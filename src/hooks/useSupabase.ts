@@ -2,8 +2,8 @@ import { useAuth } from '@clerk/clerk-react'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { useMemo, useRef } from 'react'
 
-const url = import.meta.env.VITE_SUPABASE_URL
-const anon = import.meta.env.VITE_SUPABASE_ANON_KEY
+const url = import.meta.env.VITE_SUPABASE_URL?.trim()
+const anon = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()
 
 export function useSupabase(): SupabaseClient | null {
   const { getToken, isLoaded, isSignedIn } = useAuth()
@@ -23,5 +23,5 @@ export function useSupabase(): SupabaseClient | null {
         },
       },
     })
-  }, [isLoaded, isSignedIn])
+  }, [isLoaded, isSignedIn, url, anon])
 }
