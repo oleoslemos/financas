@@ -1,4 +1,4 @@
-# Financeiro LS
+# LSH
 
 Planejamento financeiro (web + PWA): **Clerk** (login) + **Supabase** (Postgres + RLS).
 

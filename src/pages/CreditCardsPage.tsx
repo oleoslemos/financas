@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
 import { formatBRL, parseMoney } from '../lib/format'
+import { toUpperOrNull, toUpperTrim } from '../lib/text'
 
 type Card = {
   id: string
@@ -45,8 +46,8 @@ export function CreditCardsPage() {
     if (!supabase || !user?.id) return
     const payload = {
       user_id: user.id,
-      name: form.name.trim(),
-      brand: form.brand.trim() || null,
+      name: toUpperTrim(form.name),
+      brand: toUpperOrNull(form.brand),
       closing_day: Math.min(31, Math.max(1, parseInt(form.closing_day, 10) || 1)),
       due_day: Math.min(31, Math.max(1, parseInt(form.due_day, 10) || 1)),
       limit_amount: form.limit_amount ? parseMoney(form.limit_amount) : null,

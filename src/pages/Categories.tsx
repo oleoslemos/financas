@@ -1,6 +1,7 @@
 import { useUser } from '@clerk/clerk-react'
 import { useEffect, useState } from 'react'
 import { useSupabase } from '../hooks/useSupabase'
+import { toUpperTrim } from '../lib/text'
 
 type Cat = { id: string; name: string; type: 'income' | 'expense' | 'neutral' }
 
@@ -35,7 +36,7 @@ export function Categories() {
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!supabase || !user?.id) return
-    const n = name.trim()
+    const n = toUpperTrim(name)
     if (!n) return
     if (editing) {
       const { error } = await supabase.from('categories').update({ name: n, type }).eq('id', editing.id)

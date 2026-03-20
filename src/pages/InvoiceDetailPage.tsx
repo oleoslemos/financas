@@ -5,6 +5,7 @@ import { useSupabase } from '../hooks/useSupabase'
 import { monthLabel, parseISODate, toISODate } from '../lib/dates'
 import { formatBRL, parseMoney } from '../lib/format'
 import { sumInvoiceItems, syncLinkedPayable } from '../lib/invoicePayableSync'
+import { toUpperTrim } from '../lib/text'
 
 type Inv = {
   id: string
@@ -130,7 +131,7 @@ export function InvoiceDetailPage() {
     if (!supabase || !invoiceId || itemsLocked) return
     const base = {
       occurred_on: itemForm.occurred_on,
-      description: itemForm.description.trim(),
+      description: toUpperTrim(itemForm.description),
       amount: parseMoney(itemForm.amount),
       category_id: itemForm.category_id || null,
     }
@@ -230,7 +231,7 @@ export function InvoiceDetailPage() {
                     kind: 'payable',
                     amount: total,
                     due_date: dueDate,
-                    description: `Fatura ${cardName} – ${refLabel}`,
+                    description: `FATURA ${cardName} – ${refLabel}`,
                     status: 'open',
                     category_id: null,
                     bank_account_id: null,

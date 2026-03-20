@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
 import { addMonths, toISODate } from '../lib/dates'
 import { formatBRL, parseMoney } from '../lib/format'
+import { toUpperTrim } from '../lib/text'
 
 type Kind = 'payable' | 'receivable'
 type Pr = {
@@ -78,7 +79,7 @@ export function CashflowPage() {
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!supabase || !user?.id) return
-    const baseDesc = description.trim() || (kind === 'payable' ? 'Conta a pagar' : 'Conta a receber')
+    const baseDesc = toUpperTrim(description) || (kind === 'payable' ? 'CONTA A PAGAR' : 'CONTA A RECEBER')
 
     if (editing) {
       const { error } = await supabase
@@ -129,7 +130,7 @@ export function CashflowPage() {
     const inserts = Array.from({ length: n }, (_, i) => ({
       user_id: user.id,
       kind,
-      description: `${baseDesc} (parcela ${i + 1}/${n})`,
+      description: `${baseDesc} (PARCELA ${i + 1}/${n})`,
       amount: each,
       due_date: toISODate(addMonths(first, i)),
       status: 'open' as const,
@@ -162,7 +163,7 @@ export function CashflowPage() {
   function startEdit(r: Pr) {
     setEditing(r)
     setMode('vista')
-    setDescription(r.description.replace(/\s*\(parcela \d+\/\d+\)\s*$/, ''))
+    setDescription(r.description.replace(/\s*\(parcela \d+\/\d+\)\s*$/i, ''))
     setAmount(String(r.amount))
     setDueDate(r.due_date)
     setCategoryId(r.category_id ?? '')

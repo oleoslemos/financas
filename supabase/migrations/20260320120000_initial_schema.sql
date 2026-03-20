@@ -1,4 +1,4 @@
--- Financeiro LS — schema inicial + RLS para JWT Clerk (claim `sub`)
+-- LSH — schema inicial + RLS para JWT Clerk (claim `sub`)
 -- Rode no SQL Editor do Supabase após configurar integração Clerk ↔ JWT no painel.
 
 -- Tipos auxiliares
@@ -13,7 +13,8 @@ CREATE TABLE public.bank_accounts (
   user_id text NOT NULL,
   name text NOT NULL,
   bank_name text,
-  agency_account text,
+  agency text,
+  account_number text,
   initial_balance numeric(14,2) NOT NULL DEFAULT 0,
   is_active boolean NOT NULL DEFAULT true,
   created_at timestamptz NOT NULL DEFAULT now()

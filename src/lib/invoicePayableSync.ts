@@ -24,7 +24,7 @@ export async function syncLinkedPayable(
     .update({
       amount: total,
       due_date: opts.dueDate,
-      description: `Fatura ${opts.cardName} – ${opts.referenceMonthLabel}`,
+      description: `FATURA ${opts.cardName} – ${opts.referenceMonthLabel}`,
     })
     .eq('id', opts.payableId)
   return { skippedPaid: false }

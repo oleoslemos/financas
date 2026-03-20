@@ -2,12 +2,14 @@ import { useUser } from '@clerk/clerk-react'
 import { useEffect, useState } from 'react'
 import { useSupabase } from '../hooks/useSupabase'
 import { formatBRL, parseMoney } from '../lib/format'
+import { toUpperOrNull, toUpperTrim } from '../lib/text'
 
 type Bank = {
   id: string
   name: string
   bank_name: string | null
-  agency_account: string | null
+  agency: string | null
+  account_number: string | null
   initial_balance: number
   is_active: boolean
 }
@@ -20,7 +22,8 @@ export function BankAccounts() {
   const [form, setForm] = useState({
     name: '',
     bank_name: '',
-    agency_account: '',
+    agency: '',
+    account_number: '',
     initial_balance: '0',
     is_active: true,
   })
@@ -48,9 +51,10 @@ export function BankAccounts() {
     if (!supabase || !user?.id) return
     const payload = {
       user_id: user.id,
-      name: form.name.trim(),
-      bank_name: form.bank_name.trim() || null,
-      agency_account: form.agency_account.trim() || null,
+      name: toUpperTrim(form.name),
+      bank_name: toUpperOrNull(form.bank_name),
+      agency: toUpperOrNull(form.agency),
+      account_number: toUpperOrNull(form.account_number),
       initial_balance: parseMoney(form.initial_balance),
       is_active: form.is_active,
     }
@@ -73,7 +77,7 @@ export function BankAccounts() {
   }
 
   function resetForm() {
-    setForm({ name: '', bank_name: '', agency_account: '', initial_balance: '0', is_active: true })
+    setForm({ name: '', bank_name: '', agency: '', account_number: '', initial_balance: '0', is_active: true })
   }
 
   function startEdit(b: Bank) {
@@ -81,7 +85,8 @@ export function BankAccounts() {
     setForm({
       name: b.name,
       bank_name: b.bank_name ?? '',
-      agency_account: b.agency_account ?? '',
+      agency: b.agency ?? '',
+      account_number: b.account_number ?? '',
       initial_balance: String(b.initial_balance),
       is_active: b.is_active,
     })
@@ -115,8 +120,12 @@ export function BankAccounts() {
           <input value={form.bank_name} onChange={(e) => setForm({ ...form, bank_name: e.target.value })} />
         </div>
         <div>
-          <label>Agência / conta</label>
-          <input value={form.agency_account} onChange={(e) => setForm({ ...form, agency_account: e.target.value })} />
+          <label>Agência</label>
+          <input value={form.agency} onChange={(e) => setForm({ ...form, agency: e.target.value })} />
+        </div>
+        <div>
+          <label>Número da conta</label>
+          <input value={form.account_number} onChange={(e) => setForm({ ...form, account_number: e.target.value })} />
         </div>
         <div>
           <label>Saldo inicial</label>
@@ -161,7 +170,8 @@ export function BankAccounts() {
               <tr>
                 <th>Nome</th>
                 <th>Banco</th>
-                <th>Agência/conta</th>
+                <th>Agência</th>
+                <th>Número da conta</th>
                 <th>Saldo inicial</th>
                 <th>Ativa</th>
                 <th></th>
@@ -172,7 +182,8 @@ export function BankAccounts() {
                 <tr key={b.id}>
                   <td>{b.name}</td>
                   <td>{b.bank_name ?? '—'}</td>
-                  <td>{b.agency_account ?? '—'}</td>
+                  <td>{b.agency ?? '—'}</td>
+                  <td>{b.account_number ?? '—'}</td>
                   <td>{formatBRL(Number(b.initial_balance))}</td>
                   <td>{b.is_active ? 'Sim' : 'Não'}</td>
                   <td className="space-x-2 whitespace-nowrap">

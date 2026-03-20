@@ -9,8 +9,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
       manifest: {
-        name: 'Financeiro LS',
-        short_name: 'Financeiro',
+        name: 'LSH',
+        short_name: 'LSH',
         description: 'Planejamento financeiro pessoal',
         theme_color: '#0f172a',
         background_color: '#0f172a',

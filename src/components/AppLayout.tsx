@@ -8,7 +8,7 @@ export function AppLayout() {
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
       <aside className="border-b border-slate-800 bg-slate-950 p-4 md:w-56 md:border-b-0 md:border-r md:min-h-screen">
-        <h1 className="mb-6 text-lg font-semibold tracking-tight text-sky-400">Financeiro LS</h1>
+        <h1 className="mb-6 text-lg font-semibold tracking-tight text-sky-400">LSH</h1>
         <nav className="flex flex-wrap gap-1 md:flex-col">
           <NavLink to="/" className={linkClass} end>
             Início
