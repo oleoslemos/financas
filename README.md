@@ -15,10 +15,12 @@ npm run dev
 
 1. Crie o projeto no [Supabase](https://supabase.com).
 2. No **SQL Editor**, execute o arquivo [`supabase/migrations/20260320120000_initial_schema.sql`](./supabase/migrations/20260320120000_initial_schema.sql).
-3. Configure a integração **Clerk ↔ Supabase** (JWT):
+3. Configure a integração **Clerk ↔ Supabase** (recomendado: **nativa**, sem template):
    - [Documentação Clerk + Supabase](https://clerk.com/docs/integrations/databases/supabase)
-   - No Clerk: JWT Template chamado **`supabase`** (como o app solicita em `getToken({ template: 'supabase' })`).
-   - No Supabase: habilite o provedor / assinatura JWT conforme o guia (para `auth.jwt()->>'sub'` nas políticas funcionar).
+   - No **Clerk**: ative a integração Supabase e copie o **Clerk domain**.
+   - No **Supabase**: **Authentication → Sign In / Up → Add provider → Clerk** e cole o domínio.
+   - O app envia o **token de sessão** do Clerk (`getToken()`). Opcionalmente ainda tenta o template **`supabase`** se você usar o fluxo legado.
+   - RLS continua com `auth.jwt()->>'sub'` = ID do usuário no Clerk.
 
 ## Clerk
 

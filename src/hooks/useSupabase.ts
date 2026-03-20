@@ -17,7 +17,20 @@ export function useSupabase(): SupabaseClient | null {
       global: {
         fetch: async (input, init) => {
           const headers = new Headers(init?.headers)
-          const token = await getTokenRef.current({ template: 'supabase' })
+          let token: string | null = null
+          try {
+            // Integração nativa Clerk ↔ Supabase (recomendada): token de sessão, sem JWT template
+            token = await getTokenRef.current()
+            if (!token) {
+              try {
+                token = await getTokenRef.current({ template: 'supabase' })
+              } catch {
+                /* template opcional / legado */
+              }
+            }
+          } catch {
+            /* evita quebrar o fetch inteiro */
+          }
           if (token) headers.set('Authorization', `Bearer ${token}`)
           return fetch(input, { ...init, headers })
         },
