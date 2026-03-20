@@ -1,4 +1,5 @@
 import { Route, Routes } from 'react-router-dom'
+import { AllowedEmailGuard } from './components/AllowedEmailGuard'
 import { AppLayout } from './components/AppLayout'
 import { RequireAuth } from './components/RequireAuth'
 import { BankAccounts } from './pages/BankAccounts'
@@ -17,14 +18,16 @@ export default function App() {
       <Route path="/sign-in/*" element={<SignInPage />} />
       <Route path="/sign-up/*" element={<SignUpPage />} />
       <Route element={<RequireAuth />}>
-        <Route element={<AppLayout />}>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/contas-bancarias" element={<BankAccounts />} />
-          <Route path="/categorias" element={<Categories />} />
-          <Route path="/fluxo" element={<CashflowPage />} />
-          <Route path="/cartoes" element={<CreditCardsPage />} />
-          <Route path="/cartoes/:cardId" element={<CardInvoicesPage />} />
-          <Route path="/cartoes/:cardId/faturas/:invoiceId" element={<InvoiceDetailPage />} />
+        <Route element={<AllowedEmailGuard />}>
+          <Route element={<AppLayout />}>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/contas-bancarias" element={<BankAccounts />} />
+            <Route path="/categorias" element={<Categories />} />
+            <Route path="/fluxo" element={<CashflowPage />} />
+            <Route path="/cartoes" element={<CreditCardsPage />} />
+            <Route path="/cartoes/:cardId" element={<CardInvoicesPage />} />
+            <Route path="/cartoes/:cardId/faturas/:invoiceId" element={<InvoiceDetailPage />} />
+          </Route>
         </Route>
       </Route>
     </Routes>
