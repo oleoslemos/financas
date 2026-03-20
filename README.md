@@ -28,13 +28,12 @@ npm run dev
 
 ## Deploy na Vercel
 
-1. Conecte o repositório Git ao projeto [Vercel](https://vercel.com) (ex.: `financeiro-ls`).
-2. Em **Settings → Environment Variables**, adicione:
-   - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_ANON_KEY`
-   - `VITE_CLERK_PUBLISHABLE_KEY`
-3. **Build**: `npm run build` — **Output**: `dist` (detectado automaticamente para Vite).
-4. O arquivo [`vercel.json`](./vercel.json) redireciona rotas do SPA para `index.html`.
+1. [Importar](https://vercel.com/new) o repositório Git. Para o domínio **`bemaviv.vercel.app`**, o **nome do projeto** na Vercel deve ser **`bemaviv`**.
+2. **Root Directory**: vazio (raiz), salvo se o código estiver em subpasta.
+3. **Environment Variables** (Production e Preview): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_CLERK_PUBLISHABLE_KEY`.
+4. O [`vercel.json`](./vercel.json) usa `npm install --include=dev` (garante Vite/TypeScript no build), `npm run build` e saída **`dist`**, além do rewrite do SPA.
+
+**Se o deploy falhar:** abra o deployment → log de **Build** e veja a última mensagem de erro. Comuns: `vite`/`tsc` não encontrados (corrigido com o `installCommand` acima), repositório desconectado (**Settings → Git**), ou **Root Directory** errado.
 
 ## Segurança
 
