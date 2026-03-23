@@ -1,4 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
+import { FileText, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
@@ -151,14 +152,27 @@ export function CardInvoicesPage() {
                       ? `${r.installment_number ?? '?'}/${r.installment_count ?? '?'}`
                       : '—'}
                   </td>
-                  <td>{r.status}</td>
-                  <td className="space-x-2 whitespace-nowrap">
-                    <Link to={`/cartoes/${cardId}/faturas/${r.id}`} className="text-sky-400 hover:underline">
-                      Detalhar
-                    </Link>
-                    <button type="button" className="text-sm text-red-400 hover:underline" onClick={() => removeInv(r.id)}>
-                      Excluir
-                    </button>
+                  <td>{r.status === 'open' ? 'ABERTO' : r.status === 'paid' ? 'PAGO' : r.status.toUpperCase()}</td>
+                  <td className="whitespace-nowrap">
+                    <div className="flex items-center justify-end gap-2">
+                      <Link
+                        to={`/cartoes/${cardId}/faturas/${r.id}`}
+                        className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0"
+                        title="DETALHAR"
+                        aria-label="DETALHAR"
+                      >
+                        <FileText size={16} />
+                      </Link>
+                      <button
+                        type="button"
+                        className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-400"
+                        title="EXCLUIR"
+                        aria-label="EXCLUIR"
+                        onClick={() => removeInv(r.id)}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

@@ -1,4 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
+import { Pencil, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
@@ -56,6 +57,13 @@ export function InvoiceDetailPage() {
     parcel_count: '1',
   })
   const [editingItem, setEditingItem] = useState<Item | null>(null)
+
+  function statusPt(s: string | null) {
+    if (!s) return '—'
+    if (s === 'open') return 'ABERTO'
+    if (s === 'paid') return 'PAGO'
+    return s.toUpperCase()
+  }
 
   const load = useCallback(async () => {
     if (!supabase || !user?.id || !invoiceId || !cardId) return
@@ -423,7 +431,9 @@ export function InvoiceDetailPage() {
         <p className="text-lg font-medium text-white">
           Total da fatura: <span className="text-sky-300">{formatBRL(total)}</span>
         </p>
-        {inv.payable_id && <p className="text-xs text-slate-500">Conta a pagar: {inv.payable_id.slice(0, 8)}… — {payableStatus}</p>}
+        {inv.payable_id && (
+          <p className="text-xs text-slate-500">CONTA A PAGAR: {inv.payable_id.slice(0, 8)}… — {statusPt(payableStatus)}</p>
+        )}
       </div>
 
       <form onSubmit={submitItem} className="grid gap-3 rounded-xl border border-slate-800 bg-slate-900/40 p-4 sm:grid-cols-2">
@@ -528,32 +538,38 @@ export function InvoiceDetailPage() {
                   {cats.find((c) => c.id === it.category_id)?.name ?? (it.category_id ? '…' : '—')}
                 </td>
                 <td>{formatBRL(Number(it.amount))}</td>
-                <td className="space-x-2 whitespace-nowrap">
-                  <button
-                    type="button"
-                    className="btn-ghost text-sm"
-                    disabled={itemsLocked}
-                    onClick={() => {
-                      setEditingItem(it)
-                      setItemForm({
-                        occurred_on: it.occurred_on,
-                        description: it.description,
-                        amount: String(it.amount),
-                        category_id: it.category_id ?? '',
-                        parcel_count: String(it.installment_count ?? 1),
-                      })
-                    }}
-                  >
-                    Editar
-                  </button>
-                  <button
-                    type="button"
-                    className="text-sm text-red-400 hover:underline"
-                    disabled={itemsLocked}
-                    onClick={() => deleteItem(it.id)}
-                  >
-                    Excluir
-                  </button>
+                <td className="whitespace-nowrap">
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0"
+                      title="EDITAR"
+                      aria-label="EDITAR"
+                      disabled={itemsLocked}
+                      onClick={() => {
+                        setEditingItem(it)
+                        setItemForm({
+                          occurred_on: it.occurred_on,
+                          description: it.description,
+                          amount: String(it.amount),
+                          category_id: it.category_id ?? '',
+                          parcel_count: String(it.installment_count ?? 1),
+                        })
+                      }}
+                    >
+                      <Pencil size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-400"
+                      title="EXCLUIR"
+                      aria-label="EXCLUIR"
+                      disabled={itemsLocked}
+                      onClick={() => deleteItem(it.id)}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

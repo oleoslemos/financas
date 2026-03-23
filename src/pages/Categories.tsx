@@ -1,4 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
+import { Pencil, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useSupabase } from '../hooks/useSupabase'
 import { toUpperTrim } from '../lib/text'
@@ -118,21 +119,31 @@ export function Categories() {
                 <tr key={c.id}>
                   <td>{c.name}</td>
                   <td>{types.find((t) => t.v === c.type)?.l}</td>
-                  <td className="space-x-2">
-                    <button
-                      type="button"
-                      className="btn-ghost text-sm"
-                      onClick={() => {
-                        setEditing(c)
-                        setName(c.name)
-                        setType(c.type)
-                      }}
-                    >
-                      Editar
-                    </button>
-                    <button type="button" className="text-sm text-red-400 hover:underline" onClick={() => remove(c.id)}>
-                      Excluir
-                    </button>
+                  <td>
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0"
+                        title="EDITAR"
+                        aria-label="EDITAR"
+                        onClick={() => {
+                          setEditing(c)
+                          setName(c.name)
+                          setType(c.type)
+                        }}
+                      >
+                        <Pencil size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-400"
+                        title="EXCLUIR"
+                        aria-label="EXCLUIR"
+                        onClick={() => remove(c.id)}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

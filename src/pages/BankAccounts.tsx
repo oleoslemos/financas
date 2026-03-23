@@ -1,4 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
+import { Pencil, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useSupabase } from '../hooks/useSupabase'
 import { formatBRL, parseMoney } from '../lib/format'
@@ -186,13 +187,27 @@ export function BankAccounts() {
                   <td>{b.account_number ?? '—'}</td>
                   <td>{formatBRL(Number(b.initial_balance))}</td>
                   <td>{b.is_active ? 'Sim' : 'Não'}</td>
-                  <td className="space-x-2 whitespace-nowrap">
-                    <button type="button" className="btn-ghost text-sm" onClick={() => startEdit(b)}>
-                      Editar
-                    </button>
-                    <button type="button" className="text-sm text-red-400 hover:underline" onClick={() => remove(b.id)}>
-                      Excluir
-                    </button>
+                  <td className="whitespace-nowrap">
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0"
+                        title="EDITAR"
+                        aria-label="EDITAR"
+                        onClick={() => startEdit(b)}
+                      >
+                        <Pencil size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-400"
+                        title="EXCLUIR"
+                        aria-label="EXCLUIR"
+                        onClick={() => remove(b.id)}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

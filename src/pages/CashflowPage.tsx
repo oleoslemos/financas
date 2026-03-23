@@ -520,7 +520,9 @@ export function CashflowPage() {
                   <td>
                     {r.installment_group_id
                       ? `${r.installment_number ?? '?'}/${r.installment_count ?? '?'}`
-                      : '—'}
+                      : r.kind === 'payable' && invoiceDetailByPayable[r.id]
+                        ? '1/1'
+                        : '—'}
                   </td>
                   <td>{r.status === 'paid' ? 'PAGO' : 'ABERTO'}</td>
                   <td className="whitespace-nowrap">

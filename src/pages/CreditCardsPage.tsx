@@ -1,4 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
+import { CreditCard, Pencil, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
@@ -171,16 +172,35 @@ export function CreditCardsPage() {
                     {c.closing_day} / {c.due_day}
                   </td>
                   <td>{c.limit_amount != null ? formatBRL(Number(c.limit_amount)) : '—'}</td>
-                  <td className="space-x-2 whitespace-nowrap">
-                    <Link to={`/cartoes/${c.id}`} className="text-sky-400 hover:underline">
-                      Faturas
-                    </Link>
-                    <button type="button" className="btn-ghost text-sm" onClick={() => startEdit(c)}>
-                      Editar
-                    </button>
-                    <button type="button" className="text-sm text-red-400 hover:underline" onClick={() => remove(c.id)}>
-                      Excluir
-                    </button>
+                  <td className="whitespace-nowrap">
+                    <div className="flex items-center justify-end gap-2">
+                      <Link
+                        to={`/cartoes/${c.id}`}
+                        className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0"
+                        title="FATURAS"
+                        aria-label="FATURAS"
+                      >
+                        <CreditCard size={16} />
+                      </Link>
+                      <button
+                        type="button"
+                        className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0"
+                        title="EDITAR"
+                        aria-label="EDITAR"
+                        onClick={() => startEdit(c)}
+                      >
+                        <Pencil size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-400"
+                        title="EXCLUIR"
+                        aria-label="EXCLUIR"
+                        onClick={() => remove(c.id)}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
