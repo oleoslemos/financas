@@ -13,19 +13,25 @@ export async function syncLinkedPayable(
     dueDate: string
     cardName: string
     referenceMonthLabel: string
+    /** Categoria "CARTÃO DE CRÉDITO" na conta a pagar vinculada */
+    categoryId?: string | null
   },
 ): Promise<{ skippedPaid: boolean }> {
   if (!opts.payableId) return { skippedPaid: false }
   const { data: pay } = await supabase.from('payables_receivables').select('status').eq('id', opts.payableId).maybeSingle()
   if (pay?.status === 'paid') return { skippedPaid: true }
   const total = await sumInvoiceItems(supabase, opts.invoiceId)
-  await supabase
-    .from('payables_receivables')
-    .update({
-      amount: total,
-      due_date: opts.dueDate,
-      description: `FATURA ${opts.cardName} – ${opts.referenceMonthLabel}`,
-    })
-    .eq('id', opts.payableId)
+  const patch: {
+    amount: number
+    due_date: string
+    description: string
+    category_id?: string | null
+  } = {
+    amount: total,
+    due_date: opts.dueDate,
+    description: `FATURA ${opts.cardName} – ${opts.referenceMonthLabel}`,
+  }
+  if (opts.categoryId) patch.category_id = opts.categoryId
+  await supabase.from('payables_receivables').update(patch).eq('id', opts.payableId)
   return { skippedPaid: false }
 }

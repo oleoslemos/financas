@@ -4,6 +4,10 @@ import { Link, useParams } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
 import { monthLabel, parseISODate, toISODate } from '../lib/dates'
 import { formatBRL, parseMoney } from '../lib/format'
+import {
+  CREDIT_CARD_INVOICE_CATEGORY_NAME,
+  ensureCreditCardExpenseCategory,
+} from '../lib/creditCardCategory'
 import { sumInvoiceItems, syncLinkedPayable } from '../lib/invoicePayableSync'
 import { toUpperTrim } from '../lib/text'
 
@@ -38,6 +42,8 @@ export function InvoiceDetailPage() {
   const [loading, setLoading] = useState(true)
   const [warnPaid, setWarnPaid] = useState(false)
 
+  const [ccCategoryId, setCcCategoryId] = useState<string | null>(null)
+
   const [itemForm, setItemForm] = useState({
     occurred_on: toISODate(new Date()),
     description: '',
@@ -49,6 +55,8 @@ export function InvoiceDetailPage() {
   const load = useCallback(async () => {
     if (!supabase || !user?.id || !invoiceId || !cardId) return
     setLoading(true)
+    const ccCat = await ensureCreditCardExpenseCategory(supabase, user.id)
+    setCcCategoryId(ccCat)
     const [{ data: c }, { data: i }, { data: it }, { data: cat }] = await Promise.all([
       supabase.from('credit_cards').select('name').eq('id', cardId).eq('user_id', user.id).single(),
       supabase.from('credit_card_invoices').select('*').eq('id', invoiceId).eq('user_id', user.id).single(),
@@ -73,6 +81,18 @@ export function InvoiceDetailPage() {
       } else {
         setPayableStatus(null)
       }
+      const cardNm = (c as { name: string } | null)?.name ?? ''
+      if (invoice?.payable_id && ccCat) {
+        const r = await syncLinkedPayable(supabase, {
+          invoiceId,
+          payableId: invoice.payable_id,
+          dueDate: invoice.due_date,
+          cardName: cardNm,
+          referenceMonthLabel: monthLabel(parseISODate(invoice.reference_month)),
+          categoryId: ccCat,
+        })
+        if (r.skippedPaid) setWarnPaid(true)
+      }
     }
     setLoading(false)
   }, [supabase, user?.id, invoiceId, cardId])
@@ -80,6 +100,11 @@ export function InvoiceDetailPage() {
   useEffect(() => {
     load()
   }, [load])
+
+  useEffect(() => {
+    if (!ccCategoryId || editingItem) return
+    setItemForm((prev) => (prev.category_id ? prev : { ...prev, category_id: ccCategoryId }))
+  }, [ccCategoryId, editingItem])
 
   const itemsLocked = !!(inv?.payable_id && payableStatus === 'paid')
 
@@ -101,9 +126,10 @@ export function InvoiceDetailPage() {
       dueDate: invRow.due_date,
       cardName,
       referenceMonthLabel: refLabel,
+      categoryId: ccCategoryId,
     })
     if (r.skippedPaid) setWarnPaid(true)
-  }, [supabase, invoiceId, user?.id, cardName])
+  }, [supabase, invoiceId, user?.id, cardName, ccCategoryId])
 
   async function saveInvoiceMeta(e: React.FormEvent) {
     e.preventDefault()
@@ -119,6 +145,7 @@ export function InvoiceDetailPage() {
           dueDate,
           cardName,
           referenceMonthLabel: refLabel,
+          categoryId: ccCategoryId,
         })
         if (r.skippedPaid) setWarnPaid(true)
       }
@@ -133,14 +160,19 @@ export function InvoiceDetailPage() {
       occurred_on: itemForm.occurred_on,
       description: toUpperTrim(itemForm.description),
       amount: parseMoney(itemForm.amount),
-      category_id: itemForm.category_id || null,
+      category_id: itemForm.category_id || ccCategoryId || null,
     }
     if (editingItem) {
       const { error } = await supabase.from('credit_card_invoice_items').update(base).eq('id', editingItem.id)
       if (error) alert(error.message)
       else {
         setEditingItem(null)
-        setItemForm({ occurred_on: toISODate(new Date()), description: '', amount: '', category_id: '' })
+        setItemForm({
+          occurred_on: toISODate(new Date()),
+          description: '',
+          amount: '',
+          category_id: ccCategoryId ?? '',
+        })
         await load()
         await runSyncInvoice()
       }
@@ -148,7 +180,12 @@ export function InvoiceDetailPage() {
       const { error } = await supabase.from('credit_card_invoice_items').insert({ invoice_id: invoiceId, ...base })
       if (error) alert(error.message)
       else {
-        setItemForm({ occurred_on: toISODate(new Date()), description: '', amount: '', category_id: '' })
+        setItemForm({
+          occurred_on: toISODate(new Date()),
+          description: '',
+          amount: '',
+          category_id: ccCategoryId ?? '',
+        })
         await load()
         await runSyncInvoice()
       }
@@ -222,6 +259,9 @@ export function InvoiceDetailPage() {
                 return
               }
               if (v && !inv.payable_id && user?.id) {
+                const catForPayable =
+                  ccCategoryId ?? (await ensureCreditCardExpenseCategory(supabase, user.id))
+                if (catForPayable) setCcCategoryId(catForPayable)
                 const total = await sumInvoiceItems(supabase, inv.id)
                 const refLabel = monthLabel(parseISODate(inv.reference_month))
                 const { data: created, error } = await supabase
@@ -233,7 +273,7 @@ export function InvoiceDetailPage() {
                     due_date: dueDate,
                     description: `FATURA ${cardName} – ${refLabel}`,
                     status: 'open',
-                    category_id: null,
+                    category_id: catForPayable,
                     bank_account_id: null,
                     installment_group_id: null,
                     installment_number: null,
@@ -295,13 +335,13 @@ export function InvoiceDetailPage() {
           />
         </div>
         <div>
-          <label>Categoria</label>
+          <label>Categoria (padrão: {CREDIT_CARD_INVOICE_CATEGORY_NAME})</label>
           <select
             value={itemForm.category_id}
             onChange={(e) => setItemForm({ ...itemForm, category_id: e.target.value })}
             disabled={itemsLocked}
           >
-            <option value="">—</option>
+            <option value="">— (usa {CREDIT_CARD_INVOICE_CATEGORY_NAME})</option>
             {cats.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -319,7 +359,12 @@ export function InvoiceDetailPage() {
               className="btn btn-secondary"
               onClick={() => {
                 setEditingItem(null)
-                setItemForm({ occurred_on: toISODate(new Date()), description: '', amount: '', category_id: '' })
+                setItemForm({
+                  occurred_on: toISODate(new Date()),
+                  description: '',
+                  amount: '',
+                  category_id: ccCategoryId ?? '',
+                })
               }}
             >
               Cancelar
@@ -334,6 +379,7 @@ export function InvoiceDetailPage() {
             <tr>
               <th>Data</th>
               <th>Descrição</th>
+              <th>Categoria</th>
               <th>Valor</th>
               <th></th>
             </tr>
@@ -343,6 +389,9 @@ export function InvoiceDetailPage() {
               <tr key={it.id}>
                 <td>{it.occurred_on}</td>
                 <td>{it.description}</td>
+                <td className="text-slate-400">
+                  {cats.find((c) => c.id === it.category_id)?.name ?? (it.category_id ? '…' : '—')}
+                </td>
                 <td>{formatBRL(Number(it.amount))}</td>
                 <td className="space-x-2 whitespace-nowrap">
                   <button

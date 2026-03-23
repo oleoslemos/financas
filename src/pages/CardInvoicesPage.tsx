@@ -1,6 +1,6 @@
 import { useUser } from '@clerk/clerk-react'
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
 import { monthLabel, parseISODate, toISODate } from '../lib/dates'
 
@@ -13,6 +13,7 @@ type Inv = {
 
 export function CardInvoicesPage() {
   const { cardId } = useParams<{ cardId: string }>()
+  const navigate = useNavigate()
   const { user } = useUser()
   const supabase = useSupabase()
   const [cardName, setCardName] = useState('')
@@ -23,6 +24,7 @@ export function CardInvoicesPage() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
   })
   const [dueDate, setDueDate] = useState(toISODate(new Date()))
+  const [openDetailAfterCreate, setOpenDetailAfterCreate] = useState(true)
 
   async function load() {
     if (!supabase || !user?.id || !cardId) return
@@ -48,15 +50,24 @@ export function CardInvoicesPage() {
     e.preventDefault()
     if (!supabase || !user?.id || !cardId) return
     const reference_month = `${refMonth}-01`
-    const { error } = await supabase.from('credit_card_invoices').insert({
-      user_id: user.id,
-      credit_card_id: cardId,
-      reference_month,
-      due_date: dueDate,
-      status: 'open',
-    })
+    const { data: created, error } = await supabase
+      .from('credit_card_invoices')
+      .insert({
+        user_id: user.id,
+        credit_card_id: cardId,
+        reference_month,
+        due_date: dueDate,
+        status: 'open',
+      })
+      .select('id')
+      .single()
     if (error) alert(error.message)
-    else load()
+    else {
+      await load()
+      if (openDetailAfterCreate && created && 'id' in created) {
+        navigate(`/cartoes/${cardId}/faturas/${(created as { id: string }).id}`)
+      }
+    }
   }
 
   async function removeInv(id: string) {
@@ -77,18 +88,32 @@ export function CardInvoicesPage() {
         <h2 className="text-2xl font-semibold">Faturas — {cardName || '…'}</h2>
       </div>
 
-      <form onSubmit={createInvoice} className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-800 bg-slate-900/40 p-4">
-        <div>
-          <label>Mês de referência</label>
-          <input type="month" value={refMonth} onChange={(e) => setRefMonth(e.target.value)} required />
+      <form onSubmit={createInvoice} className="flex flex-col gap-4 rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label>Mês de referência</label>
+            <input type="month" value={refMonth} onChange={(e) => setRefMonth(e.target.value)} required />
+          </div>
+          <div>
+            <label>Vencimento</label>
+            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} required />
+          </div>
+          <button type="submit" className="btn btn-primary">
+            Nova fatura
+          </button>
         </div>
-        <div>
-          <label>Vencimento</label>
-          <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} required />
+        <div className="flex items-center gap-2">
+          <input
+            id="open-detail"
+            type="checkbox"
+            className="h-4 w-4"
+            checked={openDetailAfterCreate}
+            onChange={(e) => setOpenDetailAfterCreate(e.target.checked)}
+          />
+          <label htmlFor="open-detail" className="mb-0 cursor-pointer text-sm text-slate-300">
+            Após criar, abrir a fatura para detalhar e lançar despesas
+          </label>
         </div>
-        <button type="submit" className="btn btn-primary">
-          Nova fatura
-        </button>
       </form>
 
       <div className="table-wrap">
