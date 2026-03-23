@@ -6,6 +6,22 @@ import { addMonths, toISODate } from '../lib/dates'
 import { formatBRL, parseMoney } from '../lib/format'
 import { toUpperTrim } from '../lib/text'
 
+function stripParcelDesc(d: string) {
+  return d.replace(/\s*\(PARCELA \d+\/\d+\)\s*$/i, '').trim()
+}
+
+/** Descrição persistida ao editar: mantém sufixo da parcela quando for lançamento parcelado. */
+function descriptionForEditedRow(edit: Pr, baseDesc: string) {
+  if (
+    edit.installment_group_id &&
+    edit.installment_number != null &&
+    edit.installment_count != null
+  ) {
+    return `${baseDesc} (PARCELA ${edit.installment_number}/${edit.installment_count})`
+  }
+  return baseDesc
+}
+
 type Kind = 'payable' | 'receivable'
 type Pr = {
   id: string
@@ -44,6 +60,9 @@ export function CashflowPage() {
   const [firstDue, setFirstDue] = useState(toISODate(new Date()))
 
   const [editing, setEditing] = useState<Pr | null>(null)
+
+  const [parcelGroupModalId, setParcelGroupModalId] = useState<string | null>(null)
+  const [parcelNewCount, setParcelNewCount] = useState('')
 
   function setTab(t: 'pagar' | 'receber') {
     params.set('aba', t)
@@ -85,7 +104,7 @@ export function CashflowPage() {
       const { error } = await supabase
         .from('payables_receivables')
         .update({
-          description: baseDesc,
+          description: descriptionForEditedRow(editing, baseDesc),
           amount: parseMoney(amount),
           due_date: dueDate,
           category_id: categoryId || null,
@@ -163,7 +182,7 @@ export function CashflowPage() {
   function startEdit(r: Pr) {
     setEditing(r)
     setMode('vista')
-    setDescription(r.description.replace(/\s*\(parcela \d+\/\d+\)\s*$/i, ''))
+    setDescription(stripParcelDesc(r.description))
     setAmount(String(r.amount))
     setDueDate(r.due_date)
     setCategoryId(r.category_id ?? '')
@@ -194,6 +213,101 @@ export function CashflowPage() {
       .eq('status', 'open')
     if (error) alert(error.message)
     else load()
+  }
+
+  function openParcelGroupEdit(groupId: string) {
+    const grp = rows.filter((r) => r.installment_group_id === groupId)
+    const sorted = [...grp].sort((a, b) => (a.installment_number ?? 0) - (b.installment_number ?? 0))
+    const hi = sorted[sorted.length - 1]?.installment_number ?? sorted.length
+    const meta = sorted[0]?.installment_count ?? hi
+    setParcelNewCount(String(Math.max(hi, meta)))
+    setParcelGroupModalId(groupId)
+  }
+
+  async function applyParcelGroupCount() {
+    if (!supabase || !user?.id || !parcelGroupModalId) return
+    const newN = Math.max(1, parseInt(parcelNewCount, 10) || 1)
+    const groupRows = rows.filter((r) => r.installment_group_id === parcelGroupModalId)
+    const sorted = [...groupRows].sort((a, b) => (a.installment_number ?? 0) - (b.installment_number ?? 0))
+    if (sorted.length === 0) {
+      setParcelGroupModalId(null)
+      return
+    }
+
+    const baseDesc = stripParcelDesc(sorted[0].description) || (kind === 'payable' ? 'CONTA A PAGAR' : 'CONTA A RECEBER')
+    const hi = sorted[sorted.length - 1].installment_number ?? sorted.length
+
+    async function syncRowMeta(row: Pr, num: number, total: number) {
+      const desc = `${baseDesc} (PARCELA ${num}/${total})`
+      const { error } = await supabase!
+        .from('payables_receivables')
+        .update({ installment_count: total, description: desc })
+        .eq('id', row.id)
+      if (error) throw new Error(error.message)
+    }
+
+    try {
+      if (newN < hi) {
+        const toRemove = sorted.filter((r) => (r.installment_number ?? 0) > newN)
+        const blocked = toRemove.find((r) => r.status === 'paid')
+        if (blocked) {
+          alert(
+            'Não é possível reduzir para ' +
+              newN +
+              ': há parcela(s) pagas com número acima desse. Reabra a parcela ou ajuste para um valor que não remova parcelas pagas.',
+          )
+          return
+        }
+        if (toRemove.length > 0) {
+          const { error: delErr } = await supabase
+            .from('payables_receivables')
+            .delete()
+            .in(
+              'id',
+              toRemove.map((r) => r.id),
+            )
+          if (delErr) {
+            alert(delErr.message)
+            return
+          }
+        }
+        const kept = sorted.filter((r) => (r.installment_number ?? 0) <= newN)
+        await Promise.all(kept.map((r) => syncRowMeta(r, r.installment_number!, newN)))
+      } else if (newN > hi) {
+        const template = sorted[0]
+        const lastDueRow = sorted[sorted.length - 1]
+        const lastDate = new Date(lastDueRow.due_date + 'T12:00:00')
+        const inserts = Array.from({ length: newN - hi }, (_, k) => {
+          const i = hi + 1 + k
+          return {
+            user_id: user.id,
+            kind: template.kind,
+            description: `${baseDesc} (PARCELA ${i}/${newN})`,
+            amount: template.amount,
+            due_date: toISODate(addMonths(lastDate, k + 1)),
+            status: 'open' as const,
+            category_id: template.category_id,
+            bank_account_id: template.bank_account_id,
+            installment_group_id: parcelGroupModalId,
+            installment_number: i,
+            installment_count: newN,
+          }
+        })
+        const { error: insErr } = await supabase.from('payables_receivables').insert(inserts)
+        if (insErr) {
+          alert(insErr.message)
+          return
+        }
+        await Promise.all(sorted.map((r) => syncRowMeta(r, r.installment_number!, newN)))
+      } else {
+        await Promise.all(sorted.map((r) => syncRowMeta(r, r.installment_number!, newN)))
+      }
+
+      setParcelGroupModalId(null)
+      load()
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Erro ao atualizar parcelamento')
+    }
   }
 
   if (!supabase) return <p className="text-slate-400">Conectando…</p>
@@ -241,16 +355,31 @@ export function CashflowPage() {
           </button>
         </div>
 
+        {editing?.installment_group_id &&
+          editing.installment_number != null &&
+          editing.installment_count != null && (
+            <p className="rounded-lg border border-sky-900/60 bg-sky-950/30 px-3 py-2 text-sm text-sky-200/90">
+              Editando apenas a parcela {editing.installment_number} de {editing.installment_count}. Você pode alterar
+              valor, vencimento, descrição base, categoria e conta só desta parcela; ao salvar, continua{' '}
+              <span className="font-mono text-sky-100">
+                (PARCELA {editing.installment_number}/{editing.installment_count})
+              </span>
+              . Para mudar quantas parcelas existem no grupo, use &quot;Alterar parcelas&quot; na linha da tabela.
+            </p>
+          )}
+
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <label>Descrição</label>
+            <label>
+              {editing?.installment_group_id ? 'Descrição (texto base, sem número da parcela)' : 'Descrição'}
+            </label>
             <input value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
           {mode === 'vista' ? (
             <>
               <div>
                 <label>Valor</label>
-                <input value={amount} onChange={(e) => setAmount(e.target.value)} required={!editing} />
+                <input value={amount} onChange={(e) => setAmount(e.target.value)} required />
               </div>
               <div>
                 <label>Vencimento</label>
@@ -304,7 +433,11 @@ export function CashflowPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="submit" className="btn btn-primary">
-            {editing ? 'Salvar' : 'Adicionar'}
+            {editing
+              ? editing.installment_group_id
+                ? 'Salvar esta parcela'
+                : 'Salvar'
+              : 'Adicionar'}
           </button>
           {editing && (
             <button
@@ -359,13 +492,22 @@ export function CashflowPage() {
                       Excluir
                     </button>
                     {r.installment_group_id && (
-                      <button
-                        type="button"
-                        className="text-xs text-amber-400 hover:underline"
-                        onClick={() => deleteOpenGroup(r.installment_group_id!)}
-                      >
-                        Limpar abertas do grupo
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          className="text-xs text-sky-400 hover:underline"
+                          onClick={() => openParcelGroupEdit(r.installment_group_id!)}
+                        >
+                          Alterar parcelas
+                        </button>
+                        <button
+                          type="button"
+                          className="text-xs text-amber-400 hover:underline"
+                          onClick={() => deleteOpenGroup(r.installment_group_id!)}
+                        >
+                          Limpar abertas do grupo
+                        </button>
+                      </>
                     )}
                   </td>
                 </tr>
@@ -374,6 +516,50 @@ export function CashflowPage() {
           </table>
         )}
       </div>
+
+      {parcelGroupModalId && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          role="presentation"
+          onClick={() => setParcelGroupModalId(null)}
+        >
+          <div
+            role="dialog"
+            aria-labelledby="parcel-modal-title"
+            className="w-full max-w-md rounded-xl border border-slate-800 bg-slate-900 p-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="parcel-modal-title" className="text-lg font-medium text-white">
+              Alterar parcelamento
+            </h3>
+            <p className="mt-2 text-sm text-slate-400">
+              Defina o novo número total de parcelas (ex.: de 12 para 10). Ao{' '}
+              <span className="text-slate-300">diminuir</span>, as parcelas removidas são as de número maior —
+              apenas se estiverem <span className="text-slate-300">em aberto</span>. Parcelas pagas não podem ser
+              removidas assim. Ao <span className="text-slate-300">aumentar</span>, novas parcelas usam o mesmo valor,
+              categoria, conta e vencimentos mensais a partir da última parcela atual.
+            </p>
+            <div className="mt-4">
+              <label className="text-sm text-slate-300">Número de parcelas</label>
+              <input
+                type="number"
+                min={1}
+                className="mt-1 w-full"
+                value={parcelNewCount}
+                onChange={(e) => setParcelNewCount(e.target.value)}
+              />
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" className="btn btn-secondary" onClick={() => setParcelGroupModalId(null)}>
+                Cancelar
+              </button>
+              <button type="button" className="btn btn-primary" onClick={() => void applyParcelGroupCount()}>
+                Aplicar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
