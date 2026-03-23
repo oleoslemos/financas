@@ -67,6 +67,25 @@ export function CashflowPage() {
   const [parcelGroupModalId, setParcelGroupModalId] = useState<string | null>(null)
   const [parcelNewCount, setParcelNewCount] = useState('')
 
+  async function applyBankDelta(bankId: string | null, delta: number) {
+    if (!supabase || !user?.id || !bankId || delta === 0) return
+    const { data: bank, error: bankErr } = await supabase
+      .from('bank_accounts')
+      .select('initial_balance')
+      .eq('id', bankId)
+      .eq('user_id', user.id)
+      .maybeSingle()
+    if (bankErr) throw new Error(bankErr.message)
+    if (!bank || !('initial_balance' in bank)) return
+    const current = Number((bank as { initial_balance: number }).initial_balance)
+    const { error: upErr } = await supabase
+      .from('bank_accounts')
+      .update({ initial_balance: current + delta })
+      .eq('id', bankId)
+      .eq('user_id', user.id)
+    if (upErr) throw new Error(upErr.message)
+  }
+
   async function load() {
     if (!supabase || !user?.id) return
     setLoading(true)
@@ -113,19 +132,36 @@ export function CashflowPage() {
     const baseDesc = toUpperTrim(description) || (formKind === 'payable' ? 'CONTA A PAGAR' : 'CONTA A RECEBER')
 
     if (editing) {
+      const newAmount = parseMoney(amount)
+      const newKind = formKind
+      const newBankId = bankId || null
       const { error } = await supabase
         .from('payables_receivables')
         .update({
           kind: formKind,
           description: descriptionForEditedRow(editing, baseDesc),
-          amount: parseMoney(amount),
+          amount: newAmount,
           due_date: dueDate,
           category_id: categoryId || null,
-          bank_account_id: bankId || null,
+          bank_account_id: newBankId,
         })
         .eq('id', editing.id)
       if (error) alert(error.message)
       else {
+        // Se o lançamento já está pago, qualquer alteração de conta/tipo/valor
+        // precisa refletir no saldo bancário imediatamente.
+        if (editing.status === 'paid') {
+          try {
+            const oldSignal = editing.kind === 'payable' ? -1 : 1
+            const newSignal = newKind === 'payable' ? -1 : 1
+            const oldDelta = oldSignal * Number(editing.amount)
+            const newDelta = newSignal * Number(newAmount)
+            await applyBankDelta(editing.bank_account_id, -oldDelta)
+            await applyBankDelta(newBankId, newDelta)
+          } catch (e) {
+            alert(e instanceof Error ? e.message : 'Erro ao atualizar saldo da conta')
+          }
+        }
         setEditing(null)
         clearForm()
         load()
@@ -216,28 +252,10 @@ export function CashflowPage() {
         const amount = Number(r.amount)
         const signal = r.kind === 'payable' ? -1 : 1
         const delta = next === 'paid' ? signal * amount : -signal * amount
-
-        const { data: bank, error: bankErr } = await supabase
-          .from('bank_accounts')
-          .select('initial_balance')
-          .eq('id', r.bank_account_id)
-          .eq('user_id', user.id)
-          .maybeSingle()
-        if (bankErr) {
-          alert(bankErr.message)
-          await load()
-          return
-        }
-        if (bank && 'initial_balance' in bank) {
-          const current = Number((bank as { initial_balance: number }).initial_balance)
-          const { error: upErr } = await supabase
-            .from('bank_accounts')
-            .update({ initial_balance: current + delta })
-            .eq('id', r.bank_account_id)
-            .eq('user_id', user.id)
-          if (upErr) {
-            alert(upErr.message)
-          }
+        try {
+          await applyBankDelta(r.bank_account_id, delta)
+        } catch (e) {
+          alert(e instanceof Error ? e.message : 'Erro ao atualizar saldo da conta')
         }
       }
       load()
