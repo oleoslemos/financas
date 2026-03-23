@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
 import { formatBRL } from '../lib/format'
-import { addMonths, toISODate } from '../lib/dates'
+import { toISODate } from '../lib/dates'
 
 type Row = {
   id: string
@@ -54,11 +54,8 @@ export function Dashboard() {
     let cancelled = false
     ;(async () => {
       setLoading(true)
-      const now = new Date()
-      const m0 = monthKey(now)
-      const m1 = monthKey(addMonths(now, 1))
-      const from = startOfMonthIso(m0)
-      const until = endOfMonthIso(m1)
+      const from = startOfMonthIso(selectedMonth)
+      const until = endOfMonthIso(nextMonthKey(selectedMonth))
 
       const [b, pr] = await Promise.all([
         supabase
@@ -85,7 +82,7 @@ export function Dashboard() {
     return () => {
       cancelled = true
     }
-  }, [supabase, user?.id, selectedBankId])
+  }, [supabase, user?.id, selectedMonth])
 
   const monthCurrent = selectedMonth
   const monthNext = nextMonthKey(selectedMonth)
