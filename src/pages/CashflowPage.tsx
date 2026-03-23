@@ -601,7 +601,7 @@ export function CashflowPage() {
                 <th>Descrição</th>
                 <th>Valor</th>
                 <th>Vencimento</th>
-                <th>Pagamento</th>
+                <th>PAGAMENTO</th>
                 <th>Parcela</th>
                 <th>Status</th>
                 <th></th>

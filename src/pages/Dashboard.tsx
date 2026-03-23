@@ -177,7 +177,10 @@ export function Dashboard() {
                       <span>{b.name}</span>
                     </div>
                     <div className="text-sm font-semibold text-white">SALDO ATUAL: {formatBRL(Number(b.initial_balance))}</div>
-                    <div className="mt-1 text-[11px] text-slate-400">SALDO PREVISTO: {formatBRL(predicted)}</div>
+                    <div className="mt-1 text-[11px] text-slate-400">
+                      IMPACTO DAS ABERTAS: {formatBRL(impact)}
+                    </div>
+                    <div className="mt-1 text-[11px] text-slate-300">SALDO PROJETADO: {formatBRL(predicted)}</div>
                   </button>
                 )
               })
