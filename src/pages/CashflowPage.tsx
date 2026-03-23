@@ -30,6 +30,7 @@ type Pr = {
   amount: number
   due_date: string
   status: 'open' | 'paid'
+  paid_at: string | null
   kind: Kind
   category_id: string | null
   bank_account_id: string | null
@@ -66,6 +67,10 @@ export function CashflowPage() {
 
   const [parcelGroupModalId, setParcelGroupModalId] = useState<string | null>(null)
   const [parcelNewCount, setParcelNewCount] = useState('')
+
+  const [payModalRow, setPayModalRow] = useState<Pr | null>(null)
+  const [payDateInput, setPayDateInput] = useState(toISODate(new Date()))
+  const [paidAtEdit, setPaidAtEdit] = useState('')
 
   async function applyBankDelta(bankId: string | null, delta: number) {
     if (!supabase || !user?.id || !bankId || delta === 0) return
@@ -144,6 +149,9 @@ export function CashflowPage() {
           due_date: dueDate,
           category_id: categoryId || null,
           bank_account_id: newBankId,
+          ...(editing.status === 'paid'
+            ? { paid_at: paidAtEdit || editing.paid_at || null }
+            : {}),
         })
         .eq('id', editing.id)
       if (error) alert(error.message)
@@ -227,6 +235,7 @@ export function CashflowPage() {
     setFirstDue(toISODate(new Date()))
     setMode('vista')
     setFormKind('payable')
+    setPaidAtEdit('')
   }
 
   function startEdit(r: Pr) {
@@ -238,20 +247,51 @@ export function CashflowPage() {
     setDueDate(r.due_date)
     setCategoryId(r.category_id ?? '')
     setBankId(r.bank_account_id ?? '')
+    setPaidAtEdit(r.paid_at ?? toISODate(new Date()))
   }
 
-  async function togglePaid(r: Pr) {
+  function openPayModal(r: Pr) {
+    setPayModalRow(r)
+    setPayDateInput(r.due_date || toISODate(new Date()))
+  }
+
+  async function confirmPay() {
+    if (!supabase || !user?.id || !payModalRow) return
+    const r = payModalRow
+    const { error } = await supabase
+      .from('payables_receivables')
+      .update({ status: 'paid', paid_at: payDateInput })
+      .eq('id', r.id)
+    if (error) {
+      alert(error.message)
+      return
+    }
+    if (r.bank_account_id) {
+      const amount = Number(r.amount)
+      const signal = r.kind === 'payable' ? -1 : 1
+      const delta = signal * amount
+      try {
+        await applyBankDelta(r.bank_account_id, delta)
+      } catch (e) {
+        alert(e instanceof Error ? e.message : 'Erro ao atualizar saldo da conta')
+      }
+    }
+    setPayModalRow(null)
+    load()
+  }
+
+  async function reopenPaid(r: Pr) {
     if (!supabase || !user?.id) return
-    const next = r.status === 'paid' ? 'open' : 'paid'
-    const { error } = await supabase.from('payables_receivables').update({ status: next }).eq('id', r.id)
+    const { error } = await supabase
+      .from('payables_receivables')
+      .update({ status: 'open', paid_at: null })
+      .eq('id', r.id)
     if (error) alert(error.message)
     else {
       if (r.bank_account_id) {
-        // Ao liquidar: payable diminui saldo; receivable aumenta.
-        // Ao reabrir, aplica o inverso para desfazer o efeito no saldo.
         const amount = Number(r.amount)
         const signal = r.kind === 'payable' ? -1 : 1
-        const delta = next === 'paid' ? signal * amount : -signal * amount
+        const delta = -signal * amount
         try {
           await applyBankDelta(r.bank_account_id, delta)
         } catch (e) {
@@ -453,6 +493,12 @@ export function CashflowPage() {
                 <label>Vencimento</label>
                 <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} required />
               </div>
+              {editing?.status === 'paid' && (
+                <div>
+                  <label>DATA DE PAGAMENTO</label>
+                  <input type="date" value={paidAtEdit} onChange={(e) => setPaidAtEdit(e.target.value)} required />
+                </div>
+              )}
             </>
           ) : (
             <>
@@ -555,6 +601,7 @@ export function CashflowPage() {
                 <th>Descrição</th>
                 <th>Valor</th>
                 <th>Vencimento</th>
+                <th>Pagamento</th>
                 <th>Parcela</th>
                 <th>Status</th>
                 <th></th>
@@ -567,6 +614,7 @@ export function CashflowPage() {
                   <td className="min-w-[340px]">{stripParcelDesc(r.description)}</td>
                   <td>{formatBRL(Number(r.amount))}</td>
                   <td>{r.due_date}</td>
+                  <td>{r.status === 'paid' && r.paid_at ? r.paid_at : '—'}</td>
                   <td>
                     {r.installment_group_id
                       ? `${r.installment_number ?? '?'}/${r.installment_count ?? '?'}`
@@ -582,7 +630,7 @@ export function CashflowPage() {
                       className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0"
                       title={r.status === 'paid' ? 'REABRIR' : 'PAGAR'}
                       aria-label={r.status === 'paid' ? 'REABRIR' : 'PAGAR'}
-                      onClick={() => togglePaid(r)}
+                      onClick={() => (r.status === 'paid' ? void reopenPaid(r) : openPayModal(r))}
                     >
                       {r.status === 'paid' ? <Undo2 size={16} /> : <Check size={16} />}
                     </button>
@@ -637,6 +685,45 @@ export function CashflowPage() {
           </table>
         )}
       </div>
+
+      {payModalRow && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          role="presentation"
+          onClick={() => setPayModalRow(null)}
+        >
+          <div
+            role="dialog"
+            aria-labelledby="pay-modal-title"
+            className="w-full max-w-md rounded-xl border border-slate-800 bg-slate-900 p-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="pay-modal-title" className="text-lg font-medium text-white">
+              CONFIRMAR LIQUIDAÇÃO
+            </h3>
+            <p className="mt-2 text-sm text-slate-400">
+              {payModalRow.kind === 'payable' ? 'INFORME A DATA DO PAGAMENTO.' : 'INFORME A DATA DO RECEBIMENTO.'}
+            </p>
+            <div className="mt-4">
+              <label className="text-sm text-slate-300">DATA</label>
+              <input
+                type="date"
+                className="mt-1 w-full"
+                value={payDateInput}
+                onChange={(e) => setPayDateInput(e.target.value)}
+              />
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" className="btn btn-secondary" onClick={() => setPayModalRow(null)}>
+                CANCELAR
+              </button>
+              <button type="button" className="btn btn-primary" onClick={() => void confirmPay()}>
+                CONFIRMAR
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {parcelGroupModalId && (
         <div
