@@ -159,9 +159,6 @@ export function Dashboard() {
               </p>
             ) : (
               banks.map((b) => {
-                const scoped = openRows.filter((r) => r.bank_account_id === b.id)
-                const impact = scoped.reduce((acc, r) => acc + (r.kind === 'receivable' ? Number(r.amount) : -Number(r.amount)), 0)
-                const predicted = Number(b.initial_balance) + impact
                 const selected = selectedBankId === b.id
                 return (
                   <button
@@ -177,10 +174,6 @@ export function Dashboard() {
                       <span>{b.name}</span>
                     </div>
                     <div className="text-sm font-semibold text-white">SALDO ATUAL: {formatBRL(Number(b.initial_balance))}</div>
-                    <div className="mt-1 text-[11px] text-slate-400">
-                      IMPACTO DAS ABERTAS: {formatBRL(impact)}
-                    </div>
-                    <div className="mt-1 text-[11px] text-slate-300">SALDO PROJETADO: {formatBRL(predicted)}</div>
                   </button>
                 )
               })
