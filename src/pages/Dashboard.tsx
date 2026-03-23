@@ -80,7 +80,6 @@ export function Dashboard() {
       const rowsData = (pr.data as Row[]) ?? []
       setBanks(banksData)
       setOpenRows(rowsData)
-      if (banksData.length > 0 && selectedBankId === 'ALL') setSelectedBankId(banksData[0].id)
       setLoading(false)
     })()
     return () => {
