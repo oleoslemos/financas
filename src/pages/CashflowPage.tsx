@@ -1,6 +1,6 @@
 import { useUser } from '@clerk/clerk-react'
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
 import { addMonths, toISODate } from '../lib/dates'
 import { formatBRL, parseMoney } from '../lib/format'
@@ -39,6 +39,7 @@ type Pr = {
 
 export function CashflowPage() {
   const { user } = useUser()
+  const navigate = useNavigate()
   const supabase = useSupabase()
   const [formKind, setFormKind] = useState<Kind>('payable')
   const [showPayables, setShowPayables] = useState(true)
@@ -520,36 +521,38 @@ export function CashflowPage() {
                       ? `${r.installment_number ?? '?'}/${r.installment_count ?? '?'}`
                       : '—'}
                   </td>
-                  <td>{r.status === 'paid' ? 'Pago' : 'Aberto'}</td>
+                  <td>{r.status === 'paid' ? 'PAGO' : 'ABERTO'}</td>
                   <td className="space-x-2 whitespace-nowrap">
                     <button type="button" className="btn-ghost text-sm" onClick={() => togglePaid(r)}>
-                      {r.status === 'paid' ? 'Reabrir' : 'Pagar'}
+                      {r.status === 'paid' ? 'REABRIR' : 'PAGAR'}
                     </button>
                     <button type="button" className="btn-ghost text-sm" onClick={() => startEdit(r)}>
-                      Editar
+                      EDITAR
                     </button>
-                    {r.kind === 'payable' && invoiceDetailByPayable[r.id] && (
-                      <Link
-                        to={`/cartoes/${invoiceDetailByPayable[r.id].cardId}/faturas/${invoiceDetailByPayable[r.id].invoiceId}`}
-                        className="btn-ghost text-sm"
-                      >
-                        Detalhar fatura
-                      </Link>
-                    )}
-                    <button type="button" className="text-sm text-red-400 hover:underline" onClick={() => removeRow(r)}>
-                      Excluir
+                    <button
+                      type="button"
+                      className="btn-ghost text-sm disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled={!r.installment_group_id}
+                      onClick={() => {
+                        if (r.installment_group_id) openParcelGroupEdit(r.installment_group_id)
+                      }}
+                    >
+                      ALTERAR PARCELAS
                     </button>
-                    {r.installment_group_id && (
-                      <>
-                        <button
-                          type="button"
-                          className="text-xs text-sky-400 hover:underline"
-                          onClick={() => openParcelGroupEdit(r.installment_group_id!)}
-                        >
-                          Alterar parcelas
-                        </button>
-                      </>
-                    )}
+                    <button
+                      type="button"
+                      className="btn-ghost text-sm disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled={!(r.kind === 'payable' && invoiceDetailByPayable[r.id])}
+                      onClick={() => {
+                        const det = invoiceDetailByPayable[r.id]
+                        if (r.kind === 'payable' && det) navigate(`/cartoes/${det.cardId}/faturas/${det.invoiceId}`)
+                      }}
+                    >
+                      DETALHAR FATURA
+                    </button>
+                    <button type="button" className="btn-ghost text-sm text-red-400" onClick={() => removeRow(r)}>
+                      EXCLUIR
+                    </button>
                   </td>
                 </tr>
               ))}

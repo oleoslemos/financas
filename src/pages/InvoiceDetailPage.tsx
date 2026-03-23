@@ -188,12 +188,13 @@ export function InvoiceDetailPage() {
       }
     } else {
       if (n === 1) {
+        const singleGroupId = crypto.randomUUID()
         const { error } = await supabase.from('credit_card_invoice_items').insert({
           invoice_id: invoiceId,
           ...base,
-          installment_group_id: null,
-          installment_number: null,
-          installment_count: null,
+          installment_group_id: singleGroupId,
+          installment_number: 1,
+          installment_count: 1,
         })
         if (error) {
           alert(error.message)
@@ -521,9 +522,7 @@ export function InvoiceDetailPage() {
                 <td>{it.occurred_on}</td>
                 <td>{it.description}</td>
                 <td className="text-slate-400">
-                  {it.installment_group_id
-                    ? `${it.installment_number ?? '?'}/${it.installment_count ?? '?'}`
-                    : '—'}
+                  {`${it.installment_number ?? 1}/${it.installment_count ?? 1}`}
                 </td>
                 <td className="text-slate-400">
                   {cats.find((c) => c.id === it.category_id)?.name ?? (it.category_id ? '…' : '—')}
