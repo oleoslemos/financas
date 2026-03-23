@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
 import { formatBRL } from '../lib/format'
-import { addMonths, parseISODate, toISODate } from '../lib/dates'
+import { addMonths, toISODate } from '../lib/dates'
 
 type Row = {
   id: string
@@ -272,7 +272,7 @@ export function Dashboard() {
               <Wallet size={14} />
               VER MOVIMENTOS COMPLETOS
             </Link>
-          </div>
+          </section>
         </div>
       )}
     </div>
