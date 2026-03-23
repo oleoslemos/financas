@@ -1,4 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
+import { Check, FileText, Pencil, Split, Trash2, Undo2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
@@ -522,37 +523,61 @@ export function CashflowPage() {
                       : '—'}
                   </td>
                   <td>{r.status === 'paid' ? 'PAGO' : 'ABERTO'}</td>
-                  <td className="space-x-2 whitespace-nowrap">
-                    <button type="button" className="btn-ghost text-sm" onClick={() => togglePaid(r)}>
-                      {r.status === 'paid' ? 'REABRIR' : 'PAGAR'}
-                    </button>
-                    <button type="button" className="btn-ghost text-sm" onClick={() => startEdit(r)}>
-                      EDITAR
+                  <td className="whitespace-nowrap">
+                    <div className="flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0"
+                      title={r.status === 'paid' ? 'REABRIR' : 'PAGAR'}
+                      aria-label={r.status === 'paid' ? 'REABRIR' : 'PAGAR'}
+                      onClick={() => togglePaid(r)}
+                    >
+                      {r.status === 'paid' ? <Undo2 size={16} /> : <Check size={16} />}
                     </button>
                     <button
                       type="button"
-                      className="btn-ghost text-sm disabled:cursor-not-allowed disabled:opacity-40"
+                      className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0"
+                      title="EDITAR"
+                      aria-label="EDITAR"
+                      onClick={() => startEdit(r)}
+                    >
+                      <Pencil size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 disabled:cursor-not-allowed disabled:opacity-40"
+                      title="ALTERAR PARCELAS"
+                      aria-label="ALTERAR PARCELAS"
                       disabled={!r.installment_group_id}
                       onClick={() => {
                         if (r.installment_group_id) openParcelGroupEdit(r.installment_group_id)
                       }}
                     >
-                      ALTERAR PARCELAS
+                      <Split size={16} />
                     </button>
                     <button
                       type="button"
-                      className="btn-ghost text-sm disabled:cursor-not-allowed disabled:opacity-40"
+                      className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 disabled:cursor-not-allowed disabled:opacity-40"
+                      title="DETALHAR FATURA"
+                      aria-label="DETALHAR FATURA"
                       disabled={!(r.kind === 'payable' && invoiceDetailByPayable[r.id])}
                       onClick={() => {
                         const det = invoiceDetailByPayable[r.id]
                         if (r.kind === 'payable' && det) navigate(`/cartoes/${det.cardId}/faturas/${det.invoiceId}`)
                       }}
                     >
-                      DETALHAR FATURA
+                      <FileText size={16} />
                     </button>
-                    <button type="button" className="btn-ghost text-sm text-red-400" onClick={() => removeRow(r)}>
-                      EXCLUIR
+                    <button
+                      type="button"
+                      className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-400"
+                      title="EXCLUIR"
+                      aria-label="EXCLUIR"
+                      onClick={() => removeRow(r)}
+                    >
+                      <Trash2 size={16} />
                     </button>
+                    </div>
                   </td>
                 </tr>
               ))}
