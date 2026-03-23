@@ -1,10 +1,10 @@
 import { useUser } from '@clerk/clerk-react'
-import { CalendarDays, Landmark, Wallet } from 'lucide-react'
+import { CalendarDays, CreditCard, Landmark, Wallet } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
 import { formatBRL } from '../lib/format'
-import { toISODate } from '../lib/dates'
+import { monthLabel, parseISODate, toISODate } from '../lib/dates'
 
 type Row = {
   id: string
@@ -36,6 +36,26 @@ function nextMonthKey(key: string): string {
   return monthKey(new Date(y, m, 1))
 }
 
+/** Avança ou retrocede meses a partir de uma chave YYYY-MM. */
+function shiftMonthKey(key: string, delta: number): string {
+  const [y, m] = key.split('-').map(Number)
+  return monthKey(new Date(y, m - 1 + delta, 1))
+}
+
+function refMonthKey(isoDate: string): string {
+  return isoDate.slice(0, 7)
+}
+
+function monthKeysInclusive(fromKey: string, toKey: string): string[] {
+  const out: string[] = []
+  let k = fromKey
+  while (k <= toKey) {
+    out.push(k)
+    k = nextMonthKey(k)
+  }
+  return out
+}
+
 function rowSort(a: Row, b: Row) {
   return a.due_date.localeCompare(b.due_date) || a.description.localeCompare(b.description)
 }
@@ -48,6 +68,12 @@ export function Dashboard() {
   const [selectedBankId, setSelectedBankId] = useState<string>('ALL')
   const [selectedMonth, setSelectedMonth] = useState<string>(() => monthKey(new Date()))
   const [loading, setLoading] = useState(true)
+
+  const [creditCards, setCreditCards] = useState<{ id: string; name: string }[]>([])
+  const [ccPeriodMonths, setCcPeriodMonths] = useState(6)
+  const [ccFilterId, setCcFilterId] = useState<string>('ALL')
+  const [ccSeries, setCcSeries] = useState<{ monthKey: string; label: string; total: number }[]>([])
+  const [ccLoading, setCcLoading] = useState(true)
 
   useEffect(() => {
     if (!supabase || !user?.id) return
@@ -83,6 +109,80 @@ export function Dashboard() {
       cancelled = true
     }
   }, [supabase, user?.id, selectedMonth])
+
+  useEffect(() => {
+    if (!supabase || !user?.id) return
+    let cancelled = false
+    ;(async () => {
+      setCcLoading(true)
+      try {
+        const { data: cards } = await supabase
+          .from('credit_cards')
+          .select('id, name')
+          .eq('user_id', user.id)
+          .order('name')
+        if (cancelled) return
+        setCreditCards((cards as { id: string; name: string }[]) ?? [])
+
+        const endKey = monthKey(new Date())
+        const startKey = shiftMonthKey(endKey, -(ccPeriodMonths - 1))
+        const fromIso = startOfMonthIso(startKey)
+        const toIso = endOfMonthIso(endKey)
+
+        let invQuery = supabase
+          .from('credit_card_invoices')
+          .select('id, credit_card_id, reference_month')
+          .eq('user_id', user.id)
+          .gte('reference_month', fromIso)
+          .lte('reference_month', toIso)
+        if (ccFilterId !== 'ALL') invQuery = invQuery.eq('credit_card_id', ccFilterId)
+
+        const { data: invoices, error: invErr } = await invQuery
+        if (invErr) console.error(invErr)
+        if (cancelled) return
+
+        const invList = (invoices ?? []) as { id: string; credit_card_id: string; reference_month: string }[]
+        const totalsByInvoice = new Map<string, number>()
+        for (const row of invList) totalsByInvoice.set(row.id, 0)
+
+        if (invList.length > 0) {
+          const ids = invList.map((i) => i.id)
+          const { data: items, error: itErr } = await supabase
+            .from('credit_card_invoice_items')
+            .select('invoice_id, amount')
+            .in('invoice_id', ids)
+          if (cancelled) return
+          if (itErr) console.error(itErr)
+          for (const it of (items ?? []) as { invoice_id: string; amount: number }[]) {
+            const prev = totalsByInvoice.get(it.invoice_id) ?? 0
+            totalsByInvoice.set(it.invoice_id, prev + Number(it.amount))
+          }
+        }
+
+        const totalsByMonth = new Map<string, number>()
+        for (const inv of invList) {
+          const mk = refMonthKey(inv.reference_month)
+          const t = totalsByInvoice.get(inv.id) ?? 0
+          totalsByMonth.set(mk, (totalsByMonth.get(mk) ?? 0) + t)
+        }
+
+        const keys = monthKeysInclusive(startKey, endKey)
+        if (cancelled) return
+        setCcSeries(
+          keys.map((mk) => ({
+            monthKey: mk,
+            label: monthLabel(parseISODate(`${mk}-01`)).toUpperCase(),
+            total: totalsByMonth.get(mk) ?? 0,
+          })),
+        )
+      } finally {
+        if (!cancelled) setCcLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [supabase, user?.id, ccPeriodMonths, ccFilterId])
 
   const monthCurrent = selectedMonth
   const monthNext = nextMonthKey(selectedMonth)
@@ -122,6 +222,8 @@ export function Dashboard() {
         .sort(rowSort),
     [rowsScoped, monthNext],
   )
+
+  const ccMaxTotal = useMemo(() => Math.max(1, ...ccSeries.map((s) => s.total)), [ccSeries])
 
   if (!supabase) {
     return <p className="text-slate-400">CONECTANDO AO BANCO…</p>
@@ -283,6 +385,76 @@ export function Dashboard() {
           </section>
         </div>
       )}
+
+      <section className="mt-10 space-y-4 rounded-xl border border-slate-800 bg-slate-900/30 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
+            <CreditCard size={16} className="text-sky-400" />
+            <span>EVOLUÇÃO DO CARTÃO DE CRÉDITO (TOTAL DA FATURA)</span>
+          </div>
+          <Link to="/cartoes" className="text-[11px] text-sky-400 hover:underline">
+            GERENCIAR CARTÕES
+          </Link>
+        </div>
+        <p className="text-[11px] text-slate-500">
+          SOMA DOS LANÇAMENTOS DETALHADOS POR MÊS DE COMPETÊNCIA DA FATURA. PERÍODO TERMINA NO MÊS ATUAL ({monthKey(new Date())}).
+        </p>
+        <div className="flex flex-wrap items-end gap-4">
+          <div>
+            <label className="mb-1 block text-[11px] text-slate-400">MESES</label>
+            <select
+              className="w-40"
+              value={ccPeriodMonths}
+              onChange={(e) => setCcPeriodMonths(Number(e.target.value))}
+            >
+              {Array.from({ length: 10 }, (_, i) => i + 3).map((n) => (
+                <option key={n} value={n}>
+                  ÚLTIMOS {n} MESES
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] text-slate-400">CARTÃO</label>
+            <select className="min-w-[200px]" value={ccFilterId} onChange={(e) => setCcFilterId(e.target.value)}>
+              <option value="ALL">TODOS OS CARTÕES</option>
+              {creditCards.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {ccLoading ? (
+          <p className="text-xs text-slate-500">CARREGANDO EVOLUÇÃO…</p>
+        ) : creditCards.length === 0 ? (
+          <p className="text-xs text-slate-500">
+            NENHUM CARTÃO CADASTRADO.{' '}
+            <Link to="/cartoes" className="text-sky-400 hover:underline">
+              CADASTRAR
+            </Link>
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {ccSeries.map((row) => (
+              <div key={row.monthKey} className="space-y-1">
+                <div className="flex items-center justify-between gap-2 text-xs">
+                  <span className="text-slate-400">{row.label}</span>
+                  <span className="font-medium text-amber-200">{formatBRL(row.total)}</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-slate-800">
+                  <div
+                    className="h-full rounded-full bg-sky-600/80 transition-[width]"
+                    style={{ width: `${(row.total / ccMaxTotal) * 100}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   )
 }
