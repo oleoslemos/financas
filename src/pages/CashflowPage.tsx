@@ -1,6 +1,6 @@
 import { useUser } from '@clerk/clerk-react'
 import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
 import { addMonths, toISODate } from '../lib/dates'
 import { formatBRL, parseMoney } from '../lib/format'
@@ -40,11 +40,12 @@ type Pr = {
 export function CashflowPage() {
   const { user } = useUser()
   const supabase = useSupabase()
-  const [params, setParams] = useSearchParams()
-  const tab = (params.get('aba') === 'receber' ? 'receber' : 'pagar') as 'pagar' | 'receber'
-  const kind: Kind = tab === 'pagar' ? 'payable' : 'receivable'
+  const [formKind, setFormKind] = useState<Kind>('payable')
+  const [showPayables, setShowPayables] = useState(true)
+  const [showReceivables, setShowReceivables] = useState(true)
 
   const [rows, setRows] = useState<Pr[]>([])
+  const [invoiceDetailByPayable, setInvoiceDetailByPayable] = useState<Record<string, { cardId: string; invoiceId: string }>>({})
   const [cats, setCats] = useState<{ id: string; name: string }[]>([])
   const [banks, setBanks] = useState<{ id: string; name: string }[]>([])
   const [loading, setLoading] = useState(true)
@@ -64,46 +65,56 @@ export function CashflowPage() {
   const [parcelGroupModalId, setParcelGroupModalId] = useState<string | null>(null)
   const [parcelNewCount, setParcelNewCount] = useState('')
 
-  function setTab(t: 'pagar' | 'receber') {
-    params.set('aba', t)
-    setParams(params, { replace: true })
-  }
-
   async function load() {
     if (!supabase || !user?.id) return
     setLoading(true)
-    const [{ data: p }, { data: c }, { data: b }] = await Promise.all([
+    const [{ data: p }, { data: c }, { data: b }, { data: inv }] = await Promise.all([
       supabase
         .from('payables_receivables')
         .select('*')
         .eq('user_id', user.id)
-        .eq('kind', kind)
         .order('due_date', { ascending: true }),
       supabase.from('categories').select('id, name').eq('user_id', user.id).order('name'),
       supabase.from('bank_accounts').select('id, name').eq('user_id', user.id).eq('is_active', true).order('name'),
+      supabase.from('credit_card_invoices').select('id, credit_card_id, payable_id').eq('user_id', user.id).not('payable_id', 'is', null),
     ])
     setRows((p as Pr[]) ?? [])
     setCats((c as { id: string; name: string }[]) ?? [])
     setBanks((b as { id: string; name: string }[]) ?? [])
+    const links = ((inv ?? []) as Array<{ id: string; credit_card_id: string; payable_id: string | null }>).reduce(
+      (acc, row) => {
+        if (row.payable_id) acc[row.payable_id] = { cardId: row.credit_card_id, invoiceId: row.id }
+        return acc
+      },
+      {} as Record<string, { cardId: string; invoiceId: string }>,
+    )
+    setInvoiceDetailByPayable(links)
     setLoading(false)
   }
 
   useEffect(() => {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase, user?.id, kind])
+  }, [supabase, user?.id])
 
-  const filteredRows = useMemo(() => rows, [rows])
+  const filteredRows = useMemo(
+    () =>
+      rows.filter(
+        (r) => (showPayables && r.kind === 'payable') || (showReceivables && r.kind === 'receivable'),
+      ),
+    [rows, showPayables, showReceivables],
+  )
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!supabase || !user?.id) return
-    const baseDesc = toUpperTrim(description) || (kind === 'payable' ? 'CONTA A PAGAR' : 'CONTA A RECEBER')
+    const baseDesc = toUpperTrim(description) || (formKind === 'payable' ? 'CONTA A PAGAR' : 'CONTA A RECEBER')
 
     if (editing) {
       const { error } = await supabase
         .from('payables_receivables')
         .update({
+          kind: formKind,
           description: descriptionForEditedRow(editing, baseDesc),
           amount: parseMoney(amount),
           due_date: dueDate,
@@ -123,7 +134,7 @@ export function CashflowPage() {
     if (mode === 'vista') {
       const { error } = await supabase.from('payables_receivables').insert({
         user_id: user.id,
-        kind,
+        kind: formKind,
         description: baseDesc,
         amount: parseMoney(amount),
         due_date: dueDate,
@@ -148,7 +159,7 @@ export function CashflowPage() {
     const first = new Date(firstDue + 'T12:00:00')
     const inserts = Array.from({ length: n }, (_, i) => ({
       user_id: user.id,
-      kind,
+      kind: formKind,
       description: `${baseDesc} (PARCELA ${i + 1}/${n})`,
       amount: each,
       due_date: toISODate(addMonths(first, i)),
@@ -177,11 +188,13 @@ export function CashflowPage() {
     setParcelCount('12')
     setFirstDue(toISODate(new Date()))
     setMode('vista')
+    setFormKind('payable')
   }
 
   function startEdit(r: Pr) {
     setEditing(r)
     setMode('vista')
+    setFormKind(r.kind)
     setDescription(stripParcelDesc(r.description))
     setAmount(String(r.amount))
     setDueDate(r.due_date)
@@ -234,7 +247,9 @@ export function CashflowPage() {
       return
     }
 
-    const baseDesc = stripParcelDesc(sorted[0].description) || (kind === 'payable' ? 'CONTA A PAGAR' : 'CONTA A RECEBER')
+    const baseDesc =
+      stripParcelDesc(sorted[0].description) ||
+      (sorted[0].kind === 'payable' ? 'CONTA A PAGAR' : 'CONTA A RECEBER')
     const hi = sorted[sorted.length - 1].installment_number ?? sorted.length
 
     async function syncRowMeta(row: Pr, num: number, total: number) {
@@ -312,30 +327,31 @@ export function CashflowPage() {
 
   if (!supabase) return <p className="text-slate-400">Conectando…</p>
 
-  const title = tab === 'pagar' ? 'Contas a pagar' : 'Contas a receber'
+  const title = 'Contas a pagar e a receber'
 
   return (
     <div className="space-y-8">
       <h2 className="text-2xl font-semibold">{title}</h2>
 
-      <div className="flex gap-2">
-        <button
-          type="button"
-          className={`btn ${tab === 'pagar' ? 'btn-primary' : 'btn-secondary'}`}
-          onClick={() => setTab('pagar')}
-        >
-          A pagar
-        </button>
-        <button
-          type="button"
-          className={`btn ${tab === 'receber' ? 'btn-primary' : 'btn-secondary'}`}
-          onClick={() => setTab('receber')}
-        >
-          A receber
-        </button>
-      </div>
-
       <form onSubmit={submit} className="space-y-4 rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className={`btn text-sm ${formKind === 'payable' ? 'btn-primary' : 'btn-secondary'}`}
+            disabled={!!editing}
+            onClick={() => setFormKind('payable')}
+          >
+            CONTA A PAGAR
+          </button>
+          <button
+            type="button"
+            className={`btn text-sm ${formKind === 'receivable' ? 'btn-primary' : 'btn-secondary'}`}
+            disabled={!!editing}
+            onClick={() => setFormKind('receivable')}
+          >
+            CONTA A RECEBER
+          </button>
+        </div>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -454,6 +470,28 @@ export function CashflowPage() {
         </div>
       </form>
 
+      <div className="flex flex-wrap items-center gap-4 rounded-xl border border-slate-800 bg-slate-900/30 p-3">
+        <span className="text-sm text-slate-400">Exibir na tabela:</span>
+        <label className="mb-0 flex cursor-pointer items-center gap-2 text-sm text-slate-300">
+          <input
+            type="checkbox"
+            className="h-4 w-4"
+            checked={showPayables}
+            onChange={(e) => setShowPayables(e.target.checked)}
+          />
+          CONTAS A PAGAR
+        </label>
+        <label className="mb-0 flex cursor-pointer items-center gap-2 text-sm text-slate-300">
+          <input
+            type="checkbox"
+            className="h-4 w-4"
+            checked={showReceivables}
+            onChange={(e) => setShowReceivables(e.target.checked)}
+          />
+          CONTAS A RECEBER
+        </label>
+      </div>
+
       <div className="table-wrap">
         {loading ? (
           <p className="p-4 text-slate-500">Carregando…</p>
@@ -461,6 +499,7 @@ export function CashflowPage() {
           <table>
             <thead>
               <tr>
+                <th>Tipo</th>
                 <th>Descrição</th>
                 <th>Valor</th>
                 <th>Vencimento</th>
@@ -472,6 +511,7 @@ export function CashflowPage() {
             <tbody>
               {filteredRows.map((r) => (
                 <tr key={r.id}>
+                  <td>{r.kind === 'payable' ? 'CONTAS A PAGAR' : 'CONTAS A RECEBER'}</td>
                   <td>{r.description}</td>
                   <td>{formatBRL(Number(r.amount))}</td>
                   <td>{r.due_date}</td>
@@ -488,6 +528,14 @@ export function CashflowPage() {
                     <button type="button" className="btn-ghost text-sm" onClick={() => startEdit(r)}>
                       Editar
                     </button>
+                    {r.kind === 'payable' && invoiceDetailByPayable[r.id] && (
+                      <Link
+                        to={`/cartoes/${invoiceDetailByPayable[r.id].cardId}/faturas/${invoiceDetailByPayable[r.id].invoiceId}`}
+                        className="text-sm text-sky-400 hover:underline"
+                      >
+                        Detalhar fatura
+                      </Link>
+                    )}
                     <button type="button" className="text-sm text-red-400 hover:underline" onClick={() => removeRow(r)}>
                       Excluir
                     </button>
