@@ -86,6 +86,7 @@ export function Dashboard() {
 
   const monthCurrent = selectedMonth
   const monthNext = nextMonthKey(selectedMonth)
+  const selectedBankName = selectedBankId === 'ALL' ? 'TODAS AS CONTAS' : banks.find((b) => b.id === selectedBankId)?.name ?? 'CONTA'
 
   const rowsScoped = useMemo(
     () =>
@@ -166,7 +167,7 @@ export function Dashboard() {
                   <button
                     key={b.id}
                     type="button"
-                    onClick={() => setSelectedBankId(b.id)}
+                    onClick={() => setSelectedBankId((prev) => (prev === b.id ? 'ALL' : b.id))}
                     className={`w-full rounded-xl border p-4 text-left transition-colors ${
                       selected ? 'border-sky-600 bg-slate-900/80' : 'border-slate-800 bg-slate-900/40 hover:border-slate-700'
                     }`}
@@ -198,6 +199,9 @@ export function Dashboard() {
               <div className="mt-2 text-[11px] text-slate-500">
                 EXIBINDO: {selectedMonth} E {nextMonthKey(selectedMonth)}
               </div>
+              <div className="mt-1 text-[11px] text-slate-500">
+                FILTRO DE CONTA: {selectedBankName}
+              </div>
             </div>
 
             <div className="grid gap-4 lg:grid-cols-2">
@@ -206,7 +210,10 @@ export function Dashboard() {
                 <div className="space-y-2">
                   <p className="text-[11px] text-amber-300">A PAGAR</p>
                   {payCurrent.length === 0 ? (
-                    <p className="text-[11px] text-slate-500">SEM REGISTROS</p>
+                    <p className="text-[11px] text-slate-500">
+                      SEM REGISTROS
+                      {selectedBankId !== 'ALL' ? ' NESTA CONTA.' : '.'}
+                    </p>
                   ) : (
                     payCurrent.map((x) => (
                       <div key={`p0-${x.id}`} className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 px-2 py-1.5 text-xs">
@@ -219,7 +226,10 @@ export function Dashboard() {
 
                   <p className="pt-2 text-[11px] text-emerald-300">A RECEBER</p>
                   {recCurrent.length === 0 ? (
-                    <p className="text-[11px] text-slate-500">SEM REGISTROS</p>
+                    <p className="text-[11px] text-slate-500">
+                      SEM REGISTROS
+                      {selectedBankId !== 'ALL' ? ' NESTA CONTA.' : '.'}
+                    </p>
                   ) : (
                     recCurrent.map((x) => (
                       <div key={`r0-${x.id}`} className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 px-2 py-1.5 text-xs">
@@ -237,7 +247,10 @@ export function Dashboard() {
                 <div className="space-y-2">
                   <p className="text-[11px] text-amber-300">A PAGAR</p>
                   {payNext.length === 0 ? (
-                    <p className="text-[11px] text-slate-500">SEM REGISTROS</p>
+                    <p className="text-[11px] text-slate-500">
+                      SEM REGISTROS
+                      {selectedBankId !== 'ALL' ? ' NESTA CONTA.' : '.'}
+                    </p>
                   ) : (
                     payNext.map((x) => (
                       <div key={`p1-${x.id}`} className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 px-2 py-1.5 text-xs">
@@ -250,7 +263,10 @@ export function Dashboard() {
 
                   <p className="pt-2 text-[11px] text-emerald-300">A RECEBER</p>
                   {recNext.length === 0 ? (
-                    <p className="text-[11px] text-slate-500">SEM REGISTROS</p>
+                    <p className="text-[11px] text-slate-500">
+                      SEM REGISTROS
+                      {selectedBankId !== 'ALL' ? ' NESTA CONTA.' : '.'}
+                    </p>
                   ) : (
                     recNext.map((x) => (
                       <div key={`r1-${x.id}`} className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 px-2 py-1.5 text-xs">
