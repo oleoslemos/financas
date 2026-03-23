@@ -24,7 +24,8 @@ export function addMonthsToReferenceMonth(referenceMonthIso: string, months: num
 }
 
 export function addMonthsToDueDate(dueIso: string, months: number): string {
-  const d = parseISODate(dueIso + 'T12:00:00')
+  // dueIso vem como YYYY-MM-DD; criar Date direto evita quebrar no parseISODate
+  const d = new Date(`${dueIso}T12:00:00`)
   return toISODate(addMonths(d, months))
 }
 

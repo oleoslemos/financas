@@ -513,7 +513,7 @@ export function CashflowPage() {
               {filteredRows.map((r) => (
                 <tr key={r.id}>
                   <td>{r.kind === 'payable' ? 'CONTAS A PAGAR' : 'CONTAS A RECEBER'}</td>
-                  <td>{r.description}</td>
+                  <td className="min-w-[340px]">{stripParcelDesc(r.description)}</td>
                   <td>{formatBRL(Number(r.amount))}</td>
                   <td>{r.due_date}</td>
                   <td>
