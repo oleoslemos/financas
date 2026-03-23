@@ -70,9 +70,12 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true)
 
   const [creditCards, setCreditCards] = useState<{ id: string; name: string }[]>([])
-  const [ccPeriodMonths, setCcPeriodMonths] = useState(6)
+  /** Meses à frente do mês atual (além da base fixa: 3 meses anteriores + atual). */
+  const [ccFutureMonths, setCcFutureMonths] = useState<3 | 6 | 9 | 12>(3)
   const [ccFilterId, setCcFilterId] = useState<string>('ALL')
-  const [ccSeries, setCcSeries] = useState<{ monthKey: string; label: string; total: number }[]>([])
+  const [ccSeries, setCcSeries] = useState<
+    { monthKey: string; label: string; total: number; segment: 'passado' | 'atual' | 'futuro' }[]
+  >([])
   const [ccLoading, setCcLoading] = useState(true)
 
   useEffect(() => {
@@ -124,8 +127,9 @@ export function Dashboard() {
         if (cancelled) return
         setCreditCards((cards as { id: string; name: string }[]) ?? [])
 
-        const endKey = monthKey(new Date())
-        const startKey = shiftMonthKey(endKey, -(ccPeriodMonths - 1))
+        const todayKey = monthKey(new Date())
+        const startKey = shiftMonthKey(todayKey, -3)
+        const endKey = shiftMonthKey(todayKey, ccFutureMonths)
         const fromIso = startOfMonthIso(startKey)
         const toIso = endOfMonthIso(endKey)
 
@@ -173,6 +177,7 @@ export function Dashboard() {
             monthKey: mk,
             label: monthLabel(parseISODate(`${mk}-01`)).toUpperCase(),
             total: totalsByMonth.get(mk) ?? 0,
+            segment: mk < todayKey ? 'passado' : mk === todayKey ? 'atual' : 'futuro',
           })),
         )
       } finally {
@@ -182,7 +187,7 @@ export function Dashboard() {
     return () => {
       cancelled = true
     }
-  }, [supabase, user?.id, ccPeriodMonths, ccFilterId])
+  }, [supabase, user?.id, ccFutureMonths, ccFilterId])
 
   const monthCurrent = selectedMonth
   const monthNext = nextMonthKey(selectedMonth)
@@ -397,21 +402,21 @@ export function Dashboard() {
           </Link>
         </div>
         <p className="text-[11px] text-slate-500">
-          SOMA DOS LANÇAMENTOS DETALHADOS POR MÊS DE COMPETÊNCIA DA FATURA. PERÍODO TERMINA NO MÊS ATUAL ({monthKey(new Date())}).
+          BASE FIXA: 3 MESES ANTERIORES + MÊS ATUAL ({monthKey(new Date())}). EM SEGUIDA, MESES À FRENTE CONFORME O FILTRO.
+          VALORES = SOMA DOS ITENS DA FATURA POR COMPETÊNCIA (FATURAS FUTURAS APARECEM SE JÁ EXISTIREM, EX.: PARCELADO).
         </p>
         <div className="flex flex-wrap items-end gap-4">
           <div>
-            <label className="mb-1 block text-[11px] text-slate-400">MESES</label>
+            <label className="mb-1 block text-[11px] text-slate-400">À FRENTE</label>
             <select
-              className="w-40"
-              value={ccPeriodMonths}
-              onChange={(e) => setCcPeriodMonths(Number(e.target.value))}
+              className="min-w-[200px]"
+              value={ccFutureMonths}
+              onChange={(e) => setCcFutureMonths(Number(e.target.value) as 3 | 6 | 9 | 12)}
             >
-              {Array.from({ length: 10 }, (_, i) => i + 3).map((n) => (
-                <option key={n} value={n}>
-                  ÚLTIMOS {n} MESES
-                </option>
-              ))}
+              <option value={3}>PRÓXIMOS 3 MESES</option>
+              <option value={6}>PRÓXIMOS 6 MESES</option>
+              <option value={9}>PRÓXIMOS 9 MESES</option>
+              <option value={12}>PRÓXIMOS 12 MESES</option>
             </select>
           </div>
           <div>
@@ -441,12 +446,25 @@ export function Dashboard() {
             {ccSeries.map((row) => (
               <div key={row.monthKey} className="space-y-1">
                 <div className="flex items-center justify-between gap-2 text-xs">
-                  <span className="text-slate-400">{row.label}</span>
+                  <span
+                    className={
+                      row.segment === 'atual'
+                        ? 'font-medium text-white'
+                        : row.segment === 'futuro'
+                          ? 'text-sky-300'
+                          : 'text-slate-400'
+                    }
+                  >
+                    {row.label}
+                    {row.segment === 'atual' ? ' — MÊS ATUAL' : row.segment === 'futuro' ? ' — À FRENTE' : ''}
+                  </span>
                   <span className="font-medium text-amber-200">{formatBRL(row.total)}</span>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-slate-800">
                   <div
-                    className="h-full rounded-full bg-sky-600/80 transition-[width]"
+                    className={`h-full rounded-full transition-[width] ${
+                      row.segment === 'futuro' ? 'bg-violet-600/70' : 'bg-sky-600/80'
+                    }`}
                     style={{ width: `${(row.total / ccMaxTotal) * 100}%` }}
                   />
                 </div>
