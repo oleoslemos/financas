@@ -531,7 +531,7 @@ export function CashflowPage() {
                     {r.kind === 'payable' && invoiceDetailByPayable[r.id] && (
                       <Link
                         to={`/cartoes/${invoiceDetailByPayable[r.id].cardId}/faturas/${invoiceDetailByPayable[r.id].invoiceId}`}
-                        className="text-sm text-sky-400 hover:underline"
+                        className="btn-ghost text-sm"
                       >
                         Detalhar fatura
                       </Link>
@@ -547,13 +547,6 @@ export function CashflowPage() {
                           onClick={() => openParcelGroupEdit(r.installment_group_id!)}
                         >
                           Alterar parcelas
-                        </button>
-                        <button
-                          type="button"
-                          className="text-xs text-amber-400 hover:underline"
-                          onClick={() => deleteOpenGroup(r.installment_group_id!)}
-                        >
-                          Limpar abertas do grupo
                         </button>
                       </>
                     )}
@@ -580,6 +573,17 @@ export function CashflowPage() {
             <h3 id="parcel-modal-title" className="text-lg font-medium text-white">
               Alterar parcelamento
             </h3>
+            <div className="mt-2 flex justify-end">
+              <button
+                type="button"
+                className="text-xs text-amber-400 hover:underline"
+                onClick={() => {
+                  if (parcelGroupModalId) void deleteOpenGroup(parcelGroupModalId)
+                }}
+              >
+                Excluir parcelas em aberto do grupo
+              </button>
+            </div>
             <p className="mt-2 text-sm text-slate-400">
               Defina o novo número total de parcelas (ex.: de 12 para 10). Ao{' '}
               <span className="text-slate-300">diminuir</span>, as parcelas removidas são as de número maior —
