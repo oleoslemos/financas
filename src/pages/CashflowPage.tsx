@@ -205,11 +205,43 @@ export function CashflowPage() {
   }
 
   async function togglePaid(r: Pr) {
-    if (!supabase) return
+    if (!supabase || !user?.id) return
     const next = r.status === 'paid' ? 'open' : 'paid'
     const { error } = await supabase.from('payables_receivables').update({ status: next }).eq('id', r.id)
     if (error) alert(error.message)
-    else load()
+    else {
+      if (r.bank_account_id) {
+        // Ao liquidar: payable diminui saldo; receivable aumenta.
+        // Ao reabrir, aplica o inverso para desfazer o efeito no saldo.
+        const amount = Number(r.amount)
+        const signal = r.kind === 'payable' ? -1 : 1
+        const delta = next === 'paid' ? signal * amount : -signal * amount
+
+        const { data: bank, error: bankErr } = await supabase
+          .from('bank_accounts')
+          .select('initial_balance')
+          .eq('id', r.bank_account_id)
+          .eq('user_id', user.id)
+          .maybeSingle()
+        if (bankErr) {
+          alert(bankErr.message)
+          await load()
+          return
+        }
+        if (bank && 'initial_balance' in bank) {
+          const current = Number((bank as { initial_balance: number }).initial_balance)
+          const { error: upErr } = await supabase
+            .from('bank_accounts')
+            .update({ initial_balance: current + delta })
+            .eq('id', r.bank_account_id)
+            .eq('user_id', user.id)
+          if (upErr) {
+            alert(upErr.message)
+          }
+        }
+      }
+      load()
+    }
   }
 
   async function removeRow(r: Pr) {
