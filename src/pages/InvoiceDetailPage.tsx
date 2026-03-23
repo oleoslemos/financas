@@ -1,6 +1,6 @@
 import { useUser } from '@clerk/clerk-react'
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
 import { monthLabel, parseISODate, toISODate } from '../lib/dates'
 import { formatBRL, parseMoney } from '../lib/format'
@@ -8,6 +8,10 @@ import {
   CREDIT_CARD_INVOICE_CATEGORY_NAME,
   ensureCreditCardExpenseCategory,
 } from '../lib/creditCardCategory'
+import {
+  applyCreditCardInstallments,
+  dissolveCreditCardInstallmentGroup,
+} from '../lib/invoiceInstallments'
 import { sumInvoiceItems, syncLinkedPayable } from '../lib/invoicePayableSync'
 import { toUpperTrim } from '../lib/text'
 
@@ -18,6 +22,17 @@ type Inv = {
   due_date: string
   status: string
   payable_id: string | null
+  installment_group_id: string | null
+  installment_number: number | null
+  installment_count: number | null
+}
+
+type SiblingRow = {
+  id: string
+  reference_month: string
+  due_date: string
+  installment_number: number | null
+  installment_count: number | null
 }
 
 type Item = {
@@ -30,6 +45,7 @@ type Item = {
 
 export function InvoiceDetailPage() {
   const { cardId, invoiceId } = useParams<{ cardId: string; invoiceId: string }>()
+  const navigate = useNavigate()
   const { user } = useUser()
   const supabase = useSupabase()
   const [cardName, setCardName] = useState('')
@@ -52,6 +68,9 @@ export function InvoiceDetailPage() {
   })
   const [editingItem, setEditingItem] = useState<Item | null>(null)
 
+  const [siblings, setSiblings] = useState<SiblingRow[]>([])
+  const [installCountInput, setInstallCountInput] = useState('3')
+
   const load = useCallback(async () => {
     if (!supabase || !user?.id || !invoiceId || !cardId) return
     setLoading(true)
@@ -68,6 +87,17 @@ export function InvoiceDetailPage() {
     setInv(invoice)
     setItems((it as Item[]) ?? [])
     setCats((cat as { id: string; name: string }[]) ?? [])
+    if (invoice?.installment_group_id) {
+      const { data: sib } = await supabase
+        .from('credit_card_invoices')
+        .select('id, reference_month, due_date, installment_number, installment_count')
+        .eq('installment_group_id', invoice.installment_group_id)
+        .eq('user_id', user.id)
+        .order('due_date', { ascending: true })
+      setSiblings((sib as SiblingRow[]) ?? [])
+    } else {
+      setSiblings([])
+    }
     if (invoice) {
       setDueDate(invoice.due_date)
       setLinkPayable(!!invoice.payable_id)
@@ -106,7 +136,65 @@ export function InvoiceDetailPage() {
     setItemForm((prev) => (prev.category_id ? prev : { ...prev, category_id: ccCategoryId }))
   }, [ccCategoryId, editingItem])
 
+  useEffect(() => {
+    if (inv?.installment_count) setInstallCountInput(String(inv.installment_count))
+    else setInstallCountInput('3')
+  }, [inv?.id, inv?.installment_count])
+
   const itemsLocked = !!(inv?.payable_id && payableStatus === 'paid')
+
+  async function handleApplyInstallments() {
+    if (!supabase || !user?.id || !inv || !invoiceId || itemsLocked) return
+    const parsed = parseInt(installCountInput, 10)
+    if (!Number.isFinite(parsed) || parsed < 2) {
+      alert('Informe 2 ou mais parcelas.')
+      return
+    }
+    const n = parsed
+    if (
+      !confirm(
+        'O valor total somado em todas as parcelas atuais será dividido em ' +
+          n +
+          ' faturas (uma competência por mês, vencimentos consecutivos). Cada fatura ficará com um único lançamento por parcela (você pode editar valores depois, inclusive por arredondamento). Os itens atuais de todas as parcelas do grupo serão substituídos. Continuar?',
+      )
+    ) {
+      return
+    }
+    const cat =
+      ccCategoryId ?? (await ensureCreditCardExpenseCategory(supabase, user.id))
+    if (cat) setCcCategoryId(cat)
+    const r = await applyCreditCardInstallments(supabase, {
+      userId: user.id,
+      anchorInvoiceId: invoiceId,
+      installmentCount: n,
+      categoryIdForItems: cat,
+      cardName: cardName || 'CARTÃO',
+    })
+    if (r.error) alert(r.error)
+    else {
+      await load()
+      await runSyncInvoice()
+    }
+  }
+
+  async function handleDissolveInstallments() {
+    if (!supabase || !user?.id || !invoiceId || itemsLocked) return
+    if (
+      !confirm(
+        'Remover parcelamento: permanece só a fatura com vencimento mais antigo; as demais parcelas serão excluídas (e contas a pagar em aberto vinculadas). Continuar?',
+      )
+    ) {
+      return
+    }
+    const r = await dissolveCreditCardInstallmentGroup(supabase, user.id, invoiceId)
+    if (r.error) alert(r.error)
+    else if (r.survivorInvoiceId && r.survivorInvoiceId !== invoiceId) {
+      navigate(`/cartoes/${cardId}/faturas/${r.survivorInvoiceId}`)
+    } else {
+      await load()
+      await runSyncInvoice()
+    }
+  }
 
   /** Lê a fatura no banco e sincroniza total/vencimento na conta a pagar vinculada. */
   const runSyncInvoice = useCallback(async () => {
@@ -231,6 +319,67 @@ export function InvoiceDetailPage() {
           “Pagar / Receber” para editar.
         </p>
       )}
+
+      {siblings.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-sm text-slate-400">
+          <span className="text-slate-500">Parcelas do grupo:</span>
+          {siblings.map((s) => (
+            <Link
+              key={s.id}
+              to={`/cartoes/${cardId}/faturas/${s.id}`}
+              className={
+                s.id === invoiceId
+                  ? 'rounded-md bg-sky-900/50 px-2 py-0.5 font-medium text-sky-200'
+                  : 'rounded-md px-2 py-0.5 text-sky-400 hover:underline'
+              }
+            >
+              {s.installment_number ?? '?'}/{s.installment_count ?? '?'} —{' '}
+              {monthLabel(parseISODate(s.reference_month))}
+            </Link>
+          ))}
+        </div>
+      )}
+
+      <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+        <h3 className="text-base font-medium text-white">Parcelamento da fatura</h3>
+        <p className="text-sm text-slate-400">
+          Informe em quantas vezes deseja dividir o total (somando todas as parcelas já existentes neste grupo). Serão
+          criadas faturas nos meses seguintes com o mesmo dia de vencimento, quando ainda não existirem. Cada fatura
+          recebe um lançamento por parcela; você pode alterar o valor de cada uma para corrigir arredondamento. Na lista
+          de faturas, excluir qualquer parcela remove o grupo inteiro.
+        </p>
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="text-sm text-slate-300">Quantidade de parcelas</label>
+            <input
+              type="number"
+              min={2}
+              className="mt-1 w-28"
+              value={installCountInput}
+              onChange={(e) => setInstallCountInput(e.target.value)}
+              disabled={itemsLocked}
+            />
+          </div>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={itemsLocked}
+            onClick={() => void handleApplyInstallments()}
+          >
+            Aplicar parcelamento
+          </button>
+          {inv.installment_group_id && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={itemsLocked}
+              onClick={() => void handleDissolveInstallments()}
+            >
+              Remover parcelamento
+            </button>
+          )}
+        </div>
+      </div>
 
       <form onSubmit={saveInvoiceMeta} className="flex flex-wrap items-end gap-4 rounded-xl border border-slate-800 bg-slate-900/40 p-4">
         <div>

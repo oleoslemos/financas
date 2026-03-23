@@ -2,6 +2,7 @@ import { useUser } from '@clerk/clerk-react'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
+import { deleteCreditCardInvoiceOrGroup } from '../lib/invoiceInstallments'
 import { monthLabel, parseISODate, toISODate } from '../lib/dates'
 
 type Inv = {
@@ -9,6 +10,9 @@ type Inv = {
   reference_month: string
   due_date: string
   status: string
+  installment_group_id: string | null
+  installment_number: number | null
+  installment_count: number | null
 }
 
 export function CardInvoicesPage() {
@@ -33,7 +37,9 @@ export function CardInvoicesPage() {
     setCardName((c as { name: string } | null)?.name ?? '')
     const { data } = await supabase
       .from('credit_card_invoices')
-      .select('id, reference_month, due_date, status')
+      .select(
+        'id, reference_month, due_date, status, installment_group_id, installment_number, installment_count',
+      )
       .eq('credit_card_id', cardId)
       .eq('user_id', user.id)
       .order('reference_month', { ascending: false })
@@ -71,9 +77,14 @@ export function CardInvoicesPage() {
   }
 
   async function removeInv(id: string) {
-    if (!supabase || !confirm('Excluir fatura e itens?')) return
-    const { error } = await supabase.from('credit_card_invoices').delete().eq('id', id)
-    if (error) alert(error.message)
+    if (!supabase || !user?.id) return
+    const row = rows.find((r) => r.id === id)
+    const msg = row?.installment_group_id
+      ? 'Excluir todas as parcelas deste parcelamento no cartão? (Contas a pagar em aberto vinculadas também serão removidas.)'
+      : 'Excluir fatura e itens?'
+    if (!confirm(msg)) return
+    const r = await deleteCreditCardInvoiceOrGroup(supabase, user.id, id)
+    if (r.error) alert(r.error)
     else load()
   }
 
@@ -125,6 +136,7 @@ export function CardInvoicesPage() {
               <tr>
                 <th>Competência</th>
                 <th>Vencimento</th>
+                <th>Parcela</th>
                 <th>Status</th>
                 <th></th>
               </tr>
@@ -134,6 +146,11 @@ export function CardInvoicesPage() {
                 <tr key={r.id}>
                   <td>{monthLabel(parseISODate(r.reference_month))}</td>
                   <td>{r.due_date}</td>
+                  <td className="text-slate-400">
+                    {r.installment_group_id
+                      ? `${r.installment_number ?? '?'}/${r.installment_count ?? '?'}`
+                      : '—'}
+                  </td>
                   <td>{r.status}</td>
                   <td className="space-x-2 whitespace-nowrap">
                     <Link to={`/cartoes/${cardId}/faturas/${r.id}`} className="text-sky-400 hover:underline">
