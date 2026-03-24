@@ -15,10 +15,19 @@ type Card = {
   limit_amount: number | null
 }
 
+function currentMonthKey() {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  return `${y}-${m}`
+}
+
 export function CreditCardsPage() {
   const { user } = useUser()
   const supabase = useSupabase()
   const [rows, setRows] = useState<Card[]>([])
+  const [monthValueByCard, setMonthValueByCard] = useState<Record<string, number>>({})
+  const [totalValueByCard, setTotalValueByCard] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [form, setForm] = useState({
     name: '',
@@ -28,12 +37,60 @@ export function CreditCardsPage() {
     limit_amount: '',
   })
   const [editing, setEditing] = useState<Card | null>(null)
+  const [modalOpen, setModalOpen] = useState(false)
 
   async function load() {
     if (!supabase || !user?.id) return
     setLoading(true)
     const { data } = await supabase.from('credit_cards').select('*').eq('user_id', user.id).order('name')
-    setRows((data as Card[]) ?? [])
+    const cards = (data as Card[]) ?? []
+    setRows(cards)
+
+    if (cards.length === 0) {
+      setMonthValueByCard({})
+      setTotalValueByCard({})
+      setLoading(false)
+      return
+    }
+
+    const cardIds = cards.map((c) => c.id)
+    const { data: invData } = await supabase
+      .from('credit_card_invoices')
+      .select('id, credit_card_id, reference_month')
+      .eq('user_id', user.id)
+      .in('credit_card_id', cardIds)
+
+    const invoices = (invData ?? []) as Array<{ id: string; credit_card_id: string; reference_month: string }>
+    if (invoices.length === 0) {
+      setMonthValueByCard({})
+      setTotalValueByCard({})
+      setLoading(false)
+      return
+    }
+
+    const invoiceById = new Map<string, { credit_card_id: string; reference_month: string }>()
+    for (const inv of invoices) invoiceById.set(inv.id, { credit_card_id: inv.credit_card_id, reference_month: inv.reference_month })
+
+    const { data: itemData } = await supabase.from('credit_card_invoice_items').select('invoice_id, amount').in(
+      'invoice_id',
+      invoices.map((i) => i.id),
+    )
+
+    const monthMap: Record<string, number> = {}
+    const totalMap: Record<string, number> = {}
+    const current = currentMonthKey()
+    for (const it of ((itemData ?? []) as Array<{ invoice_id: string; amount: number }>)) {
+      const inv = invoiceById.get(it.invoice_id)
+      if (!inv) continue
+      const cardId = inv.credit_card_id
+      const amount = Number(it.amount) || 0
+      totalMap[cardId] = (totalMap[cardId] ?? 0) + amount
+      if (inv.reference_month.slice(0, 7) === current) {
+        monthMap[cardId] = (monthMap[cardId] ?? 0) + amount
+      }
+    }
+    setMonthValueByCard(monthMap)
+    setTotalValueByCard(totalMap)
     setLoading(false)
   }
 
@@ -57,6 +114,7 @@ export function CreditCardsPage() {
       const { error } = await supabase.from('credit_cards').update(payload).eq('id', editing.id)
       if (error) alert(error.message)
       else {
+        setModalOpen(false)
         setEditing(null)
         reset()
         load()
@@ -65,6 +123,7 @@ export function CreditCardsPage() {
       const { error } = await supabase.from('credit_cards').insert(payload)
       if (error) alert(error.message)
       else {
+        setModalOpen(false)
         reset()
         load()
       }
@@ -73,6 +132,12 @@ export function CreditCardsPage() {
 
   function reset() {
     setForm({ name: '', brand: '', closing_day: '10', due_day: '17', limit_amount: '' })
+  }
+
+  function openAddModal() {
+    setEditing(null)
+    reset()
+    setModalOpen(true)
   }
 
   async function remove(id: string) {
@@ -91,65 +156,21 @@ export function CreditCardsPage() {
       due_day: String(c.due_day),
       limit_amount: c.limit_amount != null ? String(c.limit_amount) : '',
     })
+    setModalOpen(true)
   }
 
   if (!supabase) return <p className="text-slate-400">Conectando…</p>
 
+  const currentKey = currentMonthKey().replace('-', '/')
+
   return (
     <div className="space-y-8">
-      <h2 className="text-2xl font-semibold">Cartões de crédito</h2>
-
-      <form onSubmit={submit} className="grid gap-4 rounded-xl border border-slate-800 bg-slate-900/40 p-4 sm:grid-cols-2">
-        <div>
-          <label>Nome</label>
-          <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-        </div>
-        <div>
-          <label>Bandeira</label>
-          <input value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} />
-        </div>
-        <div>
-          <label>Dia fechamento</label>
-          <input
-            type="number"
-            min={1}
-            max={31}
-            value={form.closing_day}
-            onChange={(e) => setForm({ ...form, closing_day: e.target.value })}
-          />
-        </div>
-        <div>
-          <label>Dia vencimento</label>
-          <input
-            type="number"
-            min={1}
-            max={31}
-            value={form.due_day}
-            onChange={(e) => setForm({ ...form, due_day: e.target.value })}
-          />
-        </div>
-        <div className="sm:col-span-2">
-          <label>Limite (opcional)</label>
-          <input value={form.limit_amount} onChange={(e) => setForm({ ...form, limit_amount: e.target.value })} />
-        </div>
-        <div className="flex gap-2 sm:col-span-2">
-          <button type="submit" className="btn btn-primary">
-            {editing ? 'Salvar' : 'Adicionar'}
-          </button>
-          {editing && (
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => {
-                setEditing(null)
-                reset()
-              }}
-            >
-              Cancelar
-            </button>
-          )}
-        </div>
-      </form>
+      <div className="space-y-2">
+        <h2 className="text-2xl font-semibold">CARTÕES DE CRÉDITO</h2>
+        <button type="button" className="btn btn-primary text-sm" onClick={openAddModal}>
+          ADICIONAR NOVO CARTÃO
+        </button>
+      </div>
 
       <div className="table-wrap">
         {loading ? (
@@ -158,9 +179,12 @@ export function CreditCardsPage() {
           <table>
             <thead>
               <tr>
-                <th>Nome</th>
-                <th>Fechamento / Venc.</th>
-                <th>Limite</th>
+                <th>NOME</th>
+                <th>BANDEIRA</th>
+                <th>FECHAMENTO / VENC.</th>
+                <th>LIMITE</th>
+                <th>VALOR MÊS ATUAL ({currentKey})</th>
+                <th>VALOR TOTAL CARTÃO</th>
                 <th></th>
               </tr>
             </thead>
@@ -168,10 +192,13 @@ export function CreditCardsPage() {
               {rows.map((c) => (
                 <tr key={c.id}>
                   <td>{c.name}</td>
+                  <td>{c.brand || '—'}</td>
                   <td>
                     {c.closing_day} / {c.due_day}
                   </td>
                   <td>{c.limit_amount != null ? formatBRL(Number(c.limit_amount)) : '—'}</td>
+                  <td>{formatBRL(monthValueByCard[c.id] ?? 0)}</td>
+                  <td>{formatBRL(totalValueByCard[c.id] ?? 0)}</td>
                   <td className="whitespace-nowrap">
                     <div className="flex items-center justify-end gap-2">
                       <Link
@@ -208,6 +235,79 @@ export function CreditCardsPage() {
           </table>
         )}
       </div>
+
+      {modalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          role="presentation"
+          onClick={() => {
+            setModalOpen(false)
+            setEditing(null)
+            reset()
+          }}
+        >
+          <div
+            role="dialog"
+            aria-labelledby="card-modal-title"
+            className="w-full max-w-2xl rounded-xl border border-slate-800 bg-slate-900 p-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="card-modal-title" className="text-lg font-medium text-white">
+              {editing ? 'EDITAR CARTÃO' : 'NOVO CARTÃO'}
+            </h3>
+            <form onSubmit={submit} className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div>
+                <label>NOME</label>
+                <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              </div>
+              <div>
+                <label>BANDEIRA</label>
+                <input value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} />
+              </div>
+              <div>
+                <label>DIA FECHAMENTO</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={form.closing_day}
+                  onChange={(e) => setForm({ ...form, closing_day: e.target.value })}
+                />
+              </div>
+              <div>
+                <label>DIA VENCIMENTO</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={form.due_day}
+                  onChange={(e) => setForm({ ...form, due_day: e.target.value })}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label>LIMITE (OPCIONAL)</label>
+                <input value={form.limit_amount} onChange={(e) => setForm({ ...form, limit_amount: e.target.value })} />
+              </div>
+              <div className="flex gap-2 sm:col-span-2">
+                <button type="submit" className="btn btn-primary">
+                  {editing ? 'SALVAR' : 'ADICIONAR'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setModalOpen(false)
+                    setEditing(null)
+                    reset()
+                  }}
+                >
+                  CANCELAR
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
