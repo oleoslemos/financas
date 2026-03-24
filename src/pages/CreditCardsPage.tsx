@@ -15,19 +15,12 @@ type Card = {
   limit_amount: number | null
 }
 
-function currentMonthKey() {
-  const d = new Date()
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  return `${y}-${m}`
-}
-
 export function CreditCardsPage() {
   const { user } = useUser()
   const navigate = useNavigate()
   const supabase = useSupabase()
   const [rows, setRows] = useState<Card[]>([])
-  const [monthValueByCard, setMonthValueByCard] = useState<Record<string, number>>({})
+  const [openInvoiceValueByCard, setOpenInvoiceValueByCard] = useState<Record<string, number>>({})
   const [totalValueByCard, setTotalValueByCard] = useState<Record<string, number>>({})
   const [openDueByCard, setOpenDueByCard] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
@@ -49,8 +42,9 @@ export function CreditCardsPage() {
     setRows(cards)
 
     if (cards.length === 0) {
-      setMonthValueByCard({})
+      setOpenInvoiceValueByCard({})
       setTotalValueByCard({})
+      setOpenDueByCard({})
       setLoading(false)
       return
     }
@@ -70,7 +64,7 @@ export function CreditCardsPage() {
       status: 'open' | 'closed' | 'paid'
     }>
     if (invoices.length === 0) {
-      setMonthValueByCard({})
+      setOpenInvoiceValueByCard({})
       setTotalValueByCard({})
       setOpenDueByCard({})
       setLoading(false)
@@ -85,27 +79,33 @@ export function CreditCardsPage() {
       invoices.map((i) => i.id),
     )
 
-    const monthMap: Record<string, number> = {}
+    const openValueMap: Record<string, number> = {}
     const totalMap: Record<string, number> = {}
-    const current = currentMonthKey()
+    const totalByInvoiceId: Record<string, number> = {}
     for (const it of ((itemData ?? []) as Array<{ invoice_id: string; amount: number }>)) {
       const inv = invoiceById.get(it.invoice_id)
       if (!inv) continue
       const cardId = inv.credit_card_id
       const amount = Number(it.amount) || 0
       totalMap[cardId] = (totalMap[cardId] ?? 0) + amount
-      if (inv.reference_month.slice(0, 7) === current) {
-        monthMap[cardId] = (monthMap[cardId] ?? 0) + amount
-      }
+      totalByInvoiceId[it.invoice_id] = (totalByInvoiceId[it.invoice_id] ?? 0) + amount
     }
-    setMonthValueByCard(monthMap)
-    setTotalValueByCard(totalMap)
     const dueMap: Record<string, string> = {}
+    const openInvoiceIdByCard: Record<string, string> = {}
     for (const inv of invoices) {
       if (inv.status !== 'open') continue
       const prev = dueMap[inv.credit_card_id]
-      if (!prev || inv.due_date < prev) dueMap[inv.credit_card_id] = inv.due_date
+      if (!prev || inv.due_date < prev) {
+        dueMap[inv.credit_card_id] = inv.due_date
+        openInvoiceIdByCard[inv.credit_card_id] = inv.id
+      }
     }
+    for (const cardId of Object.keys(openInvoiceIdByCard)) {
+      const invId = openInvoiceIdByCard[cardId]
+      openValueMap[cardId] = totalByInvoiceId[invId] ?? 0
+    }
+    setOpenInvoiceValueByCard(openValueMap)
+    setTotalValueByCard(totalMap)
     setOpenDueByCard(dueMap)
     setLoading(false)
   }
@@ -177,8 +177,6 @@ export function CreditCardsPage() {
 
   if (!supabase) return <p className="text-slate-400">Conectando…</p>
 
-  const currentKey = currentMonthKey().replace('-', '/')
-
   return (
     <div className="space-y-8">
       <div className="space-y-2">
@@ -195,24 +193,24 @@ export function CreditCardsPage() {
           <table>
             <thead>
               <tr>
-                <th>NOME</th>
                 <th>BANDEIRA</th>
+                <th>NOME</th>
                 <th>DT. VENCIMENTO</th>
+                <th>VLR. FATURA</th>
+                <th>VLR. TOTAL</th>
                 <th>LIMITE</th>
-                <th>VALOR MÊS ATUAL ({currentKey})</th>
-                <th>VALOR TOTAL CARTÃO</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {rows.map((c) => (
                 <tr key={c.id}>
-                  <td>{c.name}</td>
                   <td>{c.brand || '—'}</td>
+                  <td>{c.name}</td>
                   <td>{openDueByCard[c.id] ?? '—'}</td>
-                  <td>{c.limit_amount != null ? formatBRL(Number(c.limit_amount)) : '—'}</td>
-                  <td>{formatBRL(monthValueByCard[c.id] ?? 0)}</td>
+                  <td>{formatBRL(openInvoiceValueByCard[c.id] ?? 0)}</td>
                   <td>{formatBRL(totalValueByCard[c.id] ?? 0)}</td>
+                  <td>{c.limit_amount != null ? formatBRL(Number(c.limit_amount)) : '—'}</td>
                   <td className="whitespace-nowrap">
                     <div className="flex items-center justify-end gap-2">
                       <button
