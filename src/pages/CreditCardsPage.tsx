@@ -21,7 +21,7 @@ export function CreditCardsPage() {
   const supabase = useSupabase()
   const [rows, setRows] = useState<Card[]>([])
   const [openInvoiceValueByCard, setOpenInvoiceValueByCard] = useState<Record<string, number>>({})
-  const [totalValueByCard, setTotalValueByCard] = useState<Record<string, number>>({})
+  const [nextOpenInvoicesValueByCard, setNextOpenInvoicesValueByCard] = useState<Record<string, number>>({})
   const [openDueByCard, setOpenDueByCard] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [form, setForm] = useState({
@@ -43,7 +43,7 @@ export function CreditCardsPage() {
 
     if (cards.length === 0) {
       setOpenInvoiceValueByCard({})
-      setTotalValueByCard({})
+      setNextOpenInvoicesValueByCard({})
       setOpenDueByCard({})
       setLoading(false)
       return
@@ -65,7 +65,7 @@ export function CreditCardsPage() {
     }>
     if (invoices.length === 0) {
       setOpenInvoiceValueByCard({})
-      setTotalValueByCard({})
+      setNextOpenInvoicesValueByCard({})
       setOpenDueByCard({})
       setLoading(false)
       return
@@ -80,14 +80,11 @@ export function CreditCardsPage() {
     )
 
     const openValueMap: Record<string, number> = {}
-    const totalMap: Record<string, number> = {}
     const totalByInvoiceId: Record<string, number> = {}
     for (const it of ((itemData ?? []) as Array<{ invoice_id: string; amount: number }>)) {
       const inv = invoiceById.get(it.invoice_id)
       if (!inv) continue
-      const cardId = inv.credit_card_id
       const amount = Number(it.amount) || 0
-      totalMap[cardId] = (totalMap[cardId] ?? 0) + amount
       totalByInvoiceId[it.invoice_id] = (totalByInvoiceId[it.invoice_id] ?? 0) + amount
     }
     const dueMap: Record<string, string> = {}
@@ -104,8 +101,15 @@ export function CreditCardsPage() {
       const invId = openInvoiceIdByCard[cardId]
       openValueMap[cardId] = totalByInvoiceId[invId] ?? 0
     }
+    const nextOpenMap: Record<string, number> = {}
+    for (const inv of invoices) {
+      if (inv.status !== 'open') continue
+      const currentInvId = openInvoiceIdByCard[inv.credit_card_id]
+      if (!currentInvId || inv.id === currentInvId) continue
+      nextOpenMap[inv.credit_card_id] = (nextOpenMap[inv.credit_card_id] ?? 0) + (totalByInvoiceId[inv.id] ?? 0)
+    }
     setOpenInvoiceValueByCard(openValueMap)
-    setTotalValueByCard(totalMap)
+    setNextOpenInvoicesValueByCard(nextOpenMap)
     setOpenDueByCard(dueMap)
     setLoading(false)
   }
@@ -197,7 +201,7 @@ export function CreditCardsPage() {
                 <th>NOME</th>
                 <th>DT. VENCIMENTO</th>
                 <th>VLR. FATURA</th>
-                <th>VLR. TOTAL</th>
+                <th>VLR. PRÓXIMAS FATURAS</th>
                 <th>LIMITE</th>
                 <th></th>
               </tr>
@@ -209,7 +213,7 @@ export function CreditCardsPage() {
                   <td>{c.name}</td>
                   <td>{openDueByCard[c.id] ?? '—'}</td>
                   <td>{formatBRL(openInvoiceValueByCard[c.id] ?? 0)}</td>
-                  <td>{formatBRL(totalValueByCard[c.id] ?? 0)}</td>
+                  <td>{formatBRL(nextOpenInvoicesValueByCard[c.id] ?? 0)}</td>
                   <td>{c.limit_amount != null ? formatBRL(Number(c.limit_amount)) : '—'}</td>
                   <td className="whitespace-nowrap">
                     <div className="flex items-center justify-end gap-2">
