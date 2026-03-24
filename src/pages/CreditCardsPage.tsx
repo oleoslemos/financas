@@ -1,7 +1,7 @@
 import { useUser } from '@clerk/clerk-react'
 import { CreditCard, Pencil, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
 import { formatBRL, parseMoney } from '../lib/format'
 import { toUpperOrNull, toUpperTrim } from '../lib/text'
@@ -24,10 +24,12 @@ function currentMonthKey() {
 
 export function CreditCardsPage() {
   const { user } = useUser()
+  const navigate = useNavigate()
   const supabase = useSupabase()
   const [rows, setRows] = useState<Card[]>([])
   const [monthValueByCard, setMonthValueByCard] = useState<Record<string, number>>({})
   const [totalValueByCard, setTotalValueByCard] = useState<Record<string, number>>({})
+  const [openDueByCard, setOpenDueByCard] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [form, setForm] = useState({
     name: '',
@@ -56,14 +58,21 @@ export function CreditCardsPage() {
     const cardIds = cards.map((c) => c.id)
     const { data: invData } = await supabase
       .from('credit_card_invoices')
-      .select('id, credit_card_id, reference_month')
+      .select('id, credit_card_id, reference_month, due_date, status')
       .eq('user_id', user.id)
       .in('credit_card_id', cardIds)
 
-    const invoices = (invData ?? []) as Array<{ id: string; credit_card_id: string; reference_month: string }>
+    const invoices = (invData ?? []) as Array<{
+      id: string
+      credit_card_id: string
+      reference_month: string
+      due_date: string
+      status: 'open' | 'closed' | 'paid'
+    }>
     if (invoices.length === 0) {
       setMonthValueByCard({})
       setTotalValueByCard({})
+      setOpenDueByCard({})
       setLoading(false)
       return
     }
@@ -91,6 +100,13 @@ export function CreditCardsPage() {
     }
     setMonthValueByCard(monthMap)
     setTotalValueByCard(totalMap)
+    const dueMap: Record<string, string> = {}
+    for (const inv of invoices) {
+      if (inv.status !== 'open') continue
+      const prev = dueMap[inv.credit_card_id]
+      if (!prev || inv.due_date < prev) dueMap[inv.credit_card_id] = inv.due_date
+    }
+    setOpenDueByCard(dueMap)
     setLoading(false)
   }
 
@@ -181,7 +197,7 @@ export function CreditCardsPage() {
               <tr>
                 <th>NOME</th>
                 <th>BANDEIRA</th>
-                <th>FECHAMENTO / VENC.</th>
+                <th>DT. VENCIMENTO</th>
                 <th>LIMITE</th>
                 <th>VALOR MÊS ATUAL ({currentKey})</th>
                 <th>VALOR TOTAL CARTÃO</th>
@@ -193,22 +209,21 @@ export function CreditCardsPage() {
                 <tr key={c.id}>
                   <td>{c.name}</td>
                   <td>{c.brand || '—'}</td>
-                  <td>
-                    {c.closing_day} / {c.due_day}
-                  </td>
+                  <td>{openDueByCard[c.id] ?? '—'}</td>
                   <td>{c.limit_amount != null ? formatBRL(Number(c.limit_amount)) : '—'}</td>
                   <td>{formatBRL(monthValueByCard[c.id] ?? 0)}</td>
                   <td>{formatBRL(totalValueByCard[c.id] ?? 0)}</td>
                   <td className="whitespace-nowrap">
                     <div className="flex items-center justify-end gap-2">
-                      <Link
-                        to={`/cartoes/${c.id}`}
+                      <button
+                        type="button"
                         className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0"
                         title="FATURAS"
                         aria-label="FATURAS"
+                        onClick={() => navigate(`/cartoes/${c.id}`)}
                       >
                         <CreditCard size={16} />
-                      </Link>
+                      </button>
                       <button
                         type="button"
                         className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0"
