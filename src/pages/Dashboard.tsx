@@ -79,8 +79,10 @@ export function Dashboard() {
       series: { monthKey: string; label: string; total: number; segment: 'passado' | 'atual' | 'futuro' }[]
     }[]
   >([])
-  /** Soma de todas as faturas (todos os cartões): mês atual + próximos 6 meses. */
-  const [ccKpiAllCards7m, setCcKpiAllCards7m] = useState(0)
+  /** Totais agregados (todos os cartões) por competência: mês atual + próximos 6 meses. */
+  const [ccKpiByMonth, setCcKpiByMonth] = useState<
+    { monthKey: string; label: string; total: number; isCurrent: boolean }[]
+  >([])
   const [ccLoading, setCcLoading] = useState(true)
 
   useEffect(() => {
@@ -179,15 +181,21 @@ export function Dashboard() {
 
         const displayKeys = monthKeysInclusive(startKey, endKey)
         const kpiKeys = monthKeysInclusive(todayKey, kpiEndKey)
-        let kpiSum = 0
-        for (const mk of kpiKeys) {
+        const kpiRows = kpiKeys.map((mk) => {
+          let sum = 0
           for (const c of cardList) {
-            kpiSum += byCardMonth.get(c.id)?.get(mk) ?? 0
+            sum += byCardMonth.get(c.id)?.get(mk) ?? 0
           }
-        }
+          return {
+            monthKey: mk,
+            label: monthLabel(parseISODate(`${mk}-01`)).toUpperCase(),
+            total: sum,
+            isCurrent: mk === todayKey,
+          }
+        })
 
         if (cancelled) return
-        setCcKpiAllCards7m(kpiSum)
+        setCcKpiByMonth(kpiRows)
         setCcCardSeries(
           cardList.map((c) => ({
             cardId: c.id,
@@ -248,8 +256,7 @@ export function Dashboard() {
     [rowsScoped, monthNext],
   )
 
-  const ccKpiFrom = monthKey(new Date())
-  const ccKpiUntil = shiftMonthKey(ccKpiFrom, 6)
+  const ccKpiPeriodTotal = useMemo(() => ccKpiByMonth.reduce((s, r) => s + r.total, 0), [ccKpiByMonth])
 
   if (!supabase) {
     return <p className="text-slate-600">CONECTANDO AO BANCO…</p>
@@ -474,13 +481,39 @@ export function Dashboard() {
         ) : (
           <>
             <div className="rounded-xl border border-sky-200 bg-gradient-to-br from-sky-50 to-white p-4 shadow-sm">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-900">
-                Total de todos os cartões
+              <p className="text-xs font-semibold uppercase tracking-wide text-sky-900">
+                Total de todos os cartões por mês
               </p>
-              <p className="mt-1 text-[11px] text-slate-600">
-                Mês atual + próximos 6 meses ({ccKpiFrom} → {ccKpiUntil}) — soma das faturas por competência
+              <p className="mt-1 text-xs text-slate-600">
+                Mês atual e próximos 6 meses — soma das faturas por competência (todos os cartões)
               </p>
-              <p className="mt-2 text-2xl font-bold tabular-nums text-sky-800">{formatBRL(ccKpiAllCards7m)}</p>
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7">
+                {ccKpiByMonth.map((row) => (
+                  <div
+                    key={row.monthKey}
+                    className={`rounded-lg border px-2 py-2 sm:px-3 sm:py-2.5 ${
+                      row.isCurrent ? 'border-sky-400 bg-white ring-1 ring-sky-200' : 'border-slate-200/80 bg-white/60'
+                    }`}
+                  >
+                    {row.isCurrent ? (
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-700 sm:text-xs">
+                        Mês atual
+                      </p>
+                    ) : null}
+                    <p
+                      className={`truncate font-semibold leading-tight ${row.isCurrent ? 'mt-0.5 text-sm text-sky-950 sm:text-base' : 'text-sm text-slate-800 sm:text-base'}`}
+                      title={row.label}
+                    >
+                      {row.label.replace(' DE ', ' ')}
+                    </p>
+                    <p className="mt-1.5 text-base font-bold tabular-nums text-amber-900 sm:text-lg">{formatBRL(row.total)}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-3 border-t border-sky-200/80 pt-3 text-xs text-slate-600">
+                Total no período (7 competências):{' '}
+                <span className="font-semibold tabular-nums text-slate-900">{formatBRL(ccKpiPeriodTotal)}</span>
+              </p>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
@@ -490,33 +523,33 @@ export function Dashboard() {
                   <Link
                     key={card.cardId}
                     to={`/cartoes/${card.cardId}`}
-                    className="flex flex-col rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition-colors hover:border-sky-300 hover:shadow-md"
+                    className="flex flex-col rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition-colors hover:border-sky-300 hover:shadow-md sm:p-4"
                   >
-                    <h4 className="mb-2 truncate text-xs font-semibold text-slate-900" title={card.name}>
+                    <h4 className="mb-3 truncate text-sm font-semibold text-slate-900" title={card.name}>
                       {card.name}
                     </h4>
-                    <div className="flex min-h-0 flex-1 flex-col gap-2">
+                    <div className="flex min-h-0 flex-1 flex-col gap-2.5">
                       {card.series.map((row) => (
-                        <div key={row.monthKey} className="space-y-0.5">
-                          <div className="flex items-center justify-between gap-1 text-[10px] leading-tight">
+                        <div key={row.monthKey} className="space-y-1">
+                          <div className="flex items-center justify-between gap-2 text-xs leading-snug sm:text-sm">
                             <span
                               className={
                                 row.segment === 'atual'
-                                  ? 'min-w-0 truncate font-medium text-slate-900'
+                                  ? 'min-w-0 truncate font-semibold text-slate-900'
                                   : row.segment === 'futuro'
-                                    ? 'min-w-0 truncate text-sky-700'
-                                    : 'min-w-0 truncate text-slate-600'
+                                    ? 'min-w-0 truncate font-medium text-sky-800'
+                                    : 'min-w-0 truncate text-slate-700'
                               }
                               title={row.label}
                             >
-                              {row.segment === 'atual' ? 'ATUAL' : row.segment === 'futuro' ? '→ ' : ''}
+                              {row.segment === 'atual' ? 'ATUAL · ' : row.segment === 'futuro' ? '→ ' : ''}
                               {row.label.replace(' DE ', ' ')}
                             </span>
-                            <span className="shrink-0 font-medium tabular-nums text-amber-800">
+                            <span className="shrink-0 font-semibold tabular-nums text-amber-900">
                               {formatBRL(row.total)}
                             </span>
                           </div>
-                          <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
+                          <div className="h-2 overflow-hidden rounded-full bg-slate-200">
                             <div
                               className={`h-full rounded-full transition-[width] ${
                                 row.segment === 'futuro' ? 'bg-violet-500' : 'bg-sky-500'
