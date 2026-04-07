@@ -1,10 +1,11 @@
 import { useUser } from '@clerk/clerk-react'
 import { FileText, Trash2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
 import { deleteCreditCardInvoiceOrGroup } from '../lib/invoiceInstallments'
-import { monthLabel, parseISODate, toISODate } from '../lib/dates'
+import { toISODate } from '../lib/dates'
+import { formatBRL } from '../lib/format'
 
 type Inv = {
   id: string
@@ -30,6 +31,13 @@ export function CardInvoicesPage() {
   })
   const [dueDate, setDueDate] = useState(toISODate(new Date()))
   const [openDetailAfterCreate, setOpenDetailAfterCreate] = useState(true)
+  /** Ordenação da competência: true = mais recente primeiro (AAAA-MM decrescente) */
+  const [competenciaDesc, setCompetenciaDesc] = useState(true)
+  const [totalByInvoice, setTotalByInvoice] = useState<Record<string, number>>({})
+
+  function referenceMonthKey(iso: string): string {
+    return iso.slice(0, 7)
+  }
 
   async function load() {
     if (!supabase || !user?.id || !cardId) return
@@ -43,8 +51,18 @@ export function CardInvoicesPage() {
       )
       .eq('credit_card_id', cardId)
       .eq('user_id', user.id)
-      .order('reference_month', { ascending: false })
-    setRows((data as Inv[]) ?? [])
+    const list = (data as Inv[]) ?? []
+    setRows(list)
+
+    const ids = list.map((r) => r.id)
+    const totals: Record<string, number> = {}
+    if (ids.length > 0) {
+      const { data: items } = await supabase.from('credit_card_invoice_items').select('invoice_id, amount').in('invoice_id', ids)
+      for (const it of (items ?? []) as { invoice_id: string; amount: number }[]) {
+        totals[it.invoice_id] = (totals[it.invoice_id] ?? 0) + Number(it.amount)
+      }
+    }
+    setTotalByInvoice(totals)
     setLoading(false)
   }
 
@@ -52,6 +70,16 @@ export function CardInvoicesPage() {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase, user?.id, cardId])
+
+  const sortedRows = useMemo(() => {
+    const copy = [...rows]
+    copy.sort((a, b) => {
+      const ka = a.reference_month.slice(0, 10)
+      const kb = b.reference_month.slice(0, 10)
+      return competenciaDesc ? kb.localeCompare(ka) : ka.localeCompare(kb)
+    })
+    return copy
+  }, [rows, competenciaDesc])
 
   async function createInvoice(e: React.FormEvent) {
     e.preventDefault()
@@ -95,23 +123,23 @@ export function CardInvoicesPage() {
     <div className="space-y-8">
       <div className="flex flex-wrap items-center gap-4">
         <Link to="/cartoes" className="text-sm text-sky-600 hover:underline">
-          ← Cartões
+          ← CARTÕES
         </Link>
-        <h2 className="text-2xl font-semibold">Faturas — {cardName || '…'}</h2>
+        <h2 className="text-2xl font-semibold">FATURAS — {cardName || '…'}</h2>
       </div>
 
       <form onSubmit={createInvoice} className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
         <div className="flex flex-wrap items-end gap-3">
           <div>
-            <label>Mês de referência</label>
+            <label>MÊS DE REFERÊNCIA</label>
             <input type="month" value={refMonth} onChange={(e) => setRefMonth(e.target.value)} required />
           </div>
           <div>
-            <label>Vencimento</label>
+            <label>VENCIMENTO</label>
             <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} required />
           </div>
           <button type="submit" className="btn btn-primary">
-            Nova fatura
+            NOVA FATURA
           </button>
         </div>
         <div className="flex items-center gap-2">
@@ -123,7 +151,7 @@ export function CardInvoicesPage() {
             onChange={(e) => setOpenDetailAfterCreate(e.target.checked)}
           />
           <label htmlFor="open-detail" className="mb-0 cursor-pointer text-sm text-slate-700">
-            Após criar, abrir a fatura para detalhar e lançar despesas
+            APÓS CRIAR, ABRIR A FATURA PARA DETALHAR E LANÇAR DESPESAS
           </label>
         </div>
       </form>
@@ -135,34 +163,43 @@ export function CardInvoicesPage() {
           <table>
             <thead>
               <tr>
-                <th>Competência</th>
-                <th>Vencimento</th>
-                <th>Parcela</th>
-                <th>Status</th>
+                <th className="whitespace-nowrap">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 font-medium text-slate-600 hover:text-sky-700"
+                    title="Ordenar por competência (AAAA-MM)"
+                    onClick={() => setCompetenciaDesc((d) => !d)}
+                  >
+                    COMPETÊNCIA (AAAA-MM)
+                    <span className="text-sky-600" aria-hidden>
+                      {competenciaDesc ? '↓' : '↑'}
+                    </span>
+                  </button>
+                </th>
+                <th>VENCIMENTO</th>
+                <th>VLR. FATURA</th>
+                <th>STATUS</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {sortedRows.map((r) => (
                 <tr key={r.id}>
-                  <td>{monthLabel(parseISODate(r.reference_month))}</td>
+                  <td className="font-mono text-sm">{referenceMonthKey(r.reference_month)}</td>
                   <td>{r.due_date}</td>
-                  <td className="text-slate-600">
-                    {r.installment_group_id
-                      ? `${r.installment_number ?? '?'}/${r.installment_count ?? '?'}`
-                      : '—'}
-                  </td>
+                  <td className="text-slate-800">{formatBRL(totalByInvoice[r.id] ?? 0)}</td>
                   <td>{r.status === 'open' ? 'ABERTO' : r.status === 'paid' ? 'PAGO' : r.status.toUpperCase()}</td>
                   <td className="whitespace-nowrap">
                     <div className="flex items-center justify-end gap-2">
-                      <Link
-                        to={`/cartoes/${cardId}/faturas/${r.id}`}
+                      <button
+                        type="button"
                         className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0"
                         title="DETALHAR"
                         aria-label="DETALHAR"
+                        onClick={() => navigate(`/cartoes/${cardId}/faturas/${r.id}`)}
                       >
                         <FileText size={16} />
-                      </Link>
+                      </button>
                       <button
                         type="button"
                         className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-600"

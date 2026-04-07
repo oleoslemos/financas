@@ -72,10 +72,15 @@ export function Dashboard() {
   const [creditCards, setCreditCards] = useState<{ id: string; name: string }[]>([])
   /** Meses à frente do mês atual (além da base fixa: 3 meses anteriores + atual). */
   const [ccFutureMonths, setCcFutureMonths] = useState<3 | 6 | 9 | 12>(3)
-  const [ccFilterId, setCcFilterId] = useState<string>('ALL')
-  const [ccSeries, setCcSeries] = useState<
-    { monthKey: string; label: string; total: number; segment: 'passado' | 'atual' | 'futuro' }[]
+  const [ccCardSeries, setCcCardSeries] = useState<
+    {
+      cardId: string
+      name: string
+      series: { monthKey: string; label: string; total: number; segment: 'passado' | 'atual' | 'futuro' }[]
+    }[]
   >([])
+  /** Soma de todas as faturas (todos os cartões): mês atual + próximos 6 meses. */
+  const [ccKpiAllCards7m, setCcKpiAllCards7m] = useState(0)
   const [ccLoading, setCcLoading] = useState(true)
 
   useEffect(() => {
@@ -130,18 +135,17 @@ export function Dashboard() {
         const todayKey = monthKey(new Date())
         const startKey = shiftMonthKey(todayKey, -3)
         const endKey = shiftMonthKey(todayKey, ccFutureMonths)
+        const kpiEndKey = shiftMonthKey(todayKey, 6)
+        const fetchEndKey = endKey >= kpiEndKey ? endKey : kpiEndKey
         const fromIso = startOfMonthIso(startKey)
-        const toIso = endOfMonthIso(endKey)
+        const toIso = endOfMonthIso(fetchEndKey)
 
-        let invQuery = supabase
+        const { data: invoices, error: invErr } = await supabase
           .from('credit_card_invoices')
           .select('id, credit_card_id, reference_month')
           .eq('user_id', user.id)
           .gte('reference_month', fromIso)
           .lte('reference_month', toIso)
-        if (ccFilterId !== 'ALL') invQuery = invQuery.eq('credit_card_id', ccFilterId)
-
-        const { data: invoices, error: invErr } = await invQuery
         if (invErr) console.error(invErr)
         if (cancelled) return
 
@@ -163,21 +167,37 @@ export function Dashboard() {
           }
         }
 
-        const totalsByMonth = new Map<string, number>()
+        const cardList = (cards as { id: string; name: string }[]) ?? []
+        const byCardMonth = new Map<string, Map<string, number>>()
+        for (const c of cardList) byCardMonth.set(c.id, new Map())
         for (const inv of invList) {
           const mk = refMonthKey(inv.reference_month)
           const t = totalsByInvoice.get(inv.id) ?? 0
-          totalsByMonth.set(mk, (totalsByMonth.get(mk) ?? 0) + t)
+          const inner = byCardMonth.get(inv.credit_card_id)
+          if (inner) inner.set(mk, (inner.get(mk) ?? 0) + t)
         }
 
-        const keys = monthKeysInclusive(startKey, endKey)
+        const displayKeys = monthKeysInclusive(startKey, endKey)
+        const kpiKeys = monthKeysInclusive(todayKey, kpiEndKey)
+        let kpiSum = 0
+        for (const mk of kpiKeys) {
+          for (const c of cardList) {
+            kpiSum += byCardMonth.get(c.id)?.get(mk) ?? 0
+          }
+        }
+
         if (cancelled) return
-        setCcSeries(
-          keys.map((mk) => ({
-            monthKey: mk,
-            label: monthLabel(parseISODate(`${mk}-01`)).toUpperCase(),
-            total: totalsByMonth.get(mk) ?? 0,
-            segment: mk < todayKey ? 'passado' : mk === todayKey ? 'atual' : 'futuro',
+        setCcKpiAllCards7m(kpiSum)
+        setCcCardSeries(
+          cardList.map((c) => ({
+            cardId: c.id,
+            name: c.name,
+            series: displayKeys.map((mk) => ({
+              monthKey: mk,
+              label: monthLabel(parseISODate(`${mk}-01`)).toUpperCase(),
+              total: byCardMonth.get(c.id)?.get(mk) ?? 0,
+              segment: mk < todayKey ? 'passado' : mk === todayKey ? 'atual' : 'futuro',
+            })),
           })),
         )
       } finally {
@@ -187,7 +207,7 @@ export function Dashboard() {
     return () => {
       cancelled = true
     }
-  }, [supabase, user?.id, ccFutureMonths, ccFilterId])
+  }, [supabase, user?.id, ccFutureMonths])
 
   const monthCurrent = selectedMonth
   const monthNext = nextMonthKey(selectedMonth)
@@ -228,7 +248,8 @@ export function Dashboard() {
     [rowsScoped, monthNext],
   )
 
-  const ccMaxTotal = useMemo(() => Math.max(1, ...ccSeries.map((s) => s.total)), [ccSeries])
+  const ccKpiFrom = monthKey(new Date())
+  const ccKpiUntil = shiftMonthKey(ccKpiFrom, 6)
 
   if (!supabase) {
     return <p className="text-slate-600">CONECTANDO AO BANCO…</p>
@@ -319,10 +340,15 @@ export function Dashboard() {
                     </p>
                   ) : (
                     payCurrent.map((x) => (
-                      <div key={`p0-${x.id}`} className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-2 py-1.5 text-xs">
-                        <span className="truncate text-slate-700">{x.description || '—'}</span>
-                        <span className="text-amber-800">{formatBRL(Number(x.amount))}</span>
-                        <span className="text-slate-500">{x.due_date}</span>
+                      <div
+                        key={`p0-${x.id}`}
+                        className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-2 py-1.5 text-xs"
+                      >
+                        <span className="min-w-0 flex-1 truncate text-slate-700">{x.description || '—'}</span>
+                        <div className="flex shrink-0 items-center gap-2 tabular-nums">
+                          <span className="text-amber-800">{formatBRL(Number(x.amount))}</span>
+                          <span className="whitespace-nowrap text-slate-500">{x.due_date}</span>
+                        </div>
                       </div>
                     ))
                   )}
@@ -335,10 +361,15 @@ export function Dashboard() {
                     </p>
                   ) : (
                     recCurrent.map((x) => (
-                      <div key={`r0-${x.id}`} className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-2 py-1.5 text-xs">
-                        <span className="truncate text-slate-700">{x.description || '—'}</span>
-                        <span className="text-emerald-700">{formatBRL(Number(x.amount))}</span>
-                        <span className="text-slate-500">{x.due_date}</span>
+                      <div
+                        key={`r0-${x.id}`}
+                        className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-2 py-1.5 text-xs"
+                      >
+                        <span className="min-w-0 flex-1 truncate text-slate-700">{x.description || '—'}</span>
+                        <div className="flex shrink-0 items-center gap-2 tabular-nums">
+                          <span className="text-emerald-700">{formatBRL(Number(x.amount))}</span>
+                          <span className="whitespace-nowrap text-slate-500">{x.due_date}</span>
+                        </div>
                       </div>
                     ))
                   )}
@@ -356,10 +387,15 @@ export function Dashboard() {
                     </p>
                   ) : (
                     payNext.map((x) => (
-                      <div key={`p1-${x.id}`} className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-2 py-1.5 text-xs">
-                        <span className="truncate text-slate-700">{x.description || '—'}</span>
-                        <span className="text-amber-800">{formatBRL(Number(x.amount))}</span>
-                        <span className="text-slate-500">{x.due_date}</span>
+                      <div
+                        key={`p1-${x.id}`}
+                        className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-2 py-1.5 text-xs"
+                      >
+                        <span className="min-w-0 flex-1 truncate text-slate-700">{x.description || '—'}</span>
+                        <div className="flex shrink-0 items-center gap-2 tabular-nums">
+                          <span className="text-amber-800">{formatBRL(Number(x.amount))}</span>
+                          <span className="whitespace-nowrap text-slate-500">{x.due_date}</span>
+                        </div>
                       </div>
                     ))
                   )}
@@ -372,10 +408,15 @@ export function Dashboard() {
                     </p>
                   ) : (
                     recNext.map((x) => (
-                      <div key={`r1-${x.id}`} className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-2 py-1.5 text-xs">
-                        <span className="truncate text-slate-700">{x.description || '—'}</span>
-                        <span className="text-emerald-700">{formatBRL(Number(x.amount))}</span>
-                        <span className="text-slate-500">{x.due_date}</span>
+                      <div
+                        key={`r1-${x.id}`}
+                        className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-2 py-1.5 text-xs"
+                      >
+                        <span className="min-w-0 flex-1 truncate text-slate-700">{x.description || '—'}</span>
+                        <div className="flex shrink-0 items-center gap-2 tabular-nums">
+                          <span className="text-emerald-700">{formatBRL(Number(x.amount))}</span>
+                          <span className="whitespace-nowrap text-slate-500">{x.due_date}</span>
+                        </div>
                       </div>
                     ))
                   )}
@@ -395,19 +436,19 @@ export function Dashboard() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-xs font-semibold text-slate-800">
             <CreditCard size={16} className="text-sky-600" />
-            <span>EVOLUÇÃO DO CARTÃO DE CRÉDITO (TOTAL DA FATURA)</span>
+            <span>EVOLUÇÃO POR CARTÃO (TOTAL DA FATURA)</span>
           </div>
           <Link to="/cartoes" className="text-[11px] text-sky-600 hover:underline">
             GERENCIAR CARTÕES
           </Link>
         </div>
         <p className="text-[11px] text-slate-500">
-          BASE FIXA: 3 MESES ANTERIORES + MÊS ATUAL ({monthKey(new Date())}). EM SEGUIDA, MESES À FRENTE CONFORME O FILTRO.
-          VALORES = SOMA DOS ITENS DA FATURA POR COMPETÊNCIA (FATURAS FUTURAS APARECEM SE JÁ EXISTIREM, EX.: PARCELADO).
+          CADA CARD É UM CARTÃO: BASE DE 3 MESES ANTERIORES + MÊS ATUAL ({monthKey(new Date())}), DEPOIS MESES À FRENTE
+          CONFORME O FILTRO. VALORES = SOMA DOS ITENS DA FATURA POR COMPETÊNCIA.
         </p>
         <div className="flex flex-wrap items-end gap-4">
           <div>
-            <label className="mb-1 block text-[11px] text-slate-600">À FRENTE</label>
+            <label className="mb-1 block text-[11px] text-slate-600">À FRENTE (EM CADA CARD)</label>
             <select
               className="min-w-[200px]"
               value={ccFutureMonths}
@@ -417,17 +458,6 @@ export function Dashboard() {
               <option value={6}>PRÓXIMOS 6 MESES</option>
               <option value={9}>PRÓXIMOS 9 MESES</option>
               <option value={12}>PRÓXIMOS 12 MESES</option>
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-[11px] text-slate-600">CARTÃO</label>
-            <select className="min-w-[200px]" value={ccFilterId} onChange={(e) => setCcFilterId(e.target.value)}>
-              <option value="ALL">TODOS OS CARTÕES</option>
-              {creditCards.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
             </select>
           </div>
         </div>
@@ -442,35 +472,66 @@ export function Dashboard() {
             </Link>
           </p>
         ) : (
-          <div className="space-y-3">
-            {ccSeries.map((row) => (
-              <div key={row.monthKey} className="space-y-1">
-                <div className="flex items-center justify-between gap-2 text-xs">
-                  <span
-                    className={
-                      row.segment === 'atual'
-                        ? 'font-medium text-slate-900'
-                        : row.segment === 'futuro'
-                          ? 'text-sky-700'
-                          : 'text-slate-600'
-                    }
+          <>
+            <div className="rounded-xl border border-sky-200 bg-gradient-to-br from-sky-50 to-white p-4 shadow-sm">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-900">
+                Total de todos os cartões
+              </p>
+              <p className="mt-1 text-[11px] text-slate-600">
+                Mês atual + próximos 6 meses ({ccKpiFrom} → {ccKpiUntil}) — soma das faturas por competência
+              </p>
+              <p className="mt-2 text-2xl font-bold tabular-nums text-sky-800">{formatBRL(ccKpiAllCards7m)}</p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+              {ccCardSeries.map((card) => {
+                const maxBar = Math.max(1, ...card.series.map((s) => s.total))
+                return (
+                  <Link
+                    key={card.cardId}
+                    to={`/cartoes/${card.cardId}`}
+                    className="flex flex-col rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition-colors hover:border-sky-300 hover:shadow-md"
                   >
-                    {row.label}
-                    {row.segment === 'atual' ? ' — MÊS ATUAL' : row.segment === 'futuro' ? ' — À FRENTE' : ''}
-                  </span>
-                  <span className="font-medium text-amber-800">{formatBRL(row.total)}</span>
-                </div>
-                <div className="h-2 overflow-hidden rounded-full bg-slate-200">
-                  <div
-                    className={`h-full rounded-full transition-[width] ${
-                      row.segment === 'futuro' ? 'bg-violet-500' : 'bg-sky-500'
-                    }`}
-                    style={{ width: `${(row.total / ccMaxTotal) * 100}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
+                    <h4 className="mb-2 truncate text-xs font-semibold text-slate-900" title={card.name}>
+                      {card.name}
+                    </h4>
+                    <div className="flex min-h-0 flex-1 flex-col gap-2">
+                      {card.series.map((row) => (
+                        <div key={row.monthKey} className="space-y-0.5">
+                          <div className="flex items-center justify-between gap-1 text-[10px] leading-tight">
+                            <span
+                              className={
+                                row.segment === 'atual'
+                                  ? 'min-w-0 truncate font-medium text-slate-900'
+                                  : row.segment === 'futuro'
+                                    ? 'min-w-0 truncate text-sky-700'
+                                    : 'min-w-0 truncate text-slate-600'
+                              }
+                              title={row.label}
+                            >
+                              {row.segment === 'atual' ? 'ATUAL' : row.segment === 'futuro' ? '→ ' : ''}
+                              {row.label.replace(' DE ', ' ')}
+                            </span>
+                            <span className="shrink-0 font-medium tabular-nums text-amber-800">
+                              {formatBRL(row.total)}
+                            </span>
+                          </div>
+                          <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
+                            <div
+                              className={`h-full rounded-full transition-[width] ${
+                                row.segment === 'futuro' ? 'bg-violet-500' : 'bg-sky-500'
+                              }`}
+                              style={{ width: `${(row.total / maxBar) * 100}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          </>
         )}
       </section>
     </div>

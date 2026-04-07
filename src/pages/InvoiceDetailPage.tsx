@@ -10,7 +10,7 @@ import {
   ensureCreditCardExpenseCategory,
 } from '../lib/creditCardCategory'
 import { addMonthsToDueDate, addMonthsToReferenceMonth, splitTotalAcrossInstallments } from '../lib/invoiceInstallments'
-import { sumInvoiceItems, syncLinkedPayable } from '../lib/invoicePayableSync'
+import { ensureInvoicePayableLinked, syncLinkedPayable } from '../lib/invoicePayableSync'
 import { toUpperTrim } from '../lib/text'
 
 type Inv = {
@@ -35,6 +35,12 @@ type Item = {
 
 type ItemAmountMode = 'total' | 'per_installment'
 
+type InvoiceNavRow = { id: string; competenciaKey: string }
+
+function refMonthDisplay(iso: string) {
+  return iso.slice(0, 7)
+}
+
 export function InvoiceDetailPage() {
   const { cardId, invoiceId } = useParams<{ cardId: string; invoiceId: string }>()
   const { user } = useUser()
@@ -44,8 +50,11 @@ export function InvoiceDetailPage() {
   const [items, setItems] = useState<Item[]>([])
   const [cats, setCats] = useState<{ id: string; name: string }[]>([])
   const [payableStatus, setPayableStatus] = useState<string | null>(null)
-  const [linkPayable, setLinkPayable] = useState(false)
   const [dueDate, setDueDate] = useState('')
+  const [invoiceNav, setInvoiceNav] = useState<{ prev: InvoiceNavRow[]; next: InvoiceNavRow[] }>({
+    prev: [],
+    next: [],
+  })
   const [loading, setLoading] = useState(true)
   const [warnPaid, setWarnPaid] = useState(false)
 
@@ -80,14 +89,25 @@ export function InvoiceDetailPage() {
       supabase.from('credit_card_invoice_items').select('*').eq('invoice_id', invoiceId).order('occurred_on'),
       supabase.from('categories').select('id, name').eq('user_id', user.id).order('name'),
     ])
-    setCardName((c as { name: string } | null)?.name ?? '')
-    const invoice = i as Inv | null
-    setInv(invoice)
+    const cardNm = (c as { name: string } | null)?.name ?? ''
+    setCardName(cardNm)
+    let invoice = i as Inv | null
     setItems((it as Item[]) ?? [])
     setCats((cat as { id: string; name: string }[]) ?? [])
     if (invoice) {
       setDueDate(invoice.due_date)
-      setLinkPayable(!!invoice.payable_id)
+      if (user.id) {
+        const linked = await ensureInvoicePayableLinked(supabase, {
+          userId: user.id,
+          invoiceId: invoice.id,
+          dueDate: invoice.due_date,
+          referenceMonth: invoice.reference_month,
+          payableId: invoice.payable_id,
+          cardName: cardNm,
+          categoryId: ccCat,
+        })
+        if (!invoice.payable_id && linked) invoice = { ...invoice, payable_id: linked }
+      }
       if (invoice.payable_id) {
         const { data: p } = await supabase
           .from('payables_receivables')
@@ -98,8 +118,7 @@ export function InvoiceDetailPage() {
       } else {
         setPayableStatus(null)
       }
-      const cardNm = (c as { name: string } | null)?.name ?? ''
-      if (invoice?.payable_id && ccCat) {
+      if (invoice.payable_id && ccCat) {
         const r = await syncLinkedPayable(supabase, {
           invoiceId,
           payableId: invoice.payable_id,
@@ -110,7 +129,27 @@ export function InvoiceDetailPage() {
         })
         if (r.skippedPaid) setWarnPaid(true)
       }
+      const { data: sib } = await supabase
+        .from('credit_card_invoices')
+        .select('id, reference_month')
+        .eq('credit_card_id', cardId)
+        .eq('user_id', user.id)
+      const sorted = ((sib ?? []) as { id: string; reference_month: string }[]).sort((a, b) =>
+        a.reference_month.localeCompare(b.reference_month),
+      )
+      const ix = sorted.findIndex((row) => row.id === invoiceId)
+      const prevRows =
+        ix > 0 ? sorted.slice(Math.max(0, ix - 3), ix) : []
+      const nextRows =
+        ix >= 0 && ix < sorted.length - 1 ? sorted.slice(ix + 1, Math.min(sorted.length, ix + 1 + 12)) : []
+      setInvoiceNav({
+        prev: prevRows.map((row) => ({ id: row.id, competenciaKey: refMonthDisplay(row.reference_month) })),
+        next: nextRows.map((row) => ({ id: row.id, competenciaKey: refMonthDisplay(row.reference_month) })),
+      })
+    } else {
+      setInvoiceNav({ prev: [], next: [] })
     }
+    setInv(invoice)
     setLoading(false)
   }, [supabase, user?.id, invoiceId, cardId])
 
@@ -147,6 +186,44 @@ export function InvoiceDetailPage() {
     })
     if (r.skippedPaid) setWarnPaid(true)
   }, [supabase, invoiceId, user?.id, cardName, ccCategoryId])
+
+  const syncPayablesForInvoiceIds = useCallback(
+    async (ids: string[]) => {
+      if (!supabase || !user?.id) return
+      const unique = [...new Set(ids)]
+      for (const iid of unique) {
+        const { data: row } = await supabase
+          .from('credit_card_invoices')
+          .select('payable_id, due_date, reference_month')
+          .eq('id', iid)
+          .eq('user_id', user.id)
+          .maybeSingle()
+        const invRow = row as { payable_id: string | null; due_date: string; reference_month: string } | null
+        if (!invRow) continue
+        const effPayable = await ensureInvoicePayableLinked(supabase, {
+          userId: user.id,
+          invoiceId: iid,
+          dueDate: invRow.due_date,
+          referenceMonth: invRow.reference_month,
+          payableId: invRow.payable_id,
+          cardName,
+          categoryId: ccCategoryId,
+        })
+        const pid = effPayable ?? invRow.payable_id
+        if (!pid) continue
+        const r = await syncLinkedPayable(supabase, {
+          invoiceId: iid,
+          payableId: pid,
+          dueDate: invRow.due_date,
+          cardName,
+          referenceMonthLabel: monthLabel(parseISODate(invRow.reference_month)),
+          categoryId: ccCategoryId,
+        })
+        if (r.skippedPaid) setWarnPaid(true)
+      }
+    },
+    [supabase, user?.id, cardName, ccCategoryId],
+  )
 
   async function saveInvoiceMeta(e: React.FormEvent) {
     e.preventDefault()
@@ -185,20 +262,56 @@ export function InvoiceDetailPage() {
     }
     if (editingItem) {
       const { error } = await supabase.from('credit_card_invoice_items').update(base).eq('id', editingItem.id)
-      if (error) alert(error.message)
-      else {
-        setEditingItem(null)
-        setItemForm({
-          occurred_on: toISODate(new Date()),
-          description: '',
-          amount: '',
-          category_id: ccCategoryId ?? '',
-          parcel_count: '1',
-          amount_mode: 'total',
-        })
-        await load()
-        await runSyncInvoice()
+      if (error) {
+        alert(error.message)
+        return
       }
+      const extraInvoiceIds: string[] = []
+      const gid = editingItem.installment_group_id
+      const curNum = editingItem.installment_number
+      const nParc = editingItem.installment_count
+      if (gid != null && curNum != null && nParc != null && nParc > 1) {
+        const { data: sibs, error: sibErr } = await supabase
+          .from('credit_card_invoice_items')
+          .select('id, invoice_id, installment_number')
+          .eq('installment_group_id', gid)
+          .gt('installment_number', curNum)
+        if (sibErr) console.error(sibErr)
+        else if (sibs?.length) {
+          const invIds = [...new Set(sibs.map((s) => s.invoice_id))]
+          const { data: invs } = await supabase
+            .from('credit_card_invoices')
+            .select('id, status')
+            .in('id', invIds)
+            .eq('user_id', user.id)
+          const openSet = new Set(
+            ((invs ?? []) as { id: string; status: string }[])
+              .filter((invRow) => invRow.status === 'open')
+              .map((invRow) => invRow.id),
+          )
+          const targets = (sibs as { id: string; invoice_id: string }[]).filter((s) => openSet.has(s.invoice_id))
+          if (targets.length) {
+            const patchIds = targets.map((t) => t.id)
+            const { error: batchErr } = await supabase
+              .from('credit_card_invoice_items')
+              .update({ amount: baseAmount })
+              .in('id', patchIds)
+            if (batchErr) alert(batchErr.message)
+            else extraInvoiceIds.push(...targets.map((t) => t.invoice_id))
+          }
+        }
+      }
+      setEditingItem(null)
+      setItemForm({
+        occurred_on: toISODate(new Date()),
+        description: '',
+        amount: '',
+        category_id: ccCategoryId ?? '',
+        parcel_count: '1',
+        amount_mode: 'total',
+      })
+      await load()
+      await syncPayablesForInvoiceIds([...new Set([invoiceId, ...extraInvoiceIds])])
     } else {
       if (n === 1) {
         const singleGroupId = crypto.randomUUID()
@@ -298,10 +411,21 @@ export function InvoiceDetailPage() {
           .eq('user_id', user.id)
           .maybeSingle()
         const invRow = row as { payable_id: string | null; due_date: string; reference_month: string } | null
-        if (!invRow?.payable_id) continue
+        if (!invRow) continue
+        const effPayable = await ensureInvoicePayableLinked(supabase, {
+          userId: user.id,
+          invoiceId: iid,
+          dueDate: invRow.due_date,
+          referenceMonth: invRow.reference_month,
+          payableId: invRow.payable_id,
+          cardName,
+          categoryId: ccCategoryId,
+        })
+        const pid = effPayable ?? invRow.payable_id
+        if (!pid) continue
         await syncLinkedPayable(supabase, {
           invoiceId: iid,
-          payableId: invRow.payable_id,
+          payableId: pid,
           dueDate: invRow.due_date,
           cardName,
           referenceMonthLabel: monthLabel(parseISODate(invRow.reference_month)),
@@ -347,13 +471,61 @@ export function InvoiceDetailPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-center gap-4">
-        <Link to={`/cartoes/${cardId}`} className="text-sm text-sky-600 hover:underline">
-          ← Faturas
-        </Link>
-        <h2 className="text-2xl font-semibold">
-          Fatura {cardName} — {monthLabel(parseISODate(inv.reference_month))}
-        </h2>
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-4">
+          <h2 className="text-2xl font-semibold">
+            Fatura {cardName} — {monthLabel(parseISODate(inv.reference_month))}
+          </h2>
+        </div>
+        <nav
+          className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-sm sm:p-4"
+          aria-label="Navegação da fatura"
+        >
+          <div className="flex flex-wrap gap-3">
+            <Link to="/cartoes" className="font-medium text-sky-600 hover:underline">
+              ← CARTÕES
+            </Link>
+            <Link to={`/cartoes/${cardId}`} className="font-medium text-sky-600 hover:underline">
+              FATURAS DESTE CARTÃO
+            </Link>
+          </div>
+          {invoiceNav.prev.length > 0 && (
+            <div>
+              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">
+                Até 3 faturas anteriores
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {invoiceNav.prev.map((row) => (
+                  <Link
+                    key={row.id}
+                    to={`/cartoes/${cardId}/faturas/${row.id}`}
+                    className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-sky-700 hover:bg-slate-100"
+                  >
+                    {row.competenciaKey}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+          {invoiceNav.next.length > 0 && (
+            <div>
+              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">
+                Até 12 faturas seguintes
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {invoiceNav.next.map((row) => (
+                  <Link
+                    key={row.id}
+                    to={`/cartoes/${cardId}/faturas/${row.id}`}
+                    className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-sky-700 hover:bg-slate-100"
+                  >
+                    {row.competenciaKey}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+        </nav>
       </div>
 
       {warnPaid && (
@@ -364,8 +536,8 @@ export function InvoiceDetailPage() {
 
       {itemsLocked && (
         <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-          Itens bloqueados porque a conta a pagar vinculada está paga. Desvincule ou reabra a conta a pagar no fluxo
-          “Pagar / Receber” para editar.
+          Itens bloqueados porque a conta a pagar vinculada está paga. Reabra a conta a pagar no fluxo “Pagar /
+          Receber” para editar.
         </p>
       )}
 
@@ -377,64 +549,10 @@ export function InvoiceDetailPage() {
         <button type="submit" className="btn btn-secondary">
           Atualizar vencimento
         </button>
-        <div className="flex items-center gap-2">
-          <input
-            id="linkp"
-            type="checkbox"
-            checked={linkPayable}
-            disabled={itemsLocked}
-            onChange={async (e) => {
-              const v = e.target.checked
-              if (itemsLocked) return
-              if (!v && inv.payable_id) {
-                const { error } = await supabase.from('credit_card_invoices').update({ payable_id: null }).eq('id', inv.id)
-                if (error) alert(error.message)
-                else {
-                  setLinkPayable(false)
-                  await load()
-                }
-                return
-              }
-              if (v && !inv.payable_id && user?.id) {
-                const catForPayable =
-                  ccCategoryId ?? (await ensureCreditCardExpenseCategory(supabase, user.id))
-                if (catForPayable) setCcCategoryId(catForPayable)
-                const total = await sumInvoiceItems(supabase, inv.id)
-                const refLabel = monthLabel(parseISODate(inv.reference_month))
-                const { data: created, error } = await supabase
-                  .from('payables_receivables')
-                  .insert({
-                    user_id: user.id,
-                    kind: 'payable',
-                    amount: total,
-                    due_date: dueDate,
-                    description: `FATURA ${cardName} – ${refLabel}`,
-                    status: 'open',
-                    category_id: catForPayable,
-                    bank_account_id: null,
-                    installment_group_id: null,
-                    installment_number: null,
-                    installment_count: null,
-                  })
-                  .select('id')
-                  .single()
-                if (error) {
-                  alert(error.message)
-                  setLinkPayable(false)
-                  return
-                }
-                const pid = (created as { id: string }).id
-                await supabase.from('credit_card_invoices').update({ payable_id: pid }).eq('id', inv.id)
-                setLinkPayable(true)
-                await load()
-              }
-            }}
-            className="h-4 w-4"
-          />
-          <label htmlFor="linkp" className="mb-0 cursor-pointer text-sm text-slate-700">
-            Vincular conta a pagar (atualiza valor ao mudar itens)
-          </label>
-        </div>
+        <p className="mb-0 max-w-xl text-xs text-slate-600">
+          Esta fatura mantém conta a pagar vinculada automaticamente; o valor é atualizado quando os itens mudam
+          (exceto se a conta já estiver paga).
+        </p>
       </form>
 
       <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
