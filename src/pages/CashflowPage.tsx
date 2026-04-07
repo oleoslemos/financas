@@ -417,7 +417,7 @@ export function CashflowPage() {
     }
   }
 
-  if (!supabase) return <p className="text-slate-400">Conectando…</p>
+  if (!supabase) return <p className="text-slate-600">Conectando…</p>
 
   const title = 'Contas a pagar e a receber'
 
@@ -425,7 +425,7 @@ export function CashflowPage() {
     <div className="space-y-8">
       <h2 className="text-2xl font-semibold">{title}</h2>
 
-      <form onSubmit={submit} className="space-y-4 rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+      <form onSubmit={submit} className="space-y-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -466,10 +466,10 @@ export function CashflowPage() {
         {editing?.installment_group_id &&
           editing.installment_number != null &&
           editing.installment_count != null && (
-            <p className="rounded-lg border border-sky-900/60 bg-sky-950/30 px-3 py-2 text-sm text-sky-200/90">
+            <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
               Editando apenas a parcela {editing.installment_number} de {editing.installment_count}. Você pode alterar
               valor, vencimento, descrição base, categoria e conta só desta parcela; ao salvar, continua{' '}
-              <span className="font-mono text-sky-100">
+              <span className="font-mono text-sky-800">
                 (PARCELA {editing.installment_number}/{editing.installment_count})
               </span>
               . Para mudar quantas parcelas existem no grupo, use &quot;Alterar parcelas&quot; na linha da tabela.
@@ -568,9 +568,9 @@ export function CashflowPage() {
         </div>
       </form>
 
-      <div className="flex flex-wrap items-center gap-4 rounded-xl border border-slate-800 bg-slate-900/30 p-3">
-        <span className="text-sm text-slate-400">Exibir na tabela:</span>
-        <label className="mb-0 flex cursor-pointer items-center gap-2 text-sm text-slate-300">
+      <div className="flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+        <span className="text-sm text-slate-600">Exibir na tabela:</span>
+        <label className="mb-0 flex cursor-pointer items-center gap-2 text-sm text-slate-700">
           <input
             type="checkbox"
             className="h-4 w-4"
@@ -579,7 +579,7 @@ export function CashflowPage() {
           />
           CONTAS A PAGAR
         </label>
-        <label className="mb-0 flex cursor-pointer items-center gap-2 text-sm text-slate-300">
+        <label className="mb-0 flex cursor-pointer items-center gap-2 text-sm text-slate-700">
           <input
             type="checkbox"
             className="h-4 w-4"
@@ -670,7 +670,7 @@ export function CashflowPage() {
                     </button>
                     <button
                       type="button"
-                      className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-400"
+                      className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-600"
                       title="EXCLUIR"
                       aria-label="EXCLUIR"
                       onClick={() => removeRow(r)}
@@ -688,24 +688,24 @@ export function CashflowPage() {
 
       {payModalRow && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-3 sm:p-4"
           role="presentation"
           onClick={() => setPayModalRow(null)}
         >
           <div
             role="dialog"
             aria-labelledby="pay-modal-title"
-            className="w-full max-w-md rounded-xl border border-slate-800 bg-slate-900 p-4 shadow-xl"
+            className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 id="pay-modal-title" className="text-lg font-medium text-white">
+            <h3 id="pay-modal-title" className="text-lg font-medium text-slate-900">
               CONFIRMAR LIQUIDAÇÃO
             </h3>
-            <p className="mt-2 text-sm text-slate-400">
+            <p className="mt-2 text-sm text-slate-600">
               {payModalRow.kind === 'payable' ? 'INFORME A DATA DO PAGAMENTO.' : 'INFORME A DATA DO RECEBIMENTO.'}
             </p>
             <div className="mt-4">
-              <label className="text-sm text-slate-300">DATA</label>
+              <label className="text-sm text-slate-700">DATA</label>
               <input
                 type="date"
                 className="mt-1 w-full"
@@ -727,23 +727,23 @@ export function CashflowPage() {
 
       {parcelGroupModalId && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-3 sm:p-4"
           role="presentation"
           onClick={() => setParcelGroupModalId(null)}
         >
           <div
             role="dialog"
             aria-labelledby="parcel-modal-title"
-            className="w-full max-w-md rounded-xl border border-slate-800 bg-slate-900 p-4 shadow-xl"
+            className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 id="parcel-modal-title" className="text-lg font-medium text-white">
+            <h3 id="parcel-modal-title" className="text-lg font-medium text-slate-900">
               Alterar parcelamento
             </h3>
             <div className="mt-2 flex justify-end">
               <button
                 type="button"
-                className="text-xs text-amber-400 hover:underline"
+                className="text-xs text-amber-700 hover:underline"
                 onClick={() => {
                   if (parcelGroupModalId) void deleteOpenGroup(parcelGroupModalId)
                 }}
@@ -751,15 +751,15 @@ export function CashflowPage() {
                 Excluir parcelas em aberto do grupo
               </button>
             </div>
-            <p className="mt-2 text-sm text-slate-400">
+            <p className="mt-2 text-sm text-slate-600">
               Defina o novo número total de parcelas (ex.: de 12 para 10). Ao{' '}
-              <span className="text-slate-300">diminuir</span>, as parcelas removidas são as de número maior —
-              apenas se estiverem <span className="text-slate-300">em aberto</span>. Parcelas pagas não podem ser
-              removidas assim. Ao <span className="text-slate-300">aumentar</span>, novas parcelas usam o mesmo valor,
+              <span className="text-slate-800">diminuir</span>, as parcelas removidas são as de número maior —
+              apenas se estiverem <span className="text-slate-800">em aberto</span>. Parcelas pagas não podem ser
+              removidas assim. Ao <span className="text-slate-800">aumentar</span>, novas parcelas usam o mesmo valor,
               categoria, conta e vencimentos mensais a partir da última parcela atual.
             </p>
             <div className="mt-4">
-              <label className="text-sm text-slate-300">Número de parcelas</label>
+              <label className="text-sm text-slate-700">Número de parcelas</label>
               <input
                 type="number"
                 min={1}

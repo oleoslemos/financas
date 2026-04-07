@@ -33,8 +33,8 @@ export default defineConfig({
         name: 'LSH',
         short_name: 'LSH',
         description: 'Planejamento financeiro pessoal',
-        theme_color: '#0f172a',
-        background_color: '#0f172a',
+        theme_color: '#ffffff',
+        background_color: '#ffffff',
         display: 'standalone',
         icons: [
           {

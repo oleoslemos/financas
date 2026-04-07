@@ -179,7 +179,7 @@ export function CreditCardsPage() {
     setModalOpen(true)
   }
 
-  if (!supabase) return <p className="text-slate-400">Conectando…</p>
+  if (!supabase) return <p className="text-slate-600">Conectando…</p>
 
   return (
     <div className="space-y-8">
@@ -237,7 +237,7 @@ export function CreditCardsPage() {
                       </button>
                       <button
                         type="button"
-                        className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-400"
+                        className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-600"
                         title="EXCLUIR"
                         aria-label="EXCLUIR"
                         onClick={() => remove(c.id)}
@@ -255,7 +255,7 @@ export function CreditCardsPage() {
 
       {modalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-3 sm:p-4"
           role="presentation"
           onClick={() => {
             setModalOpen(false)
@@ -266,10 +266,10 @@ export function CreditCardsPage() {
           <div
             role="dialog"
             aria-labelledby="card-modal-title"
-            className="w-full max-w-2xl rounded-xl border border-slate-800 bg-slate-900 p-4 shadow-xl"
+            className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white p-4 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 id="card-modal-title" className="text-lg font-medium text-white">
+            <h3 id="card-modal-title" className="text-lg font-medium text-slate-900">
               {editing ? 'EDITAR CARTÃO' : 'NOVO CARTÃO'}
             </h3>
             <form onSubmit={submit} className="mt-4 grid gap-4 sm:grid-cols-2">

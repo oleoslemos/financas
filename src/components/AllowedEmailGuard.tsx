@@ -13,7 +13,7 @@ export function AllowedEmailGuard() {
 
   if (!isLoaded) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-slate-400">
+      <div className="flex min-h-screen items-center justify-center text-slate-600">
         Carregando…
       </div>
     )
@@ -31,9 +31,9 @@ export function AllowedEmailGuard() {
 
   if (!ok) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-950 p-6 text-center">
-        <p className="text-lg text-slate-200">Acesso restrito</p>
-        <p className="max-w-md text-sm text-slate-400">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-white p-4 text-center sm:p-6">
+        <p className="text-lg text-slate-900">Acesso restrito</p>
+        <p className="max-w-md text-sm text-slate-600">
           Este aplicativo só pode ser usado por contas autorizadas. O e-mail da sua sessão não está na lista
           permitida.
         </p>

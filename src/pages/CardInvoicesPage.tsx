@@ -89,18 +89,18 @@ export function CardInvoicesPage() {
     else load()
   }
 
-  if (!supabase || !cardId) return <p className="text-slate-400">…</p>
+  if (!supabase || !cardId) return <p className="text-slate-600">…</p>
 
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-center gap-4">
-        <Link to="/cartoes" className="text-sm text-sky-400 hover:underline">
+        <Link to="/cartoes" className="text-sm text-sky-600 hover:underline">
           ← Cartões
         </Link>
         <h2 className="text-2xl font-semibold">Faturas — {cardName || '…'}</h2>
       </div>
 
-      <form onSubmit={createInvoice} className="flex flex-col gap-4 rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+      <form onSubmit={createInvoice} className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
         <div className="flex flex-wrap items-end gap-3">
           <div>
             <label>Mês de referência</label>
@@ -122,7 +122,7 @@ export function CardInvoicesPage() {
             checked={openDetailAfterCreate}
             onChange={(e) => setOpenDetailAfterCreate(e.target.checked)}
           />
-          <label htmlFor="open-detail" className="mb-0 cursor-pointer text-sm text-slate-300">
+          <label htmlFor="open-detail" className="mb-0 cursor-pointer text-sm text-slate-700">
             Após criar, abrir a fatura para detalhar e lançar despesas
           </label>
         </div>
@@ -147,7 +147,7 @@ export function CardInvoicesPage() {
                 <tr key={r.id}>
                   <td>{monthLabel(parseISODate(r.reference_month))}</td>
                   <td>{r.due_date}</td>
-                  <td className="text-slate-400">
+                  <td className="text-slate-600">
                     {r.installment_group_id
                       ? `${r.installment_number ?? '?'}/${r.installment_count ?? '?'}`
                       : '—'}
@@ -165,7 +165,7 @@ export function CardInvoicesPage() {
                       </Link>
                       <button
                         type="button"
-                        className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-400"
+                        className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-600"
                         title="EXCLUIR"
                         aria-label="EXCLUIR"
                         onClick={() => removeInv(r.id)}

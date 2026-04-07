@@ -20,10 +20,10 @@ createRoot(document.getElementById('root')!).render(
         </ClerkProvider>
       </RootErrorBoundary>
     ) : (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950 p-6 text-center text-amber-200">
+      <div className="flex min-h-screen items-center justify-center bg-white p-4 text-center text-amber-900 sm:p-6">
         <p>
-          Defina <code className="text-sky-300">VITE_CLERK_PUBLISHABLE_KEY</code> e{' '}
-          <code className="text-sky-300">VITE_SUPABASE_*</code> no arquivo <code className="text-sky-300">.env</code>.
+          Defina <code className="text-sky-700">VITE_CLERK_PUBLISHABLE_KEY</code> e{' '}
+          <code className="text-sky-700">VITE_SUPABASE_*</code> no arquivo <code className="text-sky-700">.env</code>.
         </p>
       </div>
     )}

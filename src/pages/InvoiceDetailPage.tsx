@@ -33,6 +33,8 @@ type Item = {
   installment_count: number | null
 }
 
+type ItemAmountMode = 'total' | 'per_installment'
+
 export function InvoiceDetailPage() {
   const { cardId, invoiceId } = useParams<{ cardId: string; invoiceId: string }>()
   const { user } = useUser()
@@ -55,6 +57,8 @@ export function InvoiceDetailPage() {
     amount: '',
     category_id: '',
     parcel_count: '1',
+    /** total = divide o valor informado; per_installment = repete o mesmo valor em cada parcela */
+    amount_mode: 'total' as ItemAmountMode,
   })
   const [editingItem, setEditingItem] = useState<Item | null>(null)
 
@@ -190,6 +194,7 @@ export function InvoiceDetailPage() {
           amount: '',
           category_id: ccCategoryId ?? '',
           parcel_count: '1',
+          amount_mode: 'total',
         })
         await load()
         await runSyncInvoice()
@@ -214,13 +219,17 @@ export function InvoiceDetailPage() {
           amount: '',
           category_id: ccCategoryId ?? '',
           parcel_count: '1',
+          amount_mode: 'total',
         })
         await load()
         await runSyncInvoice()
         return
       }
 
-      const shareAmounts = splitTotalAcrossInstallments(baseAmount, n)
+      const shareAmounts =
+        itemForm.amount_mode === 'per_installment'
+          ? Array.from({ length: n }, () => baseAmount)
+          : splitTotalAcrossInstallments(baseAmount, n)
       const groupId = crypto.randomUUID()
       const touchedInvoiceIds: string[] = []
 
@@ -306,6 +315,7 @@ export function InvoiceDetailPage() {
         amount: '',
         category_id: ccCategoryId ?? '',
         parcel_count: '1',
+        amount_mode: 'total',
       })
       await load()
     }
@@ -329,16 +339,16 @@ export function InvoiceDetailPage() {
     }
   }
 
-  if (!supabase || !invoiceId || !cardId) return <p className="text-slate-400">…</p>
+  if (!supabase || !invoiceId || !cardId) return <p className="text-slate-600">…</p>
   if (loading && !inv) return <p className="text-slate-500">Carregando…</p>
-  if (!inv) return <p className="text-red-400">Fatura não encontrada.</p>
+  if (!inv) return <p className="text-red-600">Fatura não encontrada.</p>
 
   const total = items.reduce((s, x) => s + Number(x.amount), 0)
 
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-center gap-4">
-        <Link to={`/cartoes/${cardId}`} className="text-sm text-sky-400 hover:underline">
+        <Link to={`/cartoes/${cardId}`} className="text-sm text-sky-600 hover:underline">
           ← Faturas
         </Link>
         <h2 className="text-2xl font-semibold">
@@ -347,19 +357,19 @@ export function InvoiceDetailPage() {
       </div>
 
       {warnPaid && (
-        <p className="rounded-lg border border-amber-800 bg-amber-950/40 px-3 py-2 text-sm text-amber-200">
+        <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
           A conta a pagar vinculada está <strong>paga</strong>: o valor não foi atualizado automaticamente.
         </p>
       )}
 
       {itemsLocked && (
-        <p className="rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm text-slate-300">
+        <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
           Itens bloqueados porque a conta a pagar vinculada está paga. Desvincule ou reabra a conta a pagar no fluxo
           “Pagar / Receber” para editar.
         </p>
       )}
 
-      <form onSubmit={saveInvoiceMeta} className="flex flex-wrap items-end gap-4 rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+      <form onSubmit={saveInvoiceMeta} className="flex flex-wrap items-end gap-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
         <div>
           <label>Vencimento da fatura</label>
           <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
@@ -421,22 +431,22 @@ export function InvoiceDetailPage() {
             }}
             className="h-4 w-4"
           />
-          <label htmlFor="linkp" className="mb-0 cursor-pointer text-sm text-slate-300">
+          <label htmlFor="linkp" className="mb-0 cursor-pointer text-sm text-slate-700">
             Vincular conta a pagar (atualiza valor ao mudar itens)
           </label>
         </div>
       </form>
 
-      <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-4">
-        <p className="text-lg font-medium text-white">
-          Total da fatura: <span className="text-sky-300">{formatBRL(total)}</span>
+      <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+        <p className="text-lg font-medium text-slate-900">
+          Total da fatura: <span className="text-sky-600">{formatBRL(total)}</span>
         </p>
         {inv.payable_id && (
-          <p className="text-xs text-slate-500">CONTA A PAGAR: {inv.payable_id.slice(0, 8)}… — {statusPt(payableStatus)}</p>
+          <p className="text-xs text-slate-600">CONTA A PAGAR: {inv.payable_id.slice(0, 8)}… — {statusPt(payableStatus)}</p>
         )}
       </div>
 
-      <form onSubmit={submitItem} className="grid gap-3 rounded-xl border border-slate-800 bg-slate-900/40 p-4 sm:grid-cols-2">
+      <form onSubmit={submitItem} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-2 sm:p-4">
         <div>
           <label>Data</label>
           <input
@@ -447,13 +457,40 @@ export function InvoiceDetailPage() {
           />
         </div>
         <div>
-          <label>Valor</label>
+          <label>VALOR</label>
           <input
             value={itemForm.amount}
             onChange={(e) => setItemForm({ ...itemForm, amount: e.target.value })}
             disabled={itemsLocked}
             required
           />
+        </div>
+        <div className="sm:col-span-2 flex flex-col gap-2">
+          <span className="text-xs text-slate-600">O VALOR INFORMADO É:</span>
+          <div className="flex flex-wrap gap-4">
+            <label className="mb-0 flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+              <input
+                type="radio"
+                name="item_amount_mode"
+                className="h-4 w-4"
+                checked={itemForm.amount_mode === 'total'}
+                disabled={itemsLocked || !!editingItem}
+                onChange={() => setItemForm({ ...itemForm, amount_mode: 'total' })}
+              />
+              TOTAL DA COMPRA (DIVIDIR PELA QUANTIDADE DE PARCELAS)
+            </label>
+            <label className="mb-0 flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+              <input
+                type="radio"
+                name="item_amount_mode"
+                className="h-4 w-4"
+                checked={itemForm.amount_mode === 'per_installment'}
+                disabled={itemsLocked || !!editingItem}
+                onChange={() => setItemForm({ ...itemForm, amount_mode: 'per_installment' })}
+              />
+              VALOR DE CADA PARCELA (REPETIR EM TODAS AS PARCELAS)
+            </label>
+          </div>
         </div>
         <div className="sm:col-span-2">
           <label>Descrição</label>
@@ -479,7 +516,7 @@ export function InvoiceDetailPage() {
           </select>
         </div>
         <div>
-          <label>Parcelas desta compra</label>
+          <label>QUANTIDADE DE PARCELAS</label>
           <input
             type="number"
             min={1}
@@ -505,6 +542,7 @@ export function InvoiceDetailPage() {
                   amount: '',
                   category_id: ccCategoryId ?? '',
                   parcel_count: '1',
+                  amount_mode: 'total',
                 })
               }}
             >
@@ -531,10 +569,10 @@ export function InvoiceDetailPage() {
               <tr key={it.id}>
                 <td>{it.occurred_on}</td>
                 <td>{it.description}</td>
-                <td className="text-slate-400">
+                <td className="text-slate-600">
                   {`${it.installment_number ?? 1}/${it.installment_count ?? 1}`}
                 </td>
-                <td className="text-slate-400">
+                <td className="text-slate-600">
                   {cats.find((c) => c.id === it.category_id)?.name ?? (it.category_id ? '…' : '—')}
                 </td>
                 <td>{formatBRL(Number(it.amount))}</td>
@@ -554,6 +592,7 @@ export function InvoiceDetailPage() {
                           amount: String(it.amount),
                           category_id: it.category_id ?? '',
                           parcel_count: String(it.installment_count ?? 1),
+                          amount_mode: 'total',
                         })
                       }}
                     >
@@ -561,7 +600,7 @@ export function InvoiceDetailPage() {
                     </button>
                     <button
                       type="button"
-                      className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-400"
+                      className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-600"
                       title="EXCLUIR"
                       aria-label="EXCLUIR"
                       disabled={itemsLocked}

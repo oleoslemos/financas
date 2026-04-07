@@ -100,13 +100,13 @@ export function BankAccounts() {
     else load()
   }
 
-  if (!supabase) return <p className="text-slate-400">Conectando…</p>
+  if (!supabase) return <p className="text-slate-600">Conectando…</p>
 
   return (
     <div className="space-y-8">
       <h2 className="text-2xl font-semibold">Contas bancárias</h2>
 
-      <form onSubmit={submit} className="grid gap-4 rounded-xl border border-slate-800 bg-slate-900/40 p-4 sm:grid-cols-2">
+      <form onSubmit={submit} className="grid gap-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-2 sm:p-4">
         <div className="sm:col-span-2">
           <label>Nome da conta</label>
           <input
@@ -200,7 +200,7 @@ export function BankAccounts() {
                       </button>
                       <button
                         type="button"
-                        className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-400"
+                        className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-600"
                         title="EXCLUIR"
                         aria-label="EXCLUIR"
                         onClick={() => remove(b.id)}

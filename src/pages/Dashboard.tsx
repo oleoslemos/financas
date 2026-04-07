@@ -231,23 +231,23 @@ export function Dashboard() {
   const ccMaxTotal = useMemo(() => Math.max(1, ...ccSeries.map((s) => s.total)), [ccSeries])
 
   if (!supabase) {
-    return <p className="text-slate-400">CONECTANDO AO BANCO…</p>
+    return <p className="text-slate-600">CONECTANDO AO BANCO…</p>
   }
 
   return (
     <div className="space-y-8">
       <header>
-        <h2 className="text-xl font-semibold text-white">OLÁ{user?.firstName ? `, ${user.firstName}` : ''}</h2>
-        <p className="text-xs text-slate-400">SALDOS BANCÁRIOS E CONTAS ABERTAS</p>
+        <h2 className="text-xl font-semibold text-slate-900">OLÁ{user?.firstName ? `, ${user.firstName}` : ''}</h2>
+        <p className="text-xs text-slate-600">SALDOS BANCÁRIOS E CONTAS ABERTAS</p>
       </header>
 
       {loading ? (
         <p className="text-slate-500">CARREGANDO…</p>
       ) : (
-        <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+        <div className="grid w-full gap-4 sm:gap-6 xl:grid-cols-[minmax(0,360px)_minmax(0,1fr)]">
           <section className="space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-semibold tracking-wide text-slate-400">CONTAS BANCÁRIAS</h3>
+              <h3 className="text-xs font-semibold tracking-wide text-slate-600">CONTAS BANCÁRIAS</h3>
               <button
                 type="button"
                 className={`btn btn-secondary text-[11px] ${selectedBankId === 'ALL' ? 'ring-1 ring-sky-500/60' : ''}`}
@@ -260,7 +260,7 @@ export function Dashboard() {
             {banks.length === 0 ? (
               <p className="text-xs text-slate-500">
                 NENHUMA CONTA ATIVA.{' '}
-                <Link to="/contas-bancarias" className="text-sky-400 hover:underline">
+                <Link to="/contas-bancarias" className="text-sky-600 hover:underline">
                   CADASTRAR
                 </Link>
               </p>
@@ -272,15 +272,15 @@ export function Dashboard() {
                     key={b.id}
                     type="button"
                     onClick={() => setSelectedBankId((prev) => (prev === b.id ? 'ALL' : b.id))}
-                    className={`w-full rounded-xl border p-4 text-left transition-colors ${
-                      selected ? 'border-sky-600 bg-slate-900/80' : 'border-slate-800 bg-slate-900/40 hover:border-slate-700'
+                    className={`w-full rounded-xl border bg-white p-3 text-left shadow-sm transition-colors sm:p-4 ${
+                      selected ? 'border-sky-500 ring-1 ring-sky-200' : 'border-slate-200 hover:border-slate-300'
                     }`}
                   >
-                    <div className="mb-1 flex items-center gap-2 text-[11px] text-slate-400">
+                    <div className="mb-1 flex items-center gap-2 text-[11px] text-slate-500">
                       <Landmark size={14} />
                       <span>{b.name}</span>
                     </div>
-                    <div className="text-sm font-semibold text-white">SALDO ATUAL: {formatBRL(Number(b.initial_balance))}</div>
+                    <div className="text-sm font-semibold text-slate-900">SALDO ATUAL: {formatBRL(Number(b.initial_balance))}</div>
                   </button>
                 )
               })
@@ -288,8 +288,8 @@ export function Dashboard() {
           </section>
 
           <section className="space-y-4">
-            <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-3">
-              <div className="mb-2 flex items-center gap-2 text-xs text-slate-400">
+            <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+              <div className="mb-2 flex items-center gap-2 text-xs text-slate-600">
                 <CalendarDays size={14} />
                 <span>MÊS BASE</span>
               </div>
@@ -308,10 +308,10 @@ export function Dashboard() {
             </div>
 
             <div className="grid gap-4 lg:grid-cols-2">
-              <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-3">
-                <h3 className="mb-2 text-xs font-semibold text-slate-300">CONTAS ABERTAS — {selectedMonth}</h3>
+              <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                <h3 className="mb-2 text-xs font-semibold text-slate-700">CONTAS ABERTAS — {selectedMonth}</h3>
                 <div className="space-y-2">
-                  <p className="text-[11px] text-amber-300">A PAGAR</p>
+                  <p className="text-[11px] font-medium text-amber-800">A PAGAR</p>
                   {payCurrent.length === 0 ? (
                     <p className="text-[11px] text-slate-500">
                       SEM REGISTROS
@@ -319,15 +319,15 @@ export function Dashboard() {
                     </p>
                   ) : (
                     payCurrent.map((x) => (
-                      <div key={`p0-${x.id}`} className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 px-2 py-1.5 text-xs">
-                        <span className="truncate text-slate-300">{x.description || '—'}</span>
-                        <span className="text-amber-200">{formatBRL(Number(x.amount))}</span>
+                      <div key={`p0-${x.id}`} className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-2 py-1.5 text-xs">
+                        <span className="truncate text-slate-700">{x.description || '—'}</span>
+                        <span className="text-amber-800">{formatBRL(Number(x.amount))}</span>
                         <span className="text-slate-500">{x.due_date}</span>
                       </div>
                     ))
                   )}
 
-                  <p className="pt-2 text-[11px] text-emerald-300">A RECEBER</p>
+                  <p className="pt-2 text-[11px] font-medium text-emerald-800">A RECEBER</p>
                   {recCurrent.length === 0 ? (
                     <p className="text-[11px] text-slate-500">
                       SEM REGISTROS
@@ -335,9 +335,9 @@ export function Dashboard() {
                     </p>
                   ) : (
                     recCurrent.map((x) => (
-                      <div key={`r0-${x.id}`} className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 px-2 py-1.5 text-xs">
-                        <span className="truncate text-slate-300">{x.description || '—'}</span>
-                        <span className="text-emerald-300">{formatBRL(Number(x.amount))}</span>
+                      <div key={`r0-${x.id}`} className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-2 py-1.5 text-xs">
+                        <span className="truncate text-slate-700">{x.description || '—'}</span>
+                        <span className="text-emerald-700">{formatBRL(Number(x.amount))}</span>
                         <span className="text-slate-500">{x.due_date}</span>
                       </div>
                     ))
@@ -345,10 +345,10 @@ export function Dashboard() {
                 </div>
               </div>
 
-              <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-3">
-                <h3 className="mb-2 text-xs font-semibold text-slate-300">CONTAS ABERTAS — {monthNext}</h3>
+              <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                <h3 className="mb-2 text-xs font-semibold text-slate-700">CONTAS ABERTAS — {monthNext}</h3>
                 <div className="space-y-2">
-                  <p className="text-[11px] text-amber-300">A PAGAR</p>
+                  <p className="text-[11px] font-medium text-amber-800">A PAGAR</p>
                   {payNext.length === 0 ? (
                     <p className="text-[11px] text-slate-500">
                       SEM REGISTROS
@@ -356,15 +356,15 @@ export function Dashboard() {
                     </p>
                   ) : (
                     payNext.map((x) => (
-                      <div key={`p1-${x.id}`} className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 px-2 py-1.5 text-xs">
-                        <span className="truncate text-slate-300">{x.description || '—'}</span>
-                        <span className="text-amber-200">{formatBRL(Number(x.amount))}</span>
+                      <div key={`p1-${x.id}`} className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-2 py-1.5 text-xs">
+                        <span className="truncate text-slate-700">{x.description || '—'}</span>
+                        <span className="text-amber-800">{formatBRL(Number(x.amount))}</span>
                         <span className="text-slate-500">{x.due_date}</span>
                       </div>
                     ))
                   )}
 
-                  <p className="pt-2 text-[11px] text-emerald-300">A RECEBER</p>
+                  <p className="pt-2 text-[11px] font-medium text-emerald-800">A RECEBER</p>
                   {recNext.length === 0 ? (
                     <p className="text-[11px] text-slate-500">
                       SEM REGISTROS
@@ -372,9 +372,9 @@ export function Dashboard() {
                     </p>
                   ) : (
                     recNext.map((x) => (
-                      <div key={`r1-${x.id}`} className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 px-2 py-1.5 text-xs">
-                        <span className="truncate text-slate-300">{x.description || '—'}</span>
-                        <span className="text-emerald-300">{formatBRL(Number(x.amount))}</span>
+                      <div key={`r1-${x.id}`} className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-2 py-1.5 text-xs">
+                        <span className="truncate text-slate-700">{x.description || '—'}</span>
+                        <span className="text-emerald-700">{formatBRL(Number(x.amount))}</span>
                         <span className="text-slate-500">{x.due_date}</span>
                       </div>
                     ))
@@ -383,7 +383,7 @@ export function Dashboard() {
               </div>
             </div>
 
-            <Link to="/fluxo" className="inline-flex items-center gap-2 text-xs text-sky-400 hover:underline">
+            <Link to="/fluxo" className="inline-flex items-center gap-2 text-xs text-sky-600 hover:underline">
               <Wallet size={14} />
               VER MOVIMENTOS COMPLETOS
             </Link>
@@ -391,13 +391,13 @@ export function Dashboard() {
         </div>
       )}
 
-      <section className="mt-10 space-y-4 rounded-xl border border-slate-800 bg-slate-900/30 p-4">
+      <section className="mt-8 space-y-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:mt-10 sm:p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
-            <CreditCard size={16} className="text-sky-400" />
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-800">
+            <CreditCard size={16} className="text-sky-600" />
             <span>EVOLUÇÃO DO CARTÃO DE CRÉDITO (TOTAL DA FATURA)</span>
           </div>
-          <Link to="/cartoes" className="text-[11px] text-sky-400 hover:underline">
+          <Link to="/cartoes" className="text-[11px] text-sky-600 hover:underline">
             GERENCIAR CARTÕES
           </Link>
         </div>
@@ -407,7 +407,7 @@ export function Dashboard() {
         </p>
         <div className="flex flex-wrap items-end gap-4">
           <div>
-            <label className="mb-1 block text-[11px] text-slate-400">À FRENTE</label>
+            <label className="mb-1 block text-[11px] text-slate-600">À FRENTE</label>
             <select
               className="min-w-[200px]"
               value={ccFutureMonths}
@@ -420,7 +420,7 @@ export function Dashboard() {
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-[11px] text-slate-400">CARTÃO</label>
+            <label className="mb-1 block text-[11px] text-slate-600">CARTÃO</label>
             <select className="min-w-[200px]" value={ccFilterId} onChange={(e) => setCcFilterId(e.target.value)}>
               <option value="ALL">TODOS OS CARTÕES</option>
               {creditCards.map((c) => (
@@ -437,7 +437,7 @@ export function Dashboard() {
         ) : creditCards.length === 0 ? (
           <p className="text-xs text-slate-500">
             NENHUM CARTÃO CADASTRADO.{' '}
-            <Link to="/cartoes" className="text-sky-400 hover:underline">
+            <Link to="/cartoes" className="text-sky-600 hover:underline">
               CADASTRAR
             </Link>
           </p>
@@ -449,21 +449,21 @@ export function Dashboard() {
                   <span
                     className={
                       row.segment === 'atual'
-                        ? 'font-medium text-white'
+                        ? 'font-medium text-slate-900'
                         : row.segment === 'futuro'
-                          ? 'text-sky-300'
-                          : 'text-slate-400'
+                          ? 'text-sky-700'
+                          : 'text-slate-600'
                     }
                   >
                     {row.label}
                     {row.segment === 'atual' ? ' — MÊS ATUAL' : row.segment === 'futuro' ? ' — À FRENTE' : ''}
                   </span>
-                  <span className="font-medium text-amber-200">{formatBRL(row.total)}</span>
+                  <span className="font-medium text-amber-800">{formatBRL(row.total)}</span>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-slate-800">
+                <div className="h-2 overflow-hidden rounded-full bg-slate-200">
                   <div
                     className={`h-full rounded-full transition-[width] ${
-                      row.segment === 'futuro' ? 'bg-violet-600/70' : 'bg-sky-600/80'
+                      row.segment === 'futuro' ? 'bg-violet-500' : 'bg-sky-500'
                     }`}
                     style={{ width: `${(row.total / ccMaxTotal) * 100}%` }}
                   />

@@ -64,13 +64,13 @@ export function Categories() {
     else load()
   }
 
-  if (!supabase) return <p className="text-slate-400">Conectando…</p>
+  if (!supabase) return <p className="text-slate-600">Conectando…</p>
 
   return (
     <div className="space-y-8">
       <h2 className="text-2xl font-semibold">Categorias</h2>
 
-      <form onSubmit={submit} className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+      <form onSubmit={submit} className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
         <div className="min-w-[200px] flex-1">
           <label>Nome</label>
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Alimentação" required />
@@ -136,7 +136,7 @@ export function Categories() {
                       </button>
                       <button
                         type="button"
-                        className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-400"
+                        className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-600"
                         title="EXCLUIR"
                         aria-label="EXCLUIR"
                         onClick={() => remove(c.id)}
