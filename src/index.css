@@ -8,6 +8,7 @@
 
 body {
   @apply min-h-screen bg-white text-slate-900 antialiased;
+  text-transform: uppercase;
 }
 
 input,
@@ -15,6 +16,7 @@ select,
 textarea,
 button {
   @apply rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-sky-500/30 focus:ring-2;
+  text-transform: uppercase;
 }
 
 label {
