@@ -126,17 +126,22 @@ export function CardInvoicesPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between lg:gap-8">
-        <div className="flex min-w-0 flex-wrap items-center gap-4">
-          <Link to="/cartoes" className="text-sm text-sky-600 hover:underline">
+      <form
+        onSubmit={createInvoice}
+        className="flex flex-wrap items-end justify-between gap-x-2 gap-y-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:gap-x-3 lg:flex-nowrap"
+      >
+        <div className="flex min-w-0 items-center gap-3 pr-2">
+          <Link to="/cartoes" className="shrink-0 text-sm text-sky-600 hover:underline">
             ← CARTÕES
           </Link>
-          <h2 className="text-2xl font-semibold">FATURAS — {cardName || '…'}</h2>
+          <h2 className="truncate text-lg font-semibold sm:text-xl lg:text-2xl">FATURAS — {cardName || '…'}</h2>
         </div>
 
-        <aside className="w-full shrink-0 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4 lg:ml-auto lg:max-w-xl">
-          <div className="mb-4">
-            <label className="mb-1 block text-sm font-medium text-slate-700">TROCAR DE CARTÃO</label>
+        <div className="flex min-w-0 flex-wrap items-end gap-x-2 gap-y-2 sm:gap-x-3 lg:flex-nowrap">
+          <div className="min-w-0 sm:min-w-[9rem] sm:max-w-[14rem]">
+            <label className="mb-0 block text-[10px] font-medium uppercase tracking-wide text-slate-600 sm:text-[11px]">
+              Cartão
+            </label>
             <select
               className="w-full min-w-0"
               value={cardId}
@@ -150,39 +155,37 @@ export function CardInvoicesPage() {
               ))}
             </select>
           </div>
-
-          <form
-            onSubmit={createInvoice}
-            className="flex flex-col gap-4 border-t border-slate-200 pt-4"
+          <div>
+            <label className="mb-0 block text-[10px] font-medium uppercase tracking-wide text-slate-600 sm:text-[11px]">
+              Mês ref.
+            </label>
+            <input type="month" value={refMonth} onChange={(e) => setRefMonth(e.target.value)} required />
+          </div>
+          <div>
+            <label className="mb-0 block text-[10px] font-medium uppercase tracking-wide text-slate-600 sm:text-[11px]">
+              Vencimento
+            </label>
+            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} required />
+          </div>
+          <label
+            className="mb-0 flex cursor-pointer items-center gap-1.5 self-end pb-1.5"
+            htmlFor="open-detail"
+            title="Após criar, abrir a fatura para detalhar e lançar despesas"
           >
-            <div className="flex flex-wrap items-end gap-3">
-              <div>
-                <label>MÊS DE REFERÊNCIA</label>
-                <input type="month" value={refMonth} onChange={(e) => setRefMonth(e.target.value)} required />
-              </div>
-              <div>
-                <label>VENCIMENTO</label>
-                <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} required />
-              </div>
-              <button type="submit" className="btn btn-primary">
-                NOVA FATURA
-              </button>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                id="open-detail"
-                type="checkbox"
-                className="h-4 w-4"
-                checked={openDetailAfterCreate}
-                onChange={(e) => setOpenDetailAfterCreate(e.target.checked)}
-              />
-              <label htmlFor="open-detail" className="mb-0 cursor-pointer text-sm text-slate-700">
-                APÓS CRIAR, ABRIR A FATURA PARA DETALHAR E LANÇAR DESPESAS
-              </label>
-            </div>
-          </form>
-        </aside>
-      </div>
+            <input
+              id="open-detail"
+              type="checkbox"
+              className="h-4 w-4 shrink-0"
+              checked={openDetailAfterCreate}
+              onChange={(e) => setOpenDetailAfterCreate(e.target.checked)}
+            />
+            <span className="whitespace-nowrap text-[10px] text-slate-700 sm:text-xs">Abrir após criar</span>
+          </label>
+          <button type="submit" className="btn btn-primary shrink-0 text-xs sm:text-sm">
+            NOVA FATURA
+          </button>
+        </div>
+      </form>
 
       <div className="table-wrap">
         {loading ? (
