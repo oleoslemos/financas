@@ -1,5 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
-import { Pencil, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, Pencil, Search, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
@@ -12,7 +12,13 @@ type Cliente = {
   birth_date: string | null
   phone_1: string | null
   phone_2: string | null
-  full_address: string | null
+  cep: string | null
+  address_street: string | null
+  address_number: string | null
+  address_complement: string | null
+  address_district: string | null
+  address_city: string | null
+  address_state: string | null
   email: string | null
 }
 
@@ -37,6 +43,12 @@ function formatCpf(v?: string | null) {
   return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`
 }
 
+function formatCep(v?: string | null) {
+  const d = onlyDigits(v ?? '').slice(0, 8)
+  if (d.length <= 5) return d
+  return `${d.slice(0, 5)}-${d.slice(5)}`
+}
+
 export function BemAvivClientesPage() {
   const { user } = useUser()
   const supabase = useSupabase()
@@ -45,13 +57,21 @@ export function BemAvivClientesPage() {
   const [rows, setRows] = useState<Cliente[]>([])
   const [editing, setEditing] = useState<Cliente | null>(null)
   const [loading, setLoading] = useState(true)
+  const [formOpen, setFormOpen] = useState(false)
+  const [cepLoading, setCepLoading] = useState(false)
   const [form, setForm] = useState({
     full_name: '',
     cpf: '',
     birth_date: '',
     phone_1: '',
     phone_2: '',
-    full_address: '',
+    cep: '',
+    address_street: '',
+    address_number: '',
+    address_complement: '',
+    address_district: '',
+    address_city: '',
+    address_state: '',
     email: '',
   })
 
@@ -71,6 +91,18 @@ export function BemAvivClientesPage() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!supabase || !ownerUserId) return
+    const fullAddress = [
+      form.address_street,
+      form.address_number,
+      form.address_complement,
+      form.address_district,
+      form.address_city,
+      form.address_state,
+      form.cep ? `CEP ${onlyDigits(form.cep)}` : '',
+    ]
+      .map((v) => toUpperTrim(v))
+      .filter(Boolean)
+      .join(' - ')
     const payload = {
       user_id: ownerUserId,
       full_name: toUpperTrim(form.full_name),
@@ -78,7 +110,14 @@ export function BemAvivClientesPage() {
       birth_date: form.birth_date || null,
       phone_1: onlyDigits(form.phone_1),
       phone_2: onlyDigits(form.phone_2),
-      full_address: toUpperTrim(form.full_address),
+      cep: onlyDigits(form.cep),
+      address_street: toUpperTrim(form.address_street),
+      address_number: toUpperTrim(form.address_number),
+      address_complement: toUpperTrim(form.address_complement),
+      address_district: toUpperTrim(form.address_district),
+      address_city: toUpperTrim(form.address_city),
+      address_state: toUpperTrim(form.address_state),
+      full_address: fullAddress,
       email: toUpperTrim(form.email),
     }
     if (editing) {
@@ -89,8 +128,55 @@ export function BemAvivClientesPage() {
       if (error) alert(error.message)
     }
     setEditing(null)
-    setForm({ full_name: '', cpf: '', birth_date: '', phone_1: '', phone_2: '', full_address: '', email: '' })
+    setFormOpen(false)
+    setForm({
+      full_name: '',
+      cpf: '',
+      birth_date: '',
+      phone_1: '',
+      phone_2: '',
+      cep: '',
+      address_street: '',
+      address_number: '',
+      address_complement: '',
+      address_district: '',
+      address_city: '',
+      address_state: '',
+      email: '',
+    })
     await load()
+  }
+
+  async function lookupCep() {
+    const cep = onlyDigits(form.cep)
+    if (cep.length !== 8) {
+      alert('INFORME UM CEP COM 8 DÍGITOS.')
+      return
+    }
+    setCepLoading(true)
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`)
+      const data = (await res.json()) as {
+        erro?: boolean
+        logradouro?: string
+        bairro?: string
+        localidade?: string
+        uf?: string
+      }
+      if (data.erro) {
+        alert('CEP NÃO ENCONTRADO.')
+        return
+      }
+      setForm((prev) => ({
+        ...prev,
+        address_street: data.logradouro ?? prev.address_street,
+        address_district: data.bairro ?? prev.address_district,
+        address_city: data.localidade ?? prev.address_city,
+        address_state: data.uf ?? prev.address_state,
+      }))
+    } finally {
+      setCepLoading(false)
+    }
   }
 
   async function remove(id: string) {
@@ -105,52 +191,114 @@ export function BemAvivClientesPage() {
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-semibold">CADASTRO DE CLIENTES</h2>
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between px-3 py-2 text-left text-sm font-semibold text-slate-800 sm:px-4"
+          onClick={() => setFormOpen((v) => !v)}
+        >
+          <span>CADASTRAR CLIENTE</span>
+          {formOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        </button>
+        {formOpen && (
+          <form onSubmit={onSubmit} className="grid gap-3 border-t border-slate-200 p-3 sm:grid-cols-12 sm:p-4">
+            <div className="sm:col-span-8">
+              <label>NOME COMPLETO</label>
+              <input required value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
+            </div>
+            <div className="sm:col-span-4">
+              <label>DATA NASCIMENTO</label>
+              <input type="date" value={form.birth_date} onChange={(e) => setForm({ ...form, birth_date: e.target.value })} />
+            </div>
 
-      <form onSubmit={onSubmit} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-2">
-        <div className="sm:col-span-2">
-          <label>NOME COMPLETO</label>
-          <input required value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
-        </div>
-        <div>
-          <label>CPF</label>
-          <input required value={formatCpf(form.cpf)} onChange={(e) => setForm({ ...form, cpf: onlyDigits(e.target.value) })} />
-        </div>
-        <div>
-          <label>DATA NASCIMENTO</label>
-          <input type="date" value={form.birth_date} onChange={(e) => setForm({ ...form, birth_date: e.target.value })} />
-        </div>
-        <div>
-          <label>TELEFONE 1</label>
-          <input value={formatPhone(form.phone_1)} onChange={(e) => setForm({ ...form, phone_1: onlyDigits(e.target.value) })} />
-        </div>
-        <div>
-          <label>TELEFONE 2</label>
-          <input value={formatPhone(form.phone_2)} onChange={(e) => setForm({ ...form, phone_2: onlyDigits(e.target.value) })} />
-        </div>
-        <div className="sm:col-span-2">
-          <label>ENDEREÇO COMPLETO</label>
-          <input value={form.full_address} onChange={(e) => setForm({ ...form, full_address: e.target.value })} />
-        </div>
-        <div className="sm:col-span-2">
-          <label>E-MAIL</label>
-          <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-        </div>
-        <div className="sm:col-span-2 flex gap-2">
-          <button className="btn btn-primary" type="submit">{editing ? 'SALVAR' : 'ADICIONAR'}</button>
-          {editing && (
-            <button
-              className="btn btn-secondary"
-              type="button"
-              onClick={() => {
-                setEditing(null)
-                setForm({ full_name: '', cpf: '', birth_date: '', phone_1: '', phone_2: '', full_address: '', email: '' })
-              }}
-            >
-              CANCELAR
-            </button>
-          )}
-        </div>
-      </form>
+            <div className="sm:col-span-4">
+              <label>CPF</label>
+              <input required value={formatCpf(form.cpf)} onChange={(e) => setForm({ ...form, cpf: onlyDigits(e.target.value) })} />
+            </div>
+            <div className="sm:col-span-4">
+              <label>TELEFONE 1</label>
+              <input value={formatPhone(form.phone_1)} onChange={(e) => setForm({ ...form, phone_1: onlyDigits(e.target.value) })} />
+            </div>
+            <div className="sm:col-span-4">
+              <label>TELEFONE 2</label>
+              <input value={formatPhone(form.phone_2)} onChange={(e) => setForm({ ...form, phone_2: onlyDigits(e.target.value) })} />
+            </div>
+
+            <div className="sm:col-span-4">
+              <label>CEP</label>
+              <div className="flex gap-2">
+                <input
+                  value={formatCep(form.cep)}
+                  onChange={(e) => setForm({ ...form, cep: onlyDigits(e.target.value) })}
+                  onBlur={() => {
+                    if (onlyDigits(form.cep).length === 8) void lookupCep()
+                  }}
+                />
+                <button type="button" className="btn btn-secondary px-3" onClick={() => void lookupCep()} disabled={cepLoading}>
+                  <Search size={14} />
+                </button>
+              </div>
+            </div>
+            <div className="sm:col-span-6">
+              <label>LOGRADOURO</label>
+              <input value={form.address_street} onChange={(e) => setForm({ ...form, address_street: e.target.value })} />
+            </div>
+            <div className="sm:col-span-2">
+              <label>NÚMERO</label>
+              <input value={form.address_number} onChange={(e) => setForm({ ...form, address_number: e.target.value })} />
+            </div>
+            <div className="sm:col-span-4">
+              <label>COMPLEMENTO</label>
+              <input value={form.address_complement} onChange={(e) => setForm({ ...form, address_complement: e.target.value })} />
+            </div>
+            <div className="sm:col-span-4">
+              <label>BAIRRO</label>
+              <input value={form.address_district} onChange={(e) => setForm({ ...form, address_district: e.target.value })} />
+            </div>
+            <div className="sm:col-span-4">
+              <label>CIDADE</label>
+              <input value={form.address_city} onChange={(e) => setForm({ ...form, address_city: e.target.value })} />
+            </div>
+            <div className="sm:col-span-4">
+              <label>ESTADO</label>
+              <input value={form.address_state} onChange={(e) => setForm({ ...form, address_state: e.target.value })} />
+            </div>
+            <div className="sm:col-span-12">
+              <label>E-MAIL</label>
+              <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            </div>
+            <div className="sm:col-span-12 flex gap-2">
+              <button className="btn btn-primary" type="submit">{editing ? 'SALVAR' : 'ADICIONAR'}</button>
+              {editing && (
+                <button
+                  className="btn btn-secondary"
+                  type="button"
+                  onClick={() => {
+                    setEditing(null)
+                    setForm({
+                      full_name: '',
+                      cpf: '',
+                      birth_date: '',
+                      phone_1: '',
+                      phone_2: '',
+                      cep: '',
+                      address_street: '',
+                      address_number: '',
+                      address_complement: '',
+                      address_district: '',
+                      address_city: '',
+                      address_state: '',
+                      email: '',
+                    })
+                  }}
+                >
+                  CANCELAR
+                </button>
+              )}
+            </div>
+          </form>
+        )}
+      </div>
 
       <div className="table-wrap">
         {loading ? (
@@ -186,9 +334,16 @@ export function BemAvivClientesPage() {
                             birth_date: r.birth_date ?? '',
                             phone_1: r.phone_1 ?? '',
                             phone_2: r.phone_2 ?? '',
-                            full_address: r.full_address ?? '',
+                            cep: r.cep ?? '',
+                            address_street: r.address_street ?? '',
+                            address_number: r.address_number ?? '',
+                            address_complement: r.address_complement ?? '',
+                            address_district: r.address_district ?? '',
+                            address_city: r.address_city ?? '',
+                            address_state: r.address_state ?? '',
                             email: r.email ?? '',
                           })
+                          setFormOpen(true)
                         }}
                       >
                         <Pencil size={16} />
