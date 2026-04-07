@@ -102,7 +102,7 @@ export function CardInvoicesPage() {
     else {
       await load()
       if (openDetailAfterCreate && created && 'id' in created) {
-        navigate(`/cartoes/${cardId}/faturas/${(created as { id: string }).id}`)
+        navigate(`/lsh/cartoes/${cardId}/faturas/${(created as { id: string }).id}`)
       }
     }
   }
@@ -128,7 +128,7 @@ export function CardInvoicesPage() {
         className="flex flex-wrap items-end justify-between gap-x-2 gap-y-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:gap-x-3 lg:flex-nowrap"
       >
         <div className="flex min-w-0 w-full items-center gap-3 pr-2 lg:w-auto">
-          <Link to="/cartoes" className="shrink-0 text-sm text-sky-600 hover:underline">
+          <Link to="/lsh/cartoes" className="shrink-0 text-sm text-sky-600 hover:underline">
             ← CARTÕES
           </Link>
           <h2 className="truncate text-lg font-semibold sm:text-xl lg:text-2xl">FATURAS — {cardName || '…'}</h2>
@@ -143,7 +143,7 @@ export function CardInvoicesPage() {
               className="w-full min-w-0"
               value={cardId}
               aria-label="Selecionar outro cartão"
-              onChange={(e) => navigate(`/cartoes/${e.target.value}`)}
+              onChange={(e) => navigate(`/lsh/cartoes/${e.target.value}`)}
             >
               {allCards.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -212,7 +212,7 @@ export function CardInvoicesPage() {
                         className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0"
                         title="DETALHAR"
                         aria-label="DETALHAR"
-                        onClick={() => navigate(`/cartoes/${cardId}/faturas/${r.id}`)}
+                        onClick={() => navigate(`/lsh/cartoes/${cardId}/faturas/${r.id}`)}
                       >
                         <FileText size={16} />
                       </button>

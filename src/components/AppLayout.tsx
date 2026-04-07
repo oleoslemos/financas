@@ -34,14 +34,14 @@ export function AppLayout() {
   const lshActive = isLshSectionPath(location.pathname)
 
   return (
-    <div className="flex min-h-screen flex-col uppercase md:flex-row md:bg-slate-50">
-      <header className="flex items-center justify-between border-b border-slate-200 bg-white px-3 py-2 md:hidden">
+    <div className="flex min-h-screen flex-col uppercase lg:flex-row lg:bg-slate-50">
+      <header className="flex items-center justify-between border-b border-slate-200 bg-white px-3 py-2 lg:hidden">
         <h1 className="text-xs font-semibold tracking-wide text-sky-700">SISTEMA DE GESTÃO</h1>
         <button type="button" className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white" onClick={() => setMobileMenuOpen((v) => !v)}>
           {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
         </button>
       </header>
-      <aside className={`${mobileMenuOpen ? 'block' : 'hidden'} shrink-0 border-b border-slate-200 bg-white p-3 shadow-sm sm:p-4 md:block md:w-64 md:border-b-0 md:border-r md:shadow-none`}>
+      <aside className={`${mobileMenuOpen ? 'block' : 'hidden'} shrink-0 border-b border-slate-200 bg-white p-3 shadow-sm sm:p-4 lg:block lg:w-64 lg:border-b-0 lg:border-r lg:shadow-none`}>
         <h1 className="mb-4 text-sm font-semibold leading-tight tracking-wide text-sky-700 sm:mb-6">
           SISTEMA DE GESTÃO
         </h1>
@@ -133,7 +133,7 @@ export function AppLayout() {
           <UserButton afterSignOutUrl="/sign-in" />
         </div>
       </aside>
-      <main className="w-full min-w-0 flex-1 bg-white p-3 sm:p-4 md:bg-slate-50 md:p-6 lg:px-8 lg:py-8 xl:px-12">
+      <main className="w-full min-w-0 flex-1 bg-white p-3 sm:p-4 lg:bg-slate-50 lg:p-6 xl:px-10 xl:py-8 2xl:px-12">
         <Outlet />
       </main>
     </div>

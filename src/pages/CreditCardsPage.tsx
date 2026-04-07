@@ -224,7 +224,7 @@ export function CreditCardsPage() {
                         className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0"
                         title="FATURAS"
                         aria-label="FATURAS"
-                        onClick={() => navigate(`/cartoes/${c.id}`)}
+                        onClick={() => navigate(`/lsh/cartoes/${c.id}`)}
                       >
                         <CreditCard size={16} />
                       </button>

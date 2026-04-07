@@ -613,7 +613,7 @@ export function CashflowPage() {
               {filteredRows.map((r) => (
                 <tr key={r.id}>
                   <td>{r.kind === 'payable' ? 'CONTAS A PAGAR' : 'CONTAS A RECEBER'}</td>
-                  <td className="min-w-[340px]">{stripParcelDesc(r.description)}</td>
+                  <td className="max-w-[260px] truncate">{stripParcelDesc(r.description)}</td>
                   <td>{formatBRL(Number(r.amount))}</td>
                   <td>{r.due_date}</td>
                   <td>{r.status === 'paid' && r.paid_at ? r.paid_at : '—'}</td>
@@ -665,7 +665,7 @@ export function CashflowPage() {
                       disabled={!(r.kind === 'payable' && invoiceDetailByPayable[r.id])}
                       onClick={() => {
                         const det = invoiceDetailByPayable[r.id]
-                        if (r.kind === 'payable' && det) navigate(`/cartoes/${det.cardId}/faturas/${det.invoiceId}`)
+                        if (r.kind === 'payable' && det) navigate(`/lsh/cartoes/${det.cardId}/faturas/${det.invoiceId}`)
                       }}
                     >
                       <FileText size={16} />

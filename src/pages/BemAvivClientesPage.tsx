@@ -201,25 +201,25 @@ export function BemAvivClientesPage() {
           {formOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         </button>
         {formOpen && (
-          <form onSubmit={onSubmit} className="grid gap-3 border-t border-slate-200 p-3 sm:grid-cols-12 sm:p-4">
-            <div className="sm:col-span-8">
+          <form onSubmit={onSubmit} className="grid gap-3 border-t border-slate-200 p-3 sm:grid-cols-12 sm:p-4 lg:gap-4">
+            <div className="sm:col-span-8 lg:col-span-9">
               <label>NOME COMPLETO</label>
               <input required value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
             </div>
-            <div className="sm:col-span-4">
+            <div className="sm:col-span-4 lg:col-span-3">
               <label>DATA NASCIMENTO</label>
               <input type="date" value={form.birth_date} onChange={(e) => setForm({ ...form, birth_date: e.target.value })} />
             </div>
 
-            <div className="sm:col-span-4">
+            <div className="sm:col-span-4 lg:col-span-3">
               <label>CPF</label>
               <input required value={formatCpf(form.cpf)} onChange={(e) => setForm({ ...form, cpf: onlyDigits(e.target.value) })} />
             </div>
-            <div className="sm:col-span-4">
+            <div className="sm:col-span-4 lg:col-span-4">
               <label>TELEFONE 1</label>
               <input value={formatPhone(form.phone_1)} onChange={(e) => setForm({ ...form, phone_1: onlyDigits(e.target.value) })} />
             </div>
-            <div className="sm:col-span-4">
+            <div className="sm:col-span-4 lg:col-span-5">
               <label>TELEFONE 2</label>
               <input value={formatPhone(form.phone_2)} onChange={(e) => setForm({ ...form, phone_2: onlyDigits(e.target.value) })} />
             </div>

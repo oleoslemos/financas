@@ -484,10 +484,10 @@ export function InvoiceDetailPage() {
           aria-label="Navegação da fatura"
         >
           <div className="flex flex-wrap gap-3">
-            <Link to="/cartoes" className="font-medium text-sky-600 hover:underline">
+            <Link to="/lsh/cartoes" className="font-medium text-sky-600 hover:underline">
               ← CARTÕES
             </Link>
-            <Link to={`/cartoes/${cardId}`} className="font-medium text-sky-600 hover:underline">
+            <Link to={`/lsh/cartoes/${cardId}`} className="font-medium text-sky-600 hover:underline">
               FATURAS DESTE CARTÃO
             </Link>
           </div>
@@ -500,7 +500,7 @@ export function InvoiceDetailPage() {
                 {invoiceNav.prev.map((row) => (
                   <Link
                     key={row.id}
-                    to={`/cartoes/${cardId}/faturas/${row.id}`}
+                    to={`/lsh/cartoes/${cardId}/faturas/${row.id}`}
                     className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-sky-700 hover:bg-slate-100"
                   >
                     {row.competenciaKey}
@@ -518,7 +518,7 @@ export function InvoiceDetailPage() {
                 {invoiceNav.next.map((row) => (
                   <Link
                     key={row.id}
-                    to={`/cartoes/${cardId}/faturas/${row.id}`}
+                    to={`/lsh/cartoes/${cardId}/faturas/${row.id}`}
                     className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-sky-700 hover:bg-slate-100"
                   >
                     {row.competenciaKey}

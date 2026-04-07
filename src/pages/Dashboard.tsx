@@ -290,7 +290,7 @@ export function Dashboard() {
             {banks.length === 0 ? (
               <p className="text-xs text-slate-500">
                 NENHUMA CONTA ATIVA.{' '}
-                <Link to="/contas-bancarias" className="text-sky-600 hover:underline">
+                <Link to="/lsh/contas-bancarias" className="text-sky-600 hover:underline">
                   CADASTRAR
                 </Link>
               </p>
@@ -433,7 +433,7 @@ export function Dashboard() {
               </div>
             </div>
 
-            <Link to="/fluxo" className="inline-flex items-center gap-2 text-xs text-sky-600 hover:underline">
+            <Link to="/lsh/fluxo" className="inline-flex items-center gap-2 text-xs text-sky-600 hover:underline">
               <Wallet size={14} />
               VER MOVIMENTOS COMPLETOS
             </Link>
@@ -447,7 +447,7 @@ export function Dashboard() {
             <CreditCard size={16} className="text-sky-600" />
             <span>EVOLUÇÃO POR CARTÃO (TOTAL DA FATURA)</span>
           </div>
-          <Link to="/cartoes" className="text-[11px] text-sky-600 hover:underline">
+          <Link to="/lsh/cartoes" className="text-[11px] text-sky-600 hover:underline">
             GERENCIAR CARTÕES
           </Link>
         </div>
@@ -476,7 +476,7 @@ export function Dashboard() {
         ) : creditCards.length === 0 ? (
           <p className="text-xs text-slate-500">
             NENHUM CARTÃO CADASTRADO.{' '}
-            <Link to="/cartoes" className="text-sky-600 hover:underline">
+            <Link to="/lsh/cartoes" className="text-sky-600 hover:underline">
               CADASTRAR
             </Link>
           </p>
