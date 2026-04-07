@@ -2,6 +2,7 @@ import { useUser } from '@clerk/clerk-react'
 import { Pencil, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useSupabase } from '../hooks/useSupabase'
+import { resolveDataOwnerId } from '../lib/dataOwner'
 import { toUpperTrim } from '../lib/text'
 
 type Cat = { id: string; name: string; type: 'income' | 'expense' | 'neutral' }
@@ -15,6 +16,7 @@ const types: { v: Cat['type']; l: string }[] = [
 export function Categories() {
   const { user } = useUser()
   const supabase = useSupabase()
+  const ownerUserId = resolveDataOwnerId(user?.id)
   const [rows, setRows] = useState<Cat[]>([])
   const [loading, setLoading] = useState(true)
   const [name, setName] = useState('')
@@ -22,9 +24,9 @@ export function Categories() {
   const [editing, setEditing] = useState<Cat | null>(null)
 
   async function load() {
-    if (!supabase || !user?.id) return
+    if (!supabase || !ownerUserId) return
     setLoading(true)
-    const { data } = await supabase.from('categories').select('*').eq('user_id', user.id).order('name')
+    const { data } = await supabase.from('categories').select('*').eq('user_id', ownerUserId).order('name')
     setRows((data as Cat[]) ?? [])
     setLoading(false)
   }
@@ -32,11 +34,11 @@ export function Categories() {
   useEffect(() => {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase, user?.id])
+  }, [supabase, ownerUserId])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (!supabase || !user?.id) return
+    if (!supabase || !ownerUserId) return
     const n = toUpperTrim(name)
     if (!n) return
     if (editing) {
@@ -48,7 +50,7 @@ export function Categories() {
         load()
       }
     } else {
-      const { error } = await supabase.from('categories').insert({ user_id: user.id, name: n, type })
+      const { error } = await supabase.from('categories').insert({ user_id: ownerUserId, name: n, type })
       if (error) alert(error.message)
       else {
         setName('')

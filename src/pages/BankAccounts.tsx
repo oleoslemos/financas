@@ -2,6 +2,7 @@ import { useUser } from '@clerk/clerk-react'
 import { Pencil, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useSupabase } from '../hooks/useSupabase'
+import { resolveDataOwnerId } from '../lib/dataOwner'
 import { formatBRL, parseMoney } from '../lib/format'
 import { toUpperOrNull, toUpperTrim } from '../lib/text'
 
@@ -18,6 +19,7 @@ type Bank = {
 export function BankAccounts() {
   const { user } = useUser()
   const supabase = useSupabase()
+  const ownerUserId = resolveDataOwnerId(user?.id)
   const [rows, setRows] = useState<Bank[]>([])
   const [loading, setLoading] = useState(true)
   const [form, setForm] = useState({
@@ -31,12 +33,12 @@ export function BankAccounts() {
   const [editing, setEditing] = useState<Bank | null>(null)
 
   async function load() {
-    if (!supabase || !user?.id) return
+    if (!supabase || !ownerUserId) return
     setLoading(true)
     const { data } = await supabase
       .from('bank_accounts')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('user_id', ownerUserId)
       .order('name')
     setRows((data as Bank[]) ?? [])
     setLoading(false)
@@ -45,13 +47,13 @@ export function BankAccounts() {
   useEffect(() => {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase, user?.id])
+  }, [supabase, ownerUserId])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (!supabase || !user?.id) return
+    if (!supabase || !ownerUserId) return
     const payload = {
-      user_id: user.id,
+      user_id: ownerUserId,
       name: toUpperTrim(form.name),
       bank_name: toUpperOrNull(form.bank_name),
       agency: toUpperOrNull(form.agency),

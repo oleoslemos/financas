@@ -3,6 +3,7 @@ import { Check, FileText, Pencil, Split, Trash2, Undo2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
+import { resolveDataOwnerId } from '../lib/dataOwner'
 import { addMonths, toISODate } from '../lib/dates'
 import { formatBRL, parseMoney } from '../lib/format'
 import { toUpperTrim } from '../lib/text'
@@ -43,6 +44,7 @@ export function CashflowPage() {
   const { user } = useUser()
   const navigate = useNavigate()
   const supabase = useSupabase()
+  const ownerUserId = resolveDataOwnerId(user?.id)
   const [formKind, setFormKind] = useState<Kind>('payable')
   const [showPayables, setShowPayables] = useState(true)
   const [showReceivables, setShowReceivables] = useState(true)
@@ -73,12 +75,12 @@ export function CashflowPage() {
   const [paidAtEdit, setPaidAtEdit] = useState('')
 
   async function applyBankDelta(bankId: string | null, delta: number) {
-    if (!supabase || !user?.id || !bankId || delta === 0) return
+    if (!supabase || !ownerUserId || !bankId || delta === 0) return
     const { data: bank, error: bankErr } = await supabase
       .from('bank_accounts')
       .select('initial_balance')
       .eq('id', bankId)
-      .eq('user_id', user.id)
+      .eq('user_id', ownerUserId)
       .maybeSingle()
     if (bankErr) throw new Error(bankErr.message)
     if (!bank || !('initial_balance' in bank)) return
@@ -87,22 +89,22 @@ export function CashflowPage() {
       .from('bank_accounts')
       .update({ initial_balance: current + delta })
       .eq('id', bankId)
-      .eq('user_id', user.id)
+      .eq('user_id', ownerUserId)
     if (upErr) throw new Error(upErr.message)
   }
 
   async function load() {
-    if (!supabase || !user?.id) return
+    if (!supabase || !ownerUserId) return
     setLoading(true)
     const [{ data: p }, { data: c }, { data: b }, { data: inv }] = await Promise.all([
       supabase
         .from('payables_receivables')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', ownerUserId)
         .order('due_date', { ascending: true }),
-      supabase.from('categories').select('id, name').eq('user_id', user.id).order('name'),
-      supabase.from('bank_accounts').select('id, name').eq('user_id', user.id).eq('is_active', true).order('name'),
-      supabase.from('credit_card_invoices').select('id, credit_card_id, payable_id').eq('user_id', user.id).not('payable_id', 'is', null),
+      supabase.from('categories').select('id, name').eq('user_id', ownerUserId).order('name'),
+      supabase.from('bank_accounts').select('id, name').eq('user_id', ownerUserId).eq('is_active', true).order('name'),
+      supabase.from('credit_card_invoices').select('id, credit_card_id, payable_id').eq('user_id', ownerUserId).not('payable_id', 'is', null),
     ])
     setRows((p as Pr[]) ?? [])
     setCats((c as { id: string; name: string }[]) ?? [])
@@ -121,7 +123,7 @@ export function CashflowPage() {
   useEffect(() => {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase, user?.id])
+  }, [supabase, ownerUserId])
 
   const filteredRows = useMemo(
     () =>
@@ -133,7 +135,7 @@ export function CashflowPage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (!supabase || !user?.id) return
+    if (!supabase || !ownerUserId) return
     const baseDesc = toUpperTrim(description) || (formKind === 'payable' ? 'CONTA A PAGAR' : 'CONTA A RECEBER')
 
     if (editing) {
@@ -179,7 +181,7 @@ export function CashflowPage() {
 
     if (mode === 'vista') {
       const { error } = await supabase.from('payables_receivables').insert({
-        user_id: user.id,
+        user_id: ownerUserId,
         kind: formKind,
         description: baseDesc,
         amount: parseMoney(amount),
@@ -204,7 +206,7 @@ export function CashflowPage() {
     const groupId = crypto.randomUUID()
     const first = new Date(firstDue + 'T12:00:00')
     const inserts = Array.from({ length: n }, (_, i) => ({
-      user_id: user.id,
+      user_id: ownerUserId,
       kind: formKind,
       description: `${baseDesc} (PARCELA ${i + 1}/${n})`,
       amount: each,
@@ -256,7 +258,7 @@ export function CashflowPage() {
   }
 
   async function confirmPay() {
-    if (!supabase || !user?.id || !payModalRow) return
+    if (!supabase || !ownerUserId || !payModalRow) return
     const r = payModalRow
     const { error } = await supabase
       .from('payables_receivables')
@@ -281,7 +283,7 @@ export function CashflowPage() {
   }
 
   async function reopenPaid(r: Pr) {
-    if (!supabase || !user?.id) return
+    if (!supabase || !ownerUserId) return
     const { error } = await supabase
       .from('payables_receivables')
       .update({ status: 'open', paid_at: null })
@@ -330,7 +332,7 @@ export function CashflowPage() {
   }
 
   async function applyParcelGroupCount() {
-    if (!supabase || !user?.id || !parcelGroupModalId) return
+    if (!supabase || !ownerUserId || !parcelGroupModalId) return
     const newN = Math.max(1, parseInt(parcelNewCount, 10) || 1)
     const groupRows = rows.filter((r) => r.installment_group_id === parcelGroupModalId)
     const sorted = [...groupRows].sort((a, b) => (a.installment_number ?? 0) - (b.installment_number ?? 0))
@@ -387,7 +389,7 @@ export function CashflowPage() {
         const inserts = Array.from({ length: newN - hi }, (_, k) => {
           const i = hi + 1 + k
           return {
-            user_id: user.id,
+            user_id: ownerUserId,
             kind: template.kind,
             description: `${baseDesc} (PARCELA ${i}/${newN})`,
             amount: template.amount,

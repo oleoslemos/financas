@@ -3,6 +3,7 @@ import { FileText, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
+import { resolveDataOwnerId } from '../lib/dataOwner'
 import { deleteCreditCardInvoiceOrGroup } from '../lib/invoiceInstallments'
 import { toISODate } from '../lib/dates'
 import { formatBRL } from '../lib/format'
@@ -22,6 +23,7 @@ export function CardInvoicesPage() {
   const navigate = useNavigate()
   const { user } = useUser()
   const supabase = useSupabase()
+  const ownerUserId = resolveDataOwnerId(user?.id)
   const [cardName, setCardName] = useState('')
   const [allCards, setAllCards] = useState<{ id: string; name: string }[]>([])
   const [rows, setRows] = useState<Inv[]>([])
@@ -32,8 +34,6 @@ export function CardInvoicesPage() {
   })
   const [dueDate, setDueDate] = useState(toISODate(new Date()))
   const [openDetailAfterCreate, setOpenDetailAfterCreate] = useState(true)
-  /** Ordenação da competência: true = mais recente primeiro (AAAA-MM decrescente) */
-  const [competenciaDesc, setCompetenciaDesc] = useState(true)
   const [totalByInvoice, setTotalByInvoice] = useState<Record<string, number>>({})
 
   function referenceMonthKey(iso: string): string {
@@ -41,11 +41,11 @@ export function CardInvoicesPage() {
   }
 
   async function load() {
-    if (!supabase || !user?.id || !cardId) return
+    if (!supabase || !ownerUserId || !cardId) return
     setLoading(true)
     const [{ data: c }, { data: cardsList }] = await Promise.all([
-      supabase.from('credit_cards').select('name').eq('id', cardId).eq('user_id', user.id).single(),
-      supabase.from('credit_cards').select('id, name').eq('user_id', user.id).order('name'),
+      supabase.from('credit_cards').select('name').eq('id', cardId).eq('user_id', ownerUserId).single(),
+      supabase.from('credit_cards').select('id, name').eq('user_id', ownerUserId).order('name'),
     ])
     setAllCards((cardsList as { id: string; name: string }[]) ?? [])
     setCardName((c as { name: string } | null)?.name ?? '')
@@ -55,7 +55,7 @@ export function CardInvoicesPage() {
         'id, reference_month, due_date, status, installment_group_id, installment_number, installment_count',
       )
       .eq('credit_card_id', cardId)
-      .eq('user_id', user.id)
+      .eq('user_id', ownerUserId)
     const list = (data as Inv[]) ?? []
     setRows(list)
 
@@ -74,26 +74,23 @@ export function CardInvoicesPage() {
   useEffect(() => {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase, user?.id, cardId])
+  }, [supabase, ownerUserId, cardId])
 
   const sortedRows = useMemo(() => {
     const copy = [...rows]
-    copy.sort((a, b) => {
-      const ka = a.reference_month.slice(0, 10)
-      const kb = b.reference_month.slice(0, 10)
-      return competenciaDesc ? kb.localeCompare(ka) : ka.localeCompare(kb)
-    })
+    // Padrão único AAAA-MM: competência crescente (mês atual -> próximos -> últimos).
+    copy.sort((a, b) => a.reference_month.slice(0, 10).localeCompare(b.reference_month.slice(0, 10)))
     return copy
-  }, [rows, competenciaDesc])
+  }, [rows])
 
   async function createInvoice(e: React.FormEvent) {
     e.preventDefault()
-    if (!supabase || !user?.id || !cardId) return
+    if (!supabase || !ownerUserId || !cardId) return
     const reference_month = `${refMonth}-01`
     const { data: created, error } = await supabase
       .from('credit_card_invoices')
       .insert({
-        user_id: user.id,
+        user_id: ownerUserId,
         credit_card_id: cardId,
         reference_month,
         due_date: dueDate,
@@ -111,13 +108,13 @@ export function CardInvoicesPage() {
   }
 
   async function removeInv(id: string) {
-    if (!supabase || !user?.id) return
+    if (!supabase || !ownerUserId) return
     const row = rows.find((r) => r.id === id)
     const msg = row?.installment_group_id
       ? 'Excluir todas as parcelas deste parcelamento no cartão? (Contas a pagar em aberto vinculadas também serão removidas.)'
       : 'Excluir fatura e itens?'
     if (!confirm(msg)) return
-    const r = await deleteCreditCardInvoiceOrGroup(supabase, user.id, id)
+    const r = await deleteCreditCardInvoiceOrGroup(supabase, ownerUserId, id)
     if (r.error) alert(r.error)
     else load()
   }
@@ -130,15 +127,15 @@ export function CardInvoicesPage() {
         onSubmit={createInvoice}
         className="flex flex-wrap items-end justify-between gap-x-2 gap-y-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:gap-x-3 lg:flex-nowrap"
       >
-        <div className="flex min-w-0 items-center gap-3 pr-2">
+        <div className="flex min-w-0 w-full items-center gap-3 pr-2 lg:w-auto">
           <Link to="/cartoes" className="shrink-0 text-sm text-sky-600 hover:underline">
             ← CARTÕES
           </Link>
           <h2 className="truncate text-lg font-semibold sm:text-xl lg:text-2xl">FATURAS — {cardName || '…'}</h2>
         </div>
 
-        <div className="flex min-w-0 flex-wrap items-end gap-x-2 gap-y-2 sm:gap-x-3 lg:flex-nowrap">
-          <div className="min-w-0 sm:min-w-[9rem] sm:max-w-[14rem]">
+        <div className="flex min-w-0 w-full flex-wrap items-end gap-x-2 gap-y-2 sm:gap-x-3 lg:w-auto lg:flex-nowrap">
+          <div className="min-w-0 w-full sm:w-auto sm:min-w-[9rem] sm:max-w-[14rem]">
             <label className="mb-0 block text-[10px] font-medium uppercase tracking-wide text-slate-600 sm:text-[11px]">
               Cartão
             </label>
@@ -155,13 +152,13 @@ export function CardInvoicesPage() {
               ))}
             </select>
           </div>
-          <div>
+          <div className="w-[10.5rem] max-w-full">
             <label className="mb-0 block text-[10px] font-medium uppercase tracking-wide text-slate-600 sm:text-[11px]">
               Mês ref.
             </label>
             <input type="month" value={refMonth} onChange={(e) => setRefMonth(e.target.value)} required />
           </div>
-          <div>
+          <div className="w-[10rem] max-w-full">
             <label className="mb-0 block text-[10px] font-medium uppercase tracking-wide text-slate-600 sm:text-[11px]">
               Vencimento
             </label>
@@ -181,7 +178,7 @@ export function CardInvoicesPage() {
             />
             <span className="whitespace-nowrap text-[10px] text-slate-700 sm:text-xs">Abrir após criar</span>
           </label>
-          <button type="submit" className="btn btn-primary shrink-0 text-xs sm:text-sm">
+          <button type="submit" className="btn btn-primary h-10 shrink-0 text-xs sm:text-sm">
             NOVA FATURA
           </button>
         </div>
@@ -194,19 +191,7 @@ export function CardInvoicesPage() {
           <table>
             <thead>
               <tr>
-                <th className="whitespace-nowrap">
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 font-medium text-slate-600 hover:text-sky-700"
-                    title="Ordenar por competência (AAAA-MM)"
-                    onClick={() => setCompetenciaDesc((d) => !d)}
-                  >
-                    COMPETÊNCIA (AAAA-MM)
-                    <span className="text-sky-600" aria-hidden>
-                      {competenciaDesc ? '↓' : '↑'}
-                    </span>
-                  </button>
-                </th>
+                <th className="whitespace-nowrap">COMPETÊNCIA (AAAA-MM)</th>
                 <th>VENCIMENTO</th>
                 <th>VLR. FATURA</th>
                 <th>STATUS</th>

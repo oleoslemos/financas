@@ -3,6 +3,7 @@ import { Pencil, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
+import { resolveDataOwnerId } from '../lib/dataOwner'
 import { monthLabel, parseISODate, toISODate } from '../lib/dates'
 import { formatBRL, parseMoney } from '../lib/format'
 import {
@@ -45,6 +46,7 @@ export function InvoiceDetailPage() {
   const { cardId, invoiceId } = useParams<{ cardId: string; invoiceId: string }>()
   const { user } = useUser()
   const supabase = useSupabase()
+  const ownerUserId = resolveDataOwnerId(user?.id)
   const [cardName, setCardName] = useState('')
   const [inv, setInv] = useState<Inv | null>(null)
   const [items, setItems] = useState<Item[]>([])
@@ -79,15 +81,15 @@ export function InvoiceDetailPage() {
   }
 
   const load = useCallback(async () => {
-    if (!supabase || !user?.id || !invoiceId || !cardId) return
+    if (!supabase || !ownerUserId || !invoiceId || !cardId) return
     setLoading(true)
-    const ccCat = await ensureCreditCardExpenseCategory(supabase, user.id)
+    const ccCat = await ensureCreditCardExpenseCategory(supabase, ownerUserId)
     setCcCategoryId(ccCat)
     const [{ data: c }, { data: i }, { data: it }, { data: cat }] = await Promise.all([
-      supabase.from('credit_cards').select('name').eq('id', cardId).eq('user_id', user.id).single(),
-      supabase.from('credit_card_invoices').select('*').eq('id', invoiceId).eq('user_id', user.id).single(),
+      supabase.from('credit_cards').select('name').eq('id', cardId).eq('user_id', ownerUserId).single(),
+      supabase.from('credit_card_invoices').select('*').eq('id', invoiceId).eq('user_id', ownerUserId).single(),
       supabase.from('credit_card_invoice_items').select('*').eq('invoice_id', invoiceId).order('occurred_on'),
-      supabase.from('categories').select('id, name').eq('user_id', user.id).order('name'),
+      supabase.from('categories').select('id, name').eq('user_id', ownerUserId).order('name'),
     ])
     const cardNm = (c as { name: string } | null)?.name ?? ''
     setCardName(cardNm)
@@ -96,9 +98,9 @@ export function InvoiceDetailPage() {
     setCats((cat as { id: string; name: string }[]) ?? [])
     if (invoice) {
       setDueDate(invoice.due_date)
-      if (user.id) {
+      if (ownerUserId) {
         const linked = await ensureInvoicePayableLinked(supabase, {
-          userId: user.id,
+          userId: ownerUserId,
           invoiceId: invoice.id,
           dueDate: invoice.due_date,
           referenceMonth: invoice.reference_month,
@@ -133,7 +135,7 @@ export function InvoiceDetailPage() {
         .from('credit_card_invoices')
         .select('id, reference_month')
         .eq('credit_card_id', cardId)
-        .eq('user_id', user.id)
+        .eq('user_id', ownerUserId)
       const sorted = ((sib ?? []) as { id: string; reference_month: string }[]).sort((a, b) =>
         a.reference_month.localeCompare(b.reference_month),
       )
@@ -151,7 +153,7 @@ export function InvoiceDetailPage() {
     }
     setInv(invoice)
     setLoading(false)
-  }, [supabase, user?.id, invoiceId, cardId])
+  }, [supabase, ownerUserId, invoiceId, cardId])
 
   useEffect(() => {
     load()
@@ -166,12 +168,12 @@ export function InvoiceDetailPage() {
 
   /** Lê a fatura no banco e sincroniza total/vencimento na conta a pagar vinculada. */
   const runSyncInvoice = useCallback(async () => {
-    if (!supabase || !invoiceId || !user?.id) return
+    if (!supabase || !invoiceId || !ownerUserId) return
     const { data: row } = await supabase
       .from('credit_card_invoices')
       .select('payable_id, due_date, reference_month')
       .eq('id', invoiceId)
-      .eq('user_id', user.id)
+      .eq('user_id', ownerUserId)
       .maybeSingle()
     const invRow = row as { payable_id: string | null; due_date: string; reference_month: string } | null
     if (!invRow?.payable_id) return
@@ -185,23 +187,23 @@ export function InvoiceDetailPage() {
       categoryId: ccCategoryId,
     })
     if (r.skippedPaid) setWarnPaid(true)
-  }, [supabase, invoiceId, user?.id, cardName, ccCategoryId])
+  }, [supabase, invoiceId, ownerUserId, cardName, ccCategoryId])
 
   const syncPayablesForInvoiceIds = useCallback(
     async (ids: string[]) => {
-      if (!supabase || !user?.id) return
+      if (!supabase || !ownerUserId) return
       const unique = [...new Set(ids)]
       for (const iid of unique) {
         const { data: row } = await supabase
           .from('credit_card_invoices')
           .select('payable_id, due_date, reference_month')
           .eq('id', iid)
-          .eq('user_id', user.id)
+          .eq('user_id', ownerUserId)
           .maybeSingle()
         const invRow = row as { payable_id: string | null; due_date: string; reference_month: string } | null
         if (!invRow) continue
         const effPayable = await ensureInvoicePayableLinked(supabase, {
-          userId: user.id,
+          userId: ownerUserId,
           invoiceId: iid,
           dueDate: invRow.due_date,
           referenceMonth: invRow.reference_month,
@@ -222,7 +224,7 @@ export function InvoiceDetailPage() {
         if (r.skippedPaid) setWarnPaid(true)
       }
     },
-    [supabase, user?.id, cardName, ccCategoryId],
+    [supabase, ownerUserId, cardName, ccCategoryId],
   )
 
   async function saveInvoiceMeta(e: React.FormEvent) {
@@ -249,7 +251,7 @@ export function InvoiceDetailPage() {
 
   async function submitItem(e: React.FormEvent) {
     e.preventDefault()
-    if (!supabase || !invoiceId || !inv || !user?.id || !cardId || itemsLocked) return
+    if (!supabase || !invoiceId || !inv || !ownerUserId || !cardId || itemsLocked) return
     const n = Math.max(1, parseInt(itemForm.parcel_count, 10) || 1)
     const baseDesc = toUpperTrim(itemForm.description)
     const baseAmount = parseMoney(itemForm.amount)
@@ -283,7 +285,7 @@ export function InvoiceDetailPage() {
             .from('credit_card_invoices')
             .select('id, status')
             .in('id', invIds)
-            .eq('user_id', user.id)
+            .eq('user_id', ownerUserId)
           const openSet = new Set(
             ((invs ?? []) as { id: string; status: string }[])
               .filter((invRow) => invRow.status === 'open')
@@ -355,7 +357,7 @@ export function InvoiceDetailPage() {
           const { data: found } = await supabase
             .from('credit_card_invoices')
             .select('id')
-            .eq('user_id', user.id)
+            .eq('user_id', ownerUserId)
             .eq('credit_card_id', cardId)
             .eq('reference_month', ref)
             .maybeSingle()
@@ -366,7 +368,7 @@ export function InvoiceDetailPage() {
             const { data: created, error: createErr } = await supabase
               .from('credit_card_invoices')
               .insert({
-                user_id: user.id,
+                user_id: ownerUserId,
                 credit_card_id: cardId,
                 reference_month: ref,
                 due_date: due,
@@ -408,12 +410,12 @@ export function InvoiceDetailPage() {
           .from('credit_card_invoices')
           .select('payable_id, due_date, reference_month')
           .eq('id', iid)
-          .eq('user_id', user.id)
+          .eq('user_id', ownerUserId)
           .maybeSingle()
         const invRow = row as { payable_id: string | null; due_date: string; reference_month: string } | null
         if (!invRow) continue
         const effPayable = await ensureInvoicePayableLinked(supabase, {
-          userId: user.id,
+          userId: ownerUserId,
           invoiceId: iid,
           dueDate: invRow.due_date,
           referenceMonth: invRow.reference_month,

@@ -3,6 +3,7 @@ import { CalendarDays, CreditCard, Landmark, Wallet } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
+import { resolveDataOwnerId } from '../lib/dataOwner'
 import { formatBRL } from '../lib/format'
 import { monthLabel, parseISODate, toISODate } from '../lib/dates'
 
@@ -63,6 +64,7 @@ function rowSort(a: Row, b: Row) {
 export function Dashboard() {
   const { user } = useUser()
   const supabase = useSupabase()
+  const ownerUserId = resolveDataOwnerId(user?.id)
   const [banks, setBanks] = useState<Bank[]>([])
   const [openRows, setOpenRows] = useState<Row[]>([])
   const [selectedBankId, setSelectedBankId] = useState<string>('ALL')
@@ -86,7 +88,7 @@ export function Dashboard() {
   const [ccLoading, setCcLoading] = useState(true)
 
   useEffect(() => {
-    if (!supabase || !user?.id) return
+    if (!supabase || !ownerUserId) return
     let cancelled = false
     ;(async () => {
       setLoading(true)
@@ -97,12 +99,12 @@ export function Dashboard() {
         supabase
           .from('bank_accounts')
           .select('id, name, initial_balance')
-          .eq('user_id', user.id)
+          .eq('user_id', ownerUserId)
           .eq('is_active', true),
         supabase
           .from('payables_receivables')
           .select('id, description, amount, due_date, kind, bank_account_id, status')
-          .eq('user_id', user.id)
+          .eq('user_id', ownerUserId)
           .eq('status', 'open')
           .gte('due_date', from)
           .lte('due_date', until)
@@ -118,10 +120,10 @@ export function Dashboard() {
     return () => {
       cancelled = true
     }
-  }, [supabase, user?.id, selectedMonth])
+  }, [supabase, ownerUserId, selectedMonth])
 
   useEffect(() => {
-    if (!supabase || !user?.id) return
+    if (!supabase || !ownerUserId) return
     let cancelled = false
     ;(async () => {
       setCcLoading(true)
@@ -129,7 +131,7 @@ export function Dashboard() {
         const { data: cards } = await supabase
           .from('credit_cards')
           .select('id, name')
-          .eq('user_id', user.id)
+          .eq('user_id', ownerUserId)
           .order('name')
         if (cancelled) return
         setCreditCards((cards as { id: string; name: string }[]) ?? [])
@@ -145,7 +147,7 @@ export function Dashboard() {
         const { data: invoices, error: invErr } = await supabase
           .from('credit_card_invoices')
           .select('id, credit_card_id, reference_month')
-          .eq('user_id', user.id)
+          .eq('user_id', ownerUserId)
           .gte('reference_month', fromIso)
           .lte('reference_month', toIso)
         if (invErr) console.error(invErr)
@@ -215,7 +217,7 @@ export function Dashboard() {
     return () => {
       cancelled = true
     }
-  }, [supabase, user?.id, ccFutureMonths])
+  }, [supabase, ownerUserId, ccFutureMonths])
 
   const monthCurrent = selectedMonth
   const monthNext = nextMonthKey(selectedMonth)

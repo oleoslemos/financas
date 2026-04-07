@@ -38,6 +38,17 @@ Defina no `.env` e na Vercel a variável:
 (separados por vírgula ou `;`, maiúsculas/minúsculas ignoradas). Quem entrar com outro e-mail vê “Acesso restrito” e pode sair.  
 Se `VITE_ALLOWED_EMAILS` estiver vazia, **não** há esse filtro no front.
 
+### Workspace compartilhado (mesmos dados para todos)
+
+Defina `VITE_SHARED_DATA_OWNER_ID` com o `user.id` (Clerk) do usuário dono dos dados (ex.: conta do Léo).  
+Com isso, todas as telas passam a ler/gravar usando esse mesmo `user_id`, independentemente de quem logou.
+
+Exemplo:
+
+`VITE_SHARED_DATA_OWNER_ID=user_2abcDEF...`
+
+Além disso, aplique a migration `supabase/migrations/20260407110000_shared_workspace_policies.sql` para permitir acesso compartilhado entre usuários autenticados.
+
 **2) No Clerk (recomendado para bloquear cadastro)**  
 No [Clerk Dashboard](https://dashboard.clerk.com) → sua aplicação → **User & authentication** → **Restrictions** (ou **Allowlist** / lista permitida, conforme o plano): limite quem pode **criar conta** ou use **somente convites**, alinhado aos mesmos e-mails. Assim estranhos nem chegam a logar.
 

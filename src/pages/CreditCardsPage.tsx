@@ -3,6 +3,7 @@ import { CreditCard, Pencil, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
+import { resolveDataOwnerId } from '../lib/dataOwner'
 import { formatBRL, parseMoney } from '../lib/format'
 import { toUpperOrNull, toUpperTrim } from '../lib/text'
 
@@ -19,6 +20,7 @@ export function CreditCardsPage() {
   const { user } = useUser()
   const navigate = useNavigate()
   const supabase = useSupabase()
+  const ownerUserId = resolveDataOwnerId(user?.id)
   const [rows, setRows] = useState<Card[]>([])
   const [openInvoiceValueByCard, setOpenInvoiceValueByCard] = useState<Record<string, number>>({})
   const [nextOpenInvoicesValueByCard, setNextOpenInvoicesValueByCard] = useState<Record<string, number>>({})
@@ -35,9 +37,9 @@ export function CreditCardsPage() {
   const [modalOpen, setModalOpen] = useState(false)
 
   async function load() {
-    if (!supabase || !user?.id) return
+    if (!supabase || !ownerUserId) return
     setLoading(true)
-    const { data } = await supabase.from('credit_cards').select('*').eq('user_id', user.id).order('name')
+    const { data } = await supabase.from('credit_cards').select('*').eq('user_id', ownerUserId).order('name')
     const cards = (data as Card[]) ?? []
     setRows(cards)
 
@@ -53,7 +55,7 @@ export function CreditCardsPage() {
     const { data: invData } = await supabase
       .from('credit_card_invoices')
       .select('id, credit_card_id, reference_month, due_date, status')
-      .eq('user_id', user.id)
+      .eq('user_id', ownerUserId)
       .in('credit_card_id', cardIds)
 
     const invoices = (invData ?? []) as Array<{
@@ -117,13 +119,13 @@ export function CreditCardsPage() {
   useEffect(() => {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase, user?.id])
+  }, [supabase, ownerUserId])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (!supabase || !user?.id) return
+    if (!supabase || !ownerUserId) return
     const payload = {
-      user_id: user.id,
+      user_id: ownerUserId,
       name: toUpperTrim(form.name),
       brand: toUpperOrNull(form.brand),
       closing_day: Math.min(31, Math.max(1, parseInt(form.closing_day, 10) || 1)),
