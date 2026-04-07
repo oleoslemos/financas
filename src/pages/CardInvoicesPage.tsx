@@ -23,6 +23,7 @@ export function CardInvoicesPage() {
   const { user } = useUser()
   const supabase = useSupabase()
   const [cardName, setCardName] = useState('')
+  const [allCards, setAllCards] = useState<{ id: string; name: string }[]>([])
   const [rows, setRows] = useState<Inv[]>([])
   const [loading, setLoading] = useState(true)
   const [refMonth, setRefMonth] = useState(() => {
@@ -42,7 +43,11 @@ export function CardInvoicesPage() {
   async function load() {
     if (!supabase || !user?.id || !cardId) return
     setLoading(true)
-    const { data: c } = await supabase.from('credit_cards').select('name').eq('id', cardId).eq('user_id', user.id).single()
+    const [{ data: c }, { data: cardsList }] = await Promise.all([
+      supabase.from('credit_cards').select('name').eq('id', cardId).eq('user_id', user.id).single(),
+      supabase.from('credit_cards').select('id, name').eq('user_id', user.id).order('name'),
+    ])
+    setAllCards((cardsList as { id: string; name: string }[]) ?? [])
     setCardName((c as { name: string } | null)?.name ?? '')
     const { data } = await supabase
       .from('credit_card_invoices')
@@ -121,40 +126,63 @@ export function CardInvoicesPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-center gap-4">
-        <Link to="/cartoes" className="text-sm text-sky-600 hover:underline">
-          ← CARTÕES
-        </Link>
-        <h2 className="text-2xl font-semibold">FATURAS — {cardName || '…'}</h2>
-      </div>
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between lg:gap-8">
+        <div className="flex min-w-0 flex-wrap items-center gap-4">
+          <Link to="/cartoes" className="text-sm text-sky-600 hover:underline">
+            ← CARTÕES
+          </Link>
+          <h2 className="text-2xl font-semibold">FATURAS — {cardName || '…'}</h2>
+        </div>
 
-      <form onSubmit={createInvoice} className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-        <div className="flex flex-wrap items-end gap-3">
-          <div>
-            <label>MÊS DE REFERÊNCIA</label>
-            <input type="month" value={refMonth} onChange={(e) => setRefMonth(e.target.value)} required />
+        <aside className="w-full shrink-0 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4 lg:ml-auto lg:max-w-xl">
+          <div className="mb-4">
+            <label className="mb-1 block text-sm font-medium text-slate-700">TROCAR DE CARTÃO</label>
+            <select
+              className="w-full min-w-0"
+              value={cardId}
+              aria-label="Selecionar outro cartão"
+              onChange={(e) => navigate(`/cartoes/${e.target.value}`)}
+            >
+              {allCards.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
           </div>
-          <div>
-            <label>VENCIMENTO</label>
-            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} required />
-          </div>
-          <button type="submit" className="btn btn-primary">
-            NOVA FATURA
-          </button>
-        </div>
-        <div className="flex items-center gap-2">
-          <input
-            id="open-detail"
-            type="checkbox"
-            className="h-4 w-4"
-            checked={openDetailAfterCreate}
-            onChange={(e) => setOpenDetailAfterCreate(e.target.checked)}
-          />
-          <label htmlFor="open-detail" className="mb-0 cursor-pointer text-sm text-slate-700">
-            APÓS CRIAR, ABRIR A FATURA PARA DETALHAR E LANÇAR DESPESAS
-          </label>
-        </div>
-      </form>
+
+          <form
+            onSubmit={createInvoice}
+            className="flex flex-col gap-4 border-t border-slate-200 pt-4"
+          >
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <label>MÊS DE REFERÊNCIA</label>
+                <input type="month" value={refMonth} onChange={(e) => setRefMonth(e.target.value)} required />
+              </div>
+              <div>
+                <label>VENCIMENTO</label>
+                <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} required />
+              </div>
+              <button type="submit" className="btn btn-primary">
+                NOVA FATURA
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                id="open-detail"
+                type="checkbox"
+                className="h-4 w-4"
+                checked={openDetailAfterCreate}
+                onChange={(e) => setOpenDetailAfterCreate(e.target.checked)}
+              />
+              <label htmlFor="open-detail" className="mb-0 cursor-pointer text-sm text-slate-700">
+                APÓS CRIAR, ABRIR A FATURA PARA DETALHAR E LANÇAR DESPESAS
+              </label>
+            </div>
+          </form>
+        </aside>
+      </div>
 
       <div className="table-wrap">
         {loading ? (
