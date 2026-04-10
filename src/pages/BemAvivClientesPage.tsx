@@ -20,6 +20,7 @@ type Cliente = {
   address_city: string | null
   address_state: string | null
   email: string | null
+  client_status: string | null
 }
 
 function onlyDigits(v: string) {
@@ -73,6 +74,7 @@ export function BemAvivClientesPage() {
     address_city: '',
     address_state: '',
     email: '',
+    client_status: 'CLIENTE',
   })
 
   async function load() {
@@ -119,6 +121,7 @@ export function BemAvivClientesPage() {
       address_state: toUpperTrim(form.address_state),
       full_address: fullAddress,
       email: toUpperTrim(form.email),
+      client_status: toUpperTrim(form.client_status) || 'CLIENTE',
     }
     if (editing) {
       const { error } = await supabase.from('bem_aviv_clients').update(payload).eq('id', editing.id)
@@ -143,6 +146,7 @@ export function BemAvivClientesPage() {
       address_city: '',
       address_state: '',
       email: '',
+      client_status: 'CLIENTE',
     })
     await load()
   }
@@ -247,25 +251,32 @@ export function BemAvivClientesPage() {
               <label>NÚMERO</label>
               <input value={form.address_number} onChange={(e) => setForm({ ...form, address_number: e.target.value })} />
             </div>
-            <div className="sm:col-span-4">
+            <div className="sm:col-span-3">
               <label>COMPLEMENTO</label>
               <input value={form.address_complement} onChange={(e) => setForm({ ...form, address_complement: e.target.value })} />
             </div>
-            <div className="sm:col-span-4">
+            <div className="sm:col-span-3">
               <label>BAIRRO</label>
               <input value={form.address_district} onChange={(e) => setForm({ ...form, address_district: e.target.value })} />
             </div>
-            <div className="sm:col-span-4">
+            <div className="sm:col-span-3">
               <label>CIDADE</label>
               <input value={form.address_city} onChange={(e) => setForm({ ...form, address_city: e.target.value })} />
             </div>
-            <div className="sm:col-span-4">
+            <div className="sm:col-span-3">
               <label>ESTADO</label>
               <input value={form.address_state} onChange={(e) => setForm({ ...form, address_state: e.target.value })} />
             </div>
-            <div className="sm:col-span-12">
+            <div className="sm:col-span-8">
               <label>E-MAIL</label>
               <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            </div>
+            <div className="sm:col-span-4">
+              <label>STATUS</label>
+              <select value={form.client_status} onChange={(e) => setForm({ ...form, client_status: e.target.value })}>
+                <option value="CLIENTE">CLIENTE</option>
+                <option value="PROSPECÇÃO">PROSPECÇÃO</option>
+              </select>
             </div>
             <div className="sm:col-span-12 flex gap-2">
               <button className="btn btn-primary" type="submit">{editing ? 'SALVAR' : 'ADICIONAR'}</button>
@@ -289,6 +300,7 @@ export function BemAvivClientesPage() {
                       address_city: '',
                       address_state: '',
                       email: '',
+                      client_status: 'CLIENTE',
                     })
                   }}
                 >
@@ -311,6 +323,7 @@ export function BemAvivClientesPage() {
                 <th>CPF</th>
                 <th>TELEFONES</th>
                 <th>E-MAIL</th>
+                <th>STATUS</th>
                 <th></th>
               </tr>
             </thead>
@@ -321,6 +334,7 @@ export function BemAvivClientesPage() {
                   <td>{formatCpf(r.cpf)}</td>
                   <td>{[formatPhone(r.phone_1), formatPhone(r.phone_2)].filter(Boolean).join(' / ') || '—'}</td>
                   <td>{r.email || '—'}</td>
+                  <td>{r.client_status || 'CLIENTE'}</td>
                   <td className="whitespace-nowrap">
                     <div className="flex items-center justify-end gap-2">
                       <button
@@ -342,6 +356,7 @@ export function BemAvivClientesPage() {
                             address_city: r.address_city ?? '',
                             address_state: r.address_state ?? '',
                             email: r.email ?? '',
+                            client_status: r.client_status ?? 'CLIENTE',
                           })
                           setFormOpen(true)
                         }}
