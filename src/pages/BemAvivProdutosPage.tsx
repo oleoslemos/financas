@@ -4,8 +4,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
-import { formatBRL, parseMoney } from '../lib/format'
+import { formatBRL, formatBRLFromCentsDigits, numberToCentsDigits, parseDigitsCentsToNumber, parseMoney } from '../lib/format'
 import { toUpperTrim } from '../lib/text'
+
+const COMFORT_PLATFORM_CATEGORY = 'PLATAFORMA DE DESCANSO'
+
+const comfortProductLines = ['SUPER PREMIUM', 'PREMIUM'] as const
 
 type Produto = {
   id: string
@@ -13,7 +17,17 @@ type Produto = {
   name: string
   description: string | null
   price: number | null
+  product_line: string | null
+  model: string | null
+  dim_width_cm: number | null
+  dim_length_cm: number | null
+  dim_height_cm: number | null
+  price_table_id: string | null
 }
+
+type PriceTableOpt = { id: string; name: string }
+
+type PriceTableItemRow = { id: string; product_id: string; price_table_id: string }
 
 const productCategories = [
   'PLATAFORMA DE DESCANSO',
@@ -22,27 +36,55 @@ const productCategories = [
   'ACESSÓRIOS',
 ] as const
 
+function buildComfortPriceLineDescription(
+  line: string,
+  model: string,
+  w: number,
+  l: number,
+  h: number,
+): string {
+  return `${toUpperTrim(line)} ${toUpperTrim(model)} ${w} X ${l} X ${h} CM`
+}
+
+function emptyForm() {
+  return {
+    category: productCategories[0] as string,
+    name: '',
+    description: '',
+    price: '',
+    product_line: comfortProductLines[0] as string,
+    model: '',
+    dim_width_cm: '',
+    dim_length_cm: '',
+    dim_height_cm: '',
+    comfortPriceDigits: '',
+    price_table_id: '',
+  }
+}
+
 export function BemAvivProdutosPage() {
   const { user } = useUser()
   const location = useLocation()
   const supabase = useSupabase()
   const ownerUserId = resolveDataOwnerId(user?.id)
   const [rows, setRows] = useState<Produto[]>([])
+  const [priceTables, setPriceTables] = useState<PriceTableOpt[]>([])
   const [editing, setEditing] = useState<Produto | null>(null)
   const [loading, setLoading] = useState(true)
   const [filterCategory, setFilterCategory] = useState<string>('TODOS')
-  const [form, setForm] = useState({
-    category: productCategories[0] as string,
-    name: '',
-    description: '',
-    price: '',
-  })
+  const [form, setForm] = useState(emptyForm)
+
+  const isComfort = form.category === COMFORT_PLATFORM_CATEGORY
 
   async function load() {
     if (!supabase || !ownerUserId) return
     setLoading(true)
-    const { data } = await supabase.from('bem_aviv_products').select('*').eq('user_id', ownerUserId).order('name')
-    setRows((data as Produto[]) ?? [])
+    const [{ data: products }, { data: tables }] = await Promise.all([
+      supabase.from('bem_aviv_products').select('*').eq('user_id', ownerUserId).order('name'),
+      supabase.from('bem_aviv_price_tables').select('id, name').eq('user_id', ownerUserId).order('name'),
+    ])
+    setRows((products as Produto[]) ?? [])
+    setPriceTables((tables as PriceTableOpt[]) ?? [])
     setLoading(false)
   }
 
@@ -64,26 +106,165 @@ export function BemAvivProdutosPage() {
     [rows, filterCategory],
   )
 
+  const tableNameById = useMemo(() => Object.fromEntries(priceTables.map((t) => [t.id, t.name])), [priceTables])
+
+  async function syncPriceTableItem(args: {
+    productId: string
+    priceTableId: string
+    lineDescription: string
+    price: number
+  }) {
+    if (!supabase || !ownerUserId) return
+    const { data: existing } = await supabase
+      .from('bem_aviv_price_table_items')
+      .select('id, price_table_id')
+      .eq('product_id', args.productId)
+      .maybeSingle()
+
+    const row = existing as PriceTableItemRow | null
+
+    if (row && row.price_table_id === args.priceTableId) {
+      const { error } = await supabase
+        .from('bem_aviv_price_table_items')
+        .update({
+          line_description: args.lineDescription,
+          price: args.price,
+        })
+        .eq('id', row.id)
+      if (error) throw new Error(error.message)
+      return
+    }
+
+    if (row) {
+      const { error: delErr } = await supabase.from('bem_aviv_price_table_items').delete().eq('id', row.id)
+      if (delErr) throw new Error(delErr.message)
+    }
+
+    const { error: insErr } = await supabase.from('bem_aviv_price_table_items').insert({
+      user_id: ownerUserId,
+      price_table_id: args.priceTableId,
+      product_id: args.productId,
+      line_description: args.lineDescription,
+      price: args.price,
+    })
+    if (insErr) throw new Error(insErr.message)
+  }
+
+  async function removePriceTableItemForProduct(productId: string) {
+    if (!supabase) return
+    await supabase.from('bem_aviv_price_table_items').delete().eq('product_id', productId)
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!supabase || !ownerUserId) return
-    const payload = {
-      user_id: ownerUserId,
-      category: toUpperTrim(form.category),
-      name: toUpperTrim(form.name),
-      description: toUpperTrim(form.description) || null,
-      price: form.price ? parseMoney(form.price) : null,
-    }
-    if (editing) {
-      const { error } = await supabase.from('bem_aviv_products').update(payload).eq('id', editing.id)
-      if (error) alert(error.message)
+
+    let payload: Record<string, unknown>
+
+    if (isComfort) {
+      const w = parseInt(form.dim_width_cm, 10)
+      const len = parseInt(form.dim_length_cm, 10)
+      const h = parseInt(form.dim_height_cm, 10)
+      if (!toUpperTrim(form.model)) {
+        alert('INFORME O MODELO.')
+        return
+      }
+      if (!Number.isFinite(w) || !Number.isFinite(len) || !Number.isFinite(h) || w <= 0 || len <= 0 || h <= 0) {
+        alert('INFORME DIMENSÕES VÁLIDAS (CM).')
+        return
+      }
+      if (!form.price_table_id) {
+        alert('SELECIONE A TABELA DE PREÇO.')
+        return
+      }
+      const priceNum = parseDigitsCentsToNumber(form.comfortPriceDigits)
+      if (priceNum <= 0) {
+        alert('INFORME O VALOR.')
+        return
+      }
+      const modelUpper = toUpperTrim(form.model)
+      payload = {
+        user_id: ownerUserId,
+        category: toUpperTrim(form.category),
+        name: modelUpper,
+        description: toUpperTrim(form.description) || null,
+        price: priceNum,
+        product_line: toUpperTrim(form.product_line),
+        model: modelUpper,
+        dim_width_cm: w,
+        dim_length_cm: len,
+        dim_height_cm: h,
+        price_table_id: form.price_table_id,
+      }
     } else {
-      const { error } = await supabase.from('bem_aviv_products').insert(payload)
-      if (error) alert(error.message)
+      payload = {
+        user_id: ownerUserId,
+        category: toUpperTrim(form.category),
+        name: toUpperTrim(form.name),
+        description: toUpperTrim(form.description) || null,
+        price: form.price ? parseMoney(form.price) : null,
+        product_line: null,
+        model: null,
+        dim_width_cm: null,
+        dim_length_cm: null,
+        dim_height_cm: null,
+        price_table_id: null,
+      }
+      if (!toUpperTrim(form.name)) {
+        alert('INFORME O NOME DO PRODUTO.')
+        return
+      }
     }
-    setEditing(null)
-    setForm({ category: productCategories[0], name: '', description: '', price: '' })
-    await load()
+
+    try {
+      let productId: string
+
+      if (editing) {
+        const { error } = await supabase.from('bem_aviv_products').update(payload).eq('id', editing.id)
+        if (error) {
+          alert(error.message)
+          return
+        }
+        productId = editing.id
+
+        const wasComfort = editing.category === COMFORT_PLATFORM_CATEGORY
+        if (wasComfort && !isComfort) {
+          await removePriceTableItemForProduct(productId)
+        }
+      } else {
+        const { data: inserted, error } = await supabase.from('bem_aviv_products').insert(payload).select('id').single()
+        if (error) {
+          alert(error.message)
+          return
+        }
+        productId = (inserted as { id: string }).id
+      }
+
+      if (isComfort) {
+        const w = Number(payload.dim_width_cm)
+        const len = Number(payload.dim_length_cm)
+        const h = Number(payload.dim_height_cm)
+        const lineDescription = buildComfortPriceLineDescription(
+          String(payload.product_line),
+          String(payload.model),
+          w,
+          len,
+          h,
+        )
+        await syncPriceTableItem({
+          productId,
+          priceTableId: form.price_table_id,
+          lineDescription,
+          price: Number(payload.price),
+        })
+      }
+
+      setEditing(null)
+      setForm(emptyForm())
+      await load()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'ERRO AO SINCRONIZAR TABELA DE PREÇO.')
+    }
   }
 
   async function remove(id: string) {
@@ -91,6 +272,28 @@ export function BemAvivProdutosPage() {
     const { error } = await supabase.from('bem_aviv_products').delete().eq('id', id)
     if (error) alert(error.message)
     else load()
+  }
+
+  function startEdit(r: Produto) {
+    setEditing(r)
+    const comfort = r.category === COMFORT_PLATFORM_CATEGORY
+    const lineOk =
+      r.product_line && comfortProductLines.includes(r.product_line as (typeof comfortProductLines)[number])
+        ? r.product_line
+        : comfortProductLines[0]
+    setForm({
+      category: r.category,
+      name: r.name,
+      description: r.description ?? '',
+      price: !comfort && r.price != null ? String(r.price) : '',
+      product_line: lineOk,
+      model: comfort ? (r.model ?? r.name) : '',
+      dim_width_cm: r.dim_width_cm != null ? String(r.dim_width_cm) : '',
+      dim_length_cm: r.dim_length_cm != null ? String(r.dim_length_cm) : '',
+      dim_height_cm: r.dim_height_cm != null ? String(r.dim_height_cm) : '',
+      comfortPriceDigits: comfort && r.price != null ? numberToCentsDigits(Number(r.price)) : '',
+      price_table_id: r.price_table_id ?? '',
+    })
   }
 
   return (
@@ -107,32 +310,125 @@ export function BemAvivProdutosPage() {
         ))}
       </div>
 
-      <form onSubmit={submit} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-2">
-        <div>
+      <form onSubmit={submit} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-12 sm:gap-4">
+        <div className="sm:col-span-4">
           <label>CATEGORIA</label>
-          <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
+          <select
+            value={form.category}
+            onChange={(e) => setForm({ ...form, category: e.target.value })}
+          >
             {productCategories.map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
         </div>
-        <div>
-          <label>PREÇO</label>
-          <input value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
-        </div>
-        <div className="sm:col-span-2">
-          <label>NOME DO PRODUTO</label>
-          <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-        </div>
-        <div className="sm:col-span-2">
-          <label>DESCRIÇÃO</label>
-          <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-        </div>
-        <div className="sm:col-span-2 flex gap-2">
+
+        {isComfort ? (
+          <>
+            <div className="sm:col-span-4">
+              <label>LINHA</label>
+              <select value={form.product_line} onChange={(e) => setForm({ ...form, product_line: e.target.value })}>
+                {comfortProductLines.map((l) => (
+                  <option key={l} value={l}>{l}</option>
+                ))}
+              </select>
+            </div>
+            <div className="sm:col-span-4">
+              <label>TABELA DE PREÇO</label>
+              <select
+                required
+                value={form.price_table_id}
+                onChange={(e) => setForm({ ...form, price_table_id: e.target.value })}
+              >
+                <option value="">— SELECIONE —</option>
+                {priceTables.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="sm:col-span-3">
+              <label>LARGURA (CM)</label>
+              <input
+                inputMode="numeric"
+                required
+                value={form.dim_width_cm}
+                onChange={(e) => setForm({ ...form, dim_width_cm: e.target.value.replace(/\D/g, '') })}
+              />
+            </div>
+            <div className="sm:col-span-3">
+              <label>COMPRIMENTO (CM)</label>
+              <input
+                inputMode="numeric"
+                required
+                value={form.dim_length_cm}
+                onChange={(e) => setForm({ ...form, dim_length_cm: e.target.value.replace(/\D/g, '') })}
+              />
+            </div>
+            <div className="sm:col-span-3">
+              <label>ALTURA (CM)</label>
+              <input
+                inputMode="numeric"
+                required
+                value={form.dim_height_cm}
+                onChange={(e) => setForm({ ...form, dim_height_cm: e.target.value.replace(/\D/g, '') })}
+              />
+            </div>
+            <div className="sm:col-span-3">
+              <label>VALOR</label>
+              <input
+                inputMode="numeric"
+                placeholder="R$ 0,00"
+                required
+                value={formatBRLFromCentsDigits(form.comfortPriceDigits)}
+                onChange={(e) => setForm({ ...form, comfortPriceDigits: e.target.value.replace(/\D/g, '') })}
+              />
+            </div>
+            <div className="sm:col-span-6">
+              <label>MODELO</label>
+              <input required value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} />
+            </div>
+            <div className="sm:col-span-6">
+              <label>DESCRIÇÃO (OPCIONAL)</label>
+              <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="sm:col-span-4">
+              <label>PREÇO</label>
+              <input value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
+            </div>
+            <div className="sm:col-span-8">
+              <label>NOME DO PRODUTO</label>
+              <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            </div>
+            <div className="sm:col-span-12">
+              <label>DESCRIÇÃO</label>
+              <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            </div>
+          </>
+        )}
+
+        <div className="sm:col-span-12 flex gap-2">
           <button className="btn btn-primary" type="submit">{editing ? 'SALVAR' : 'ADICIONAR'}</button>
-          {editing && <button className="btn btn-secondary" type="button" onClick={() => setEditing(null)}>CANCELAR</button>}
+          {editing && (
+            <button
+              className="btn btn-secondary"
+              type="button"
+              onClick={() => {
+                setEditing(null)
+                setForm(emptyForm())
+              }}
+            >
+              CANCELAR
+            </button>
+          )}
         </div>
       </form>
+
+      {priceTables.length === 0 && isComfort && (
+        <p className="text-sm text-amber-800">CADASTRE PELO MENOS UMA TABELA DE PREÇO EM GERAL → TABELA DE PREÇO.</p>
+      )}
 
       <div className="table-wrap">
         {loading ? (
@@ -142,32 +438,42 @@ export function BemAvivProdutosPage() {
             <thead>
               <tr>
                 <th>CATEGORIA</th>
-                <th>NOME</th>
+                <th>NOME / MODELO</th>
+                <th>LINHA</th>
+                <th>DIM (CM)</th>
+                <th>TABELA</th>
                 <th>PREÇO</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((r) => (
-                <tr key={r.id}>
-                  <td>{r.category}</td>
-                  <td>{r.name}</td>
-                  <td>{r.price == null ? '—' : formatBRL(Number(r.price))}</td>
-                  <td className="whitespace-nowrap">
-                    <div className="flex items-center justify-end gap-2">
-                      <button type="button" className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0" onClick={() => {
-                        setEditing(r)
-                        setForm({ category: r.category, name: r.name, description: r.description ?? '', price: r.price != null ? String(r.price) : '' })
-                      }}>
-                        <Pencil size={16} />
-                      </button>
-                      <button type="button" className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-600" onClick={() => remove(r.id)}>
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {filtered.map((r) => {
+                const comfortRow = r.category === COMFORT_PLATFORM_CATEGORY
+                const dims =
+                  comfortRow && r.dim_width_cm != null && r.dim_length_cm != null && r.dim_height_cm != null
+                    ? `${r.dim_width_cm} × ${r.dim_length_cm} × ${r.dim_height_cm}`
+                    : '—'
+                return (
+                  <tr key={r.id}>
+                    <td>{r.category}</td>
+                    <td>{comfortRow ? r.model || r.name : r.name}</td>
+                    <td>{comfortRow ? r.product_line || '—' : '—'}</td>
+                    <td>{dims}</td>
+                    <td>{r.price_table_id ? tableNameById[r.price_table_id] ?? '—' : '—'}</td>
+                    <td>{r.price == null ? '—' : formatBRL(Number(r.price))}</td>
+                    <td className="whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-2">
+                        <button type="button" className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0" onClick={() => startEdit(r)}>
+                          <Pencil size={16} />
+                        </button>
+                        <button type="button" className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-600" onClick={() => remove(r.id)}>
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         )}

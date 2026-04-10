@@ -17,3 +17,21 @@ export function parseMoney(input: string): number {
   const n = Number(normalized)
   return Number.isFinite(n) ? n : 0
 }
+
+/** Só dígitos = centavos acumulados (ex: "150050" → R$ 1.500,50). */
+export function parseDigitsCentsToNumber(digits: string): number {
+  const v = parseInt(digits.replace(/\D/g, '') || '0', 10)
+  return Number.isFinite(v) ? v / 100 : 0
+}
+
+export function numberToCentsDigits(n: number): string {
+  if (!Number.isFinite(n)) return ''
+  return String(Math.round(n * 100))
+}
+
+/** Máscara R$ para exibir enquanto o estado guarda apenas dígitos (centavos). */
+export function formatBRLFromCentsDigits(digits: string): string {
+  const n = parseDigitsCentsToNumber(digits)
+  if (!digits.replace(/\D/g, '')) return ''
+  return formatBRL(n)
+}
