@@ -12,7 +12,8 @@ function isLshSectionPath(pathname: string): boolean {
     pathname.startsWith('/contas-bancarias') ||
     pathname.startsWith('/categorias') ||
     pathname.startsWith('/fluxo') ||
-    pathname.startsWith('/cartoes')
+    pathname.startsWith('/cartoes') ||
+    pathname.startsWith('/tarefas')
   )
 }
 
@@ -73,6 +74,9 @@ export function AppLayout() {
                 </NavLink>
                 <NavLink to="/lsh/cartoes" className={linkClass}>
                   CARTÕES
+                </NavLink>
+                <NavLink to="/lsh/tarefas" className={linkClass}>
+                  TAREFAS
                 </NavLink>
               </div>
             )}

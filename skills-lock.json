@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "skills": {
+    "frontend-design": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "computedHash": "516bd2154eb843a8240e43d5b285229129853114ad7075a5e141e1c08e408c84"
+    },
+    "gws-tasks": {
+      "source": "googleworkspace/cli",
+      "sourceType": "github",
+      "computedHash": "bdf6b3b129f22862757426272950ee2aecd615a5c408f065487149c95e0d8327"
+    },
+    "lark-task": {
+      "source": "larksuite/cli",
+      "sourceType": "github",
+      "computedHash": "55ef8e175e72a08c7a2b06a4f46d2b4009ced21238e730452c9d36dc40c2c44b"
+    },
+    "ui-ux-pro-max": {
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "sourceType": "github",
+      "computedHash": "6337038fe1fe6bbe1b9f252ab678ee575859190bab6f0f246f4061824eb40875"
+    }
+  }
+}
