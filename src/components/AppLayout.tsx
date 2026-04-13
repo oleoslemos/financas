@@ -20,7 +20,6 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { canAccessTasksHomolog } from '../lib/tasksHomologAccess'
 
-/** Links de navegação: sem caixa de formulário, hierarquia por cor e recuo. */
 const navLinkBase =
   'flex items-center gap-2 rounded-md px-2.5 py-2 text-[13px] font-normal leading-snug transition-colors normal-case'
 
@@ -33,45 +32,89 @@ const navLinkNested = ({ isActive }: { isActive: boolean }) =>
 const navLinkDeep = ({ isActive }: { isActive: boolean }) =>
   `${navLinkBase} pl-1 text-[12.5px] ${isActive ? 'bg-sky-50 font-medium text-sky-800' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`
 
-/** Grupo expansível: sem borda de input; affordance por chevron à esquerda. */
-function NavGroupToggle(props: {
+const groupCardClass =
+  'rounded-xl border border-slate-200/90 bg-gradient-to-b from-white to-slate-50/90 shadow-sm ring-1 ring-slate-900/[0.05]'
+
+const subGroupCardClass =
+  'rounded-lg border border-slate-200/80 bg-white/90 shadow-sm ring-1 ring-slate-900/[0.03]'
+
+/** Grupo principal: caixa moderna; chevron só expande; título navega para resumo. */
+function NavGroupCard(props: {
   open: boolean
-  active: boolean
+  sectionActive: boolean
+  summaryTo: string
   label: string
-  onClick: () => void
   icon?: ReactNode
+  onToggle: () => void
 }) {
-  const { open, active, label, onClick, icon } = props
+  const { open, sectionActive, summaryTo, label, icon, onToggle } = props
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex w-full items-center gap-2 rounded-md px-2 py-2.5 text-left text-[13px] font-semibold normal-case transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/50 ${
-        active ? 'text-sky-900' : 'text-slate-800'
-      } hover:bg-slate-50`}
-    >
-      <span className="flex shrink-0 text-slate-400" aria-hidden>
-        {open ? <ChevronDown size={16} strokeWidth={2} /> : <ChevronRight size={16} strokeWidth={2} />}
-      </span>
-      {icon ? <span className="shrink-0 text-slate-500">{icon}</span> : null}
-      <span className="min-w-0 flex-1">{label}</span>
-    </button>
+    <div className={`${groupCardClass} mb-1.5`}>
+      <div className="flex min-h-[44px] items-stretch">
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-label={open ? 'Recolher seção' : 'Expandir seção'}
+          onClick={(e) => {
+            e.preventDefault()
+            onToggle()
+          }}
+          className="flex w-10 shrink-0 items-center justify-center rounded-l-[0.65rem] border-r border-slate-200/70 text-slate-500 transition hover:bg-slate-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400/50"
+        >
+          {open ? <ChevronDown size={18} strokeWidth={2} /> : <ChevronRight size={18} strokeWidth={2} />}
+        </button>
+        <NavLink
+          to={summaryTo}
+          className={({ isActive }) =>
+            `flex min-w-0 flex-1 items-center gap-2 rounded-r-[0.65rem] px-3 py-2.5 text-left text-[13px] font-semibold normal-case transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400/40 ${
+              sectionActive || isActive ? 'bg-sky-50/90 text-sky-900' : 'text-slate-800 hover:bg-slate-50'
+            }`
+          }
+        >
+          {icon ? <span className="shrink-0 text-slate-500">{icon}</span> : null}
+          <span className="min-w-0 truncate">{label}</span>
+        </NavLink>
+      </div>
+    </div>
   )
 }
 
-function NavSubGroupToggle(props: { open: boolean; label: string; onClick: () => void }) {
-  const { open, label, onClick } = props
+/** Subgrupo (Cadastro, Produtos, Geral): mesma lógica — resumo por área. */
+function NavSubGroupCard(props: {
+  open: boolean
+  sectionActive: boolean
+  summaryTo: string
+  label: string
+  onToggle: () => void
+}) {
+  const { open, sectionActive, summaryTo, label, onToggle } = props
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="mt-0.5 flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[12.5px] font-medium normal-case text-slate-600 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40"
-    >
-      <span className="flex shrink-0 text-slate-400" aria-hidden>
-        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-      </span>
-      <span className="min-w-0 flex-1">{label}</span>
-    </button>
+    <div className={`${subGroupCardClass} mt-1.5`}>
+      <div className="flex min-h-[40px] items-stretch">
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-label={open ? 'Recolher' : 'Expandir'}
+          onClick={(e) => {
+            e.preventDefault()
+            onToggle()
+          }}
+          className="flex w-9 shrink-0 items-center justify-center rounded-l-md border-r border-slate-200/60 text-slate-400 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400/40"
+        >
+          {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+        </button>
+        <NavLink
+          to={summaryTo}
+          className={({ isActive }) =>
+            `flex min-w-0 flex-1 items-center px-2.5 py-2 text-left text-[12.5px] font-medium normal-case transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400/40 ${
+              sectionActive || isActive ? 'bg-sky-50/80 text-sky-900' : 'text-slate-600 hover:bg-slate-50'
+            }`
+          }
+        >
+          <span className="truncate">{label}</span>
+        </NavLink>
+      </div>
+    </div>
   )
 }
 
@@ -88,6 +131,7 @@ function isLshSectionPath(pathname: string): boolean {
 export function AppLayout() {
   const { user } = useUser()
   const location = useLocation()
+  const path = location.pathname
   const [lshOpen, setLshOpen] = useState(true)
   const [bemAvivOpen, setBemAvivOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -96,12 +140,17 @@ export function AppLayout() {
   const [bemGeralOpen, setBemGeralOpen] = useState(true)
 
   useEffect(() => {
-    if (isLshSectionPath(location.pathname)) setLshOpen(true)
-    if (location.pathname.startsWith('/bem-aviv')) setBemAvivOpen(true)
+    if (isLshSectionPath(path)) setLshOpen(true)
+    if (path.startsWith('/bem-aviv')) setBemAvivOpen(true)
     setMobileMenuOpen(false)
-  }, [location.pathname])
+  }, [path])
 
-  const lshActive = isLshSectionPath(location.pathname)
+  const lshActive = isLshSectionPath(path)
+  const bemAvivActive = path.startsWith('/bem-aviv')
+  const cadastroSectionActive = path.startsWith('/bem-aviv/clientes') || path.startsWith('/bem-aviv/produtos')
+  const produtosSectionActive = path.startsWith('/bem-aviv/produtos')
+  const geralSectionActive = path.startsWith('/bem-aviv/categorias') || path.startsWith('/bem-aviv/tabela-preco')
+
   const tasksHomologEnabled = canAccessTasksHomolog(user?.primaryEmailAddress?.emailAddress)
 
   return (
@@ -122,13 +171,15 @@ export function AppLayout() {
         <h1 className="mb-4 text-sm font-semibold leading-tight tracking-tight text-sky-800 sm:mb-6">
           Sistema de gestão
         </h1>
-        <nav className="flex flex-col gap-0.5" aria-label="Navegação principal">
+        <nav className="flex flex-col gap-1" aria-label="Navegação principal">
           {tasksHomologEnabled ? (
-            <div className="mb-1">
+            <div className={`${groupCardClass} mb-2`}>
               <NavLink
                 to="/lsh/tarefas"
                 className={({ isActive }) =>
-                  `${navLinkBase} font-semibold ${isActive ? 'bg-sky-100 text-sky-900' : 'text-slate-800 hover:bg-slate-50'}`
+                  `flex items-center gap-2 rounded-xl px-3 py-2.5 text-[13px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/50 ${
+                    isActive ? 'bg-sky-50 text-sky-900 ring-1 ring-sky-200/60' : 'text-slate-800 hover:bg-slate-50'
+                  }`
                 }
               >
                 <ListTodo size={18} className="shrink-0 text-sky-600" aria-hidden />
@@ -137,17 +188,18 @@ export function AppLayout() {
             </div>
           ) : null}
 
-          <div className="pt-1">
-            <NavGroupToggle
+          <div className="pt-0.5">
+            <NavGroupCard
               open={lshOpen}
-              active={lshActive}
+              sectionActive={lshActive}
+              summaryTo="/lsh/resumo"
               label="LSH"
-              onClick={() => setLshOpen((v) => !v)}
+              onToggle={() => setLshOpen((v) => !v)}
               icon={<LayoutDashboard size={17} className="text-slate-500" aria-hidden />}
             />
             {lshOpen && (
               <div
-                className="ml-2 mt-0.5 flex flex-col gap-0.5 border-l-2 border-slate-200/90 py-0.5 pl-3"
+                className="ml-1.5 mt-1 flex flex-col gap-0.5 border-l-2 border-slate-200/90 py-0.5 pl-3"
                 role="group"
                 aria-label="LSH"
               >
@@ -175,28 +227,41 @@ export function AppLayout() {
             )}
           </div>
 
-          <div className="mt-2 pt-1">
-            <NavGroupToggle
+          <div className="mt-2 pt-0.5">
+            <NavGroupCard
               open={bemAvivOpen}
-              active={location.pathname.startsWith('/bem-aviv')}
+              sectionActive={bemAvivActive}
+              summaryTo="/bem-aviv"
               label="Bem Aviv"
-              onClick={() => setBemAvivOpen((v) => !v)}
+              onToggle={() => setBemAvivOpen((v) => !v)}
               icon={<Building2 size={17} className="text-slate-500" aria-hidden />}
             />
             {bemAvivOpen && (
               <div
-                className="ml-2 mt-0.5 flex flex-col gap-0.5 border-l-2 border-slate-200/90 py-0.5 pl-3"
+                className="ml-1.5 mt-1 flex flex-col gap-0.5 border-l-2 border-slate-200/90 py-0.5 pl-3"
                 role="group"
                 aria-label="Bem Aviv"
               >
-                <NavSubGroupToggle open={bemCadastroOpen} label="Cadastro" onClick={() => setBemCadastroOpen((v) => !v)} />
+                <NavSubGroupCard
+                  open={bemCadastroOpen}
+                  sectionActive={cadastroSectionActive}
+                  summaryTo="/bem-aviv/clientes"
+                  label="Cadastro"
+                  onToggle={() => setBemCadastroOpen((v) => !v)}
+                />
                 {bemCadastroOpen && (
                   <div className="ml-2 border-l border-slate-200 pl-2.5">
                     <NavLink to="/bem-aviv/clientes" className={navLinkNested}>
                       <UserCircle size={15} className="shrink-0 opacity-70" aria-hidden />
                       Clientes
                     </NavLink>
-                    <NavSubGroupToggle open={bemProdutosOpen} label="Produtos" onClick={() => setBemProdutosOpen((v) => !v)} />
+                    <NavSubGroupCard
+                      open={bemProdutosOpen}
+                      sectionActive={produtosSectionActive}
+                      summaryTo="/bem-aviv/produtos/plataforma-de-descanso"
+                      label="Produtos"
+                      onToggle={() => setBemProdutosOpen((v) => !v)}
+                    />
                     {bemProdutosOpen && (
                       <div className="ml-2 border-l border-slate-200 pl-2.5">
                         <NavLink to="/bem-aviv/produtos/plataforma-de-descanso" className={navLinkDeep}>
@@ -223,7 +288,13 @@ export function AppLayout() {
                   <ShoppingCart size={15} className="shrink-0 opacity-70" aria-hidden />
                   Pedidos de vendas
                 </NavLink>
-                <NavSubGroupToggle open={bemGeralOpen} label="Geral" onClick={() => setBemGeralOpen((v) => !v)} />
+                <NavSubGroupCard
+                  open={bemGeralOpen}
+                  sectionActive={geralSectionActive}
+                  summaryTo="/bem-aviv/categorias"
+                  label="Geral"
+                  onToggle={() => setBemGeralOpen((v) => !v)}
+                />
                 {bemGeralOpen && (
                   <div className="ml-2 border-l border-slate-200 pl-2.5">
                     <NavLink to="/bem-aviv/categorias" className={navLinkNested}>

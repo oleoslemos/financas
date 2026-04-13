@@ -19,6 +19,7 @@ const BemAvivProdutosPage = lazy(() => import('./pages/BemAvivProdutosPage').the
 const BemAvivPedidosPage = lazy(() => import('./pages/BemAvivPedidosPage').then((m) => ({ default: m.BemAvivPedidosPage })))
 const BemAvivCategoriasPage = lazy(() => import('./pages/BemAvivCategoriasPage').then((m) => ({ default: m.BemAvivCategoriasPage })))
 const BemAvivTabelaPrecoPage = lazy(() => import('./pages/BemAvivTabelaPrecoPage').then((m) => ({ default: m.BemAvivTabelaPrecoPage })))
+const BemAvivHomePage = lazy(() => import('./pages/BemAvivHomePage').then((m) => ({ default: m.BemAvivHomePage })))
 const TasksPage = lazy(() => import('./pages/TasksPage').then((m) => ({ default: m.TasksPage })))
 
 export default function App() {
@@ -51,6 +52,7 @@ export default function App() {
               </Route>
               <Route path="/cartoes/:cardId" element={<CardInvoicesPage />} />
               <Route path="/cartoes/:cardId/faturas/:invoiceId" element={<InvoiceDetailPage />} />
+              <Route path="/bem-aviv" element={<BemAvivHomePage />} />
               <Route path="/bem-aviv/clientes" element={<BemAvivClientesPage />} />
               <Route path="/bem-aviv/produtos" element={<BemAvivProdutosPage />} />
               <Route path="/bem-aviv/produtos/plataforma-de-descanso" element={<BemAvivProdutosPage />} />
