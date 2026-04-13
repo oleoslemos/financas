@@ -3,9 +3,9 @@ const DEFAULT_HOMOLOG_EMAILS = ['leoslemos@gmail.com']
 export function getTasksHomologEmailSet(): Set<string> {
   const raw = import.meta.env.VITE_TASKS_HOMOLOG_EMAILS?.trim()
   const source = raw
-    ? raw
+    ? String(raw)
         .split(/[,;]/)
-        .map((s) => s.trim().toLowerCase())
+        .map((s: string) => s.trim().toLowerCase())
         .filter(Boolean)
     : DEFAULT_HOMOLOG_EMAILS
   return new Set(source)
