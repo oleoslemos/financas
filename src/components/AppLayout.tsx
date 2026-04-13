@@ -1,11 +1,79 @@
 import { useUser, UserButton } from '@clerk/clerk-react'
-import { ChevronDown, ChevronRight, Menu, X } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import {
+  ArrowLeftRight,
+  Building2,
+  ChevronDown,
+  ChevronRight,
+  CreditCard,
+  LayoutDashboard,
+  Landmark,
+  ListTodo,
+  Menu,
+  Package,
+  ShoppingCart,
+  Table2,
+  Tags,
+  UserCircle,
+  X,
+} from 'lucide-react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { canAccessTasksHomolog } from '../lib/tasksHomologAccess'
 
-const linkClass = ({ isActive }: { isActive: boolean }) =>
-  `block rounded-lg px-3 py-2 text-xs font-medium tracking-wide ${isActive ? 'bg-sky-100 text-sky-800' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`
+/** Links de navegação: sem caixa de formulário, hierarquia por cor e recuo. */
+const navLinkBase =
+  'flex items-center gap-2 rounded-md px-2.5 py-2 text-[13px] font-normal leading-snug transition-colors normal-case'
+
+const navLinkClass = ({ isActive }: { isActive: boolean }) =>
+  `${navLinkBase} ${isActive ? 'bg-sky-100 font-medium text-sky-900' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`
+
+const navLinkNested = ({ isActive }: { isActive: boolean }) =>
+  `${navLinkBase} ${isActive ? 'bg-sky-50 font-medium text-sky-800' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`
+
+const navLinkDeep = ({ isActive }: { isActive: boolean }) =>
+  `${navLinkBase} pl-1 text-[12.5px] ${isActive ? 'bg-sky-50 font-medium text-sky-800' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`
+
+/** Grupo expansível: sem borda de input; affordance por chevron à esquerda. */
+function NavGroupToggle(props: {
+  open: boolean
+  active: boolean
+  label: string
+  onClick: () => void
+  icon?: ReactNode
+}) {
+  const { open, active, label, onClick, icon } = props
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex w-full items-center gap-2 rounded-md px-2 py-2.5 text-left text-[13px] font-semibold normal-case transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/50 ${
+        active ? 'text-sky-900' : 'text-slate-800'
+      } hover:bg-slate-50`}
+    >
+      <span className="flex shrink-0 text-slate-400" aria-hidden>
+        {open ? <ChevronDown size={16} strokeWidth={2} /> : <ChevronRight size={16} strokeWidth={2} />}
+      </span>
+      {icon ? <span className="shrink-0 text-slate-500">{icon}</span> : null}
+      <span className="min-w-0 flex-1">{label}</span>
+    </button>
+  )
+}
+
+function NavSubGroupToggle(props: { open: boolean; label: string; onClick: () => void }) {
+  const { open, label, onClick } = props
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="mt-0.5 flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[12.5px] font-medium normal-case text-slate-600 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40"
+    >
+      <span className="flex shrink-0 text-slate-400" aria-hidden>
+        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+      </span>
+      <span className="min-w-0 flex-1">{label}</span>
+    </button>
+  )
+}
 
 function isLshSectionPath(pathname: string): boolean {
   if (pathname === '/' || pathname.startsWith('/lsh')) return true
@@ -35,111 +103,137 @@ export function AppLayout() {
 
   const lshActive = isLshSectionPath(location.pathname)
   const tasksHomologEnabled = canAccessTasksHomolog(user?.primaryEmailAddress?.emailAddress)
-  const tasksActive = location.pathname.startsWith('/lsh/tarefas') || location.pathname.startsWith('/tarefas')
 
   return (
-    <div className="flex min-h-screen flex-col uppercase lg:flex-row lg:bg-slate-50">
-      <header className="flex items-center justify-between border-b border-slate-200 bg-white px-3 py-2 lg:hidden">
-        <h1 className="text-xs font-semibold tracking-wide text-sky-700">SISTEMA DE GESTÃO</h1>
-        <button type="button" className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white" onClick={() => setMobileMenuOpen((v) => !v)}>
+    <div className="flex min-h-screen flex-col lg:flex-row lg:bg-slate-50">
+      <header className="flex items-center justify-between border-b border-slate-200 bg-white px-3 py-2 uppercase lg:hidden">
+        <h1 className="text-xs font-semibold tracking-wide text-sky-700">Sistema de gestão</h1>
+        <button
+          type="button"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white uppercase"
+          onClick={() => setMobileMenuOpen((v) => !v)}
+        >
           {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
         </button>
       </header>
-      <aside className={`${mobileMenuOpen ? 'block' : 'hidden'} shrink-0 border-b border-slate-200 bg-white p-3 shadow-sm sm:p-4 lg:block lg:w-64 lg:border-b-0 lg:border-r lg:shadow-none`}>
-        <h1 className="mb-4 text-sm font-semibold leading-tight tracking-wide text-sky-700 sm:mb-6">
-          SISTEMA DE GESTÃO
+      <aside
+        className={`${mobileMenuOpen ? 'block' : 'hidden'} shrink-0 border-b border-slate-200 bg-white p-3 shadow-sm normal-case sm:p-4 lg:block lg:w-64 lg:border-b-0 lg:border-r lg:shadow-none`}
+      >
+        <h1 className="mb-4 text-sm font-semibold leading-tight tracking-tight text-sky-800 sm:mb-6">
+          Sistema de gestão
         </h1>
-        <nav className="flex flex-col gap-1">
+        <nav className="flex flex-col gap-0.5" aria-label="Navegação principal">
           {tasksHomologEnabled ? (
-            <div>
+            <div className="mb-1">
               <NavLink
                 to="/lsh/tarefas"
-                className={`block rounded-lg px-3 py-2 text-xs font-semibold tracking-wide transition-colors ${
-                  tasksActive ? 'bg-sky-100 text-sky-900' : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
-                }`}
+                className={({ isActive }) =>
+                  `${navLinkBase} font-semibold ${isActive ? 'bg-sky-100 text-sky-900' : 'text-slate-800 hover:bg-slate-50'}`
+                }
               >
-                TAREFAS
+                <ListTodo size={18} className="shrink-0 text-sky-600" aria-hidden />
+                Tarefas
               </NavLink>
             </div>
           ) : null}
 
-          <div>
-            <button
-              type="button"
+          <div className="pt-1">
+            <NavGroupToggle
+              open={lshOpen}
+              active={lshActive}
+              label="LSH"
               onClick={() => setLshOpen((v) => !v)}
-              className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold tracking-wide transition-colors ${
-                lshActive ? 'bg-sky-100 text-sky-900' : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
-              }`}
-            >
-              <span>LSH</span>
-              {lshOpen ? <ChevronDown size={16} className="shrink-0 opacity-80" /> : <ChevronRight size={16} className="shrink-0 opacity-80" />}
-            </button>
+              icon={<LayoutDashboard size={17} className="text-slate-500" aria-hidden />}
+            />
             {lshOpen && (
-              <div className="mt-1 flex flex-col gap-0.5 border-l border-slate-200 pl-2 md:ml-2">
-                <NavLink to="/lsh/resumo" className={linkClass} end>
-                  RESUMO
+              <div
+                className="ml-2 mt-0.5 flex flex-col gap-0.5 border-l-2 border-slate-200/90 py-0.5 pl-3"
+                role="group"
+                aria-label="LSH"
+              >
+                <NavLink to="/lsh/resumo" className={navLinkClass} end>
+                  <LayoutDashboard size={16} className="shrink-0 opacity-70" aria-hidden />
+                  Resumo
                 </NavLink>
-                <NavLink to="/lsh/contas-bancarias" className={linkClass}>
-                  CONTAS BANCÁRIAS
+                <NavLink to="/lsh/contas-bancarias" className={navLinkClass}>
+                  <Landmark size={16} className="shrink-0 opacity-70" aria-hidden />
+                  Contas bancárias
                 </NavLink>
-                <NavLink to="/lsh/categorias" className={linkClass}>
-                  CATEGORIAS
+                <NavLink to="/lsh/categorias" className={navLinkClass}>
+                  <Tags size={16} className="shrink-0 opacity-70" aria-hidden />
+                  Categorias
                 </NavLink>
-                <NavLink to="/lsh/fluxo" className={linkClass}>
-                  PAGAR / RECEBER
+                <NavLink to="/lsh/fluxo" className={navLinkClass}>
+                  <ArrowLeftRight size={16} className="shrink-0 opacity-70" aria-hidden />
+                  Pagar / receber
                 </NavLink>
-                <NavLink to="/lsh/cartoes" className={linkClass}>
-                  CARTÕES
+                <NavLink to="/lsh/cartoes" className={navLinkClass}>
+                  <CreditCard size={16} className="shrink-0 opacity-70" aria-hidden />
+                  Cartões
                 </NavLink>
               </div>
             )}
           </div>
 
-          <div className="mt-2">
-            <button
-              type="button"
+          <div className="mt-2 pt-1">
+            <NavGroupToggle
+              open={bemAvivOpen}
+              active={location.pathname.startsWith('/bem-aviv')}
+              label="Bem Aviv"
               onClick={() => setBemAvivOpen((v) => !v)}
-              className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold tracking-wide text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900"
-            >
-              <span>BEM AVIV</span>
-              {bemAvivOpen ? (
-                <ChevronDown size={16} className="shrink-0 opacity-80" />
-              ) : (
-                <ChevronRight size={16} className="shrink-0 opacity-80" />
-              )}
-            </button>
+              icon={<Building2 size={17} className="text-slate-500" aria-hidden />}
+            />
             {bemAvivOpen && (
-              <div className="mt-1 flex flex-col gap-0.5 border-l border-slate-200 pl-2 md:ml-2">
-                <button type="button" className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-100" onClick={() => setBemCadastroOpen((v) => !v)}>
-                  <span>1. CADASTRO</span>
-                  {bemCadastroOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                </button>
+              <div
+                className="ml-2 mt-0.5 flex flex-col gap-0.5 border-l-2 border-slate-200/90 py-0.5 pl-3"
+                role="group"
+                aria-label="Bem Aviv"
+              >
+                <NavSubGroupToggle open={bemCadastroOpen} label="Cadastro" onClick={() => setBemCadastroOpen((v) => !v)} />
                 {bemCadastroOpen && (
-                  <div className="ml-2 border-l border-slate-200 pl-2">
-                    <NavLink to="/bem-aviv/clientes" className={linkClass}>1.1 CLIENTES</NavLink>
-                    <button type="button" className="mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-100" onClick={() => setBemProdutosOpen((v) => !v)}>
-                      <span>1.2 PRODUTOS GERAL</span>
-                      {bemProdutosOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                    </button>
+                  <div className="ml-2 border-l border-slate-200 pl-2.5">
+                    <NavLink to="/bem-aviv/clientes" className={navLinkNested}>
+                      <UserCircle size={15} className="shrink-0 opacity-70" aria-hidden />
+                      Clientes
+                    </NavLink>
+                    <NavSubGroupToggle open={bemProdutosOpen} label="Produtos" onClick={() => setBemProdutosOpen((v) => !v)} />
                     {bemProdutosOpen && (
-                      <div className="ml-2 border-l border-slate-200 pl-2">
-                        <NavLink to="/bem-aviv/produtos/plataforma-de-descanso" className={linkClass}>1.2.1 PLATAFORMA DE DESCANSO</NavLink>
-                        <NavLink to="/bem-aviv/produtos/cabeceiras" className={linkClass}>1.2.3 CABECEIRAS</NavLink>
-                        <NavLink to="/bem-aviv/produtos/bases-camas" className={linkClass}>1.2.4 BASES / CAMAS</NavLink>
-                        <NavLink to="/bem-aviv/produtos/acessorios" className={linkClass}>1.2.5 ACESSÓRIOS</NavLink>
+                      <div className="ml-2 border-l border-slate-200 pl-2.5">
+                        <NavLink to="/bem-aviv/produtos/plataforma-de-descanso" className={navLinkDeep}>
+                          <Package size={14} className="shrink-0 opacity-60" aria-hidden />
+                          Plataforma de descanso
+                        </NavLink>
+                        <NavLink to="/bem-aviv/produtos/cabeceiras" className={navLinkDeep}>
+                          <Package size={14} className="shrink-0 opacity-60" aria-hidden />
+                          Cabeceiras
+                        </NavLink>
+                        <NavLink to="/bem-aviv/produtos/bases-camas" className={navLinkDeep}>
+                          <Package size={14} className="shrink-0 opacity-60" aria-hidden />
+                          Bases / camas
+                        </NavLink>
+                        <NavLink to="/bem-aviv/produtos/acessorios" className={navLinkDeep}>
+                          <Package size={14} className="shrink-0 opacity-60" aria-hidden />
+                          Acessórios
+                        </NavLink>
                       </div>
                     )}
                   </div>
                 )}
-                <NavLink to="/bem-aviv/pedidos" className={linkClass}>2. PEDIDOS DE VENDAS</NavLink>
-                <button type="button" className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-100" onClick={() => setBemGeralOpen((v) => !v)}>
-                  <span>3. GERAL</span>
-                  {bemGeralOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                </button>
+                <NavLink to="/bem-aviv/pedidos" className={navLinkNested}>
+                  <ShoppingCart size={15} className="shrink-0 opacity-70" aria-hidden />
+                  Pedidos de vendas
+                </NavLink>
+                <NavSubGroupToggle open={bemGeralOpen} label="Geral" onClick={() => setBemGeralOpen((v) => !v)} />
                 {bemGeralOpen && (
-                  <div className="ml-2 border-l border-slate-200 pl-2">
-                    <NavLink to="/bem-aviv/categorias" className={linkClass}>3.1 CATEGORIAS</NavLink>
-                    <NavLink to="/bem-aviv/tabela-preco" className={linkClass}>3.2 TABELA DE PREÇO</NavLink>
+                  <div className="ml-2 border-l border-slate-200 pl-2.5">
+                    <NavLink to="/bem-aviv/categorias" className={navLinkNested}>
+                      <Tags size={15} className="shrink-0 opacity-70" aria-hidden />
+                      Categorias
+                    </NavLink>
+                    <NavLink to="/bem-aviv/tabela-preco" className={navLinkNested}>
+                      <Table2 size={15} className="shrink-0 opacity-70" aria-hidden />
+                      Tabela de preço
+                    </NavLink>
                   </div>
                 )}
               </div>
