@@ -10,7 +10,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "sync:tasks": "node scripts/tasks-sync.mjs"
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.22.0",
