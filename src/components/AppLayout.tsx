@@ -1,7 +1,8 @@
-import { UserButton } from '@clerk/clerk-react'
+import { useUser, UserButton } from '@clerk/clerk-react'
 import { ChevronDown, ChevronRight, Menu, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { canAccessTasksHomolog } from '../lib/tasksHomologAccess'
 
 const linkClass = ({ isActive }: { isActive: boolean }) =>
   `block rounded-lg px-3 py-2 text-xs font-medium tracking-wide ${isActive ? 'bg-sky-100 text-sky-800' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`
@@ -12,12 +13,12 @@ function isLshSectionPath(pathname: string): boolean {
     pathname.startsWith('/contas-bancarias') ||
     pathname.startsWith('/categorias') ||
     pathname.startsWith('/fluxo') ||
-    pathname.startsWith('/cartoes') ||
-    pathname.startsWith('/tarefas')
+    pathname.startsWith('/cartoes')
   )
 }
 
 export function AppLayout() {
+  const { user } = useUser()
   const location = useLocation()
   const [lshOpen, setLshOpen] = useState(true)
   const [bemAvivOpen, setBemAvivOpen] = useState(false)
@@ -33,6 +34,8 @@ export function AppLayout() {
   }, [location.pathname])
 
   const lshActive = isLshSectionPath(location.pathname)
+  const tasksHomologEnabled = canAccessTasksHomolog(user?.primaryEmailAddress?.emailAddress)
+  const tasksActive = location.pathname.startsWith('/lsh/tarefas') || location.pathname.startsWith('/tarefas')
 
   return (
     <div className="flex min-h-screen flex-col uppercase lg:flex-row lg:bg-slate-50">
@@ -47,6 +50,19 @@ export function AppLayout() {
           SISTEMA DE GESTÃO
         </h1>
         <nav className="flex flex-col gap-1">
+          {tasksHomologEnabled ? (
+            <div>
+              <NavLink
+                to="/lsh/tarefas"
+                className={`block rounded-lg px-3 py-2 text-xs font-semibold tracking-wide transition-colors ${
+                  tasksActive ? 'bg-sky-100 text-sky-900' : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                TAREFAS
+              </NavLink>
+            </div>
+          ) : null}
+
           <div>
             <button
               type="button"
@@ -74,9 +90,6 @@ export function AppLayout() {
                 </NavLink>
                 <NavLink to="/lsh/cartoes" className={linkClass}>
                   CARTÕES
-                </NavLink>
-                <NavLink to="/lsh/tarefas" className={linkClass}>
-                  TAREFAS
                 </NavLink>
               </div>
             )}

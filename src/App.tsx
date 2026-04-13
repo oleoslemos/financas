@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { AllowedEmailGuard } from './components/AllowedEmailGuard'
 import { AppLayout } from './components/AppLayout'
 import { RequireAuth } from './components/RequireAuth'
+import { RequireTasksHomologAccess } from './components/RequireTasksHomologAccess'
 
 const SignInPage = lazy(() => import('./pages/SignInPage').then((m) => ({ default: m.SignInPage })))
 const SignUpPage = lazy(() => import('./pages/SignUpPage').then((m) => ({ default: m.SignUpPage })))
@@ -37,13 +38,17 @@ export default function App() {
               <Route path="/lsh/cartoes" element={<CreditCardsPage />} />
               <Route path="/lsh/cartoes/:cardId" element={<CardInvoicesPage />} />
               <Route path="/lsh/cartoes/:cardId/faturas/:invoiceId" element={<InvoiceDetailPage />} />
-              <Route path="/lsh/tarefas" element={<TasksPage />} />
+              <Route element={<RequireTasksHomologAccess />}>
+                <Route path="/lsh/tarefas" element={<TasksPage />} />
+              </Route>
 
               <Route path="/contas-bancarias" element={<Navigate to="/lsh/contas-bancarias" replace />} />
               <Route path="/categorias" element={<Navigate to="/lsh/categorias" replace />} />
               <Route path="/fluxo" element={<Navigate to="/lsh/fluxo" replace />} />
               <Route path="/cartoes" element={<Navigate to="/lsh/cartoes" replace />} />
-              <Route path="/tarefas" element={<Navigate to="/lsh/tarefas" replace />} />
+              <Route element={<RequireTasksHomologAccess />}>
+                <Route path="/tarefas" element={<Navigate to="/lsh/tarefas" replace />} />
+              </Route>
               <Route path="/cartoes/:cardId" element={<CardInvoicesPage />} />
               <Route path="/cartoes/:cardId/faturas/:invoiceId" element={<InvoiceDetailPage />} />
               <Route path="/bem-aviv/clientes" element={<BemAvivClientesPage />} />
