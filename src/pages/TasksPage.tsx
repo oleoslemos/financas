@@ -17,6 +17,8 @@ type TaskRow = {
   priority: TaskPriority
   due_date: string | null
   source: 'LOCAL' | 'GOOGLE_TASKS' | 'LARK_TASK'
+  google_sync_enabled: boolean
+  google_external_id: string | null
   created_at: string
 }
 
@@ -46,13 +48,14 @@ export function TasksPage() {
   const [details, setDetails] = useState('')
   const [priority, setPriority] = useState<TaskPriority>('MEDIUM')
   const [dueDate, setDueDate] = useState(toISODate(new Date()))
+  const [mirrorGoogle, setMirrorGoogle] = useState(true)
 
   async function loadTasks() {
     if (!supabase || !ownerUserId) return
     setLoading(true)
     const { data, error } = await supabase
       .from('lsh_tasks')
-      .select('id, title, details, status, priority, due_date, source, created_at')
+      .select('id, title, details, status, priority, due_date, source, google_sync_enabled, google_external_id, created_at')
       .eq('user_id', ownerUserId)
       .order('created_at', { ascending: false })
     if (error) alert(error.message)
@@ -96,6 +99,7 @@ export function TasksPage() {
       status: 'TODO',
       due_date: dueDate || null,
       source: 'LOCAL',
+      google_sync_enabled: mirrorGoogle,
     })
     if (error) {
       alert(error.message)
@@ -105,7 +109,15 @@ export function TasksPage() {
     setDetails('')
     setPriority('MEDIUM')
     setDueDate(toISODate(new Date()))
+    setMirrorGoogle(true)
     await loadTasks()
+  }
+
+  async function setGoogleMirror(id: string, enabled: boolean) {
+    if (!supabase) return
+    const { error } = await supabase.from('lsh_tasks').update({ google_sync_enabled: enabled }).eq('id', id)
+    if (error) alert(error.message)
+    else await loadTasks()
   }
 
   async function setStatus(id: string, status: TaskStatus) {
@@ -177,6 +189,18 @@ export function TasksPage() {
             <label>Prazo</label>
             <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           </div>
+          <div className="sm:col-span-2 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+            <input
+              id="mirror-google"
+              type="checkbox"
+              checked={mirrorGoogle}
+              onChange={(e) => setMirrorGoogle(e.target.checked)}
+              className="h-4 w-4"
+            />
+            <label htmlFor="mirror-google" className="mb-0 cursor-pointer text-sm text-slate-700">
+              Espelhar no Google Tasks (título, prazo, status e trecho da descrição — a descrição completa fica no sistema)
+            </label>
+          </div>
         </div>
         <button type="submit" className="btn btn-primary inline-flex items-center gap-2">
           <Plus size={16} />
@@ -220,6 +244,7 @@ export function TasksPage() {
                   <th>PRIORIDADE</th>
                   <th>PRAZO</th>
                   <th>STATUS</th>
+                  <th>GOOGLE</th>
                   <th className="text-right">AÇÕES</th>
                 </tr>
               </thead>
@@ -235,6 +260,23 @@ export function TasksPage() {
                     <td>{priorityLabel[task.priority]}</td>
                     <td>{task.due_date || '—'}</td>
                     <td>{statusLabel[task.status]}</td>
+                    <td>
+                      {task.source === 'LOCAL' ? (
+                        <label className="mb-0 flex cursor-pointer items-center gap-1.5 text-xs text-slate-600">
+                          <input
+                            type="checkbox"
+                            checked={task.google_sync_enabled}
+                            onChange={(e) => void setGoogleMirror(task.id, e.target.checked)}
+                            className="h-3.5 w-3.5"
+                          />
+                          {task.google_external_id ? 'Espelho' : 'Off'}
+                        </label>
+                      ) : task.source === 'GOOGLE_TASKS' ? (
+                        <span className="text-xs text-slate-500">Importada</span>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </td>
                     <td>
                       <div className="flex items-center justify-end gap-2">
                         {task.status === 'TODO' ? (

@@ -48,7 +48,8 @@ export function AgendaPage() {
   const [loading, setLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncMessage, setSyncMessage] = useState<string | null>(null)
-  const syncEndpoint = import.meta.env.VITE_SYNC_TASKS_WEBHOOK_URL?.trim() || ''
+  const syncEndpoint = import.meta.env.VITE_SYNC_TASKS_WEBHOOK_URL?.trim() || '/api/sync-tasks'
+  const syncToken = import.meta.env.VITE_SYNC_TASKS_WEBHOOK_TOKEN?.trim() || ''
 
   const loadAgenda = useCallback(async () => {
     if (!supabase || !ownerUserId) return
@@ -91,7 +92,10 @@ export function AgendaPage() {
       setSyncMessage(null)
       const response = await fetch(syncEndpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(syncToken ? { 'x-sync-token': syncToken } : {}),
+        },
         body: JSON.stringify({
           source: 'agenda-page',
           userId: ownerUserId,
@@ -147,9 +151,8 @@ export function AgendaPage() {
             <button
               type="button"
               onClick={() => void requestSyncNow()}
-              disabled={syncing || !syncEndpoint}
+              disabled={syncing}
               className="btn btn-primary inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-70"
-              title={!syncEndpoint ? 'Configure VITE_SYNC_TASKS_WEBHOOK_URL para habilitar.' : undefined}
             >
               {syncing ? <LoaderCircle size={14} className="animate-spin" /> : <RefreshCw size={14} />}
               SINCRONIZAR AGORA
