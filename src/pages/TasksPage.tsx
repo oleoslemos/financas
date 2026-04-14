@@ -150,7 +150,11 @@ export function TasksPage() {
         </article>
       </section>
 
-      <form onSubmit={createTask} className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <form
+        id="nova-tarefa"
+        onSubmit={createTask}
+        className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+      >
         <h3 className="text-sm font-semibold text-slate-800">NOVA TAREFA</h3>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">

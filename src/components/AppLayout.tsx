@@ -136,12 +136,16 @@ export function AppLayout() {
   const [lshOpen, setLshOpen] = useState(true)
   const [bemAvivOpen, setBemAvivOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [agendaMenuOpen, setAgendaMenuOpen] = useState(true)
   const [bemCadastroOpen, setBemCadastroOpen] = useState(true)
   const [bemProdutosOpen, setBemProdutosOpen] = useState(true)
   const [bemGeralOpen, setBemGeralOpen] = useState(true)
 
   useEffect(() => {
     if (isLshSectionPath(path)) setLshOpen(true)
+    if (path.startsWith('/lsh/agenda') || path.startsWith('/lsh/tarefas') || path === '/agenda' || path === '/tarefas') {
+      setAgendaMenuOpen(true)
+    }
     if (path.startsWith('/bem-aviv')) setBemAvivOpen(true)
     setMobileMenuOpen(false)
   }, [path])
@@ -155,6 +159,7 @@ export function AppLayout() {
   const tasksHomologEnabled = canAccessTasksHomolog(user?.primaryEmailAddress?.emailAddress)
   const agendaActive = path.startsWith('/lsh/agenda') || path === '/agenda'
   const tasksActive = path.startsWith('/lsh/tarefas') || path === '/tarefas'
+  const agendaSectionActive = agendaActive || tasksActive
 
   return (
     <div className="flex min-h-screen flex-col lg:flex-row lg:bg-slate-50">
@@ -176,33 +181,27 @@ export function AppLayout() {
         </h1>
         <nav className="flex flex-col gap-1" aria-label="Navegação principal">
           {tasksHomologEnabled ? (
-            <div className="mb-2 space-y-2">
-              <div className={groupCardClass}>
-                <NavLink
-                  to="/lsh/agenda"
-                  className={() =>
-                    `flex items-center gap-2 rounded-xl px-3 py-2.5 text-[13px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/50 ${
-                      agendaActive ? 'bg-sky-50 text-sky-900 ring-1 ring-sky-200/60' : 'text-slate-800 hover:bg-slate-50'
-                    }`
-                  }
-                >
-                  <CalendarDays size={18} className="shrink-0 text-sky-600" aria-hidden />
-                  Agenda
-                </NavLink>
-              </div>
-              <div className={groupCardClass}>
-                <NavLink
-                  to="/lsh/tarefas"
-                  className={() =>
-                    `flex items-center gap-2 rounded-xl px-3 py-2.5 text-[13px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/50 ${
-                      tasksActive ? 'bg-sky-50 text-sky-900 ring-1 ring-sky-200/60' : 'text-slate-800 hover:bg-slate-50'
-                    }`
-                  }
-                >
-                  <ListTodo size={18} className="shrink-0 text-sky-600" aria-hidden />
-                  Tarefas
-                </NavLink>
-              </div>
+            <div className="mb-2">
+              <NavGroupCard
+                open={agendaMenuOpen}
+                sectionActive={agendaSectionActive}
+                summaryTo="/lsh/agenda"
+                label="Agenda e Tarefas"
+                onToggle={() => setAgendaMenuOpen((v) => !v)}
+                icon={<CalendarDays size={17} className="text-slate-500" aria-hidden />}
+              />
+              {agendaMenuOpen && (
+                <div className="ml-1.5 mt-1 flex flex-col gap-0.5 border-l-2 border-slate-200/90 py-0.5 pl-3">
+                  <NavLink to="/lsh/agenda" className={navLinkClass}>
+                    <CalendarDays size={16} className="shrink-0 opacity-70" aria-hidden />
+                    Resumo da agenda
+                  </NavLink>
+                  <NavLink to="/lsh/tarefas" className={navLinkClass}>
+                    <ListTodo size={16} className="shrink-0 opacity-70" aria-hidden />
+                    Gestão de tarefas
+                  </NavLink>
+                </div>
+              )}
             </div>
           ) : null}
 
