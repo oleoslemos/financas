@@ -23,6 +23,7 @@ loadEnvFromFile('.env')
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 const GWS_TASKLIST_ID = process.env.GWS_TASKLIST_ID
+const GWS_CALENDAR_ID = process.env.GWS_CALENDAR_ID || 'primary'
 
 function must(value, name) {
   if (!value) throw new Error(`Variavel obrigatoria ausente: ${name}`)
@@ -87,6 +88,13 @@ function mapLarkStatusToLocal(status) {
 function dueDateToRfc3339(dateValue) {
   if (!dateValue) return null
   return `${dateValue}T00:00:00.000Z`
+}
+
+function parseGoogleEventDate(value) {
+  if (!value) return null
+  if (typeof value.dateTime === 'string' && value.dateTime) return value.dateTime
+  if (typeof value.date === 'string' && value.date) return `${value.date}T00:00:00.000Z`
+  return null
 }
 
 async function syncGoogle(supabase, localRows) {
@@ -229,6 +237,56 @@ async function syncLark(supabase, localRows) {
   return { created, updated, imported }
 }
 
+async function syncGoogleCalendar(supabase) {
+  const start = new Date()
+  start.setHours(0, 0, 0, 0)
+  const end = new Date(start)
+  end.setDate(end.getDate() + 30)
+  end.setHours(23, 59, 59, 999)
+
+  const params = {
+    calendarId: GWS_CALENDAR_ID,
+    singleEvents: true,
+    orderBy: 'startTime',
+    maxResults: 500,
+    showDeleted: true,
+    timeMin: start.toISOString(),
+    timeMax: end.toISOString(),
+  }
+
+  const remoteResp = runGwsJson('calendar events list', params)
+  const remoteItems = Array.isArray(remoteResp?.items) ? remoteResp.items : []
+
+  let synced = 0
+  for (const event of remoteItems) {
+    const startAt = parseGoogleEventDate(event.start)
+    const endAt = parseGoogleEventDate(event.end) || startAt
+    const extId = event.id
+    if (!extId || !startAt || !endAt) continue
+
+    const payload = {
+      user_id: process.env.SYNC_OWNER_USER_ID,
+      source: 'GOOGLE_CALENDAR',
+      calendar_id: GWS_CALENDAR_ID,
+      external_id: extId,
+      summary: String(event.summary || 'SEM TITULO').toUpperCase(),
+      details: String(event.description || '').toUpperCase() || null,
+      location: String(event.location || '').toUpperCase() || null,
+      start_at: startAt,
+      end_at: endAt,
+      is_all_day: Boolean(event.start?.date && !event.start?.dateTime),
+      status: String(event.status || 'confirmed').toLowerCase(),
+    }
+
+    const { error } = await supabase
+      .from('lsh_calendar_events')
+      .upsert(payload, { onConflict: 'user_id,source,external_id' })
+    if (!error) synced += 1
+  }
+
+  return { synced, calendarId: GWS_CALENDAR_ID, rangeDays: 30 }
+}
+
 async function main() {
   must(SUPABASE_URL, 'SUPABASE_URL ou VITE_SUPABASE_URL')
   must(SUPABASE_SERVICE_ROLE_KEY, 'SUPABASE_SERVICE_ROLE_KEY')
@@ -246,6 +304,8 @@ async function main() {
   const google = await syncGoogle(supabase, localRows || [])
   console.log('Sincronizando Lark Tasks...')
   const lark = await syncLark(supabase, localRows || [])
+  console.log('Sincronizando Google Agenda...')
+  const calendar = await syncGoogleCalendar(supabase)
 
   console.log(
     JSON.stringify(
@@ -253,6 +313,7 @@ async function main() {
         ok: true,
         google,
         lark,
+        calendar,
       },
       null,
       2,

@@ -2,6 +2,7 @@ import { useUser, UserButton } from '@clerk/clerk-react'
 import {
   ArrowLeftRight,
   Building2,
+  CalendarDays,
   ChevronDown,
   ChevronRight,
   CreditCard,
@@ -152,6 +153,8 @@ export function AppLayout() {
   const geralSectionActive = path.startsWith('/bem-aviv/categorias') || path.startsWith('/bem-aviv/tabela-preco')
 
   const tasksHomologEnabled = canAccessTasksHomolog(user?.primaryEmailAddress?.emailAddress)
+  const agendaActive = path.startsWith('/lsh/agenda') || path === '/agenda'
+  const tasksActive = path.startsWith('/lsh/tarefas') || path === '/tarefas'
 
   return (
     <div className="flex min-h-screen flex-col lg:flex-row lg:bg-slate-50">
@@ -173,18 +176,33 @@ export function AppLayout() {
         </h1>
         <nav className="flex flex-col gap-1" aria-label="Navegação principal">
           {tasksHomologEnabled ? (
-            <div className={`${groupCardClass} mb-2`}>
-              <NavLink
-                to="/lsh/tarefas"
-                className={({ isActive }) =>
-                  `flex items-center gap-2 rounded-xl px-3 py-2.5 text-[13px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/50 ${
-                    isActive ? 'bg-sky-50 text-sky-900 ring-1 ring-sky-200/60' : 'text-slate-800 hover:bg-slate-50'
-                  }`
-                }
-              >
-                <ListTodo size={18} className="shrink-0 text-sky-600" aria-hidden />
-                Tarefas
-              </NavLink>
+            <div className="mb-2 space-y-2">
+              <div className={groupCardClass}>
+                <NavLink
+                  to="/lsh/agenda"
+                  className={() =>
+                    `flex items-center gap-2 rounded-xl px-3 py-2.5 text-[13px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/50 ${
+                      agendaActive ? 'bg-sky-50 text-sky-900 ring-1 ring-sky-200/60' : 'text-slate-800 hover:bg-slate-50'
+                    }`
+                  }
+                >
+                  <CalendarDays size={18} className="shrink-0 text-sky-600" aria-hidden />
+                  Agenda
+                </NavLink>
+              </div>
+              <div className={groupCardClass}>
+                <NavLink
+                  to="/lsh/tarefas"
+                  className={() =>
+                    `flex items-center gap-2 rounded-xl px-3 py-2.5 text-[13px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/50 ${
+                      tasksActive ? 'bg-sky-50 text-sky-900 ring-1 ring-sky-200/60' : 'text-slate-800 hover:bg-slate-50'
+                    }`
+                  }
+                >
+                  <ListTodo size={18} className="shrink-0 text-sky-600" aria-hidden />
+                  Tarefas
+                </NavLink>
+              </div>
             </div>
           ) : null}
 
