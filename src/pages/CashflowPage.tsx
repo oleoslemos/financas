@@ -61,7 +61,7 @@ export function CashflowPage() {
   const [rows, setRows] = useState<Pr[]>([])
   const [invoiceDetailByPayable, setInvoiceDetailByPayable] = useState<Record<string, { cardId: string; invoiceId: string }>>({})
   const [cats, setCats] = useState<{ id: string; name: string }[]>([])
-  const [banks, setBanks] = useState<{ id: string; name: string }[]>([])
+  const [banks, setBanks] = useState<{ id: string; name: string; initial_balance: number | null }[]>([])
   const [loading, setLoading] = useState(true)
 
   const [mode, setMode] = useState<'vista' | 'parcelado'>('vista')
@@ -84,7 +84,6 @@ export function CashflowPage() {
   const [paidAtEdit, setPaidAtEdit] = useState('')
 
   const monthRange = currentMonthRange()
-  const [filterKind, setFilterKind] = useState<'ALL' | Kind>('ALL')
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'open' | 'paid'>('open')
   const [filterBank, setFilterBank] = useState('')
   const [filterFrom, setFilterFrom] = useState(monthRange.from)
@@ -119,12 +118,17 @@ export function CashflowPage() {
         .eq('user_id', ownerUserId)
         .order('due_date', { ascending: true }),
       supabase.from('categories').select('id, name').eq('user_id', ownerUserId).order('name'),
-      supabase.from('bank_accounts').select('id, name').eq('user_id', ownerUserId).eq('is_active', true).order('name'),
+      supabase
+        .from('bank_accounts')
+        .select('id, name, initial_balance')
+        .eq('user_id', ownerUserId)
+        .eq('is_active', true)
+        .order('name'),
       supabase.from('credit_card_invoices').select('id, credit_card_id, payable_id').eq('user_id', ownerUserId).not('payable_id', 'is', null),
     ])
     setRows((p as Pr[]) ?? [])
     setCats((c as { id: string; name: string }[]) ?? [])
-    setBanks((b as { id: string; name: string }[]) ?? [])
+    setBanks((b as { id: string; name: string; initial_balance: number | null }[]) ?? [])
     const links = ((inv ?? []) as Array<{ id: string; credit_card_id: string; payable_id: string | null }>).reduce(
       (acc, row) => {
         if (row.payable_id) acc[row.payable_id] = { cardId: row.credit_card_id, invoiceId: row.id }
@@ -145,14 +149,31 @@ export function CashflowPage() {
     () =>
       rows.filter((r) => {
         if (!((showPayables && r.kind === 'payable') || (showReceivables && r.kind === 'receivable'))) return false
-        if (filterKind !== 'ALL' && r.kind !== filterKind) return false
         if (filterStatus !== 'ALL' && r.status !== filterStatus) return false
         if (filterBank && (r.bank_account_id || '') !== filterBank) return false
         if (filterFrom && r.due_date < filterFrom) return false
         if (filterTo && r.due_date > filterTo) return false
         return true
       }),
-    [rows, showPayables, showReceivables, filterKind, filterStatus, filterBank, filterFrom, filterTo],
+    [rows, showPayables, showReceivables, filterStatus, filterBank, filterFrom, filterTo],
+  )
+  const currentBalance = useMemo(
+    () => banks.reduce((sum, bank) => sum + Number(bank.initial_balance ?? 0), 0),
+    [banks],
+  )
+  const totalReceivable = useMemo(
+    () =>
+      filteredRows
+        .filter((r) => r.kind === 'receivable' && r.status === 'open')
+        .reduce((sum, r) => sum + Number(r.amount), 0),
+    [filteredRows],
+  )
+  const totalPayable = useMemo(
+    () =>
+      filteredRows
+        .filter((r) => r.kind === 'payable' && r.status === 'open')
+        .reduce((sum, r) => sum + Number(r.amount), 0),
+    [filteredRows],
   )
 
   async function submit(e: React.FormEvent) {
@@ -691,7 +712,22 @@ export function CashflowPage() {
           </label>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Saldo atual</p>
+            <p className="mt-1 text-lg font-semibold text-slate-900">{formatBRL(currentBalance)}</p>
+          </div>
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+            <p className="text-xs uppercase tracking-wide text-emerald-700">Total a receber</p>
+            <p className="mt-1 text-lg font-semibold text-emerald-800">{formatBRL(totalReceivable)}</p>
+          </div>
+          <div className="rounded-lg border border-rose-200 bg-rose-50 p-3">
+            <p className="text-xs uppercase tracking-wide text-rose-700">Total a pagar</p>
+            <p className="mt-1 text-lg font-semibold text-rose-800">{formatBRL(totalPayable)}</p>
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div>
             <label>Conta bancária</label>
             <select value={filterBank} onChange={(e) => setFilterBank(e.target.value)}>
@@ -701,14 +737,6 @@ export function CashflowPage() {
                   {b.name}
                 </option>
               ))}
-            </select>
-          </div>
-          <div>
-            <label>Tipo</label>
-            <select value={filterKind} onChange={(e) => setFilterKind(e.target.value as 'ALL' | Kind)}>
-              <option value="ALL">Todos</option>
-              <option value="payable">A pagar</option>
-              <option value="receivable">A receber</option>
             </select>
           </div>
           <div>
@@ -764,7 +792,7 @@ export function CashflowPage() {
                         ? '1/1'
                         : '—'}
                   </td>
-                  <td>{r.status === 'paid' ? 'PAGO' : 'ABERTO'}</td>
+                  <td>{r.status === 'paid' ? (r.kind === 'receivable' ? 'RECEBIDO' : 'PAGO') : 'ABERTO'}</td>
                   <td className="whitespace-nowrap">
                     <div className="flex items-center justify-end gap-2">
                     <button
