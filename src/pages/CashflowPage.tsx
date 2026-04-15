@@ -201,6 +201,57 @@ export function CashflowPage() {
       const newAmount = parseMoney(amount)
       const newKind = formKind
       const newBankId = bankId || null
+      const prevStatus = editing.status
+      const prevKind = editing.kind
+      const prevBank = editing.bank_account_id
+
+      // À vista aberto → parcelado: remove o lançamento único e recria o grupo.
+      if (
+        editing.status === 'open' &&
+        !editing.installment_group_id &&
+        mode === 'parcelado' &&
+        formStatus === 'open'
+      ) {
+        const n = Math.max(1, parseInt(parcelCount, 10) || 1)
+        const each = parseMoney(parcelAmount)
+        const groupId = crypto.randomUUID()
+        const first = new Date(firstDue + 'T12:00:00')
+        const { error: delErr } = await supabase.from('payables_receivables').delete().eq('id', editing.id)
+        if (delErr) {
+          alert(delErr.message)
+          return
+        }
+        const inserts = Array.from({ length: n }, (_, i) => ({
+          user_id: ownerUserId,
+          kind: formKind,
+          description: `${baseDesc} (PARCELA ${i + 1}/${n})`,
+          amount: each,
+          due_date: toISODate(addMonths(first, i)),
+          status: 'open' as const,
+          category_id: categoryId || null,
+          bank_account_id: newBankId,
+          installment_group_id: groupId,
+          installment_number: i + 1,
+          installment_count: n,
+        }))
+        const { error: insErr } = await supabase.from('payables_receivables').insert(inserts)
+        if (insErr) {
+          alert(insErr.message)
+          return
+        }
+        setEditing(null)
+        clearForm()
+        setCreateOpen(false)
+        load()
+        return
+      }
+
+      const nextStatus = mode === 'vista' ? formStatus : editing.status
+      const nextPaidAt =
+        nextStatus === 'paid'
+          ? paidAtEdit || dueDate || editing.paid_at || toISODate(new Date())
+          : null
+
       const { error } = await supabase
         .from('payables_receivables')
         .update({
@@ -210,26 +261,29 @@ export function CashflowPage() {
           due_date: dueDate,
           category_id: categoryId || null,
           bank_account_id: newBankId,
-          ...(editing.status === 'paid'
-            ? { paid_at: paidAtEdit || editing.paid_at || null }
-            : {}),
+          status: nextStatus,
+          paid_at: nextPaidAt,
         })
         .eq('id', editing.id)
       if (error) alert(error.message)
       else {
-        // Se o lançamento já está pago, qualquer alteração de conta/tipo/valor
-        // precisa refletir no saldo bancário imediatamente.
-        if (editing.status === 'paid') {
-          try {
-            const oldSignal = editing.kind === 'payable' ? -1 : 1
+        try {
+          if (prevStatus === 'paid' && nextStatus === 'paid') {
+            const oldSignal = prevKind === 'payable' ? -1 : 1
             const newSignal = newKind === 'payable' ? -1 : 1
             const oldDelta = oldSignal * Number(editing.amount)
             const newDelta = newSignal * Number(newAmount)
-            await applyBankDelta(editing.bank_account_id, -oldDelta)
+            await applyBankDelta(prevBank, -oldDelta)
             await applyBankDelta(newBankId, newDelta)
-          } catch (e) {
-            alert(e instanceof Error ? e.message : 'Erro ao atualizar saldo da conta')
+          } else if (prevStatus === 'open' && nextStatus === 'paid' && newBankId) {
+            const newSignal = newKind === 'payable' ? -1 : 1
+            await applyBankDelta(newBankId, newSignal * Number(newAmount))
+          } else if (prevStatus === 'paid' && nextStatus === 'open' && prevBank) {
+            const oldSignal = prevKind === 'payable' ? -1 : 1
+            await applyBankDelta(prevBank, -oldSignal * Number(editing.amount))
           }
+        } catch (e) {
+          alert(e instanceof Error ? e.message : 'Erro ao atualizar saldo da conta')
         }
         setEditing(null)
         clearForm()
@@ -496,6 +550,12 @@ export function CashflowPage() {
   if (!supabase) return <p className="text-slate-600">Conectando…</p>
 
   const title = 'Movimentos financeiros'
+  const editOpen = editing?.status === 'open'
+  const editLocksKind = !!editing && !editOpen
+  const editLocksMode = !!editing && (!editOpen || !!editing.installment_group_id)
+  const editLocksStatus = mode !== 'vista' || (!!editing && !editOpen)
+  const editParceladoBlockedByPaid =
+    !!editing && editOpen && !editing.installment_group_id && formStatus === 'paid'
 
   return (
     <div className="space-y-8">
@@ -554,7 +614,7 @@ export function CashflowPage() {
                 <button
                   type="button"
                   className={`btn text-sm ${formKind === 'payable' ? 'btn-primary' : 'btn-secondary'}`}
-                  disabled={!!editing}
+                  disabled={editLocksKind}
                   onClick={() => setFormKind('payable')}
                 >
                   CONTA A PAGAR
@@ -562,7 +622,7 @@ export function CashflowPage() {
                 <button
                   type="button"
                   className={`btn text-sm ${formKind === 'receivable' ? 'btn-primary' : 'btn-secondary'}`}
-                  disabled={!!editing}
+                  disabled={editLocksKind}
                   onClick={() => setFormKind('receivable')}
                 >
                   CONTA A RECEBER
@@ -573,8 +633,14 @@ export function CashflowPage() {
                     className="h-9"
                     value={formStatus}
                     onChange={(e) => setFormStatus(e.target.value as 'open' | 'paid')}
-                    disabled={mode !== 'vista' || !!editing}
-                    title={mode !== 'vista' ? 'Status manual somente em lançamento à vista.' : undefined}
+                    disabled={editLocksStatus}
+                    title={
+                      mode !== 'vista'
+                        ? 'Status manual somente em lançamento à vista.'
+                        : editLocksStatus && editing
+                          ? 'Só é possível alterar o status enquanto o lançamento está em aberto.'
+                          : undefined
+                    }
                   >
                     <option value="open">ABERTO</option>
                     <option value="paid">PAGO</option>
@@ -587,15 +653,22 @@ export function CashflowPage() {
                   type="button"
                   className={`btn text-sm ${mode === 'vista' ? 'btn-primary' : 'btn-secondary'}`}
                   onClick={() => setMode('vista')}
-                  disabled={!!editing}
+                  disabled={editLocksMode}
                 >
                   À vista
                 </button>
                 <button
                   type="button"
                   className={`btn text-sm ${mode === 'parcelado' ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => setMode('parcelado')}
-                  disabled={!!editing}
+                  onClick={() => {
+                    setMode('parcelado')
+                    if (editing && editing.status === 'open' && !editing.installment_group_id) {
+                      setParcelAmount(amount)
+                      setParcelCount('12')
+                      setFirstDue(dueDate)
+                    }
+                  }}
+                  disabled={editLocksMode || editParceladoBlockedByPaid}
                 >
                   Parcelado
                 </button>
