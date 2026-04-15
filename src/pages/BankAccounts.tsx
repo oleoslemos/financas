@@ -1,6 +1,6 @@
 import { useUser } from '@clerk/clerk-react'
 import { Pencil, Trash2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { formatBRL, parseMoney } from '../lib/format'
@@ -15,12 +15,19 @@ type Bank = {
   initial_balance: number
   is_active: boolean
 }
+type PrMovement = {
+  bank_account_id: string | null
+  amount: number
+  kind: 'payable' | 'receivable'
+  status: 'open' | 'paid'
+}
 
 export function BankAccounts() {
   const { user } = useUser()
   const supabase = useSupabase()
   const ownerUserId = resolveDataOwnerId(user?.id)
   const [rows, setRows] = useState<Bank[]>([])
+  const [movements, setMovements] = useState<PrMovement[]>([])
   const [loading, setLoading] = useState(true)
   const [form, setForm] = useState({
     name: '',
@@ -35,14 +42,32 @@ export function BankAccounts() {
   async function load() {
     if (!supabase || !ownerUserId) return
     setLoading(true)
-    const { data } = await supabase
-      .from('bank_accounts')
-      .select('*')
-      .eq('user_id', ownerUserId)
-      .order('name')
-    setRows((data as Bank[]) ?? [])
+    const [{ data: accounts }, { data: prs }] = await Promise.all([
+      supabase.from('bank_accounts').select('*').eq('user_id', ownerUserId).order('name'),
+      supabase
+        .from('payables_receivables')
+        .select('bank_account_id, amount, kind, status')
+        .eq('user_id', ownerUserId)
+        .eq('status', 'paid'),
+    ])
+    setRows((accounts as Bank[]) ?? [])
+    setMovements((prs as PrMovement[]) ?? [])
     setLoading(false)
   }
+
+  const currentBalanceByBankId = useMemo(() => {
+    const map = new Map<string, number>()
+    rows.forEach((bank) => {
+      map.set(bank.id, Number(bank.initial_balance ?? 0))
+    })
+    movements.forEach((movement) => {
+      if (!movement.bank_account_id) return
+      const current = map.get(movement.bank_account_id) ?? 0
+      const delta = movement.kind === 'receivable' ? Number(movement.amount) : -Number(movement.amount)
+      map.set(movement.bank_account_id, current + delta)
+    })
+    return map
+  }, [rows, movements])
 
   useEffect(() => {
     load()
@@ -176,6 +201,7 @@ export function BankAccounts() {
                 <th>Agência</th>
                 <th>Número da conta</th>
                 <th>Saldo inicial</th>
+                <th>Saldo atual</th>
                 <th>Ativa</th>
                 <th></th>
               </tr>
@@ -188,6 +214,7 @@ export function BankAccounts() {
                   <td>{b.agency ?? '—'}</td>
                   <td>{b.account_number ?? '—'}</td>
                   <td>{formatBRL(Number(b.initial_balance))}</td>
+                  <td>{formatBRL(currentBalanceByBankId.get(b.id) ?? 0)}</td>
                   <td>{b.is_active ? 'Sim' : 'Não'}</td>
                   <td className="whitespace-nowrap">
                     <div className="flex items-center justify-end gap-2">

@@ -97,25 +97,6 @@ export function CashflowPage() {
   const [filterFrom, setFilterFrom] = useState(monthRange.from)
   const [filterTo, setFilterTo] = useState(monthRange.to)
 
-  async function applyBankDelta(bankId: string | null, delta: number) {
-    if (!supabase || !ownerUserId || !bankId || delta === 0) return
-    const { data: bank, error: bankErr } = await supabase
-      .from('bank_accounts')
-      .select('initial_balance')
-      .eq('id', bankId)
-      .eq('user_id', ownerUserId)
-      .maybeSingle()
-    if (bankErr) throw new Error(bankErr.message)
-    if (!bank || !('initial_balance' in bank)) return
-    const current = Number((bank as { initial_balance: number }).initial_balance)
-    const { error: upErr } = await supabase
-      .from('bank_accounts')
-      .update({ initial_balance: current + delta })
-      .eq('id', bankId)
-      .eq('user_id', ownerUserId)
-    if (upErr) throw new Error(upErr.message)
-  }
-
   async function load() {
     if (!supabase || !ownerUserId) return
     setLoading(true)
@@ -165,13 +146,16 @@ export function CashflowPage() {
       }),
     [rows, filterKind, filterStatus, filterBank, filterFrom, filterTo],
   )
-  const currentBalance = useMemo(
-    () =>
-      filterBank
-        ? Number(banks.find((bank) => bank.id === filterBank)?.initial_balance ?? 0)
-        : banks.reduce((sum, bank) => sum + Number(bank.initial_balance ?? 0), 0),
-    [banks, filterBank],
-  )
+  const currentBalance = useMemo(() => {
+    const selectedBankIds = filterBank ? new Set([filterBank]) : new Set(banks.map((bank) => bank.id))
+    const openingBalance = banks
+      .filter((bank) => selectedBankIds.has(bank.id))
+      .reduce((sum, bank) => sum + Number(bank.initial_balance ?? 0), 0)
+    const settledDelta = rows
+      .filter((row) => row.status === 'paid' && !!row.bank_account_id && selectedBankIds.has(row.bank_account_id))
+      .reduce((sum, row) => sum + (row.kind === 'receivable' ? Number(row.amount) : -Number(row.amount)), 0)
+    return openingBalance + settledDelta
+  }, [banks, filterBank, rows])
   const totalReceivable = useMemo(
     () =>
       filteredRows
@@ -212,11 +196,7 @@ export function CashflowPage() {
 
     if (editing) {
       const newAmount = parseMoney(amount)
-      const newKind = formKind
       const newBankId = bankId || null
-      const prevStatus = editing.status
-      const prevKind = editing.kind
-      const prevBank = editing.bank_account_id
 
       // À vista aberto → parcelado: remove o lançamento único e recria o grupo.
       if (
@@ -280,24 +260,7 @@ export function CashflowPage() {
         .eq('id', editing.id)
       if (error) alert(error.message)
       else {
-        try {
-          if (prevStatus === 'paid' && nextStatus === 'paid') {
-            const oldSignal = prevKind === 'payable' ? -1 : 1
-            const newSignal = newKind === 'payable' ? -1 : 1
-            const oldDelta = oldSignal * Number(editing.amount)
-            const newDelta = newSignal * Number(newAmount)
-            await applyBankDelta(prevBank, -oldDelta)
-            await applyBankDelta(newBankId, newDelta)
-          } else if (prevStatus === 'open' && nextStatus === 'paid' && newBankId) {
-            const newSignal = newKind === 'payable' ? -1 : 1
-            await applyBankDelta(newBankId, newSignal * Number(newAmount))
-          } else if (prevStatus === 'paid' && nextStatus === 'open' && prevBank) {
-            const oldSignal = prevKind === 'payable' ? -1 : 1
-            await applyBankDelta(prevBank, -oldSignal * Number(editing.amount))
-          }
-        } catch (e) {
-          alert(e instanceof Error ? e.message : 'Erro ao atualizar saldo da conta')
-        }
+        // O saldo atual é derivado dos lançamentos quitados; não mutamos saldo da conta aqui.
         setEditing(null)
         clearForm()
         load()
@@ -322,15 +285,6 @@ export function CashflowPage() {
       })
       if (error) alert(error.message)
       else {
-        if (formStatus === 'paid' && bankId) {
-          const signal = formKind === 'payable' ? -1 : 1
-          const delta = signal * parseMoney(amount)
-          try {
-            await applyBankDelta(bankId, delta)
-          } catch (e) {
-            alert(e instanceof Error ? e.message : 'Erro ao atualizar saldo da conta')
-          }
-        }
         clearForm()
         setCreateOpen(false)
         load()
@@ -409,16 +363,6 @@ export function CashflowPage() {
       alert(error.message)
       return
     }
-    if (r.bank_account_id) {
-      const amount = Number(r.amount)
-      const signal = r.kind === 'payable' ? -1 : 1
-      const delta = signal * amount
-      try {
-        await applyBankDelta(r.bank_account_id, delta)
-      } catch (e) {
-        alert(e instanceof Error ? e.message : 'Erro ao atualizar saldo da conta')
-      }
-    }
     setPayModalRow(null)
     load()
   }
@@ -431,16 +375,6 @@ export function CashflowPage() {
       .eq('id', r.id)
     if (error) alert(error.message)
     else {
-      if (r.bank_account_id) {
-        const amount = Number(r.amount)
-        const signal = r.kind === 'payable' ? -1 : 1
-        const delta = -signal * amount
-        try {
-          await applyBankDelta(r.bank_account_id, delta)
-        } catch (e) {
-          alert(e instanceof Error ? e.message : 'Erro ao atualizar saldo da conta')
-        }
-      }
       load()
     }
   }
