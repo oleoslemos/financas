@@ -1,6 +1,6 @@
 import { useUser } from '@clerk/clerk-react'
 import { Copy, Pencil, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
@@ -60,6 +60,24 @@ function formatComfortDims(wCm: number, lCm: number, hCm: number) {
   return `${formatMetersMaskFromCmDigits(String(wCm))} x ${formatMetersMaskFromCmDigits(String(lCm))} x ${formatCentimetersMaskFromCmDigits(String(hCm))}`
 }
 
+function rowIsComfort(r: Produto) {
+  return r.category === COMFORT_PLATFORM_CATEGORY
+}
+
+function rowNameModel(r: Produto) {
+  return rowIsComfort(r) ? r.model || r.name : r.name
+}
+
+function rowDimsDisplay(r: Produto) {
+  return rowIsComfort(r) && r.dim_width_cm != null && r.dim_length_cm != null && r.dim_height_cm != null
+    ? formatComfortDims(Number(r.dim_width_cm), Number(r.dim_length_cm), Number(r.dim_height_cm))
+    : '—'
+}
+
+function rowLineDisplay(r: Produto) {
+  return rowIsComfort(r) ? r.product_line || '' : ''
+}
+
 const productCategories = [
   'PLATAFORMA DE DESCANSO',
   'CABECEIRAS',
@@ -105,6 +123,11 @@ export function BemAvivProdutosPage() {
   const [filterCategory, setFilterCategory] = useState<string>('TODOS')
   const [form, setForm] = useState(emptyForm)
   const [duplicateBase, setDuplicateBase] = useState<DuplicateValidationBase | null>(null)
+  const [filterNameModel, setFilterNameModel] = useState('')
+  const [filterLine, setFilterLine] = useState('')
+  const [filterDimension, setFilterDimension] = useState('')
+  const [filterTable, setFilterTable] = useState('')
+  const formRef = useRef<HTMLFormElement>(null)
 
   const isComfort = form.category === COMFORT_PLATFORM_CATEGORY
 
@@ -133,12 +156,29 @@ export function BemAvivProdutosPage() {
     else setFilterCategory('TODOS')
   }, [location.pathname])
 
-  const filtered = useMemo(
-    () => rows.filter((r) => (filterCategory === 'TODOS' ? true : r.category === filterCategory)),
-    [rows, filterCategory],
-  )
-
   const tableNameById = useMemo(() => Object.fromEntries(priceTables.map((t) => [t.id, t.name])), [priceTables])
+
+  const filtered = useMemo(() => {
+    const qName = filterNameModel.trim().toLowerCase()
+    const qLine = filterLine.trim().toLowerCase()
+    const qDim = filterDimension.trim().toLowerCase()
+    const qTable = filterTable.trim().toLowerCase()
+
+    return rows.filter((r) => {
+      if (filterCategory !== 'TODOS' && r.category !== filterCategory) return false
+
+      const nameModel = rowNameModel(r).toLowerCase()
+      const line = rowLineDisplay(r).toLowerCase()
+      const dims = rowDimsDisplay(r).toLowerCase()
+      const tableLabel = (r.price_table_id ? tableNameById[r.price_table_id] ?? '' : '').toLowerCase()
+
+      if (qName && !nameModel.includes(qName)) return false
+      if (qLine && !line.includes(qLine)) return false
+      if (qDim && !dims.includes(qDim)) return false
+      if (qTable && !tableLabel.includes(qTable)) return false
+      return true
+    })
+  }, [rows, filterCategory, filterNameModel, filterLine, filterDimension, filterTable, tableNameById])
 
   async function syncPriceTableItem(args: {
     productId: string
@@ -377,21 +417,36 @@ export function BemAvivProdutosPage() {
     })
   }
 
+  function scrollToAddProductForm() {
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    window.setTimeout(() => {
+      const el = formRef.current?.querySelector<HTMLElement>('select, input')
+      el?.focus()
+    }, 350)
+  }
+
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-semibold">PRODUTOS GERAL</h2>
-      <div className="flex flex-wrap gap-2">
-        <button className={`btn ${filterCategory === 'TODOS' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setFilterCategory('TODOS')} type="button">
-          TODOS
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1 space-y-3">
+          <h2 className="text-2xl font-semibold">PRODUTOS GERAL</h2>
+          <div className="flex flex-wrap gap-2">
+            <button className={`btn ${filterCategory === 'TODOS' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setFilterCategory('TODOS')} type="button">
+              TODOS
+            </button>
+            {productCategories.map((c) => (
+              <button key={c} className={`btn ${filterCategory === c ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setFilterCategory(c)} type="button">
+                {c}
+              </button>
+            ))}
+          </div>
+        </div>
+        <button className="btn btn-primary shrink-0 self-start sm:self-auto" type="button" onClick={scrollToAddProductForm}>
+          ADICIONAR PRODUTO
         </button>
-        {productCategories.map((c) => (
-          <button key={c} className={`btn ${filterCategory === c ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setFilterCategory(c)} type="button">
-            {c}
-          </button>
-        ))}
       </div>
 
-      <form onSubmit={submit} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-12 sm:gap-4">
+      <form ref={formRef} onSubmit={submit} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-12 sm:gap-4">
         <div className="sm:col-span-4">
           <label>CATEGORIA</label>
           <select
@@ -525,26 +580,64 @@ export function BemAvivProdutosPage() {
             <thead>
               <tr>
                 <th>CATEGORIA</th>
-                <th>NOME / MODELO</th>
                 <th>LINHA</th>
-                <th>DIM</th>
+                <th>NOME / MODELO</th>
+                <th>DIMENSÃO</th>
                 <th>TABELA</th>
                 <th>PREÇO</th>
                 <th></th>
               </tr>
+              <tr>
+                <th className="align-top" />
+                <th className="align-top">
+                  <input
+                    type="search"
+                    placeholder="FILTRAR"
+                    value={filterLine}
+                    onChange={(e) => setFilterLine(e.target.value)}
+                    aria-label="Filtrar por linha"
+                  />
+                </th>
+                <th className="align-top">
+                  <input
+                    type="search"
+                    placeholder="FILTRAR"
+                    value={filterNameModel}
+                    onChange={(e) => setFilterNameModel(e.target.value)}
+                    aria-label="Filtrar por nome ou modelo"
+                  />
+                </th>
+                <th className="align-top">
+                  <input
+                    type="search"
+                    placeholder="FILTRAR"
+                    value={filterDimension}
+                    onChange={(e) => setFilterDimension(e.target.value)}
+                    aria-label="Filtrar por dimensão"
+                  />
+                </th>
+                <th className="align-top">
+                  <input
+                    type="search"
+                    placeholder="FILTRAR"
+                    value={filterTable}
+                    onChange={(e) => setFilterTable(e.target.value)}
+                    aria-label="Filtrar por tabela de preço"
+                  />
+                </th>
+                <th className="align-top" />
+                <th className="align-top" />
+              </tr>
             </thead>
             <tbody>
               {filtered.map((r) => {
-                const comfortRow = r.category === COMFORT_PLATFORM_CATEGORY
-                const dims =
-                  comfortRow && r.dim_width_cm != null && r.dim_length_cm != null && r.dim_height_cm != null
-                    ? formatComfortDims(Number(r.dim_width_cm), Number(r.dim_length_cm), Number(r.dim_height_cm))
-                    : '—'
+                const comfortRow = rowIsComfort(r)
+                const dims = rowDimsDisplay(r)
                 return (
                   <tr key={r.id}>
                     <td>{r.category}</td>
-                    <td>{comfortRow ? r.model || r.name : r.name}</td>
                     <td>{comfortRow ? r.product_line || '—' : '—'}</td>
+                    <td>{rowNameModel(r)}</td>
                     <td>{dims}</td>
                     <td>{r.price_table_id ? tableNameById[r.price_table_id] ?? '—' : '—'}</td>
                     <td>{r.price == null ? '—' : formatBRL(Number(r.price))}</td>
