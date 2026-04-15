@@ -29,6 +29,30 @@ type PriceTableOpt = { id: string; name: string }
 
 type PriceTableItemRow = { id: string; product_id: string; price_table_id: string }
 
+function onlyDigits(v: string) {
+  return v.replace(/\D/g, '')
+}
+
+function formatTwoDecimalsFromDigits(digits: string) {
+  if (!digits) return ''
+  const n = Number(digits) / 100
+  return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+function formatMetersMaskFromCmDigits(digits: string) {
+  const base = formatTwoDecimalsFromDigits(digits)
+  return base ? `${base}m` : ''
+}
+
+function formatCentimetersMaskFromCmDigits(digits: string) {
+  const base = formatTwoDecimalsFromDigits(digits)
+  return base ? `${base}cm` : ''
+}
+
+function formatComfortDims(wCm: number, lCm: number, hCm: number) {
+  return `${formatMetersMaskFromCmDigits(String(wCm))} x ${formatMetersMaskFromCmDigits(String(lCm))} x ${formatCentimetersMaskFromCmDigits(String(hCm))}`
+}
+
 const productCategories = [
   'PLATAFORMA DE DESCANSO',
   'CABECEIRAS',
@@ -43,7 +67,7 @@ function buildComfortPriceLineDescription(
   l: number,
   h: number,
 ): string {
-  return `${toUpperTrim(line)} ${toUpperTrim(model)} ${w} X ${l} X ${h} CM`
+  return `${toUpperTrim(line)} ${toUpperTrim(model)} ${formatComfortDims(w, l, h).toUpperCase()}`
 }
 
 function emptyForm() {
@@ -347,30 +371,33 @@ export function BemAvivProdutosPage() {
               </select>
             </div>
             <div className="sm:col-span-3">
-              <label>LARGURA (CM)</label>
+              <label>LARGURA</label>
               <input
                 inputMode="numeric"
                 required
-                value={form.dim_width_cm}
-                onChange={(e) => setForm({ ...form, dim_width_cm: e.target.value.replace(/\D/g, '') })}
+                placeholder="0,78m"
+                value={formatMetersMaskFromCmDigits(form.dim_width_cm)}
+                onChange={(e) => setForm({ ...form, dim_width_cm: onlyDigits(e.target.value) })}
               />
             </div>
             <div className="sm:col-span-3">
-              <label>COMPRIMENTO (CM)</label>
+              <label>COMPRIMENTO</label>
               <input
                 inputMode="numeric"
                 required
-                value={form.dim_length_cm}
-                onChange={(e) => setForm({ ...form, dim_length_cm: e.target.value.replace(/\D/g, '') })}
+                placeholder="1,88m"
+                value={formatMetersMaskFromCmDigits(form.dim_length_cm)}
+                onChange={(e) => setForm({ ...form, dim_length_cm: onlyDigits(e.target.value) })}
               />
             </div>
             <div className="sm:col-span-3">
-              <label>ALTURA (CM)</label>
+              <label>ALTURA</label>
               <input
                 inputMode="numeric"
                 required
-                value={form.dim_height_cm}
-                onChange={(e) => setForm({ ...form, dim_height_cm: e.target.value.replace(/\D/g, '') })}
+                placeholder="0,41cm"
+                value={formatCentimetersMaskFromCmDigits(form.dim_height_cm)}
+                onChange={(e) => setForm({ ...form, dim_height_cm: onlyDigits(e.target.value) })}
               />
             </div>
             <div className="sm:col-span-3">
@@ -440,7 +467,7 @@ export function BemAvivProdutosPage() {
                 <th>CATEGORIA</th>
                 <th>NOME / MODELO</th>
                 <th>LINHA</th>
-                <th>DIM (CM)</th>
+                <th>DIM</th>
                 <th>TABELA</th>
                 <th>PREÇO</th>
                 <th></th>
@@ -451,7 +478,7 @@ export function BemAvivProdutosPage() {
                 const comfortRow = r.category === COMFORT_PLATFORM_CATEGORY
                 const dims =
                   comfortRow && r.dim_width_cm != null && r.dim_length_cm != null && r.dim_height_cm != null
-                    ? `${r.dim_width_cm} × ${r.dim_length_cm} × ${r.dim_height_cm}`
+                    ? formatComfortDims(Number(r.dim_width_cm), Number(r.dim_length_cm), Number(r.dim_height_cm))
                     : '—'
                 return (
                   <tr key={r.id}>
