@@ -105,6 +105,30 @@ async function getGoogleAccessToken(env) {
   return json?.access_token || null
 }
 
+async function loadGoogleConfigForUser(supabase, env, integrationUserId) {
+  const fallback = {
+    refreshToken: env.GOOGLE_OAUTH_REFRESH_TOKEN || null,
+    tasklistId: env.GOOGLE_TASKLIST_ID || null,
+    calendarId: env.GOOGLE_CALENDAR_ID || 'primary',
+    source: 'env',
+  }
+  if (!integrationUserId) return fallback
+
+  const { data, error } = await supabase
+    .from('google_user_sync_credentials')
+    .select('refresh_token, tasklist_id, calendar_id, is_active')
+    .eq('user_id', integrationUserId)
+    .maybeSingle()
+
+  if (error || !data || data.is_active === false) return fallback
+  return {
+    refreshToken: data.refresh_token || fallback.refreshToken,
+    tasklistId: data.tasklist_id || fallback.tasklistId,
+    calendarId: data.calendar_id || fallback.calendarId,
+    source: 'table',
+  }
+}
+
 async function googleApi(path, accessToken, options = {}) {
   const url = `https://tasks.googleapis.com/tasks/v1${path}`
   return fetchJson(url, {
@@ -241,7 +265,7 @@ async function syncGoogle(supabase, localRows, env) {
       const existsMirror = localRows.some((r) => r.google_external_id === remote.id)
       if (existsLegacy || existsMirror) continue
       const { error } = await supabase.from('lsh_tasks').insert({
-        user_id: env.SYNC_OWNER_USER_ID,
+        user_id: env.TASK_OWNER_USER_ID,
         title: String(remote.title || 'SEM TITULO').toUpperCase(),
         details: String(remote.notes || '').toUpperCase() || null,
         status: mapGoogleStatusToLocal(remote.status),
@@ -326,7 +350,7 @@ async function syncLark(supabase, localRows, env) {
     const exists = localRows.some((r) => r.external_id === guid && r.source === 'LARK_TASK')
     if (exists) continue
     const { error } = await supabase.from('lsh_tasks').insert({
-      user_id: env.SYNC_OWNER_USER_ID,
+      user_id: env.TASK_OWNER_USER_ID,
       title: String(remote.summary || 'SEM TITULO').toUpperCase(),
       details: String(remote.description || '').toUpperCase() || null,
       status: mapLarkStatusToLocal(remote.status || remote.completed),
@@ -390,7 +414,7 @@ async function syncGoogleCalendar(supabase, env) {
     if (!extId || !startAt || !endAt) continue
 
     const payload = {
-      user_id: env.SYNC_OWNER_USER_ID,
+      user_id: env.SYNC_USER_ID,
       source: 'GOOGLE_CALENDAR',
       calendar_id: env.GOOGLE_CALENDAR_ID,
       external_id: extId,
@@ -413,10 +437,10 @@ async function syncGoogleCalendar(supabase, env) {
 }
 
 export async function runTasksSync(options = {}) {
-  const { loadDotEnv = true, logger = console } = options
+  const { loadDotEnv = true, logger = console, targetUserId, taskOwnerUserId } = options
   if (loadDotEnv) loadEnvFromFile('.env')
 
-  const env = {
+  const baseEnv = {
     SUPABASE_URL: process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     GOOGLE_TASKLIST_ID: process.env.GOOGLE_TASKLIST_ID || process.env.GWS_TASKLIST_ID,
@@ -430,15 +454,28 @@ export async function runTasksSync(options = {}) {
     SYNC_OWNER_USER_ID: process.env.SYNC_OWNER_USER_ID,
   }
 
-  must(env.SUPABASE_URL, 'SUPABASE_URL ou VITE_SUPABASE_URL')
-  must(env.SUPABASE_SERVICE_ROLE_KEY, 'SUPABASE_SERVICE_ROLE_KEY')
-  must(env.SYNC_OWNER_USER_ID, 'SYNC_OWNER_USER_ID')
+  must(baseEnv.SUPABASE_URL, 'SUPABASE_URL ou VITE_SUPABASE_URL')
+  must(baseEnv.SUPABASE_SERVICE_ROLE_KEY, 'SUPABASE_SERVICE_ROLE_KEY')
 
-  const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY)
+  const supabase = createClient(baseEnv.SUPABASE_URL, baseEnv.SUPABASE_SERVICE_ROLE_KEY)
+  const syncUserId = targetUserId || baseEnv.SYNC_OWNER_USER_ID
+  const ownerUserId = taskOwnerUserId || baseEnv.SYNC_OWNER_USER_ID || syncUserId
+  must(syncUserId, 'targetUserId ou SYNC_OWNER_USER_ID')
+  must(ownerUserId, 'taskOwnerUserId ou SYNC_OWNER_USER_ID')
+
+  const googleCfg = await loadGoogleConfigForUser(supabase, baseEnv, syncUserId)
+  const env = {
+    ...baseEnv,
+    SYNC_USER_ID: syncUserId,
+    TASK_OWNER_USER_ID: ownerUserId,
+    GOOGLE_OAUTH_REFRESH_TOKEN: googleCfg.refreshToken,
+    GOOGLE_TASKLIST_ID: googleCfg.tasklistId || baseEnv.GOOGLE_TASKLIST_ID,
+    GOOGLE_CALENDAR_ID: googleCfg.calendarId || baseEnv.GOOGLE_CALENDAR_ID,
+  }
   const { data: localRows, error } = await supabase
     .from('lsh_tasks')
     .select('id, title, details, status, priority, due_date, source, external_id, google_sync_enabled, google_external_id, lark_sync_enabled')
-    .eq('user_id', env.SYNC_OWNER_USER_ID)
+    .eq('user_id', env.TASK_OWNER_USER_ID)
 
   if (error) throw error
 
@@ -451,6 +488,9 @@ export async function runTasksSync(options = {}) {
 
   return {
     ok: true,
+    sync_user_id: env.SYNC_USER_ID,
+    task_owner_user_id: env.TASK_OWNER_USER_ID,
+    google_config_source: googleCfg.source,
     google,
     lark,
     calendar,

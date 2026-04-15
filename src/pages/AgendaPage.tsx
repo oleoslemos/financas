@@ -41,7 +41,8 @@ function formatDateTime(value: string) {
 export function AgendaPage() {
   const { user } = useUser()
   const supabase = useSupabase()
-  const ownerUserId = resolveDataOwnerId(user?.id)
+  const currentUserId = user?.id ?? null
+  const ownerUserId = resolveDataOwnerId(currentUserId)
 
   const [events, setEvents] = useState<CalendarEventRow[]>([])
   const [tasks, setTasks] = useState<PendingTaskRow[]>([])
@@ -52,7 +53,7 @@ export function AgendaPage() {
   const syncToken = import.meta.env.VITE_SYNC_TASKS_WEBHOOK_TOKEN?.trim() || ''
 
   const loadAgenda = useCallback(async () => {
-    if (!supabase || !ownerUserId) return
+    if (!supabase || !ownerUserId || !currentUserId) return
     setLoading(true)
 
     const startOfDay = new Date()
@@ -64,7 +65,7 @@ export function AgendaPage() {
       supabase
         .from('lsh_calendar_events')
         .select('id, summary, details, location, start_at, end_at, status')
-        .eq('user_id', ownerUserId)
+        .eq('user_id', currentUserId)
         .gte('start_at', startOfDay.toISOString())
         .lte('start_at', endOfDay.toISOString())
         .neq('status', 'cancelled')
@@ -83,7 +84,7 @@ export function AgendaPage() {
     setEvents((eventsResp.data as CalendarEventRow[]) ?? [])
     setTasks((tasksResp.data as PendingTaskRow[]) ?? [])
     setLoading(false)
-  }, [supabase, ownerUserId])
+  }, [supabase, ownerUserId, currentUserId])
 
   async function requestSyncNow() {
     if (!syncEndpoint) return
@@ -98,7 +99,9 @@ export function AgendaPage() {
         },
         body: JSON.stringify({
           source: 'agenda-page',
-          userId: ownerUserId,
+          userId: currentUserId,
+          integrationUserId: currentUserId,
+          taskOwnerUserId: ownerUserId,
         }),
       })
       const text = await response.text()

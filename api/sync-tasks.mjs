@@ -29,10 +29,7 @@ export default async function handler(req, res) {
     }
   }
 
-  const required = [
-    'SUPABASE_SERVICE_ROLE_KEY',
-    'SYNC_OWNER_USER_ID',
-  ]
+  const required = ['SUPABASE_SERVICE_ROLE_KEY']
   const missing = required.filter((k) => !process.env[k] || !String(process.env[k]).trim())
   if (missing.length) {
     return json(res, 500, {
@@ -43,7 +40,13 @@ export default async function handler(req, res) {
   }
 
   try {
-    const result = await runTasksSync({ loadDotEnv: false, logger: console })
+    const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {}
+    const result = await runTasksSync({
+      loadDotEnv: false,
+      logger: console,
+      targetUserId: body.integrationUserId || body.userId,
+      taskOwnerUserId: body.taskOwnerUserId,
+    })
     return json(res, 200, result)
   } catch (err) {
     return json(res, 500, {
