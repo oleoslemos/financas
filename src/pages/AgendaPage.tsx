@@ -101,7 +101,18 @@ export function AgendaPage() {
           userId: ownerUserId,
         }),
       })
-      if (!response.ok) throw new Error(`Falha HTTP ${response.status}`)
+      const text = await response.text()
+      const payload = text ? (() => {
+        try {
+          return JSON.parse(text)
+        } catch {
+          return { raw: text }
+        }
+      })() : null
+      if (!response.ok) {
+        const msg = payload?.error ? String(payload.error) : `Falha HTTP ${response.status}`
+        throw new Error(msg)
+      }
       await loadAgenda()
       setSyncMessage('Sincronização concluída com sucesso.')
     } catch (err) {
@@ -181,7 +192,7 @@ export function AgendaPage() {
         <article className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
             <CalendarDays size={16} className="text-indigo-600" />
-            AGENDA (LADO ESQUERDO)
+            AGENDA
           </h3>
           {loading ? (
             <p className="flex items-center gap-2 p-2 text-slate-500">
@@ -211,7 +222,7 @@ export function AgendaPage() {
         <article className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
             <CheckCircle2 size={16} className="text-amber-600" />
-            TAREFAS (LADO DIREITO)
+            TAREFAS
           </h3>
           {loading ? (
             <p className="flex items-center gap-2 p-2 text-slate-500">

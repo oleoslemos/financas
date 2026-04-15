@@ -29,6 +29,19 @@ export default async function handler(req, res) {
     }
   }
 
+  const required = [
+    'SUPABASE_SERVICE_ROLE_KEY',
+    'SYNC_OWNER_USER_ID',
+  ]
+  const missing = required.filter((k) => !process.env[k] || !String(process.env[k]).trim())
+  if (missing.length) {
+    return json(res, 500, {
+      ok: false,
+      error: `Variáveis obrigatórias ausentes na Vercel: ${missing.join(', ')}`,
+      missing,
+    })
+  }
+
   try {
     const result = await runTasksSync({ loadDotEnv: false, logger: console })
     return json(res, 200, result)

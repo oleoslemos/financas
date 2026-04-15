@@ -171,7 +171,11 @@ async function syncGoogle(supabase, localRows, env) {
     }
   }
 
-  const autoImport = env.GOOGLE_TASKS_AUTO_IMPORT === 'true' || env.GOOGLE_TASKS_AUTO_IMPORT === '1'
+  const autoImportRaw = String(env.GOOGLE_TASKS_AUTO_IMPORT ?? '').trim().toLowerCase()
+  const autoImport =
+    autoImportRaw === ''
+      ? true
+      : autoImportRaw === 'true' || autoImportRaw === '1' || autoImportRaw === 'yes' || autoImportRaw === 'y'
 
   const remoteResp = await googleApi(
     `/lists/${encodeURIComponent(env.GOOGLE_TASKLIST_ID)}/tasks?showCompleted=true&showHidden=true&maxResults=100`,
