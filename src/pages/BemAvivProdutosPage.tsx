@@ -1,5 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
-import { ArrowDown, ArrowUp, Copy, Pencil, Trash2 } from 'lucide-react'
+import { Copy, Pencil, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
@@ -78,6 +78,11 @@ function rowLineDisplay(r: Produto) {
   return rowIsComfort(r) ? r.product_line || '' : ''
 }
 
+function rowComplementDisplay(r: Produto) {
+  const d = r.description?.trim()
+  return d ? d : '—'
+}
+
 /** Chave para ordenar por dimensão física (largura, comprimento, altura em cm). */
 function rowDimSortKey(r: Produto): [number, number, number] | null {
   if (!rowIsComfort(r)) return null
@@ -92,6 +97,16 @@ function compareDimKeys(a: [number, number, number] | null, b: [number, number, 
   if (a[0] !== b[0]) return a[0] - b[0]
   if (a[1] !== b[1]) return a[1] - b[1]
   return a[2] - b[2]
+}
+
+/** LINHA asc: vazio por último para agrupar produtos com linha definida. */
+function compareLineAsc(a: string, b: string): number {
+  const ae = !a.trim()
+  const be = !b.trim()
+  if (ae && be) return 0
+  if (ae) return 1
+  if (be) return -1
+  return a.localeCompare(b, 'pt-BR', { sensitivity: 'base' })
 }
 
 const productCategories = [
@@ -144,7 +159,6 @@ export function BemAvivProdutosPage() {
   const [filterDimension, setFilterDimension] = useState('')
   const [filterTable, setFilterTable] = useState('')
   const [showForm, setShowForm] = useState(false)
-  const [dimSort, setDimSort] = useState<'none' | 'asc' | 'desc'>('none')
   const formRef = useRef<HTMLFormElement>(null)
 
   const isComfort = form.category === COMFORT_PLATFORM_CATEGORY
@@ -176,6 +190,35 @@ export function BemAvivProdutosPage() {
 
   const tableNameById = useMemo(() => Object.fromEntries(priceTables.map((t) => [t.id, t.name])), [priceTables])
 
+  const rowsForFilterOptions = useMemo(
+    () => rows.filter((r) => (filterCategory === 'TODOS' ? true : r.category === filterCategory)),
+    [rows, filterCategory],
+  )
+
+  const { filterLineOptions, filterNameModelOptions, filterDimensionOptions, filterTableOptions } = useMemo(() => {
+    const lines = new Set<string>()
+    const names = new Set<string>()
+    const dims = new Set<string>()
+    const tables = new Set<string>()
+    for (const r of rowsForFilterOptions) {
+      const line = rowLineDisplay(r).trim()
+      if (line) lines.add(line)
+      const nm = rowNameModel(r).trim()
+      if (nm) names.add(nm)
+      const dim = rowDimsDisplay(r)
+      if (dim !== '—') dims.add(dim)
+      const tbl = r.price_table_id ? tableNameById[r.price_table_id]?.trim() ?? '' : ''
+      if (tbl) tables.add(tbl)
+    }
+    const sortPt = (a: string, b: string) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' })
+    return {
+      filterLineOptions: [...lines].sort(sortPt),
+      filterNameModelOptions: [...names].sort(sortPt),
+      filterDimensionOptions: [...dims].sort(sortPt),
+      filterTableOptions: [...tables].sort(sortPt),
+    }
+  }, [rowsForFilterOptions, tableNameById])
+
   const filtered = useMemo(() => {
     const qName = filterNameModel.trim().toLowerCase()
     const qLine = filterLine.trim().toLowerCase()
@@ -199,20 +242,18 @@ export function BemAvivProdutosPage() {
   }, [rows, filterCategory, filterNameModel, filterLine, filterDimension, filterTable, tableNameById])
 
   const sortedDisplayed = useMemo(() => {
-    if (dimSort === 'none') return filtered
     const arr = [...filtered]
-    const dir = dimSort === 'asc' ? 1 : -1
     arr.sort((r1, r2) => {
-      const cmp = compareDimKeys(rowDimSortKey(r1), rowDimSortKey(r2)) * dir
+      let cmp = compareLineAsc(rowLineDisplay(r1), rowLineDisplay(r2))
       if (cmp !== 0) return cmp
-      return rowNameModel(r1).localeCompare(rowNameModel(r2), 'pt-BR')
+      cmp = rowNameModel(r1).localeCompare(rowNameModel(r2), 'pt-BR', { sensitivity: 'base' })
+      if (cmp !== 0) return cmp
+      cmp = compareDimKeys(rowDimSortKey(r1), rowDimSortKey(r2))
+      if (cmp !== 0) return cmp
+      return r1.id.localeCompare(r2.id)
     })
     return arr
-  }, [filtered, dimSort])
-
-  function cycleDimSort() {
-    setDimSort((s) => (s === 'none' ? 'asc' : s === 'asc' ? 'desc' : 'none'))
-  }
+  }, [filtered])
 
   async function syncPriceTableItem(args: {
     productId: string
@@ -587,7 +628,7 @@ export function BemAvivProdutosPage() {
               <input required value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} />
             </div>
             <div className="sm:col-span-6">
-              <label>DESCRIÇÃO (OPCIONAL)</label>
+              <label>COMPLEMENTO</label>
               <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
             </div>
           </>
@@ -602,7 +643,7 @@ export function BemAvivProdutosPage() {
               <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             </div>
             <div className="sm:col-span-12">
-              <label>DESCRIÇÃO</label>
+              <label>COMPLEMENTO</label>
               <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
             </div>
           </>
@@ -625,44 +666,76 @@ export function BemAvivProdutosPage() {
 
       <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-12">
         <div className="sm:col-span-3">
-          <label>FILTRAR LINHA</label>
+          <label htmlFor="bem-aviv-filter-line">FILTRAR LINHA</label>
           <input
-            type="search"
-            placeholder="FILTRAR"
+            id="bem-aviv-filter-line"
+            type="text"
+            list="bem-aviv-filter-line-dl"
+            placeholder="DIGITE OU SELECIONE"
             value={filterLine}
             onChange={(e) => setFilterLine(e.target.value)}
+            autoComplete="off"
             aria-label="Filtrar por linha"
           />
+          <datalist id="bem-aviv-filter-line-dl">
+            {filterLineOptions.map((opt) => (
+              <option key={opt} value={opt} />
+            ))}
+          </datalist>
         </div>
         <div className="sm:col-span-3">
-          <label>FILTRAR NOME / MODELO</label>
+          <label htmlFor="bem-aviv-filter-name">FILTRAR NOME / MODELO</label>
           <input
-            type="search"
-            placeholder="FILTRAR"
+            id="bem-aviv-filter-name"
+            type="text"
+            list="bem-aviv-filter-name-dl"
+            placeholder="DIGITE OU SELECIONE"
             value={filterNameModel}
             onChange={(e) => setFilterNameModel(e.target.value)}
+            autoComplete="off"
             aria-label="Filtrar por nome ou modelo"
           />
+          <datalist id="bem-aviv-filter-name-dl">
+            {filterNameModelOptions.map((opt) => (
+              <option key={opt} value={opt} />
+            ))}
+          </datalist>
         </div>
         <div className="sm:col-span-3">
-          <label>FILTRAR DIMENSÃO</label>
+          <label htmlFor="bem-aviv-filter-dim">FILTRAR DIMENSÃO</label>
           <input
-            type="search"
-            placeholder="FILTRAR"
+            id="bem-aviv-filter-dim"
+            type="text"
+            list="bem-aviv-filter-dim-dl"
+            placeholder="DIGITE OU SELECIONE"
             value={filterDimension}
             onChange={(e) => setFilterDimension(e.target.value)}
+            autoComplete="off"
             aria-label="Filtrar por dimensão"
           />
+          <datalist id="bem-aviv-filter-dim-dl">
+            {filterDimensionOptions.map((opt) => (
+              <option key={opt} value={opt} />
+            ))}
+          </datalist>
         </div>
         <div className="sm:col-span-3">
-          <label>FILTRAR TABELA</label>
+          <label htmlFor="bem-aviv-filter-table">FILTRAR TABELA</label>
           <input
-            type="search"
-            placeholder="FILTRAR"
+            id="bem-aviv-filter-table"
+            type="text"
+            list="bem-aviv-filter-table-dl"
+            placeholder="DIGITE OU SELECIONE"
             value={filterTable}
             onChange={(e) => setFilterTable(e.target.value)}
+            autoComplete="off"
             aria-label="Filtrar por tabela de preço"
           />
+          <datalist id="bem-aviv-filter-table-dl">
+            {filterTableOptions.map((opt) => (
+              <option key={opt} value={opt} />
+            ))}
+          </datalist>
         </div>
       </div>
 
@@ -673,21 +746,9 @@ export function BemAvivProdutosPage() {
           <table>
             <thead>
               <tr>
-                <th>CATEGORIA</th>
-                <th>LINHA</th>
                 <th>NOME / MODELO</th>
-                <th>
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 rounded-md px-1 py-0.5 text-left font-medium text-slate-700 hover:bg-slate-200/80"
-                    onClick={cycleDimSort}
-                    aria-label="Ordenar por dimensão"
-                  >
-                    DIMENSÃO
-                    {dimSort === 'asc' ? <ArrowUp size={14} className="shrink-0 text-sky-700" aria-hidden /> : null}
-                    {dimSort === 'desc' ? <ArrowDown size={14} className="shrink-0 text-sky-700" aria-hidden /> : null}
-                  </button>
-                </th>
+                <th>COMPLEMENTO</th>
+                <th>DIMENSÃO</th>
                 <th>TABELA</th>
                 <th>PREÇO</th>
                 <th></th>
@@ -695,13 +756,11 @@ export function BemAvivProdutosPage() {
             </thead>
             <tbody>
               {sortedDisplayed.map((r) => {
-                const comfortRow = rowIsComfort(r)
                 const dims = rowDimsDisplay(r)
                 return (
                   <tr key={r.id}>
-                    <td>{r.category}</td>
-                    <td>{comfortRow ? r.product_line || '—' : '—'}</td>
                     <td>{rowNameModel(r)}</td>
+                    <td>{rowComplementDisplay(r)}</td>
                     <td>{dims}</td>
                     <td>{r.price_table_id ? tableNameById[r.price_table_id] ?? '—' : '—'}</td>
                     <td>{r.price == null ? '—' : formatBRL(Number(r.price))}</td>
