@@ -1,5 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
-import { Copy, Pencil, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Copy, Pencil, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
@@ -78,6 +78,22 @@ function rowLineDisplay(r: Produto) {
   return rowIsComfort(r) ? r.product_line || '' : ''
 }
 
+/** Chave para ordenar por dimensão física (largura, comprimento, altura em cm). */
+function rowDimSortKey(r: Produto): [number, number, number] | null {
+  if (!rowIsComfort(r)) return null
+  if (r.dim_width_cm == null || r.dim_length_cm == null || r.dim_height_cm == null) return null
+  return [Number(r.dim_width_cm), Number(r.dim_length_cm), Number(r.dim_height_cm)]
+}
+
+function compareDimKeys(a: [number, number, number] | null, b: [number, number, number] | null): number {
+  if (a === null && b === null) return 0
+  if (a === null) return 1
+  if (b === null) return -1
+  if (a[0] !== b[0]) return a[0] - b[0]
+  if (a[1] !== b[1]) return a[1] - b[1]
+  return a[2] - b[2]
+}
+
 const productCategories = [
   'PLATAFORMA DE DESCANSO',
   'CABECEIRAS',
@@ -127,6 +143,8 @@ export function BemAvivProdutosPage() {
   const [filterLine, setFilterLine] = useState('')
   const [filterDimension, setFilterDimension] = useState('')
   const [filterTable, setFilterTable] = useState('')
+  const [showForm, setShowForm] = useState(false)
+  const [dimSort, setDimSort] = useState<'none' | 'asc' | 'desc'>('none')
   const formRef = useRef<HTMLFormElement>(null)
 
   const isComfort = form.category === COMFORT_PLATFORM_CATEGORY
@@ -179,6 +197,22 @@ export function BemAvivProdutosPage() {
       return true
     })
   }, [rows, filterCategory, filterNameModel, filterLine, filterDimension, filterTable, tableNameById])
+
+  const sortedDisplayed = useMemo(() => {
+    if (dimSort === 'none') return filtered
+    const arr = [...filtered]
+    const dir = dimSort === 'asc' ? 1 : -1
+    arr.sort((r1, r2) => {
+      const cmp = compareDimKeys(rowDimSortKey(r1), rowDimSortKey(r2)) * dir
+      if (cmp !== 0) return cmp
+      return rowNameModel(r1).localeCompare(rowNameModel(r2), 'pt-BR')
+    })
+    return arr
+  }, [filtered, dimSort])
+
+  function cycleDimSort() {
+    setDimSort((s) => (s === 'none' ? 'asc' : s === 'asc' ? 'desc' : 'none'))
+  }
 
   async function syncPriceTableItem(args: {
     productId: string
@@ -352,6 +386,7 @@ export function BemAvivProdutosPage() {
       setEditing(null)
       setDuplicateBase(null)
       setForm(emptyForm())
+      setShowForm(false)
       await load()
     } catch (err) {
       alert(err instanceof Error ? err.message : 'ERRO AO SINCRONIZAR TABELA DE PREÇO.')
@@ -366,6 +401,7 @@ export function BemAvivProdutosPage() {
   }
 
   function startEdit(r: Produto) {
+    setShowForm(true)
     setEditing(r)
     setDuplicateBase(null)
     const comfort = r.category === COMFORT_PLATFORM_CATEGORY
@@ -386,9 +422,11 @@ export function BemAvivProdutosPage() {
       comfortPriceDigits: comfort && r.price != null ? numberToCentsDigits(Number(r.price)) : '',
       price_table_id: r.price_table_id ?? '',
     })
+    scrollFormIntoViewSoon()
   }
 
   function startDuplicate(r: Produto) {
+    setShowForm(true)
     setEditing(null)
     const comfort = r.category === COMFORT_PLATFORM_CATEGORY
     const lineOk =
@@ -415,14 +453,35 @@ export function BemAvivProdutosPage() {
       sourceLength: r.dim_length_cm != null ? Number(r.dim_length_cm) : null,
       sourceHeight: r.dim_height_cm != null ? Number(r.dim_height_cm) : null,
     })
+    scrollFormIntoViewSoon()
   }
 
-  function scrollToAddProductForm() {
-    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    window.setTimeout(() => {
-      const el = formRef.current?.querySelector<HTMLElement>('select, input')
-      el?.focus()
-    }, 350)
+  function openAddProductForm() {
+    setEditing(null)
+    setDuplicateBase(null)
+    setForm(emptyForm())
+    setShowForm(true)
+    window.requestAnimationFrame(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      window.setTimeout(() => {
+        formRef.current?.querySelector<HTMLElement>('select, input')?.focus()
+      }, 350)
+    })
+  }
+
+  function closeProductForm() {
+    setEditing(null)
+    setDuplicateBase(null)
+    setForm(emptyForm())
+    setShowForm(false)
+  }
+
+  function scrollFormIntoViewSoon() {
+    window.requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 50)
+    })
   }
 
   return (
@@ -441,11 +500,12 @@ export function BemAvivProdutosPage() {
             ))}
           </div>
         </div>
-        <button className="btn btn-primary shrink-0 self-start sm:self-auto" type="button" onClick={scrollToAddProductForm}>
+        <button className="btn btn-primary shrink-0 self-start sm:self-auto" type="button" onClick={openAddProductForm}>
           ADICIONAR PRODUTO
         </button>
       </div>
 
+      {showForm && (
       <form ref={formRef} onSubmit={submit} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-12 sm:gap-4">
         <div className="sm:col-span-4">
           <label>CATEGORIA</label>
@@ -548,29 +608,63 @@ export function BemAvivProdutosPage() {
           </>
         )}
 
-        <div className="sm:col-span-12 flex gap-2">
+        <div className="sm:col-span-12 flex flex-wrap gap-2">
           <button className="btn btn-primary" type="submit">
             {editing ? 'SALVAR' : duplicateBase ? 'SALVAR DUPLICADO' : 'ADICIONAR'}
           </button>
-          {(editing || duplicateBase) && (
-            <button
-              className="btn btn-secondary"
-              type="button"
-              onClick={() => {
-                setEditing(null)
-                setDuplicateBase(null)
-                setForm(emptyForm())
-              }}
-            >
-              CANCELAR
-            </button>
-          )}
+          <button className="btn btn-secondary" type="button" onClick={closeProductForm}>
+            CANCELAR
+          </button>
         </div>
       </form>
+      )}
 
-      {priceTables.length === 0 && isComfort && (
+      {showForm && priceTables.length === 0 && isComfort && (
         <p className="text-sm text-amber-800">CADASTRE PELO MENOS UMA TABELA DE PREÇO EM GERAL → TABELA DE PREÇO.</p>
       )}
+
+      <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-12">
+        <div className="sm:col-span-3">
+          <label>FILTRAR LINHA</label>
+          <input
+            type="search"
+            placeholder="FILTRAR"
+            value={filterLine}
+            onChange={(e) => setFilterLine(e.target.value)}
+            aria-label="Filtrar por linha"
+          />
+        </div>
+        <div className="sm:col-span-3">
+          <label>FILTRAR NOME / MODELO</label>
+          <input
+            type="search"
+            placeholder="FILTRAR"
+            value={filterNameModel}
+            onChange={(e) => setFilterNameModel(e.target.value)}
+            aria-label="Filtrar por nome ou modelo"
+          />
+        </div>
+        <div className="sm:col-span-3">
+          <label>FILTRAR DIMENSÃO</label>
+          <input
+            type="search"
+            placeholder="FILTRAR"
+            value={filterDimension}
+            onChange={(e) => setFilterDimension(e.target.value)}
+            aria-label="Filtrar por dimensão"
+          />
+        </div>
+        <div className="sm:col-span-3">
+          <label>FILTRAR TABELA</label>
+          <input
+            type="search"
+            placeholder="FILTRAR"
+            value={filterTable}
+            onChange={(e) => setFilterTable(e.target.value)}
+            aria-label="Filtrar por tabela de preço"
+          />
+        </div>
+      </div>
 
       <div className="table-wrap">
         {loading ? (
@@ -582,55 +676,25 @@ export function BemAvivProdutosPage() {
                 <th>CATEGORIA</th>
                 <th>LINHA</th>
                 <th>NOME / MODELO</th>
-                <th>DIMENSÃO</th>
+                <th>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-md px-1 py-0.5 text-left font-medium text-slate-700 hover:bg-slate-200/80"
+                    onClick={cycleDimSort}
+                    aria-label="Ordenar por dimensão"
+                  >
+                    DIMENSÃO
+                    {dimSort === 'asc' ? <ArrowUp size={14} className="shrink-0 text-sky-700" aria-hidden /> : null}
+                    {dimSort === 'desc' ? <ArrowDown size={14} className="shrink-0 text-sky-700" aria-hidden /> : null}
+                  </button>
+                </th>
                 <th>TABELA</th>
                 <th>PREÇO</th>
                 <th></th>
               </tr>
-              <tr>
-                <th className="align-top" />
-                <th className="align-top">
-                  <input
-                    type="search"
-                    placeholder="FILTRAR"
-                    value={filterLine}
-                    onChange={(e) => setFilterLine(e.target.value)}
-                    aria-label="Filtrar por linha"
-                  />
-                </th>
-                <th className="align-top">
-                  <input
-                    type="search"
-                    placeholder="FILTRAR"
-                    value={filterNameModel}
-                    onChange={(e) => setFilterNameModel(e.target.value)}
-                    aria-label="Filtrar por nome ou modelo"
-                  />
-                </th>
-                <th className="align-top">
-                  <input
-                    type="search"
-                    placeholder="FILTRAR"
-                    value={filterDimension}
-                    onChange={(e) => setFilterDimension(e.target.value)}
-                    aria-label="Filtrar por dimensão"
-                  />
-                </th>
-                <th className="align-top">
-                  <input
-                    type="search"
-                    placeholder="FILTRAR"
-                    value={filterTable}
-                    onChange={(e) => setFilterTable(e.target.value)}
-                    aria-label="Filtrar por tabela de preço"
-                  />
-                </th>
-                <th className="align-top" />
-                <th className="align-top" />
-              </tr>
             </thead>
             <tbody>
-              {filtered.map((r) => {
+              {sortedDisplayed.map((r) => {
                 const comfortRow = rowIsComfort(r)
                 const dims = rowDimsDisplay(r)
                 return (
