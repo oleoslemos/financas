@@ -234,7 +234,7 @@ export function AppLayout() {
                 </NavLink>
                 <NavLink to="/lsh/fluxo" className={navLinkClass}>
                   <ArrowLeftRight size={16} className="shrink-0 opacity-70" aria-hidden />
-                  Pagar / receber
+                  Movimentos financeiros
                 </NavLink>
                 <NavLink to="/lsh/cartoes" className={navLinkClass}>
                   <CreditCard size={16} className="shrink-0 opacity-70" aria-hidden />

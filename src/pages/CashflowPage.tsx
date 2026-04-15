@@ -1,5 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
-import { Check, FileText, Pencil, Split, Trash2, Undo2 } from 'lucide-react'
+import { Check, FileText, Pencil, Plus, Split, Trash2, Undo2, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
@@ -22,6 +22,13 @@ function descriptionForEditedRow(edit: Pr, baseDesc: string) {
     return `${baseDesc} (PARCELA ${edit.installment_number}/${edit.installment_count})`
   }
   return baseDesc
+}
+
+function currentMonthRange() {
+  const now = new Date()
+  const first = new Date(now.getFullYear(), now.getMonth(), 1)
+  const last = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+  return { from: toISODate(first), to: toISODate(last) }
 }
 
 type Kind = 'payable' | 'receivable'
@@ -48,6 +55,8 @@ export function CashflowPage() {
   const [formKind, setFormKind] = useState<Kind>('payable')
   const [showPayables, setShowPayables] = useState(true)
   const [showReceivables, setShowReceivables] = useState(true)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [formStatus, setFormStatus] = useState<'open' | 'paid'>('open')
 
   const [rows, setRows] = useState<Pr[]>([])
   const [invoiceDetailByPayable, setInvoiceDetailByPayable] = useState<Record<string, { cardId: string; invoiceId: string }>>({})
@@ -73,6 +82,13 @@ export function CashflowPage() {
   const [payModalRow, setPayModalRow] = useState<Pr | null>(null)
   const [payDateInput, setPayDateInput] = useState(toISODate(new Date()))
   const [paidAtEdit, setPaidAtEdit] = useState('')
+
+  const monthRange = currentMonthRange()
+  const [filterKind, setFilterKind] = useState<'ALL' | Kind>('ALL')
+  const [filterStatus, setFilterStatus] = useState<'ALL' | 'open' | 'paid'>('open')
+  const [filterBank, setFilterBank] = useState('')
+  const [filterFrom, setFilterFrom] = useState(monthRange.from)
+  const [filterTo, setFilterTo] = useState(monthRange.to)
 
   async function applyBankDelta(bankId: string | null, delta: number) {
     if (!supabase || !ownerUserId || !bankId || delta === 0) return
@@ -127,10 +143,16 @@ export function CashflowPage() {
 
   const filteredRows = useMemo(
     () =>
-      rows.filter(
-        (r) => (showPayables && r.kind === 'payable') || (showReceivables && r.kind === 'receivable'),
-      ),
-    [rows, showPayables, showReceivables],
+      rows.filter((r) => {
+        if (!((showPayables && r.kind === 'payable') || (showReceivables && r.kind === 'receivable'))) return false
+        if (filterKind !== 'ALL' && r.kind !== filterKind) return false
+        if (filterStatus !== 'ALL' && r.status !== filterStatus) return false
+        if (filterBank && (r.bank_account_id || '') !== filterBank) return false
+        if (filterFrom && r.due_date < filterFrom) return false
+        if (filterTo && r.due_date > filterTo) return false
+        return true
+      }),
+    [rows, showPayables, showReceivables, filterKind, filterStatus, filterBank, filterFrom, filterTo],
   )
 
   async function submit(e: React.FormEvent) {
@@ -186,7 +208,8 @@ export function CashflowPage() {
         description: baseDesc,
         amount: parseMoney(amount),
         due_date: dueDate,
-        status: 'open',
+        status: formStatus,
+        paid_at: formStatus === 'paid' ? (paidAtEdit || dueDate || toISODate(new Date())) : null,
         category_id: categoryId || null,
         bank_account_id: bankId || null,
         installment_group_id: null,
@@ -195,7 +218,17 @@ export function CashflowPage() {
       })
       if (error) alert(error.message)
       else {
+        if (formStatus === 'paid' && bankId) {
+          const signal = formKind === 'payable' ? -1 : 1
+          const delta = signal * parseMoney(amount)
+          try {
+            await applyBankDelta(bankId, delta)
+          } catch (e) {
+            alert(e instanceof Error ? e.message : 'Erro ao atualizar saldo da conta')
+          }
+        }
         clearForm()
+        setCreateOpen(false)
         load()
       }
       return
@@ -222,6 +255,7 @@ export function CashflowPage() {
     if (error) alert(error.message)
     else {
       clearForm()
+      setCreateOpen(false)
       load()
     }
   }
@@ -238,10 +272,12 @@ export function CashflowPage() {
     setMode('vista')
     setFormKind('payable')
     setPaidAtEdit('')
+    setFormStatus('open')
   }
 
   function startEdit(r: Pr) {
     setEditing(r)
+    setCreateOpen(true)
     setMode('vista')
     setFormKind(r.kind)
     setDescription(stripParcelDesc(r.description))
@@ -250,6 +286,7 @@ export function CashflowPage() {
     setCategoryId(r.category_id ?? '')
     setBankId(r.bank_account_id ?? '')
     setPaidAtEdit(r.paid_at ?? toISODate(new Date()))
+    setFormStatus(r.status)
   }
 
   function openPayModal(r: Pr) {
@@ -421,124 +458,244 @@ export function CashflowPage() {
 
   if (!supabase) return <p className="text-slate-600">Conectando…</p>
 
-  const title = 'Contas a pagar e a receber'
+  const title = 'Movimentos financeiros'
 
   return (
     <div className="space-y-8">
-      <h2 className="text-2xl font-semibold">{title}</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-2xl font-semibold">{title}</h2>
+        <button
+          type="button"
+          className="btn btn-primary inline-flex items-center gap-2"
+          onClick={() => {
+            clearForm()
+            setEditing(null)
+            setCreateOpen(true)
+          }}
+        >
+          <Plus size={16} />
+          ADICIONAR MOVIMENTO
+        </button>
+      </div>
 
-      <form onSubmit={submit} className="space-y-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className={`btn text-sm ${formKind === 'payable' ? 'btn-primary' : 'btn-secondary'}`}
-            disabled={!!editing}
-            onClick={() => setFormKind('payable')}
+      {createOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-3 sm:p-4"
+          role="presentation"
+          onClick={() => {
+            setCreateOpen(false)
+            setEditing(null)
+            clearForm()
+          }}
+        >
+          <div
+            role="dialog"
+            aria-labelledby="create-movement-title"
+            className="w-full max-w-3xl rounded-xl border border-slate-200 bg-white p-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
           >
-            CONTA A PAGAR
-          </button>
-          <button
-            type="button"
-            className={`btn text-sm ${formKind === 'receivable' ? 'btn-primary' : 'btn-secondary'}`}
-            disabled={!!editing}
-            onClick={() => setFormKind('receivable')}
-          >
-            CONTA A RECEBER
-          </button>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className={`btn text-sm ${mode === 'vista' ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setMode('vista')}
-            disabled={!!editing}
-          >
-            À vista
-          </button>
-          <button
-            type="button"
-            className={`btn text-sm ${mode === 'parcelado' ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setMode('parcelado')}
-            disabled={!!editing}
-          >
-            Parcelado
-          </button>
-        </div>
+            <div className="flex items-center justify-between gap-2">
+              <h3 id="create-movement-title" className="text-lg font-medium text-slate-900">
+                {editing ? 'Editar movimento' : 'Novo movimento'}
+              </h3>
+              <button
+                type="button"
+                className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0"
+                aria-label="Fechar"
+                onClick={() => {
+                  setCreateOpen(false)
+                  setEditing(null)
+                  clearForm()
+                }}
+              >
+                <X size={16} />
+              </button>
+            </div>
 
-        {editing?.installment_group_id &&
-          editing.installment_number != null &&
-          editing.installment_count != null && (
-            <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
-              Editando apenas a parcela {editing.installment_number} de {editing.installment_count}. Você pode alterar
-              valor, vencimento, descrição base, categoria e conta só desta parcela; ao salvar, continua{' '}
-              <span className="font-mono text-sky-800">
-                (PARCELA {editing.installment_number}/{editing.installment_count})
-              </span>
-              . Para mudar quantas parcelas existem no grupo, use &quot;Alterar parcelas&quot; na linha da tabela.
-            </p>
-          )}
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <label>
-              {editing?.installment_group_id ? 'Descrição (texto base, sem número da parcela)' : 'Descrição'}
-            </label>
-            <input value={description} onChange={(e) => setDescription(e.target.value)} />
-          </div>
-          {mode === 'vista' ? (
-            <>
-              <div>
-                <label>Valor</label>
-                <input value={amount} onChange={(e) => setAmount(e.target.value)} required />
-              </div>
-              <div>
-                <label>Vencimento</label>
-                <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} required />
-              </div>
-              {editing?.status === 'paid' && (
-                <div>
-                  <label>DATA DE PAGAMENTO</label>
-                  <input type="date" value={paidAtEdit} onChange={(e) => setPaidAtEdit(e.target.value)} required />
+            <form onSubmit={submit} className="mt-4 space-y-4">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className={`btn text-sm ${formKind === 'payable' ? 'btn-primary' : 'btn-secondary'}`}
+                  disabled={!!editing}
+                  onClick={() => setFormKind('payable')}
+                >
+                  CONTA A PAGAR
+                </button>
+                <button
+                  type="button"
+                  className={`btn text-sm ${formKind === 'receivable' ? 'btn-primary' : 'btn-secondary'}`}
+                  disabled={!!editing}
+                  onClick={() => setFormKind('receivable')}
+                >
+                  CONTA A RECEBER
+                </button>
+                <div className="ml-auto flex items-center gap-2">
+                  <label className="mb-0 text-xs text-slate-600">STATUS</label>
+                  <select
+                    className="h-9"
+                    value={formStatus}
+                    onChange={(e) => setFormStatus(e.target.value as 'open' | 'paid')}
+                    disabled={mode !== 'vista' || !!editing}
+                    title={mode !== 'vista' ? 'Status manual somente em lançamento à vista.' : undefined}
+                  >
+                    <option value="open">ABERTO</option>
+                    <option value="paid">PAGO</option>
+                  </select>
                 </div>
-              )}
-            </>
-          ) : (
-            <>
-              <div>
-                <label>Valor de cada parcela</label>
-                <input value={parcelAmount} onChange={(e) => setParcelAmount(e.target.value)} required />
               </div>
-              <div>
-                <label>Número de parcelas</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={parcelCount}
-                  onChange={(e) => setParcelCount(e.target.value)}
-                  required
-                />
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className={`btn text-sm ${mode === 'vista' ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setMode('vista')}
+                  disabled={!!editing}
+                >
+                  À vista
+                </button>
+                <button
+                  type="button"
+                  className={`btn text-sm ${mode === 'parcelado' ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setMode('parcelado')}
+                  disabled={!!editing}
+                >
+                  Parcelado
+                </button>
               </div>
-              <div>
-                <label>1º vencimento</label>
-                <input type="date" value={firstDue} onChange={(e) => setFirstDue(e.target.value)} required />
+
+              {editing?.installment_group_id &&
+                editing.installment_number != null &&
+                editing.installment_count != null && (
+                  <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
+                    Editando apenas a parcela {editing.installment_number} de {editing.installment_count}. Ao salvar,
+                    mantém <span className="font-mono text-sky-800">(PARCELA {editing.installment_number}/{editing.installment_count})</span>.
+                  </p>
+                )}
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label>
+                    {editing?.installment_group_id ? 'Descrição (texto base, sem número da parcela)' : 'Descrição'}
+                  </label>
+                  <input value={description} onChange={(e) => setDescription(e.target.value)} />
+                </div>
+                {mode === 'vista' ? (
+                  <>
+                    <div>
+                      <label>Valor</label>
+                      <input value={amount} onChange={(e) => setAmount(e.target.value)} required />
+                    </div>
+                    <div>
+                      <label>Vencimento</label>
+                      <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} required />
+                    </div>
+                    {formStatus === 'paid' ? (
+                      <div>
+                        <label>DATA DE PAGAMENTO</label>
+                        <input type="date" value={paidAtEdit || dueDate} onChange={(e) => setPaidAtEdit(e.target.value)} required />
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <label>Valor de cada parcela</label>
+                      <input value={parcelAmount} onChange={(e) => setParcelAmount(e.target.value)} required />
+                    </div>
+                    <div>
+                      <label>Número de parcelas</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={parcelCount}
+                        onChange={(e) => setParcelCount(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label>1º vencimento</label>
+                      <input type="date" value={firstDue} onChange={(e) => setFirstDue(e.target.value)} required />
+                    </div>
+                  </>
+                )}
+                <div>
+                  <label>Categoria</label>
+                  <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+                    <option value="">—</option>
+                    {cats.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label>Conta bancária (liquidação)</label>
+                  <select value={bankId} onChange={(e) => setBankId(e.target.value)}>
+                    <option value="">—</option>
+                    {banks.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-            </>
-          )}
-          <div>
-            <label>Categoria</label>
-            <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-              <option value="">—</option>
-              {cats.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+
+              <div className="flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setCreateOpen(false)
+                    setEditing(null)
+                    clearForm()
+                  }}
+                >
+                  Cancelar
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  {editing
+                    ? editing.installment_group_id
+                      ? 'Salvar esta parcela'
+                      : 'Salvar'
+                    : 'Adicionar'}
+                </button>
+              </div>
+            </form>
           </div>
+        </div>
+      ) : null}
+
+      <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="flex flex-wrap items-center gap-4">
+          <span className="text-sm text-slate-600">Exibir:</span>
+          <label className="mb-0 flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              className="h-4 w-4"
+              checked={showPayables}
+              onChange={(e) => setShowPayables(e.target.checked)}
+            />
+            CONTAS A PAGAR
+          </label>
+          <label className="mb-0 flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              className="h-4 w-4"
+              checked={showReceivables}
+              onChange={(e) => setShowReceivables(e.target.checked)}
+            />
+            CONTAS A RECEBER
+          </label>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div>
-            <label>Conta bancária (liquidação)</label>
-            <select value={bankId} onChange={(e) => setBankId(e.target.value)}>
-              <option value="">—</option>
+            <label>Conta bancária</label>
+            <select value={filterBank} onChange={(e) => setFilterBank(e.target.value)}>
+              <option value="">Todas</option>
               {banks.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.name}
@@ -546,50 +703,33 @@ export function CashflowPage() {
               ))}
             </select>
           </div>
+          <div>
+            <label>Tipo</label>
+            <select value={filterKind} onChange={(e) => setFilterKind(e.target.value as 'ALL' | Kind)}>
+              <option value="ALL">Todos</option>
+              <option value="payable">A pagar</option>
+              <option value="receivable">A receber</option>
+            </select>
+          </div>
+          <div>
+            <label>Status</label>
+            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as 'ALL' | 'open' | 'paid')}>
+              <option value="ALL">Todos</option>
+              <option value="open">Aberto</option>
+              <option value="paid">Pago</option>
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label>De</label>
+              <input type="date" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)} />
+            </div>
+            <div>
+              <label>Até</label>
+              <input type="date" value={filterTo} onChange={(e) => setFilterTo(e.target.value)} />
+            </div>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="submit" className="btn btn-primary">
-            {editing
-              ? editing.installment_group_id
-                ? 'Salvar esta parcela'
-                : 'Salvar'
-              : 'Adicionar'}
-          </button>
-          {editing && (
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => {
-                setEditing(null)
-                clearForm()
-              }}
-            >
-              Cancelar edição
-            </button>
-          )}
-        </div>
-      </form>
-
-      <div className="flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-        <span className="text-sm text-slate-600">Exibir na tabela:</span>
-        <label className="mb-0 flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            className="h-4 w-4"
-            checked={showPayables}
-            onChange={(e) => setShowPayables(e.target.checked)}
-          />
-          CONTAS A PAGAR
-        </label>
-        <label className="mb-0 flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            className="h-4 w-4"
-            checked={showReceivables}
-            onChange={(e) => setShowReceivables(e.target.checked)}
-          />
-          CONTAS A RECEBER
-        </label>
       </div>
 
       <div className="table-wrap">
