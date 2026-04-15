@@ -83,6 +83,15 @@ function rowComplementDisplay(r: Produto) {
   return d ? d : '—'
 }
 
+/** Agrupa variantes iguais (caixa, espaços, unicode) nos valores sugeridos dos filtros. */
+function addUniqueFilterOption(map: Map<string, string>, raw: string) {
+  const trimmed = raw.normalize('NFKC').replace(/\s+/g, ' ').trim()
+  if (!trimmed) return
+  const key = trimmed.toLocaleLowerCase('pt-BR')
+  if (map.has(key)) return
+  map.set(key, toUpperTrim(trimmed))
+}
+
 /** Chave para ordenar por dimensão física (largura, comprimento, altura em cm). */
 function rowDimSortKey(r: Produto): [number, number, number] | null {
   if (!rowIsComfort(r)) return null
@@ -196,26 +205,27 @@ export function BemAvivProdutosPage() {
   )
 
   const { filterLineOptions, filterNameModelOptions, filterDimensionOptions, filterTableOptions } = useMemo(() => {
-    const lines = new Set<string>()
-    const names = new Set<string>()
-    const dims = new Set<string>()
-    const tables = new Set<string>()
+    const lines = new Map<string, string>()
+    const names = new Map<string, string>()
+    const dimsByCm = new Map<string, string>()
+    const tables = new Map<string, string>()
     for (const r of rowsForFilterOptions) {
-      const line = rowLineDisplay(r).trim()
-      if (line) lines.add(line)
-      const nm = rowNameModel(r).trim()
-      if (nm) names.add(nm)
-      const dim = rowDimsDisplay(r)
-      if (dim !== '—') dims.add(dim)
-      const tbl = r.price_table_id ? tableNameById[r.price_table_id]?.trim() ?? '' : ''
-      if (tbl) tables.add(tbl)
+      addUniqueFilterOption(lines, rowLineDisplay(r))
+      addUniqueFilterOption(names, rowNameModel(r))
+      const dk = rowDimSortKey(r)
+      if (dk) {
+        const sizeKey = `${dk[0]}|${dk[1]}|${dk[2]}`
+        if (!dimsByCm.has(sizeKey)) dimsByCm.set(sizeKey, formatComfortDims(dk[0], dk[1], dk[2]))
+      }
+      const tbl = r.price_table_id ? tableNameById[r.price_table_id] ?? '' : ''
+      addUniqueFilterOption(tables, tbl)
     }
     const sortPt = (a: string, b: string) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' })
     return {
-      filterLineOptions: [...lines].sort(sortPt),
-      filterNameModelOptions: [...names].sort(sortPt),
-      filterDimensionOptions: [...dims].sort(sortPt),
-      filterTableOptions: [...tables].sort(sortPt),
+      filterLineOptions: [...lines.values()].sort(sortPt),
+      filterNameModelOptions: [...names.values()].sort(sortPt),
+      filterDimensionOptions: [...dimsByCm.values()].sort(sortPt),
+      filterTableOptions: [...tables.values()].sort(sortPt),
     }
   }, [rowsForFilterOptions, tableNameById])
 
