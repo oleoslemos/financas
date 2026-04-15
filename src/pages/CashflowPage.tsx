@@ -47,6 +47,15 @@ type Pr = {
   installment_count: number | null
 }
 
+function statusQuitadoLabel(kind: Kind) {
+  return kind === 'receivable' ? 'RECEBIDO' : 'PAGO'
+}
+
+/** Rótulo do botão de quitar título em aberto. */
+function acaoQuitarLabel(kind: Kind) {
+  return kind === 'receivable' ? 'RECEBER' : 'PAGAR'
+}
+
 export function CashflowPage() {
   const { user } = useUser()
   const navigate = useNavigate()
@@ -190,6 +199,10 @@ export function CashflowPage() {
         .filter((r) => r.kind === 'payable' && r.status === 'paid')
         .reduce((sum, r) => sum + Number(r.amount), 0),
     [filteredRows],
+  )
+  const projectedBalance = useMemo(
+    () => currentBalance + totalReceivable - totalPayable,
+    [currentBalance, totalReceivable, totalPayable],
   )
 
   async function submit(e: React.FormEvent) {
@@ -643,7 +656,7 @@ export function CashflowPage() {
                     }
                   >
                     <option value="open">ABERTO</option>
-                    <option value="paid">PAGO</option>
+                    <option value="paid">{statusQuitadoLabel(formKind)}</option>
                   </select>
                 </div>
               </div>
@@ -702,7 +715,7 @@ export function CashflowPage() {
                     </div>
                     {formStatus === 'paid' ? (
                       <div>
-                        <label>DATA DE PAGAMENTO</label>
+                        <label>{formKind === 'receivable' ? 'DATA DE RECEBIMENTO' : 'DATA DE PAGAMENTO'}</label>
                         <input type="date" value={paidAtEdit || dueDate} onChange={(e) => setPaidAtEdit(e.target.value)} required />
                       </div>
                     ) : null}
@@ -779,11 +792,17 @@ export function CashflowPage() {
       ) : null}
 
       <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
             <p className="text-xs uppercase tracking-wide text-slate-500">Saldo atual</p>
             <p className={`mt-1 text-lg font-semibold ${currentBalance < 0 ? 'text-red-600' : 'text-slate-900'}`}>
               {formatBRL(currentBalance)}
+            </p>
+          </div>
+          <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3">
+            <p className="text-xs uppercase tracking-wide text-indigo-700">Saldo previsto</p>
+            <p className={`mt-1 text-lg font-semibold ${projectedBalance < 0 ? 'text-red-600' : 'text-indigo-800'}`}>
+              {formatBRL(projectedBalance)}
             </p>
           </div>
           <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
@@ -829,7 +848,7 @@ export function CashflowPage() {
             <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as 'ALL' | 'open' | 'paid')}>
               <option value="ALL">Todos</option>
               <option value="open">Aberto</option>
-              <option value="paid">Pago</option>
+              <option value="paid">Quitado</option>
             </select>
           </div>
           <div className="grid grid-cols-2 gap-2">
@@ -856,7 +875,7 @@ export function CashflowPage() {
                 <th>Descrição</th>
                 <th>Valor</th>
                 <th>Vencimento</th>
-                <th>PAGAMENTO</th>
+                <th>Quitação</th>
                 <th>Parcela</th>
                 <th>Status</th>
                 <th></th>
@@ -877,14 +896,14 @@ export function CashflowPage() {
                         ? '1/1'
                         : '—'}
                   </td>
-                  <td>{r.status === 'paid' ? (r.kind === 'receivable' ? 'RECEBIDO' : 'PAGO') : 'ABERTO'}</td>
+                  <td>{r.status === 'paid' ? statusQuitadoLabel(r.kind) : 'ABERTO'}</td>
                   <td className="whitespace-nowrap">
                     <div className="flex items-center justify-end gap-2">
                     <button
                       type="button"
                       className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0"
-                      title={r.status === 'paid' ? 'REABRIR' : 'PAGAR'}
-                      aria-label={r.status === 'paid' ? 'REABRIR' : 'PAGAR'}
+                      title={r.status === 'paid' ? 'REABRIR' : acaoQuitarLabel(r.kind)}
+                      aria-label={r.status === 'paid' ? 'REABRIR' : acaoQuitarLabel(r.kind)}
                       onClick={() => (r.status === 'paid' ? void reopenPaid(r) : openPayModal(r))}
                     >
                       {r.status === 'paid' ? <Undo2 size={16} /> : <Check size={16} />}
@@ -954,13 +973,15 @@ export function CashflowPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <h3 id="pay-modal-title" className="text-lg font-medium text-slate-900">
-              CONFIRMAR LIQUIDAÇÃO
+              {payModalRow.kind === 'payable' ? 'CONFIRMAR PAGAMENTO' : 'CONFIRMAR RECEBIMENTO'}
             </h3>
             <p className="mt-2 text-sm text-slate-600">
               {payModalRow.kind === 'payable' ? 'INFORME A DATA DO PAGAMENTO.' : 'INFORME A DATA DO RECEBIMENTO.'}
             </p>
             <div className="mt-4">
-              <label className="text-sm text-slate-700">DATA</label>
+              <label className="text-sm text-slate-700">
+                {payModalRow.kind === 'payable' ? 'DATA DO PAGAMENTO' : 'DATA DO RECEBIMENTO'}
+              </label>
               <input
                 type="date"
                 className="mt-1 w-full"
@@ -973,7 +994,7 @@ export function CashflowPage() {
                 CANCELAR
               </button>
               <button type="button" className="btn btn-primary" onClick={() => void confirmPay()}>
-                CONFIRMAR
+                {payModalRow.kind === 'payable' ? 'CONFIRMAR PAGAMENTO' : 'CONFIRMAR RECEBIMENTO'}
               </button>
             </div>
           </div>
