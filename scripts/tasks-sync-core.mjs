@@ -153,6 +153,14 @@ async function googleCalendarApi(path, accessToken, options = {}) {
   })
 }
 
+async function listGoogleCalendarIds(accessToken) {
+  const resp = await googleCalendarApi('/users/me/calendarList?maxResults=250', accessToken)
+  const items = Array.isArray(resp?.items) ? resp.items : []
+  return items
+    .filter((c) => c?.id && (c.accessRole === 'owner' || c.accessRole === 'writer' || c.accessRole === 'reader'))
+    .map((c) => String(c.id))
+}
+
 async function getLarkTenantAccessToken(env) {
   if (!env.LARK_APP_ID || !env.LARK_APP_SECRET) return null
   const json = await fetchJson('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal', {
@@ -382,58 +390,62 @@ async function syncGoogleCalendar(supabase, env) {
   end.setDate(end.getDate() + 30)
   end.setHours(23, 59, 59, 999)
 
-  const params = {
-    calendarId: env.GOOGLE_CALENDAR_ID,
-    singleEvents: true,
-    orderBy: 'startTime',
-    maxResults: 500,
-    showDeleted: true,
-    timeMin: start.toISOString(),
-    timeMax: end.toISOString(),
-  }
-
-  const query = new URLSearchParams({
-    singleEvents: 'true',
-    orderBy: 'startTime',
-    maxResults: String(params.maxResults),
-    showDeleted: 'true',
-    timeMin: params.timeMin,
-    timeMax: params.timeMax,
-  })
-  const remoteResp = await googleCalendarApi(
-    `/calendars/${encodeURIComponent(env.GOOGLE_CALENDAR_ID)}/events?${query.toString()}`,
-    token,
-  )
-  const remoteItems = Array.isArray(remoteResp?.items) ? remoteResp.items : []
+  const wanted = String(env.GOOGLE_CALENDAR_ID || 'primary').trim().toLowerCase()
+  const calendarIds =
+    wanted === '*' || wanted === 'all'
+      ? await listGoogleCalendarIds(token)
+      : [String(env.GOOGLE_CALENDAR_ID || 'primary')]
 
   let synced = 0
-  for (const event of remoteItems) {
-    const startAt = parseGoogleEventDate(event.start)
-    const endAt = parseGoogleEventDate(event.end) || startAt
-    const extId = event.id
-    if (!extId || !startAt || !endAt) continue
+  for (const calendarId of calendarIds) {
+    const query = new URLSearchParams({
+      singleEvents: 'true',
+      orderBy: 'startTime',
+      maxResults: '500',
+      showDeleted: 'true',
+      timeMin: start.toISOString(),
+      timeMax: end.toISOString(),
+    })
+    const remoteResp = await googleCalendarApi(
+      `/calendars/${encodeURIComponent(calendarId)}/events?${query.toString()}`,
+      token,
+    )
+    const remoteItems = Array.isArray(remoteResp?.items) ? remoteResp.items : []
 
-    const payload = {
-      user_id: env.SYNC_USER_ID,
-      source: 'GOOGLE_CALENDAR',
-      calendar_id: env.GOOGLE_CALENDAR_ID,
-      external_id: extId,
-      summary: String(event.summary || 'SEM TITULO').toUpperCase(),
-      details: String(event.description || '').toUpperCase() || null,
-      location: String(event.location || '').toUpperCase() || null,
-      start_at: startAt,
-      end_at: endAt,
-      is_all_day: Boolean(event.start?.date && !event.start?.dateTime),
-      status: String(event.status || 'confirmed').toLowerCase(),
+    for (const event of remoteItems) {
+      const startAt = parseGoogleEventDate(event.start)
+      const endAt = parseGoogleEventDate(event.end) || startAt
+      const extId = event.id
+      if (!extId || !startAt || !endAt) continue
+
+      const payload = {
+        user_id: env.SYNC_USER_ID,
+        source: 'GOOGLE_CALENDAR',
+        calendar_id: calendarId,
+        external_id: extId,
+        summary: String(event.summary || 'SEM TITULO').toUpperCase(),
+        details: String(event.description || '').toUpperCase() || null,
+        location: String(event.location || '').toUpperCase() || null,
+        start_at: startAt,
+        end_at: endAt,
+        is_all_day: Boolean(event.start?.date && !event.start?.dateTime),
+        status: String(event.status || 'confirmed').toLowerCase(),
+      }
+
+      const { error } = await supabase
+        .from('lsh_calendar_events')
+        .upsert(payload, { onConflict: 'user_id,source,calendar_id,external_id' })
+      if (!error) synced += 1
     }
-
-    const { error } = await supabase
-      .from('lsh_calendar_events')
-      .upsert(payload, { onConflict: 'user_id,source,external_id' })
-    if (!error) synced += 1
   }
 
-  return { synced, calendarId: env.GOOGLE_CALENDAR_ID, rangeDays: 30, skipped: false }
+  return {
+    synced,
+    calendarId: env.GOOGLE_CALENDAR_ID,
+    rangeDays: 30,
+    calendarsScanned: calendarIds.length,
+    skipped: false,
+  }
 }
 
 export async function runTasksSync(options = {}) {

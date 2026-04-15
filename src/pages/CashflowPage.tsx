@@ -53,8 +53,6 @@ export function CashflowPage() {
   const supabase = useSupabase()
   const ownerUserId = resolveDataOwnerId(user?.id)
   const [formKind, setFormKind] = useState<Kind>('payable')
-  const [showPayables, setShowPayables] = useState(true)
-  const [showReceivables, setShowReceivables] = useState(true)
   const [createOpen, setCreateOpen] = useState(false)
   const [formStatus, setFormStatus] = useState<'open' | 'paid'>('open')
 
@@ -84,6 +82,7 @@ export function CashflowPage() {
   const [paidAtEdit, setPaidAtEdit] = useState('')
 
   const monthRange = currentMonthRange()
+  const [filterKind, setFilterKind] = useState<'ALL' | Kind>('ALL')
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'open' | 'paid'>('open')
   const [filterBank, setFilterBank] = useState('')
   const [filterFrom, setFilterFrom] = useState(monthRange.from)
@@ -148,18 +147,21 @@ export function CashflowPage() {
   const filteredRows = useMemo(
     () =>
       rows.filter((r) => {
-        if (!((showPayables && r.kind === 'payable') || (showReceivables && r.kind === 'receivable'))) return false
+        if (filterKind !== 'ALL' && r.kind !== filterKind) return false
         if (filterStatus !== 'ALL' && r.status !== filterStatus) return false
         if (filterBank && (r.bank_account_id || '') !== filterBank) return false
         if (filterFrom && r.due_date < filterFrom) return false
         if (filterTo && r.due_date > filterTo) return false
         return true
       }),
-    [rows, showPayables, showReceivables, filterStatus, filterBank, filterFrom, filterTo],
+    [rows, filterKind, filterStatus, filterBank, filterFrom, filterTo],
   )
   const currentBalance = useMemo(
-    () => banks.reduce((sum, bank) => sum + Number(bank.initial_balance ?? 0), 0),
-    [banks],
+    () =>
+      filterBank
+        ? Number(banks.find((bank) => bank.id === filterBank)?.initial_balance ?? 0)
+        : banks.reduce((sum, bank) => sum + Number(bank.initial_balance ?? 0), 0),
+    [banks, filterBank],
   )
   const totalReceivable = useMemo(
     () =>
@@ -168,10 +170,24 @@ export function CashflowPage() {
         .reduce((sum, r) => sum + Number(r.amount), 0),
     [filteredRows],
   )
+  const totalReceived = useMemo(
+    () =>
+      filteredRows
+        .filter((r) => r.kind === 'receivable' && r.status === 'paid')
+        .reduce((sum, r) => sum + Number(r.amount), 0),
+    [filteredRows],
+  )
   const totalPayable = useMemo(
     () =>
       filteredRows
         .filter((r) => r.kind === 'payable' && r.status === 'open')
+        .reduce((sum, r) => sum + Number(r.amount), 0),
+    [filteredRows],
+  )
+  const totalPaid = useMemo(
+    () =>
+      filteredRows
+        .filter((r) => r.kind === 'payable' && r.status === 'paid')
         .reduce((sum, r) => sum + Number(r.amount), 0),
     [filteredRows],
   )
@@ -690,44 +706,32 @@ export function CashflowPage() {
       ) : null}
 
       <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-        <div className="flex flex-wrap items-center gap-4">
-          <span className="text-sm text-slate-600">Exibir:</span>
-          <label className="mb-0 flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              className="h-4 w-4"
-              checked={showPayables}
-              onChange={(e) => setShowPayables(e.target.checked)}
-            />
-            CONTAS A PAGAR
-          </label>
-          <label className="mb-0 flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              className="h-4 w-4"
-              checked={showReceivables}
-              onChange={(e) => setShowReceivables(e.target.checked)}
-            />
-            CONTAS A RECEBER
-          </label>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
             <p className="text-xs uppercase tracking-wide text-slate-500">Saldo atual</p>
-            <p className="mt-1 text-lg font-semibold text-slate-900">{formatBRL(currentBalance)}</p>
+            <p className={`mt-1 text-lg font-semibold ${currentBalance < 0 ? 'text-red-600' : 'text-slate-900'}`}>
+              {formatBRL(currentBalance)}
+            </p>
           </div>
           <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-            <p className="text-xs uppercase tracking-wide text-emerald-700">Total a receber</p>
+            <p className="text-xs uppercase tracking-wide text-emerald-700">A receber</p>
             <p className="mt-1 text-lg font-semibold text-emerald-800">{formatBRL(totalReceivable)}</p>
           </div>
+          <div className="rounded-lg border border-emerald-200 bg-white p-3">
+            <p className="text-xs uppercase tracking-wide text-emerald-700">Recebido</p>
+            <p className="mt-1 text-lg font-semibold text-emerald-800">{formatBRL(totalReceived)}</p>
+          </div>
           <div className="rounded-lg border border-rose-200 bg-rose-50 p-3">
-            <p className="text-xs uppercase tracking-wide text-rose-700">Total a pagar</p>
+            <p className="text-xs uppercase tracking-wide text-rose-700">A pagar</p>
             <p className="mt-1 text-lg font-semibold text-rose-800">{formatBRL(totalPayable)}</p>
+          </div>
+          <div className="rounded-lg border border-rose-200 bg-white p-3">
+            <p className="text-xs uppercase tracking-wide text-rose-700">Pago</p>
+            <p className="mt-1 text-lg font-semibold text-rose-800">{formatBRL(totalPaid)}</p>
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <label>Conta bancária</label>
             <select value={filterBank} onChange={(e) => setFilterBank(e.target.value)}>
@@ -737,6 +741,14 @@ export function CashflowPage() {
                   {b.name}
                 </option>
               ))}
+            </select>
+          </div>
+          <div>
+            <label>Tipo</label>
+            <select value={filterKind} onChange={(e) => setFilterKind(e.target.value as 'ALL' | Kind)}>
+              <option value="ALL">Todos</option>
+              <option value="payable">A pagar</option>
+              <option value="receivable">A receber</option>
             </select>
           </div>
           <div>
