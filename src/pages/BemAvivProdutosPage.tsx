@@ -1,5 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
-import { Pencil, Trash2 } from 'lucide-react'
+import { Copy, Pencil, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
@@ -28,6 +28,13 @@ type Produto = {
 type PriceTableOpt = { id: string; name: string }
 
 type PriceTableItemRow = { id: string; product_id: string; price_table_id: string }
+type DuplicateValidationBase = {
+  sourceId: string
+  sourceNameOrModel: string
+  sourceWidth: number | null
+  sourceLength: number | null
+  sourceHeight: number | null
+}
 
 function onlyDigits(v: string) {
   return v.replace(/\D/g, '')
@@ -97,6 +104,7 @@ export function BemAvivProdutosPage() {
   const [loading, setLoading] = useState(true)
   const [filterCategory, setFilterCategory] = useState<string>('TODOS')
   const [form, setForm] = useState(emptyForm)
+  const [duplicateBase, setDuplicateBase] = useState<DuplicateValidationBase | null>(null)
 
   const isComfort = form.category === COMFORT_PLATFORM_CATEGORY
 
@@ -240,6 +248,24 @@ export function BemAvivProdutosPage() {
       }
     }
 
+    if (duplicateBase) {
+      const currentNameOrModel = toUpperTrim(isComfort ? form.model : form.name)
+      const currentWidth = isComfort ? parseInt(form.dim_width_cm, 10) : null
+      const currentLength = isComfort ? parseInt(form.dim_length_cm, 10) : null
+      const currentHeight = isComfort ? parseInt(form.dim_height_cm, 10) : null
+
+      const unchanged =
+        duplicateBase.sourceNameOrModel === currentNameOrModel &&
+        duplicateBase.sourceWidth === (Number.isFinite(currentWidth) ? currentWidth : null) &&
+        duplicateBase.sourceLength === (Number.isFinite(currentLength) ? currentLength : null) &&
+        duplicateBase.sourceHeight === (Number.isFinite(currentHeight) ? currentHeight : null)
+
+      if (unchanged) {
+        alert('AO DUPLICAR, ALTERE NOME/MODELO, LARGURA, COMPRIMENTO OU ALTURA ANTES DE SALVAR.')
+        return
+      }
+    }
+
     try {
       let productId: string
 
@@ -284,6 +310,7 @@ export function BemAvivProdutosPage() {
       }
 
       setEditing(null)
+      setDuplicateBase(null)
       setForm(emptyForm())
       await load()
     } catch (err) {
@@ -300,6 +327,7 @@ export function BemAvivProdutosPage() {
 
   function startEdit(r: Produto) {
     setEditing(r)
+    setDuplicateBase(null)
     const comfort = r.category === COMFORT_PLATFORM_CATEGORY
     const lineOk =
       r.product_line && comfortProductLines.includes(r.product_line as (typeof comfortProductLines)[number])
@@ -317,6 +345,35 @@ export function BemAvivProdutosPage() {
       dim_height_cm: r.dim_height_cm != null ? String(r.dim_height_cm) : '',
       comfortPriceDigits: comfort && r.price != null ? numberToCentsDigits(Number(r.price)) : '',
       price_table_id: r.price_table_id ?? '',
+    })
+  }
+
+  function startDuplicate(r: Produto) {
+    setEditing(null)
+    const comfort = r.category === COMFORT_PLATFORM_CATEGORY
+    const lineOk =
+      r.product_line && comfortProductLines.includes(r.product_line as (typeof comfortProductLines)[number])
+        ? r.product_line
+        : comfortProductLines[0]
+    setForm({
+      category: r.category,
+      name: r.name,
+      description: r.description ?? '',
+      price: !comfort && r.price != null ? String(r.price) : '',
+      product_line: lineOk,
+      model: comfort ? (r.model ?? r.name) : '',
+      dim_width_cm: r.dim_width_cm != null ? String(r.dim_width_cm) : '',
+      dim_length_cm: r.dim_length_cm != null ? String(r.dim_length_cm) : '',
+      dim_height_cm: r.dim_height_cm != null ? String(r.dim_height_cm) : '',
+      comfortPriceDigits: comfort && r.price != null ? numberToCentsDigits(Number(r.price)) : '',
+      price_table_id: r.price_table_id ?? '',
+    })
+    setDuplicateBase({
+      sourceId: r.id,
+      sourceNameOrModel: toUpperTrim(comfort ? (r.model ?? r.name) : r.name),
+      sourceWidth: r.dim_width_cm != null ? Number(r.dim_width_cm) : null,
+      sourceLength: r.dim_length_cm != null ? Number(r.dim_length_cm) : null,
+      sourceHeight: r.dim_height_cm != null ? Number(r.dim_height_cm) : null,
     })
   }
 
@@ -437,13 +494,16 @@ export function BemAvivProdutosPage() {
         )}
 
         <div className="sm:col-span-12 flex gap-2">
-          <button className="btn btn-primary" type="submit">{editing ? 'SALVAR' : 'ADICIONAR'}</button>
-          {editing && (
+          <button className="btn btn-primary" type="submit">
+            {editing ? 'SALVAR' : duplicateBase ? 'SALVAR DUPLICADO' : 'ADICIONAR'}
+          </button>
+          {(editing || duplicateBase) && (
             <button
               className="btn btn-secondary"
               type="button"
               onClick={() => {
                 setEditing(null)
+                setDuplicateBase(null)
                 setForm(emptyForm())
               }}
             >
@@ -492,6 +552,9 @@ export function BemAvivProdutosPage() {
                       <div className="flex items-center justify-end gap-2">
                         <button type="button" className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0" onClick={() => startEdit(r)}>
                           <Pencil size={16} />
+                        </button>
+                        <button type="button" className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0" onClick={() => startDuplicate(r)}>
+                          <Copy size={16} />
                         </button>
                         <button type="button" className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-600" onClick={() => remove(r.id)}>
                           <Trash2 size={16} />
