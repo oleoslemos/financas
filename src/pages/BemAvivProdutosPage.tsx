@@ -8,6 +8,9 @@ import { formatBRL, formatBRLFromCentsDigits, numberToCentsDigits, parseDigitsCe
 import { toUpperTrim } from '../lib/text'
 
 const COMFORT_PLATFORM_CATEGORY = 'PLATAFORMA DE DESCANSO'
+const BASE_BED_CATEGORY = 'BASES / CAMAS'
+const HEADBOARD_CATEGORY = 'CABECEIRAS'
+const ACCESSORY_CATEGORY = 'ACESSÓRIOS'
 
 const comfortProductLines = ['SUPER PREMIUM', 'PREMIUM'] as const
 
@@ -60,6 +63,19 @@ function formatComfortDims(wCm: number, lCm: number, hCm: number) {
   return `${formatMetersMaskFromCmDigits(String(wCm))} x ${formatMetersMaskFromCmDigits(String(lCm))} x ${formatCentimetersMaskFromCmDigits(String(hCm))}`
 }
 
+function formatDimsByCategory(category: string, wCm: number | null, lCm: number | null, hCm: number | null) {
+  if (category === COMFORT_PLATFORM_CATEGORY && wCm != null && lCm != null && hCm != null) {
+    return formatComfortDims(wCm, lCm, hCm)
+  }
+  if (category === BASE_BED_CATEGORY && wCm != null && lCm != null) {
+    return `${formatMetersMaskFromCmDigits(String(wCm))} x ${formatMetersMaskFromCmDigits(String(lCm))}`
+  }
+  if (category === HEADBOARD_CATEGORY && wCm != null) {
+    return formatMetersMaskFromCmDigits(String(wCm))
+  }
+  return '—'
+}
+
 function rowIsComfort(r: Produto) {
   return r.category === COMFORT_PLATFORM_CATEGORY
 }
@@ -69,9 +85,10 @@ function rowNameModel(r: Produto) {
 }
 
 function rowDimsDisplay(r: Produto) {
-  return rowIsComfort(r) && r.dim_width_cm != null && r.dim_length_cm != null && r.dim_height_cm != null
-    ? formatComfortDims(Number(r.dim_width_cm), Number(r.dim_length_cm), Number(r.dim_height_cm))
-    : '—'
+  const w = r.dim_width_cm != null ? Number(r.dim_width_cm) : null
+  const l = r.dim_length_cm != null ? Number(r.dim_length_cm) : null
+  const h = r.dim_height_cm != null ? Number(r.dim_height_cm) : null
+  return formatDimsByCategory(r.category, w, l, h)
 }
 
 function rowLineDisplay(r: Produto) {
@@ -94,9 +111,13 @@ function addUniqueFilterOption(map: Map<string, string>, raw: string) {
 
 /** Chave para ordenar por dimensão física (largura, comprimento, altura em cm). */
 function rowDimSortKey(r: Produto): [number, number, number] | null {
-  if (!rowIsComfort(r)) return null
-  if (r.dim_width_cm == null || r.dim_length_cm == null || r.dim_height_cm == null) return null
-  return [Number(r.dim_width_cm), Number(r.dim_length_cm), Number(r.dim_height_cm)]
+  const w = r.dim_width_cm != null ? Number(r.dim_width_cm) : null
+  const l = r.dim_length_cm != null ? Number(r.dim_length_cm) : null
+  const h = r.dim_height_cm != null ? Number(r.dim_height_cm) : null
+  if (r.category === COMFORT_PLATFORM_CATEGORY && w != null && l != null && h != null) return [w, l, h]
+  if (r.category === BASE_BED_CATEGORY && w != null && l != null) return [w, l, Number.NEGATIVE_INFINITY]
+  if (r.category === HEADBOARD_CATEGORY && w != null) return [w, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY]
+  return null
 }
 
 function compareDimKeys(a: [number, number, number] | null, b: [number, number, number] | null): number {
@@ -135,6 +156,12 @@ function buildComfortPriceLineDescription(
   return `${toUpperTrim(line)} ${toUpperTrim(model)} ${formatComfortDims(w, l, h).toUpperCase()}`
 }
 
+function buildSizedPriceLineDescription(args: { category: string; name: string; widthCm: number | null; lengthCm: number | null; heightCm: number | null }) {
+  const dims = formatDimsByCategory(args.category, args.widthCm, args.lengthCm, args.heightCm)
+  const dimsPart = dims === '—' ? '' : ` ${dims.toUpperCase()}`
+  return `${toUpperTrim(args.name)}${dimsPart}`
+}
+
 function emptyForm() {
   return {
     category: productCategories[0] as string,
@@ -171,6 +198,10 @@ export function BemAvivProdutosPage() {
   const formRef = useRef<HTMLFormElement>(null)
 
   const isComfort = form.category === COMFORT_PLATFORM_CATEGORY
+  const isBaseBed = form.category === BASE_BED_CATEGORY
+  const isHeadboard = form.category === HEADBOARD_CATEGORY
+  const isAccessory = form.category === ACCESSORY_CATEGORY
+  const needsStructuredPrice = isComfort || isBaseBed || isHeadboard || isAccessory
 
   async function load() {
     if (!supabase || !ownerUserId) return
@@ -212,11 +243,8 @@ export function BemAvivProdutosPage() {
     for (const r of rowsForFilterOptions) {
       addUniqueFilterOption(lines, rowLineDisplay(r))
       addUniqueFilterOption(names, rowNameModel(r))
-      const dk = rowDimSortKey(r)
-      if (dk) {
-        const sizeKey = `${dk[0]}|${dk[1]}|${dk[2]}`
-        if (!dimsByCm.has(sizeKey)) dimsByCm.set(sizeKey, formatComfortDims(dk[0], dk[1], dk[2]))
-      }
+      const dimLabel = rowDimsDisplay(r)
+      if (dimLabel !== '—') addUniqueFilterOption(dimsByCm, dimLabel)
       const tbl = r.price_table_id ? tableNameById[r.price_table_id] ?? '' : ''
       addUniqueFilterOption(tables, tbl)
     }
@@ -353,6 +381,98 @@ export function BemAvivProdutosPage() {
         dim_height_cm: h,
         price_table_id: form.price_table_id,
       }
+    } else if (isBaseBed) {
+      const w = parseInt(form.dim_width_cm, 10)
+      const len = parseInt(form.dim_length_cm, 10)
+      if (!toUpperTrim(form.name)) {
+        alert('INFORME O NOME DO PRODUTO.')
+        return
+      }
+      if (!Number.isFinite(w) || !Number.isFinite(len) || w <= 0 || len <= 0) {
+        alert('INFORME LARGURA E COMPRIMENTO VÁLIDOS (CM).')
+        return
+      }
+      if (!form.price_table_id) {
+        alert('SELECIONE A TABELA DE PREÇO.')
+        return
+      }
+      const priceNum = parseDigitsCentsToNumber(form.comfortPriceDigits)
+      if (priceNum <= 0) {
+        alert('INFORME O VALOR.')
+        return
+      }
+      payload = {
+        user_id: ownerUserId,
+        category: toUpperTrim(form.category),
+        name: toUpperTrim(form.name),
+        description: toUpperTrim(form.description) || null,
+        price: priceNum,
+        product_line: null,
+        model: null,
+        dim_width_cm: w,
+        dim_length_cm: len,
+        dim_height_cm: null,
+        price_table_id: form.price_table_id,
+      }
+    } else if (isHeadboard) {
+      const w = parseInt(form.dim_width_cm, 10)
+      if (!toUpperTrim(form.name)) {
+        alert('INFORME O NOME DO PRODUTO.')
+        return
+      }
+      if (!Number.isFinite(w) || w <= 0) {
+        alert('INFORME LARGURA VÁLIDA (CM).')
+        return
+      }
+      if (!form.price_table_id) {
+        alert('SELECIONE A TABELA DE PREÇO.')
+        return
+      }
+      const priceNum = parseDigitsCentsToNumber(form.comfortPriceDigits)
+      if (priceNum <= 0) {
+        alert('INFORME O VALOR.')
+        return
+      }
+      payload = {
+        user_id: ownerUserId,
+        category: toUpperTrim(form.category),
+        name: toUpperTrim(form.name),
+        description: toUpperTrim(form.description) || null,
+        price: priceNum,
+        product_line: null,
+        model: null,
+        dim_width_cm: w,
+        dim_length_cm: null,
+        dim_height_cm: null,
+        price_table_id: form.price_table_id,
+      }
+    } else if (isAccessory) {
+      if (!toUpperTrim(form.name)) {
+        alert('INFORME O NOME DO PRODUTO.')
+        return
+      }
+      if (!form.price_table_id) {
+        alert('SELECIONE A TABELA DE PREÇO.')
+        return
+      }
+      const priceNum = parseDigitsCentsToNumber(form.comfortPriceDigits)
+      if (priceNum <= 0) {
+        alert('INFORME O VALOR.')
+        return
+      }
+      payload = {
+        user_id: ownerUserId,
+        category: toUpperTrim(form.category),
+        name: toUpperTrim(form.name),
+        description: toUpperTrim(form.description) || null,
+        price: priceNum,
+        product_line: null,
+        model: null,
+        dim_width_cm: null,
+        dim_length_cm: null,
+        dim_height_cm: null,
+        price_table_id: form.price_table_id,
+      }
     } else {
       payload = {
         user_id: ownerUserId,
@@ -375,8 +495,8 @@ export function BemAvivProdutosPage() {
 
     if (duplicateBase) {
       const currentNameOrModel = toUpperTrim(isComfort ? form.model : form.name)
-      const currentWidth = isComfort ? parseInt(form.dim_width_cm, 10) : null
-      const currentLength = isComfort ? parseInt(form.dim_length_cm, 10) : null
+      const currentWidth = needsStructuredPrice ? parseInt(form.dim_width_cm, 10) : null
+      const currentLength = isComfort || isBaseBed ? parseInt(form.dim_length_cm, 10) : null
       const currentHeight = isComfort ? parseInt(form.dim_height_cm, 10) : null
 
       const unchanged =
@@ -402,8 +522,12 @@ export function BemAvivProdutosPage() {
         }
         productId = editing.id
 
-        const wasComfort = editing.category === COMFORT_PLATFORM_CATEGORY
-        if (wasComfort && !isComfort) {
+        const wasStructured =
+          editing.category === COMFORT_PLATFORM_CATEGORY ||
+          editing.category === BASE_BED_CATEGORY ||
+          editing.category === HEADBOARD_CATEGORY ||
+          editing.category === ACCESSORY_CATEGORY
+        if (wasStructured && !needsStructuredPrice) {
           await removePriceTableItemForProduct(productId)
         }
       } else {
@@ -415,17 +539,28 @@ export function BemAvivProdutosPage() {
         productId = (inserted as { id: string }).id
       }
 
-      if (isComfort) {
-        const w = Number(payload.dim_width_cm)
-        const len = Number(payload.dim_length_cm)
-        const h = Number(payload.dim_height_cm)
-        const lineDescription = buildComfortPriceLineDescription(
-          String(payload.product_line),
-          String(payload.model),
-          w,
-          len,
-          h,
-        )
+      if (needsStructuredPrice) {
+        let lineDescription = ''
+        if (isComfort) {
+          const w = Number(payload.dim_width_cm)
+          const len = Number(payload.dim_length_cm)
+          const h = Number(payload.dim_height_cm)
+          lineDescription = buildComfortPriceLineDescription(
+            String(payload.product_line),
+            String(payload.model),
+            w,
+            len,
+            h,
+          )
+        } else {
+          lineDescription = buildSizedPriceLineDescription({
+            category: String(payload.category),
+            name: String(payload.name),
+            widthCm: payload.dim_width_cm == null ? null : Number(payload.dim_width_cm),
+            lengthCm: payload.dim_length_cm == null ? null : Number(payload.dim_length_cm),
+            heightCm: payload.dim_height_cm == null ? null : Number(payload.dim_height_cm),
+          })
+        }
         await syncPriceTableItem({
           productId,
           priceTableId: form.price_table_id,
@@ -456,6 +591,11 @@ export function BemAvivProdutosPage() {
     setEditing(r)
     setDuplicateBase(null)
     const comfort = r.category === COMFORT_PLATFORM_CATEGORY
+    const structured =
+      r.category === COMFORT_PLATFORM_CATEGORY ||
+      r.category === BASE_BED_CATEGORY ||
+      r.category === HEADBOARD_CATEGORY ||
+      r.category === ACCESSORY_CATEGORY
     const lineOk =
       r.product_line && comfortProductLines.includes(r.product_line as (typeof comfortProductLines)[number])
         ? r.product_line
@@ -464,13 +604,13 @@ export function BemAvivProdutosPage() {
       category: r.category,
       name: r.name,
       description: r.description ?? '',
-      price: !comfort && r.price != null ? String(r.price) : '',
+      price: !structured && r.price != null ? String(r.price) : '',
       product_line: lineOk,
       model: comfort ? (r.model ?? r.name) : '',
       dim_width_cm: r.dim_width_cm != null ? String(r.dim_width_cm) : '',
       dim_length_cm: r.dim_length_cm != null ? String(r.dim_length_cm) : '',
       dim_height_cm: r.dim_height_cm != null ? String(r.dim_height_cm) : '',
-      comfortPriceDigits: comfort && r.price != null ? numberToCentsDigits(Number(r.price)) : '',
+      comfortPriceDigits: structured && r.price != null ? numberToCentsDigits(Number(r.price)) : '',
       price_table_id: r.price_table_id ?? '',
     })
   }
@@ -479,6 +619,11 @@ export function BemAvivProdutosPage() {
     setShowForm(true)
     setEditing(null)
     const comfort = r.category === COMFORT_PLATFORM_CATEGORY
+    const structured =
+      r.category === COMFORT_PLATFORM_CATEGORY ||
+      r.category === BASE_BED_CATEGORY ||
+      r.category === HEADBOARD_CATEGORY ||
+      r.category === ACCESSORY_CATEGORY
     const lineOk =
       r.product_line && comfortProductLines.includes(r.product_line as (typeof comfortProductLines)[number])
         ? r.product_line
@@ -487,13 +632,13 @@ export function BemAvivProdutosPage() {
       category: r.category,
       name: r.name,
       description: r.description ?? '',
-      price: !comfort && r.price != null ? String(r.price) : '',
+      price: !structured && r.price != null ? String(r.price) : '',
       product_line: lineOk,
       model: comfort ? (r.model ?? r.name) : '',
       dim_width_cm: r.dim_width_cm != null ? String(r.dim_width_cm) : '',
       dim_length_cm: r.dim_length_cm != null ? String(r.dim_length_cm) : '',
       dim_height_cm: r.dim_height_cm != null ? String(r.dim_height_cm) : '',
-      comfortPriceDigits: comfort && r.price != null ? numberToCentsDigits(Number(r.price)) : '',
+      comfortPriceDigits: structured && r.price != null ? numberToCentsDigits(Number(r.price)) : '',
       price_table_id: r.price_table_id ?? '',
     })
     setDuplicateBase({
@@ -644,6 +789,138 @@ export function BemAvivProdutosPage() {
                     <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
                   </div>
                 </>
+              ) : isBaseBed ? (
+                <>
+                  <div className="sm:col-span-4">
+                    <label>TABELA DE PREÇO</label>
+                    <select
+                      required
+                      value={form.price_table_id}
+                      onChange={(e) => setForm({ ...form, price_table_id: e.target.value })}
+                    >
+                      <option value="">— SELECIONE —</option>
+                      {priceTables.map((t) => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="sm:col-span-4">
+                    <label>LARGURA</label>
+                    <input
+                      inputMode="numeric"
+                      required
+                      placeholder="1,28m"
+                      value={formatMetersMaskFromCmDigits(form.dim_width_cm)}
+                      onChange={(e) => setForm({ ...form, dim_width_cm: onlyDigits(e.target.value) })}
+                    />
+                  </div>
+                  <div className="sm:col-span-4">
+                    <label>COMPRIMENTO</label>
+                    <input
+                      inputMode="numeric"
+                      required
+                      placeholder="1,88m"
+                      value={formatMetersMaskFromCmDigits(form.dim_length_cm)}
+                      onChange={(e) => setForm({ ...form, dim_length_cm: onlyDigits(e.target.value) })}
+                    />
+                  </div>
+                  <div className="sm:col-span-4">
+                    <label>VALOR</label>
+                    <input
+                      inputMode="numeric"
+                      placeholder="R$ 0,00"
+                      required
+                      value={formatBRLFromCentsDigits(form.comfortPriceDigits)}
+                      onChange={(e) => setForm({ ...form, comfortPriceDigits: e.target.value.replace(/\D/g, '') })}
+                    />
+                  </div>
+                  <div className="sm:col-span-8">
+                    <label>NOME DO PRODUTO</label>
+                    <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                  </div>
+                  <div className="sm:col-span-12">
+                    <label>COMPLEMENTO</label>
+                    <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+                  </div>
+                </>
+              ) : isHeadboard ? (
+                <>
+                  <div className="sm:col-span-4">
+                    <label>TABELA DE PREÇO</label>
+                    <select
+                      required
+                      value={form.price_table_id}
+                      onChange={(e) => setForm({ ...form, price_table_id: e.target.value })}
+                    >
+                      <option value="">— SELECIONE —</option>
+                      {priceTables.map((t) => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="sm:col-span-4">
+                    <label>LARGURA</label>
+                    <input
+                      inputMode="numeric"
+                      required
+                      placeholder="1,28m"
+                      value={formatMetersMaskFromCmDigits(form.dim_width_cm)}
+                      onChange={(e) => setForm({ ...form, dim_width_cm: onlyDigits(e.target.value) })}
+                    />
+                  </div>
+                  <div className="sm:col-span-4">
+                    <label>VALOR</label>
+                    <input
+                      inputMode="numeric"
+                      placeholder="R$ 0,00"
+                      required
+                      value={formatBRLFromCentsDigits(form.comfortPriceDigits)}
+                      onChange={(e) => setForm({ ...form, comfortPriceDigits: e.target.value.replace(/\D/g, '') })}
+                    />
+                  </div>
+                  <div className="sm:col-span-12">
+                    <label>NOME DO PRODUTO</label>
+                    <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                  </div>
+                  <div className="sm:col-span-12">
+                    <label>COMPLEMENTO</label>
+                    <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+                  </div>
+                </>
+              ) : isAccessory ? (
+                <>
+                  <div className="sm:col-span-4">
+                    <label>TABELA DE PREÇO</label>
+                    <select
+                      required
+                      value={form.price_table_id}
+                      onChange={(e) => setForm({ ...form, price_table_id: e.target.value })}
+                    >
+                      <option value="">— SELECIONE —</option>
+                      {priceTables.map((t) => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="sm:col-span-4">
+                    <label>VALOR</label>
+                    <input
+                      inputMode="numeric"
+                      placeholder="R$ 0,00"
+                      required
+                      value={formatBRLFromCentsDigits(form.comfortPriceDigits)}
+                      onChange={(e) => setForm({ ...form, comfortPriceDigits: e.target.value.replace(/\D/g, '') })}
+                    />
+                  </div>
+                  <div className="sm:col-span-12">
+                    <label>NOME DO PRODUTO</label>
+                    <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                  </div>
+                  <div className="sm:col-span-12">
+                    <label>COMPLEMENTO</label>
+                    <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+                  </div>
+                </>
               ) : (
                 <>
                   <div className="sm:col-span-4">
@@ -661,7 +938,7 @@ export function BemAvivProdutosPage() {
                 </>
               )}
 
-              {priceTables.length === 0 && isComfort && (
+              {priceTables.length === 0 && needsStructuredPrice && (
                 <p className="sm:col-span-12 text-sm text-amber-800">CADASTRE PELO MENOS UMA TABELA DE PREÇO EM GERAL → TABELA DE PREÇO.</p>
               )}
 
