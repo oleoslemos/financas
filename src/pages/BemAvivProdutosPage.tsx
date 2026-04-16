@@ -254,11 +254,15 @@ export function BemAvivProdutosPage() {
   const sortedDisplayed = useMemo(() => {
     const arr = [...filtered]
     arr.sort((r1, r2) => {
-      let cmp = compareLineAsc(rowLineDisplay(r1), rowLineDisplay(r2))
+      let cmp = compareDimKeys(rowDimSortKey(r1), rowDimSortKey(r2))
+      if (cmp !== 0) return cmp
+      const p1 = r1.price == null ? Number.POSITIVE_INFINITY : Number(r1.price)
+      const p2 = r2.price == null ? Number.POSITIVE_INFINITY : Number(r2.price)
+      cmp = p1 - p2
       if (cmp !== 0) return cmp
       cmp = rowNameModel(r1).localeCompare(rowNameModel(r2), 'pt-BR', { sensitivity: 'base' })
       if (cmp !== 0) return cmp
-      cmp = compareDimKeys(rowDimSortKey(r1), rowDimSortKey(r2))
+      cmp = compareLineAsc(rowLineDisplay(r1), rowLineDisplay(r2))
       if (cmp !== 0) return cmp
       return r1.id.localeCompare(r2.id)
     })
@@ -274,13 +278,14 @@ export function BemAvivProdutosPage() {
     if (!supabase || !ownerUserId) return
     const { data: existing } = await supabase
       .from('bem_aviv_price_table_items')
-      .select('id, price_table_id')
+      .select('id')
+      .eq('price_table_id', args.priceTableId)
       .eq('product_id', args.productId)
       .maybeSingle()
 
     const row = existing as PriceTableItemRow | null
 
-    if (row && row.price_table_id === args.priceTableId) {
+    if (row) {
       const { error } = await supabase
         .from('bem_aviv_price_table_items')
         .update({
@@ -290,11 +295,6 @@ export function BemAvivProdutosPage() {
         .eq('id', row.id)
       if (error) throw new Error(error.message)
       return
-    }
-
-    if (row) {
-      const { error: delErr } = await supabase.from('bem_aviv_price_table_items').delete().eq('id', row.id)
-      if (delErr) throw new Error(delErr.message)
     }
 
     const { error: insErr } = await supabase.from('bem_aviv_price_table_items').insert({
@@ -473,7 +473,6 @@ export function BemAvivProdutosPage() {
       comfortPriceDigits: comfort && r.price != null ? numberToCentsDigits(Number(r.price)) : '',
       price_table_id: r.price_table_id ?? '',
     })
-    scrollFormIntoViewSoon()
   }
 
   function startDuplicate(r: Produto) {
@@ -504,7 +503,6 @@ export function BemAvivProdutosPage() {
       sourceLength: r.dim_length_cm != null ? Number(r.dim_length_cm) : null,
       sourceHeight: r.dim_height_cm != null ? Number(r.dim_height_cm) : null,
     })
-    scrollFormIntoViewSoon()
   }
 
   function openAddProductForm() {
@@ -512,12 +510,6 @@ export function BemAvivProdutosPage() {
     setDuplicateBase(null)
     setForm(emptyForm())
     setShowForm(true)
-    window.requestAnimationFrame(() => {
-      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      window.setTimeout(() => {
-        formRef.current?.querySelector<HTMLElement>('select, input')?.focus()
-      }, 350)
-    })
   }
 
   function closeProductForm() {
@@ -527,13 +519,12 @@ export function BemAvivProdutosPage() {
     setShowForm(false)
   }
 
-  function scrollFormIntoViewSoon() {
-    window.requestAnimationFrame(() => {
-      window.setTimeout(() => {
-        formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      }, 50)
-    })
-  }
+  useEffect(() => {
+    if (!showForm) return
+    window.setTimeout(() => {
+      formRef.current?.querySelector<HTMLElement>('select, input')?.focus()
+    }, 20)
+  }, [showForm])
 
   return (
     <div className="space-y-6">
@@ -557,121 +548,134 @@ export function BemAvivProdutosPage() {
       </div>
 
       {showForm && (
-      <form ref={formRef} onSubmit={submit} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-12 sm:gap-4">
-        <div className="sm:col-span-4">
-          <label>CATEGORIA</label>
-          <select
-            value={form.category}
-            onChange={(e) => setForm({ ...form, category: e.target.value })}
-          >
-            {productCategories.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/45 p-4 sm:items-center">
+          <div className="max-h-[92vh] w-full max-w-5xl overflow-auto rounded-xl border border-slate-200 bg-white p-3 shadow-xl sm:p-4">
+            <form ref={formRef} onSubmit={submit} className="grid gap-3 sm:grid-cols-12 sm:gap-4">
+              <div className="sm:col-span-12 flex items-center justify-between">
+                <h3 className="text-base font-semibold text-slate-900">
+                  {editing ? 'EDITAR PRODUTO' : duplicateBase ? 'DUPLICAR PRODUTO' : 'ADICIONAR PRODUTO'}
+                </h3>
+                <button className="btn btn-secondary" type="button" onClick={closeProductForm}>
+                  FECHAR
+                </button>
+              </div>
+
+              <div className="sm:col-span-4">
+                <label>CATEGORIA</label>
+                <select
+                  value={form.category}
+                  onChange={(e) => setForm({ ...form, category: e.target.value })}
+                >
+                  {productCategories.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+
+              {isComfort ? (
+                <>
+                  <div className="sm:col-span-4">
+                    <label>LINHA</label>
+                    <select value={form.product_line} onChange={(e) => setForm({ ...form, product_line: e.target.value })}>
+                      {comfortProductLines.map((l) => (
+                        <option key={l} value={l}>{l}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="sm:col-span-4">
+                    <label>TABELA DE PREÇO</label>
+                    <select
+                      required
+                      value={form.price_table_id}
+                      onChange={(e) => setForm({ ...form, price_table_id: e.target.value })}
+                    >
+                      <option value="">— SELECIONE —</option>
+                      {priceTables.map((t) => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="sm:col-span-3">
+                    <label>LARGURA</label>
+                    <input
+                      inputMode="numeric"
+                      required
+                      placeholder="0,78m"
+                      value={formatMetersMaskFromCmDigits(form.dim_width_cm)}
+                      onChange={(e) => setForm({ ...form, dim_width_cm: onlyDigits(e.target.value) })}
+                    />
+                  </div>
+                  <div className="sm:col-span-3">
+                    <label>COMPRIMENTO</label>
+                    <input
+                      inputMode="numeric"
+                      required
+                      placeholder="1,88m"
+                      value={formatMetersMaskFromCmDigits(form.dim_length_cm)}
+                      onChange={(e) => setForm({ ...form, dim_length_cm: onlyDigits(e.target.value) })}
+                    />
+                  </div>
+                  <div className="sm:col-span-3">
+                    <label>ALTURA</label>
+                    <input
+                      inputMode="numeric"
+                      required
+                      placeholder="0,41cm"
+                      value={formatCentimetersMaskFromCmDigits(form.dim_height_cm)}
+                      onChange={(e) => setForm({ ...form, dim_height_cm: onlyDigits(e.target.value) })}
+                    />
+                  </div>
+                  <div className="sm:col-span-3">
+                    <label>VALOR</label>
+                    <input
+                      inputMode="numeric"
+                      placeholder="R$ 0,00"
+                      required
+                      value={formatBRLFromCentsDigits(form.comfortPriceDigits)}
+                      onChange={(e) => setForm({ ...form, comfortPriceDigits: e.target.value.replace(/\D/g, '') })}
+                    />
+                  </div>
+                  <div className="sm:col-span-6">
+                    <label>MODELO</label>
+                    <input required value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} />
+                  </div>
+                  <div className="sm:col-span-6">
+                    <label>COMPLEMENTO</label>
+                    <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="sm:col-span-4">
+                    <label>PREÇO</label>
+                    <input value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
+                  </div>
+                  <div className="sm:col-span-8">
+                    <label>NOME DO PRODUTO</label>
+                    <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                  </div>
+                  <div className="sm:col-span-12">
+                    <label>COMPLEMENTO</label>
+                    <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+                  </div>
+                </>
+              )}
+
+              {priceTables.length === 0 && isComfort && (
+                <p className="sm:col-span-12 text-sm text-amber-800">CADASTRE PELO MENOS UMA TABELA DE PREÇO EM GERAL → TABELA DE PREÇO.</p>
+              )}
+
+              <div className="sm:col-span-12 flex flex-wrap gap-2">
+                <button className="btn btn-primary" type="submit">
+                  {editing ? 'SALVAR' : duplicateBase ? 'SALVAR DUPLICADO' : 'ADICIONAR'}
+                </button>
+                <button className="btn btn-secondary" type="button" onClick={closeProductForm}>
+                  CANCELAR
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-
-        {isComfort ? (
-          <>
-            <div className="sm:col-span-4">
-              <label>LINHA</label>
-              <select value={form.product_line} onChange={(e) => setForm({ ...form, product_line: e.target.value })}>
-                {comfortProductLines.map((l) => (
-                  <option key={l} value={l}>{l}</option>
-                ))}
-              </select>
-            </div>
-            <div className="sm:col-span-4">
-              <label>TABELA DE PREÇO</label>
-              <select
-                required
-                value={form.price_table_id}
-                onChange={(e) => setForm({ ...form, price_table_id: e.target.value })}
-              >
-                <option value="">— SELECIONE —</option>
-                {priceTables.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="sm:col-span-3">
-              <label>LARGURA</label>
-              <input
-                inputMode="numeric"
-                required
-                placeholder="0,78m"
-                value={formatMetersMaskFromCmDigits(form.dim_width_cm)}
-                onChange={(e) => setForm({ ...form, dim_width_cm: onlyDigits(e.target.value) })}
-              />
-            </div>
-            <div className="sm:col-span-3">
-              <label>COMPRIMENTO</label>
-              <input
-                inputMode="numeric"
-                required
-                placeholder="1,88m"
-                value={formatMetersMaskFromCmDigits(form.dim_length_cm)}
-                onChange={(e) => setForm({ ...form, dim_length_cm: onlyDigits(e.target.value) })}
-              />
-            </div>
-            <div className="sm:col-span-3">
-              <label>ALTURA</label>
-              <input
-                inputMode="numeric"
-                required
-                placeholder="0,41cm"
-                value={formatCentimetersMaskFromCmDigits(form.dim_height_cm)}
-                onChange={(e) => setForm({ ...form, dim_height_cm: onlyDigits(e.target.value) })}
-              />
-            </div>
-            <div className="sm:col-span-3">
-              <label>VALOR</label>
-              <input
-                inputMode="numeric"
-                placeholder="R$ 0,00"
-                required
-                value={formatBRLFromCentsDigits(form.comfortPriceDigits)}
-                onChange={(e) => setForm({ ...form, comfortPriceDigits: e.target.value.replace(/\D/g, '') })}
-              />
-            </div>
-            <div className="sm:col-span-6">
-              <label>MODELO</label>
-              <input required value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} />
-            </div>
-            <div className="sm:col-span-6">
-              <label>COMPLEMENTO</label>
-              <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="sm:col-span-4">
-              <label>PREÇO</label>
-              <input value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
-            </div>
-            <div className="sm:col-span-8">
-              <label>NOME DO PRODUTO</label>
-              <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-            </div>
-            <div className="sm:col-span-12">
-              <label>COMPLEMENTO</label>
-              <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-            </div>
-          </>
-        )}
-
-        <div className="sm:col-span-12 flex flex-wrap gap-2">
-          <button className="btn btn-primary" type="submit">
-            {editing ? 'SALVAR' : duplicateBase ? 'SALVAR DUPLICADO' : 'ADICIONAR'}
-          </button>
-          <button className="btn btn-secondary" type="button" onClick={closeProductForm}>
-            CANCELAR
-          </button>
-        </div>
-      </form>
-      )}
-
-      {showForm && priceTables.length === 0 && isComfort && (
-        <p className="text-sm text-amber-800">CADASTRE PELO MENOS UMA TABELA DE PREÇO EM GERAL → TABELA DE PREÇO.</p>
       )}
 
       <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-12">
@@ -680,7 +684,7 @@ export function BemAvivProdutosPage() {
           <input
             id="bem-aviv-filter-line"
             type="text"
-            list="bem-aviv-filter-line-dl"
+            list={filterLine.trim() ? 'bem-aviv-filter-line-dl' : undefined}
             placeholder="DIGITE OU SELECIONE"
             value={filterLine}
             onChange={(e) => setFilterLine(e.target.value)}
@@ -698,7 +702,7 @@ export function BemAvivProdutosPage() {
           <input
             id="bem-aviv-filter-name"
             type="text"
-            list="bem-aviv-filter-name-dl"
+            list={filterNameModel.trim() ? 'bem-aviv-filter-name-dl' : undefined}
             placeholder="DIGITE OU SELECIONE"
             value={filterNameModel}
             onChange={(e) => setFilterNameModel(e.target.value)}
@@ -716,7 +720,7 @@ export function BemAvivProdutosPage() {
           <input
             id="bem-aviv-filter-dim"
             type="text"
-            list="bem-aviv-filter-dim-dl"
+            list={filterDimension.trim() ? 'bem-aviv-filter-dim-dl' : undefined}
             placeholder="DIGITE OU SELECIONE"
             value={filterDimension}
             onChange={(e) => setFilterDimension(e.target.value)}
@@ -734,7 +738,7 @@ export function BemAvivProdutosPage() {
           <input
             id="bem-aviv-filter-table"
             type="text"
-            list="bem-aviv-filter-table-dl"
+            list={filterTable.trim() ? 'bem-aviv-filter-table-dl' : undefined}
             placeholder="DIGITE OU SELECIONE"
             value={filterTable}
             onChange={(e) => setFilterTable(e.target.value)}
