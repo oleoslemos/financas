@@ -3,6 +3,7 @@ import { Pencil, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
+import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { formatBRL, parseMoney } from '../lib/format'
 import { toUpperOrNull, toUpperTrim } from '../lib/text'
 
@@ -25,7 +26,7 @@ type PrMovement = {
 export function BankAccounts() {
   const { user } = useUser()
   const supabase = useSupabase()
-  const ownerUserId = resolveDataOwnerId(user?.id, user?.primaryEmailAddress?.emailAddress)
+  const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const [rows, setRows] = useState<Bank[]>([])
   const [movements, setMovements] = useState<PrMovement[]>([])
   const [loading, setLoading] = useState(true)

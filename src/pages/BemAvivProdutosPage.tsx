@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
+import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { formatBRL, formatBRLFromCentsDigits, numberToCentsDigits, parseDigitsCentsToNumber, parseMoney } from '../lib/format'
 import { toUpperTrim } from '../lib/text'
 
@@ -182,7 +183,7 @@ export function BemAvivProdutosPage() {
   const { user } = useUser()
   const location = useLocation()
   const supabase = useSupabase()
-  const ownerUserId = resolveDataOwnerId(user?.id, user?.primaryEmailAddress?.emailAddress)
+  const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const [rows, setRows] = useState<Produto[]>([])
   const [priceTables, setPriceTables] = useState<PriceTableOpt[]>([])
   const [editing, setEditing] = useState<Produto | null>(null)

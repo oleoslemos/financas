@@ -3,6 +3,7 @@ import { CheckCircle2, CircleDashed, LoaderCircle, Plus, RotateCcw, Search, Tras
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
+import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { toISODate } from '../lib/dates'
 import { toUpperTrim } from '../lib/text'
 
@@ -37,7 +38,7 @@ const priorityLabel: Record<TaskPriority, string> = {
 export function TasksPage() {
   const { user } = useUser()
   const supabase = useSupabase()
-  const ownerUserId = resolveDataOwnerId(user?.id, user?.primaryEmailAddress?.emailAddress)
+  const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
 
   const [rows, setRows] = useState<TaskRow[]>([])
   const [loading, setLoading] = useState(false)

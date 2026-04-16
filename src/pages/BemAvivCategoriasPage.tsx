@@ -3,6 +3,7 @@ import { Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
+import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { toUpperTrim } from '../lib/text'
 
 type Cat = { id: string; name: string }
@@ -10,7 +11,7 @@ type Cat = { id: string; name: string }
 export function BemAvivCategoriasPage() {
   const { user } = useUser()
   const supabase = useSupabase()
-  const ownerUserId = resolveDataOwnerId(user?.id, user?.primaryEmailAddress?.emailAddress)
+  const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const [rows, setRows] = useState<Cat[]>([])
   const [name, setName] = useState('')
 

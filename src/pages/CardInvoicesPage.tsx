@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
+import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { deleteCreditCardInvoiceOrGroup } from '../lib/invoiceInstallments'
 import { toISODate } from '../lib/dates'
 import { formatBRL } from '../lib/format'
@@ -23,7 +24,7 @@ export function CardInvoicesPage() {
   const navigate = useNavigate()
   const { user } = useUser()
   const supabase = useSupabase()
-  const ownerUserId = resolveDataOwnerId(user?.id, user?.primaryEmailAddress?.emailAddress)
+  const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const [cardName, setCardName] = useState('')
   const [allCards, setAllCards] = useState<{ id: string; name: string }[]>([])
   const [rows, setRows] = useState<Inv[]>([])

@@ -20,6 +20,7 @@ import {
 import { useEffect, useState, type ReactNode } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { canAccessTasksHomolog } from '../lib/tasksHomologAccess'
+import { clerkEmailCandidates } from '../lib/clerkEmails'
 
 const navLinkBase =
   'flex items-center gap-2 rounded-md px-2.5 py-2 text-[13px] font-normal leading-snug transition-colors normal-case'
@@ -156,8 +157,8 @@ export function AppLayout() {
   const produtosSectionActive = path.startsWith('/bem-aviv/produtos')
   const geralSectionActive = path.startsWith('/bem-aviv/categorias') || path.startsWith('/bem-aviv/tabela-preco')
 
-  const currentEmail = (user?.primaryEmailAddress?.emailAddress ?? '').trim().toLowerCase()
-  const hideAgendaTasks = currentEmail === 'suelenjalves@gmail.com'
+  const emails = clerkEmailCandidates(user)
+  const hideAgendaTasks = emails.includes('suelenjalves@gmail.com')
   const tasksHomologEnabled = !hideAgendaTasks && canAccessTasksHomolog(user?.primaryEmailAddress?.emailAddress)
   const agendaActive = path.startsWith('/lsh/agenda') || path === '/agenda'
   const tasksActive = path.startsWith('/lsh/tarefas') || path === '/tarefas'

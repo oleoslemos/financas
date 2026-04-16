@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
+import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { formatBRL, parseMoney } from '../lib/format'
 import { toUpperOrNull, toUpperTrim } from '../lib/text'
 
@@ -20,7 +21,7 @@ export function CreditCardsPage() {
   const { user } = useUser()
   const navigate = useNavigate()
   const supabase = useSupabase()
-  const ownerUserId = resolveDataOwnerId(user?.id, user?.primaryEmailAddress?.emailAddress)
+  const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const [rows, setRows] = useState<Card[]>([])
   const [openInvoiceValueByCard, setOpenInvoiceValueByCard] = useState<Record<string, number>>({})
   const [nextOpenInvoicesValueByCard, setNextOpenInvoicesValueByCard] = useState<Record<string, number>>({})

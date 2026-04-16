@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
+import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { formatBRL } from '../lib/format'
 import { monthLabel, parseISODate, toISODate } from '../lib/dates'
 
@@ -65,7 +66,7 @@ function rowSort(a: Row, b: Row) {
 export function Dashboard() {
   const { user } = useUser()
   const supabase = useSupabase()
-  const ownerUserId = resolveDataOwnerId(user?.id, user?.primaryEmailAddress?.emailAddress)
+  const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const [banks, setBanks] = useState<Bank[]>([])
   const [openRows, setOpenRows] = useState<Row[]>([])
   const [paidMovements, setPaidMovements] = useState<PaidMovement[]>([])

@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, Pencil, Search, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
+import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { toUpperTrim } from '../lib/text'
 
 type Cliente = {
@@ -53,7 +54,7 @@ function formatCep(v?: string | null) {
 export function BemAvivClientesPage() {
   const { user } = useUser()
   const supabase = useSupabase()
-  const ownerUserId = resolveDataOwnerId(user?.id, user?.primaryEmailAddress?.emailAddress)
+  const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
 
   const [rows, setRows] = useState<Cliente[]>([])
   const [editing, setEditing] = useState<Cliente | null>(null)
