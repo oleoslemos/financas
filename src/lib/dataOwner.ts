@@ -6,18 +6,16 @@ function parseCsv(v?: string | null): string[] {
 }
 
 export function resolveDataOwnerId(currentUserId?: string | null, currentUserEmail?: string | null): string | null {
-  // Global override (existing behavior).
+  // Global override (existing behavior): when VITE_SHARED_DATA_OWNER_ID is set,
+  // you can optionally restrict it to a list of e-mails via VITE_SHARED_EMAILS.
   const forced = (import.meta.env.VITE_SHARED_DATA_OWNER_ID as string | undefined)?.trim()
-  if (forced) return forced
-
-  // Bem Aviv: compartilhar dados por e-mail (ex.: usuário auxiliar enxergar o mesmo cadastro).
-  // Configure:
-  // - VITE_BEM_AVIV_SHARED_DATA_OWNER_ID=<clerk_user_id do dono dos dados>
-  // - VITE_BEM_AVIV_SHARED_EMAILS=email1,email2,...
-  const sharedOwner = (import.meta.env.VITE_BEM_AVIV_SHARED_DATA_OWNER_ID as string | undefined)?.trim()
-  const sharedEmails = parseCsv(import.meta.env.VITE_BEM_AVIV_SHARED_EMAILS as string | undefined)
   const email = (currentUserEmail ?? '').trim().toLowerCase()
-  if (sharedOwner && email && sharedEmails.includes(email)) return sharedOwner
+  const sharedEmails = parseCsv(import.meta.env.VITE_SHARED_EMAILS as string | undefined)
+  if (forced) {
+    // Backward compatible: if no list is provided, force for everyone.
+    if (sharedEmails.length === 0) return forced
+    if (email && sharedEmails.includes(email)) return forced
+  }
 
   return currentUserId ?? null
 }

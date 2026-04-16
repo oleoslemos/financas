@@ -65,7 +65,7 @@ function rowSort(a: Row, b: Row) {
 export function Dashboard() {
   const { user } = useUser()
   const supabase = useSupabase()
-  const ownerUserId = resolveDataOwnerId(user?.id)
+  const ownerUserId = resolveDataOwnerId(user?.id, user?.primaryEmailAddress?.emailAddress)
   const [banks, setBanks] = useState<Bank[]>([])
   const [openRows, setOpenRows] = useState<Row[]>([])
   const [paidMovements, setPaidMovements] = useState<PaidMovement[]>([])

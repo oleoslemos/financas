@@ -60,7 +60,7 @@ export function CashflowPage() {
   const { user } = useUser()
   const navigate = useNavigate()
   const supabase = useSupabase()
-  const ownerUserId = resolveDataOwnerId(user?.id)
+  const ownerUserId = resolveDataOwnerId(user?.id, user?.primaryEmailAddress?.emailAddress)
   const [formKind, setFormKind] = useState<Kind>('payable')
   const [createOpen, setCreateOpen] = useState(false)
   const [formStatus, setFormStatus] = useState<'open' | 'paid'>('open')

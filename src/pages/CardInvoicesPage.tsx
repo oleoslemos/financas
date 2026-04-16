@@ -23,7 +23,7 @@ export function CardInvoicesPage() {
   const navigate = useNavigate()
   const { user } = useUser()
   const supabase = useSupabase()
-  const ownerUserId = resolveDataOwnerId(user?.id)
+  const ownerUserId = resolveDataOwnerId(user?.id, user?.primaryEmailAddress?.emailAddress)
   const [cardName, setCardName] = useState('')
   const [allCards, setAllCards] = useState<{ id: string; name: string }[]>([])
   const [rows, setRows] = useState<Inv[]>([])

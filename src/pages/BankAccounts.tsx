@@ -25,7 +25,7 @@ type PrMovement = {
 export function BankAccounts() {
   const { user } = useUser()
   const supabase = useSupabase()
-  const ownerUserId = resolveDataOwnerId(user?.id)
+  const ownerUserId = resolveDataOwnerId(user?.id, user?.primaryEmailAddress?.emailAddress)
   const [rows, setRows] = useState<Bank[]>([])
   const [movements, setMovements] = useState<PrMovement[]>([])
   const [loading, setLoading] = useState(true)

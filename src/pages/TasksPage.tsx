@@ -37,7 +37,7 @@ const priorityLabel: Record<TaskPriority, string> = {
 export function TasksPage() {
   const { user } = useUser()
   const supabase = useSupabase()
-  const ownerUserId = resolveDataOwnerId(user?.id)
+  const ownerUserId = resolveDataOwnerId(user?.id, user?.primaryEmailAddress?.emailAddress)
 
   const [rows, setRows] = useState<TaskRow[]>([])
   const [loading, setLoading] = useState(false)

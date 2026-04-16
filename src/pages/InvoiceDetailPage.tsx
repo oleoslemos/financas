@@ -46,7 +46,7 @@ export function InvoiceDetailPage() {
   const { cardId, invoiceId } = useParams<{ cardId: string; invoiceId: string }>()
   const { user } = useUser()
   const supabase = useSupabase()
-  const ownerUserId = resolveDataOwnerId(user?.id)
+  const ownerUserId = resolveDataOwnerId(user?.id, user?.primaryEmailAddress?.emailAddress)
   const [cardName, setCardName] = useState('')
   const [inv, setInv] = useState<Inv | null>(null)
   const [items, setItems] = useState<Item[]>([])

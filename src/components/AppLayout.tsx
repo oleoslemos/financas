@@ -156,7 +156,9 @@ export function AppLayout() {
   const produtosSectionActive = path.startsWith('/bem-aviv/produtos')
   const geralSectionActive = path.startsWith('/bem-aviv/categorias') || path.startsWith('/bem-aviv/tabela-preco')
 
-  const tasksHomologEnabled = canAccessTasksHomolog(user?.primaryEmailAddress?.emailAddress)
+  const currentEmail = (user?.primaryEmailAddress?.emailAddress ?? '').trim().toLowerCase()
+  const hideAgendaTasks = currentEmail === 'suelenjalves@gmail.com'
+  const tasksHomologEnabled = !hideAgendaTasks && canAccessTasksHomolog(user?.primaryEmailAddress?.emailAddress)
   const agendaActive = path.startsWith('/lsh/agenda') || path === '/agenda'
   const tasksActive = path.startsWith('/lsh/tarefas') || path === '/tarefas'
   const agendaSectionActive = agendaActive || tasksActive
