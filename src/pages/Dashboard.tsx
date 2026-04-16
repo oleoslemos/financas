@@ -18,6 +18,7 @@ type Row = {
 }
 
 type Bank = { id: string; name: string; initial_balance: number }
+type PaidMovement = { bank_account_id: string | null; amount: number; kind: 'payable' | 'receivable' }
 
 function monthKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
@@ -67,6 +68,7 @@ export function Dashboard() {
   const ownerUserId = resolveDataOwnerId(user?.id)
   const [banks, setBanks] = useState<Bank[]>([])
   const [openRows, setOpenRows] = useState<Row[]>([])
+  const [paidMovements, setPaidMovements] = useState<PaidMovement[]>([])
   const [selectedBankId, setSelectedBankId] = useState<string>('ALL')
   const [selectedMonth, setSelectedMonth] = useState<string>(() => monthKey(new Date()))
   const [loading, setLoading] = useState(true)
@@ -95,7 +97,7 @@ export function Dashboard() {
       const from = startOfMonthIso(selectedMonth)
       const until = endOfMonthIso(nextMonthKey(selectedMonth))
 
-      const [b, pr] = await Promise.all([
+      const [b, pr, paid] = await Promise.all([
         supabase
           .from('bank_accounts')
           .select('id, name, initial_balance')
@@ -109,18 +111,37 @@ export function Dashboard() {
           .gte('due_date', from)
           .lte('due_date', until)
           .order('due_date', { ascending: true })
+        ,
+        supabase
+          .from('payables_receivables')
+          .select('bank_account_id, amount, kind')
+          .eq('user_id', ownerUserId)
+          .eq('status', 'paid'),
       ])
       if (cancelled) return
       const banksData = (b.data as Bank[]) ?? []
       const rowsData = (pr.data as Row[]) ?? []
       setBanks(banksData)
       setOpenRows(rowsData)
+      setPaidMovements(((paid.data ?? []) as PaidMovement[]) ?? [])
       setLoading(false)
     })()
     return () => {
       cancelled = true
     }
   }, [supabase, ownerUserId, selectedMonth])
+
+  const currentBalanceByBankId = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const bank of banks) map.set(bank.id, Number(bank.initial_balance ?? 0))
+    for (const mv of paidMovements) {
+      if (!mv.bank_account_id) continue
+      const cur = map.get(mv.bank_account_id) ?? 0
+      const delta = mv.kind === 'receivable' ? Number(mv.amount) : -Number(mv.amount)
+      map.set(mv.bank_account_id, cur + delta)
+    }
+    return map
+  }, [banks, paidMovements])
 
   useEffect(() => {
     if (!supabase || !ownerUserId) return
@@ -310,7 +331,9 @@ export function Dashboard() {
                       <Landmark size={14} />
                       <span>{b.name}</span>
                     </div>
-                    <div className="text-sm font-semibold text-slate-900">SALDO ATUAL: {formatBRL(Number(b.initial_balance))}</div>
+                    <div className="text-sm font-semibold text-slate-900">
+                      SALDO ATUAL: {formatBRL(currentBalanceByBankId.get(b.id) ?? Number(b.initial_balance ?? 0))}
+                    </div>
                   </button>
                 )
               })

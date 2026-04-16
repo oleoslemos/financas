@@ -30,7 +30,7 @@ function nextCopyName(baseName: string, existingNames: string[]) {
 export function BemAvivTabelaPrecoPage() {
   const { user } = useUser()
   const supabase = useSupabase()
-  const ownerUserId = resolveDataOwnerId(user?.id)
+  const ownerUserId = resolveDataOwnerId(user?.id, user?.primaryEmailAddress?.emailAddress)
   const [rows, setRows] = useState<PriceTable[]>([])
   const [items, setItems] = useState<PriceTableItem[]>([])
   const [name, setName] = useState('')

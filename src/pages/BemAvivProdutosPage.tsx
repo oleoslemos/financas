@@ -182,7 +182,7 @@ export function BemAvivProdutosPage() {
   const { user } = useUser()
   const location = useLocation()
   const supabase = useSupabase()
-  const ownerUserId = resolveDataOwnerId(user?.id)
+  const ownerUserId = resolveDataOwnerId(user?.id, user?.primaryEmailAddress?.emailAddress)
   const [rows, setRows] = useState<Produto[]>([])
   const [priceTables, setPriceTables] = useState<PriceTableOpt[]>([])
   const [editing, setEditing] = useState<Produto | null>(null)

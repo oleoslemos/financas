@@ -53,7 +53,7 @@ function formatCep(v?: string | null) {
 export function BemAvivClientesPage() {
   const { user } = useUser()
   const supabase = useSupabase()
-  const ownerUserId = resolveDataOwnerId(user?.id)
+  const ownerUserId = resolveDataOwnerId(user?.id, user?.primaryEmailAddress?.emailAddress)
 
   const [rows, setRows] = useState<Cliente[]>([])
   const [editing, setEditing] = useState<Cliente | null>(null)

@@ -18,7 +18,7 @@ type ClienteOpt = { id: string; full_name: string }
 export function BemAvivPedidosPage() {
   const { user } = useUser()
   const supabase = useSupabase()
-  const ownerUserId = resolveDataOwnerId(user?.id)
+  const ownerUserId = resolveDataOwnerId(user?.id, user?.primaryEmailAddress?.emailAddress)
   const [rows, setRows] = useState<Pedido[]>([])
   const [clients, setClients] = useState<ClienteOpt[]>([])
   const [loading, setLoading] = useState(true)

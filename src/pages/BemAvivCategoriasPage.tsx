@@ -10,7 +10,7 @@ type Cat = { id: string; name: string }
 export function BemAvivCategoriasPage() {
   const { user } = useUser()
   const supabase = useSupabase()
-  const ownerUserId = resolveDataOwnerId(user?.id)
+  const ownerUserId = resolveDataOwnerId(user?.id, user?.primaryEmailAddress?.emailAddress)
   const [rows, setRows] = useState<Cat[]>([])
   const [name, setName] = useState('')
 
