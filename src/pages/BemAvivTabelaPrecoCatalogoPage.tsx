@@ -1,5 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
-import { Copy, Pencil, RefreshCw, Star, Trash2 } from 'lucide-react'
+import { Copy, Eye, Pencil, RefreshCw, Star, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
@@ -18,6 +18,14 @@ type PriceTableItem = {
   line_description: string
   price: number
 }
+
+type GradeModalState = {
+  tableId: string
+  productId: string
+  productName: string
+  items: PriceTableItem[]
+  editable: boolean
+} | null
 
 function nextCopyName(baseName: string, existingNames: string[]) {
   const used = new Set(existingNames)
@@ -38,6 +46,8 @@ export function BemAvivTabelaPrecoCatalogoPage() {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [isDefault, setIsDefault] = useState(false)
+  const [gradeModal, setGradeModal] = useState<GradeModalState>(null)
+  const [gradePriceDraft, setGradePriceDraft] = useState<Record<string, string>>({})
 
   const itemsByTableId = useMemo(() => {
     const m = new Map<string, PriceTableItem[]>()
@@ -51,6 +61,8 @@ export function BemAvivTabelaPrecoCatalogoPage() {
     }
     return m
   }, [items])
+
+  const productsById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products])
 
   const load = useCallback(async () => {
     if (!supabase || !ownerUserId) return
@@ -209,6 +221,60 @@ export function BemAvivTabelaPrecoCatalogoPage() {
     await load()
   }
 
+  function openGradeModal(tableId: string, productId: string, editable: boolean) {
+    const tableItems = itemsByTableId.get(tableId) ?? []
+    const gradeItems = tableItems
+      .filter((it) => it.offer_product_id === productId)
+      .sort((a, b) => a.variation_code.localeCompare(b.variation_code, 'pt-BR'))
+    if (gradeItems.length === 0) return
+    const product = productsById.get(productId)
+    setGradePriceDraft(Object.fromEntries(gradeItems.map((it) => [it.id, String(it.price).replace('.', ',')])))
+    setGradeModal({
+      tableId,
+      productId,
+      productName: product?.name ?? gradeItems[0].line_description,
+      items: gradeItems,
+      editable,
+    })
+  }
+
+  async function saveGradePrices() {
+    if (!supabase || !gradeModal) return
+    for (const item of gradeModal.items) {
+      const typed = gradePriceDraft[item.id] ?? ''
+      const parsed = parseMoney(typed)
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        alert(`VALOR INVÁLIDO PARA ${item.variation_code}.`)
+        return
+      }
+      const { error } = await supabase.from('bem_aviv_offer_price_table_items').update({ price: parsed }).eq('id', item.id)
+      if (error) {
+        alert(error.message)
+        return
+      }
+    }
+
+    const product = productsById.get(gradeModal.productId)
+    if (product && product.price_table_id === gradeModal.tableId) {
+      const byVarCode = new Map(
+        gradeModal.items.map((it) => [it.variation_code, parseMoney(gradePriceDraft[it.id] ?? String(it.price).replace('.', ','))]),
+      )
+      const vars = normalizePayload(product.payload).variations ?? []
+      const nextVars = vars.map((v) => (byVarCode.has(v.code) ? { ...v, price: byVarCode.get(v.code)! } : v))
+      const { error: productError } = await supabase
+        .from('bem_aviv_offer_products')
+        .update({ payload: { variations: nextVars }, updated_at: new Date().toISOString() })
+        .eq('id', product.id)
+      if (productError) {
+        alert(productError.message)
+        return
+      }
+    }
+
+    setGradeModal(null)
+    await load()
+  }
+
   async function applyTableToAllProducts(tableId: string) {
     if (!supabase || !ownerUserId) return
     if (!confirm('VINCULAR ESTA TABELA COMO PADRÃO EM TODOS OS PRODUTOS DO CATÁLOGO?')) return
@@ -270,6 +336,20 @@ export function BemAvivTabelaPrecoCatalogoPage() {
         ) : null}
         {rows.map((r) => {
           const lines = itemsByTableId.get(r.id) ?? []
+          const groupedRows = (() => {
+            const map = new Map<string, PriceTableItem[]>()
+            for (const it of lines) {
+              const group = map.get(it.offer_product_id) ?? []
+              group.push(it)
+              map.set(it.offer_product_id, group)
+            }
+            return [...map.entries()].map(([productId, productItems]) => {
+              const product = productsById.get(productId)
+              const isGrade = product?.pricing_mode === 'GRADE' || productItems.length > 1
+              const sorted = [...productItems].sort((a, b) => a.variation_code.localeCompare(b.variation_code, 'pt-BR'))
+              return { productId, product, isGrade, items: sorted }
+            })
+          })()
           return (
             <div key={r.id} className="rounded-xl border border-slate-200 bg-white shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 px-3 py-2 sm:px-4">
@@ -320,21 +400,58 @@ export function BemAvivTabelaPrecoCatalogoPage() {
                   <table>
                     <thead>
                       <tr>
-                        <th>PRODUTO / VARIAÇÃO</th>
+                        <th>PRODUTO</th>
                         <th>VALOR</th>
                         <th></th>
                       </tr>
                     </thead>
                     <tbody>
-                      {lines.map((it) => (
-                        <tr key={it.id}>
-                          <td>{it.line_description}</td>
-                          <td>{formatBRL(Number(it.price))}</td>
+                      {groupedRows.map((row) => (
+                        <tr key={`${r.id}:${row.productId}`}>
+                          <td>
+                            {row.product?.name ?? row.items[0]?.line_description}
+                            {row.isGrade ? (
+                              <span className="ml-2 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+                                GRADE ({row.items.length})
+                              </span>
+                            ) : null}
+                          </td>
+                          <td>{row.isGrade ? `${row.items.length} variações` : formatBRL(Number(row.items[0]?.price ?? 0))}</td>
                           <td className="whitespace-nowrap text-right">
-                            <Button type="button" variant="secondary" className="inline-flex h-8 items-center gap-1 px-2 text-xs" onClick={() => editItemPrice(it)}>
-                              <Pencil size={13} />
-                              Editar preço
-                            </Button>
+                            <div className="inline-flex items-center gap-1">
+                              {row.isGrade ? (
+                                <>
+                                  <Button
+                                    type="button"
+                                    variant="secondary"
+                                    className="inline-flex h-8 w-8 items-center justify-center p-0"
+                                    title="VER GRADE E VALORES"
+                                    onClick={() => openGradeModal(r.id, row.productId, false)}
+                                  >
+                                    <Eye size={14} />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="secondary"
+                                    className="inline-flex h-8 w-8 items-center justify-center p-0"
+                                    title="EDITAR VALORES DA GRADE"
+                                    onClick={() => openGradeModal(r.id, row.productId, true)}
+                                  >
+                                    <Pencil size={14} />
+                                  </Button>
+                                </>
+                              ) : (
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  className="inline-flex h-8 w-8 items-center justify-center p-0"
+                                  title="EDITAR VALOR"
+                                  onClick={() => editItemPrice(row.items[0])}
+                                >
+                                  <Pencil size={14} />
+                                </Button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -346,6 +463,64 @@ export function BemAvivTabelaPrecoCatalogoPage() {
           )
         })}
       </div>
+
+      {gradeModal ? (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/45 p-4 sm:items-center">
+          <div className="max-h-[88vh] w-full max-w-2xl overflow-auto rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">{gradeModal.productName}</h3>
+                <p className="text-xs text-slate-500">{gradeModal.editable ? 'EDIÇÃO DE VALORES DA GRADE' : 'VISUALIZAÇÃO DA GRADE'}</p>
+              </div>
+              <Button type="button" variant="secondary" className="inline-flex h-8 w-8 items-center justify-center p-0" onClick={() => setGradeModal(null)}>
+                <X size={14} />
+              </Button>
+            </div>
+
+            <div className="table-wrap border-0">
+              <table>
+                <thead>
+                  <tr>
+                    <th>CÓD.</th>
+                    <th>DESCRIÇÃO</th>
+                    <th>VALOR</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {gradeModal.items.map((it) => (
+                    <tr key={it.id}>
+                      <td>{it.variation_code}</td>
+                      <td>{it.line_description}</td>
+                      <td>
+                        {gradeModal.editable ? (
+                          <input
+                            inputMode="decimal"
+                            value={gradePriceDraft[it.id] ?? ''}
+                            onChange={(e) => setGradePriceDraft((prev) => ({ ...prev, [it.id]: e.target.value }))}
+                          />
+                        ) : (
+                          formatBRL(Number(it.price))
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {gradeModal.editable ? (
+              <div className="mt-3 flex justify-end gap-2">
+                <Button type="button" variant="secondary" onClick={() => setGradeModal(null)}>
+                  CANCELAR
+                </Button>
+                <Button type="button" variant="primary" onClick={saveGradePrices}>
+                  SALVAR
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

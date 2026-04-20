@@ -473,20 +473,7 @@ export function BemAvivProdutosCatalogoPage() {
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id}>
-                  <td>
-                    {r.pricing_mode === 'GRADE' ? (
-                      <button
-                        type="button"
-                        className="font-medium text-emerald-800 underline-offset-2 hover:underline"
-                        onClick={() => setGradePreview(r)}
-                        title="VER GRADE"
-                      >
-                        {r.name}
-                      </button>
-                    ) : (
-                      r.name
-                    )}
-                  </td>
+                  <td>{r.name}</td>
                   <td>{r.category || '—'}</td>
                   <td>{r.product_line || '—'}</td>
                   <td>{r.product_type || '—'}</td>
