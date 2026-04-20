@@ -4,29 +4,36 @@
 
 :root {
   color-scheme: light;
-  --color-bg: #f5f1e8;
-  --color-bg-elevated: #f0eadf;
-  --color-surface: #fffdf8;
-  --color-surface-soft: #f8f3e9;
-  --color-border: #d7ccba;
-  --color-border-soft: #e6dccd;
-  --color-text: #2d2419;
-  --color-text-muted: #6b5a46;
-  --color-primary: #0f766e;
-  --color-primary-hover: #0d9488;
-  --color-danger: #b91c1c;
-  --color-danger-hover: #dc2626;
-  --shadow-sm: 0 1px 2px rgba(45, 36, 25, 0.06), 0 6px 14px rgba(45, 36, 25, 0.04);
-  --shadow-md: 0 8px 24px rgba(45, 36, 25, 0.08);
-  --radius-md: 0.5rem;
-  --radius-lg: 0.875rem;
+  --color-bg: #f4f7fb;
+  --color-bg-elevated: #eaf0f8;
+  --color-surface: #ffffff;
+  --color-surface-soft: #f7faff;
+  --color-border: #cfd9e8;
+  --color-border-soft: #e4ebf5;
+  --color-text: #152238;
+  --color-text-muted: #54657e;
+  --color-primary: #0f5bd5;
+  --color-primary-hover: #0d4fb8;
+  --color-danger: #c43434;
+  --color-danger-hover: #aa2525;
+  --shadow-sm: 0 1px 2px rgba(13, 32, 63, 0.08), 0 10px 20px rgba(13, 32, 63, 0.04);
+  --shadow-md: 0 14px 28px rgba(13, 32, 63, 0.1);
+  --radius-md: 0.65rem;
+  --radius-lg: 1rem;
 }
 
 body {
   @apply min-h-screen antialiased;
-  background: radial-gradient(circle at top, #fffdf7 0%, var(--color-bg) 55%, var(--color-bg-elevated) 100%);
+  font-family: 'Segoe UI', 'Trebuchet MS', 'Verdana', sans-serif;
+  background: radial-gradient(circle at top, #ffffff 0%, var(--color-bg) 50%, var(--color-bg-elevated) 100%);
   color: var(--color-text);
   text-transform: uppercase;
+}
+
+h1,
+h2,
+h3 {
+  letter-spacing: 0.01em;
 }
 
 input,
@@ -61,6 +68,10 @@ button {
   transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 120ms ease, box-shadow 160ms ease;
 }
 
+button:hover {
+  box-shadow: var(--shadow-md);
+}
+
 button:active {
   transform: translateY(1px);
 }
@@ -93,7 +104,15 @@ td {
   @apply border-b px-3 py-2;
   border-color: var(--color-border-soft);
   color: var(--color-text);
-  background-color: color-mix(in srgb, var(--color-surface) 90%, #ffffff);
+  background-color: color-mix(in srgb, var(--color-surface) 92%, #f7faff);
+}
+
+tbody tr:nth-child(even) td {
+  background-color: #fbfdff;
+}
+
+tbody tr:hover td {
+  background-color: #f3f8ff;
 }
 
 .btn {
@@ -136,7 +155,7 @@ td {
 .btn-ghost {
   @apply shadow-sm;
   border-color: var(--color-border-soft);
-  background-color: color-mix(in srgb, var(--color-surface-soft) 65%, #ffffff);
+  background-color: color-mix(in srgb, var(--color-surface-soft) 75%, #ffffff);
   color: var(--color-primary);
 }
 

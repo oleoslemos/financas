@@ -1057,15 +1057,33 @@ export function BemAvivProdutosPage() {
                     <td>{r.price_table_id ? tableNameById[r.price_table_id] ?? '—' : '—'}</td>
                     <td>{r.price == null ? '—' : formatBRL(Number(r.price))}</td>
                     <td className="whitespace-nowrap">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button type="button" variant="ghost" className="inline-flex h-9 w-9 items-center justify-center p-0" onClick={() => startEdit(r)}>
-                          <Pencil size={16} />
+                      <div className="flex items-center justify-end gap-1.5">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="inline-flex h-8 items-center gap-1 px-2 text-xs text-slate-700"
+                          onClick={() => startEdit(r)}
+                        >
+                          <Pencil size={13} />
+                          Editar
                         </Button>
-                        <Button type="button" variant="ghost" className="inline-flex h-9 w-9 items-center justify-center p-0" onClick={() => startDuplicate(r)}>
-                          <Copy size={16} />
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="inline-flex h-8 items-center gap-1 px-2 text-xs text-slate-700"
+                          onClick={() => startDuplicate(r)}
+                        >
+                          <Copy size={13} />
+                          Duplicar
                         </Button>
-                        <Button type="button" variant="ghost" className="inline-flex h-9 w-9 items-center justify-center p-0 text-red-600" onClick={() => remove(r.id)}>
-                          <Trash2 size={16} />
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="inline-flex h-8 items-center gap-1 px-2 text-xs text-red-700"
+                          onClick={() => remove(r.id)}
+                        >
+                          <Trash2 size={13} />
+                          Excluir
                         </Button>
                       </div>
                     </td>

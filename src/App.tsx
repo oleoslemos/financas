@@ -22,6 +22,7 @@ const BemAvivTabelaPrecoPage = lazy(() => import('./pages/BemAvivTabelaPrecoPage
 const BemAvivHomePage = lazy(() => import('./pages/BemAvivHomePage').then((m) => ({ default: m.BemAvivHomePage })))
 const AgendaPage = lazy(() => import('./pages/AgendaPage').then((m) => ({ default: m.AgendaPage })))
 const TasksPage = lazy(() => import('./pages/TasksPage').then((m) => ({ default: m.TasksPage })))
+const LshStartPage = lazy(() => import('./pages/LshStartPage').then((m) => ({ default: m.LshStartPage })))
 
 export default function App() {
   return (
@@ -32,7 +33,10 @@ export default function App() {
         <Route element={<RequireAuth />}>
           <Route element={<AllowedEmailGuard />}>
             <Route element={<AppLayout />}>
-              <Route path="/" element={<Navigate to="/lsh/resumo" replace />} />
+              <Route element={<RequireTasksHomologAccess />}>
+                <Route path="/" element={<Navigate to="/lsh/inicio" replace />} />
+                <Route path="/lsh/inicio" element={<LshStartPage />} />
+              </Route>
               <Route path="/lsh/resumo" element={<Dashboard />} />
               <Route path="/lsh/contas-bancarias" element={<BankAccounts />} />
               <Route path="/lsh/categorias" element={<Categories />} />
@@ -50,6 +54,7 @@ export default function App() {
               <Route path="/fluxo" element={<Navigate to="/lsh/fluxo" replace />} />
               <Route path="/cartoes" element={<Navigate to="/lsh/cartoes" replace />} />
               <Route element={<RequireTasksHomologAccess />}>
+                <Route path="/inicio" element={<Navigate to="/lsh/inicio" replace />} />
                 <Route path="/agenda" element={<Navigate to="/lsh/agenda" replace />} />
                 <Route path="/tarefas" element={<Navigate to="/lsh/tarefas" replace />} />
               </Route>
