@@ -1,8 +1,9 @@
 import { useUser } from '@clerk/clerk-react'
 import { CheckCircle2, Pencil, Plus, ThumbsDown, Trash2, X } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
+import { SearchableSelect } from '../components/ui/SearchableSelect'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
@@ -68,6 +69,22 @@ function clampPercent(n: number) {
 
 function parsePercent(raw: string) {
   return clampPercent(parseMoney(raw || '0'))
+}
+
+function formatMoneyInput(n: number) {
+  return clampMoney(n).toFixed(2).replace('.', ',')
+}
+
+/** % sobre o bruto para atingir líquido com frete: bruto × (1 − p/100) + frete = líquido */
+function percentFromTargetLiquid(gross: number, freight: number, targetLiquid: number) {
+  if (gross <= 0) return 0
+  const afterDiscount = clampMoney(targetLiquid - freight)
+  const p = (1 - afterDiscount / gross) * 100
+  return clampPercent(p)
+}
+
+function formatPercentInput(n: number) {
+  return clampPercent(n).toFixed(2).replace('.', ',')
 }
 
 function parsePaymentOption(v: string | null | undefined): PaymentOption {
@@ -167,6 +184,15 @@ export function BemAvivPedidosPage() {
   const [draftVariationCode, setDraftVariationCode] = useState('')
   const [draftQty, setDraftQty] = useState('1')
   const [lineItems, setLineItems] = useState<LinhaItem[]>([])
+  const [liquidTotalDraft, setLiquidTotalDraft] = useState('')
+  const liquidDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function clearLiquidDebounce() {
+    if (liquidDebounceRef.current) {
+      clearTimeout(liquidDebounceRef.current)
+      liquidDebounceRef.current = null
+    }
+  }
 
   const uniqueProductNames = useMemo(() => {
     const names = new Set<string>()
@@ -199,10 +225,31 @@ export function BemAvivPedidosPage() {
     return normalizePayload(selectedOffer.payload).variations ?? []
   }, [selectedOffer])
 
+  const productSelectOptions = useMemo(
+    () => uniqueProductNames.map((name) => ({ value: name, label: name })),
+    [uniqueProductNames],
+  )
+  const typeSelectOptions = useMemo(
+    () => productTypeOptions.map((t) => ({ value: t, label: t })),
+    [productTypeOptions],
+  )
+  const variationSelectOptions = useMemo(
+    () =>
+      variationOptions.map((v) => ({
+        value: v.code,
+        label: `[${v.code}] ${v.dimensions || '—'} — ${formatBRL(v.price)}`,
+      })),
+    [variationOptions],
+  )
+
   useEffect(() => {
     setDraftProductType('')
     setDraftVariationCode('')
   }, [draftProductName])
+
+  useEffect(() => {
+    setDraftVariationCode('')
+  }, [draftProductType])
 
   useEffect(() => {
     if (variationOptions.length === 1) {
@@ -269,6 +316,22 @@ export function BemAvivPedidosPage() {
     return clampMoney(parseMoney(form.total_amount || '0') - orderDiscount + freightAmountNum)
   }, [lineItems.length, form.total_amount, orderDiscount, freightAmountNum])
 
+  useEffect(() => {
+    return () => {
+      if (liquidDebounceRef.current) clearTimeout(liquidDebounceRef.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (lineItems.length === 0) {
+      setLiquidTotalDraft('')
+      return
+    }
+    const p = parsePercent(form.discount_percent)
+    const net = clampMoney(sumLinesNet - (sumLinesNet * p) / 100 + freightAmountNum)
+    setLiquidTotalDraft(formatMoneyInput(net))
+  }, [lineItems.length, sumLinesNet, freightAmountNum, form.discount_percent])
+
   function resetFormForNew() {
     setForm({
       client_id: '',
@@ -291,6 +354,8 @@ export function BemAvivPedidosPage() {
     setDraftVariationCode('')
     setDraftQty('1')
     setEditingOrderId(null)
+    clearLiquidDebounce()
+    setLiquidTotalDraft('')
   }
 
   function openModalNew() {
@@ -379,6 +444,7 @@ export function BemAvivPedidosPage() {
   }
 
   function addLineFromDraft() {
+    clearLiquidDebounce()
     const p = selectedOffer
     if (!p) {
       alert('SELECIONE PRODUTO E TIPO DO CATÁLOGO.')
@@ -420,10 +486,12 @@ export function BemAvivPedidosPage() {
   }
 
   function removeLine(key: string) {
+    clearLiquidDebounce()
     setLineItems((prev) => prev.filter((l) => l.key !== key))
   }
 
   function updateLineQty(key: string, qtyStr: string) {
+    clearLiquidDebounce()
     const qty = Math.max(1, parseInt(qtyStr.replace(/\D/g, ''), 10) || 1)
     setLineItems((prev) =>
       prev.map((l) => {
@@ -837,14 +905,14 @@ export function BemAvivPedidosPage() {
 
       {modalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-3 py-8 sm:p-6"
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-2 py-6 sm:p-4 sm:py-8"
           role="presentation"
           onClick={closeModal}
         >
           <div
             role="dialog"
             aria-labelledby="pedido-modal-title"
-            className="relative w-full max-w-3xl rounded-xl border border-slate-200 bg-white p-4 shadow-xl sm:p-5"
+            className="relative w-full max-w-6xl rounded-xl border border-slate-200 bg-white p-3 shadow-xl sm:p-5"
             onClick={(e) => e.stopPropagation()}
           >
             <button
@@ -859,7 +927,7 @@ export function BemAvivPedidosPage() {
               {editingOrderId ? 'EDITAR ORÇAMENTO / PEDIDO' : 'NOVO ORÇAMENTO / PEDIDO'}
             </h3>
 
-            <form onSubmit={submit} className="mt-4 grid gap-3 sm:grid-cols-2">
+            <form onSubmit={submit} className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <div>
                 <label>CLIENTE</label>
                 <select value={form.client_id} onChange={(e) => setForm({ ...form, client_id: e.target.value })}>
@@ -945,11 +1013,21 @@ export function BemAvivPedidosPage() {
                 <label>DESCONTO NO PEDIDO (%)</label>
                 <input
                   value={form.discount_percent}
-                  onChange={(e) => setForm({ ...form, discount_percent: e.target.value })}
+                  onChange={(e) => {
+                    clearLiquidDebounce()
+                    setForm({ ...form, discount_percent: e.target.value })
+                  }}
                   placeholder="0"
                   inputMode="decimal"
                 />
-                <p className="mt-1 text-xs font-normal normal-case text-slate-600">Valor do desconto: {formatBRL(orderDiscount)}</p>
+                <p className="mt-1 text-xs font-normal normal-case text-slate-600">
+                  Valor do desconto (sobre o bruto): {formatBRL(orderDiscount)}
+                  {lineItems.length > 0 ? (
+                    <span className="block text-slate-500">
+                      Ao alterar o valor líquido (com frete) abaixo, este percentual é recalculado (duas casas decimais).
+                    </span>
+                  ) : null}
+                </p>
               </div>
               <div>
                 <label>PARCELAS</label>
@@ -975,71 +1053,97 @@ export function BemAvivPedidosPage() {
                 <label>FRETE (R$)</label>
                 <input
                   value={form.freight_amount}
-                  onChange={(e) => setForm({ ...form, freight_amount: e.target.value })}
+                  onChange={(e) => {
+                    clearLiquidDebounce()
+                    setForm({ ...form, freight_amount: e.target.value })
+                  }}
                   placeholder="0"
                   inputMode="decimal"
                 />
               </div>
-              <div>
-                <label>VALOR TOTAL {lineItems.length > 0 ? '(BRUTO DOS ITENS)' : ''}</label>
-                <input
-                  value={lineItems.length > 0 ? formatBRL(lineItems.reduce((a, l) => a + l.quantity * l.unit_price, 0)) : form.total_amount}
-                  onChange={(e) => {
-                    if (lineItems.length === 0) setForm({ ...form, total_amount: e.target.value })
-                  }}
-                  readOnly={lineItems.length > 0}
-                  required={lineItems.length === 0}
-                />
-                {lineItems.length > 0 && previewOrderTotal != null ? (
-                  <p className="mt-1 text-xs font-normal normal-case text-slate-600">
-                    Líquido estimado (com frete): <strong>{formatBRL(previewOrderTotal)}</strong>
-                  </p>
-                ) : null}
-              </div>
-              <div className="sm:col-span-2">
+              {lineItems.length > 0 ? (
+                <>
+                  <div>
+                    <label>VALOR TOTAL (BRUTO DOS ITENS)</label>
+                    <input value={formatBRL(linesGrossTotal)} readOnly />
+                  </div>
+                  <div>
+                    <label>VALOR LÍQUIDO (COM FRETE)</label>
+                    <input
+                      value={liquidTotalDraft}
+                      onChange={(e) => {
+                        const raw = e.target.value
+                        setLiquidTotalDraft(raw)
+                        if (liquidDebounceRef.current) clearTimeout(liquidDebounceRef.current)
+                        liquidDebounceRef.current = setTimeout(() => {
+                          liquidDebounceRef.current = null
+                          const target = parseMoney(raw)
+                          if (sumLinesNet <= 0) return
+                          const pct = percentFromTargetLiquid(sumLinesNet, freightAmountNum, target)
+                          const pctStr = formatPercentInput(pct)
+                          const net = clampMoney(sumLinesNet - (sumLinesNet * parsePercent(pctStr)) / 100 + freightAmountNum)
+                          setForm((f) => ({ ...f, discount_percent: pctStr }))
+                          setLiquidTotalDraft(formatMoneyInput(net))
+                        }, 220)
+                      }}
+                      placeholder="0,00"
+                      inputMode="decimal"
+                    />
+                    <p className="mt-1 text-xs font-normal normal-case text-slate-600">
+                      Total líquido do pedido (bruto com desconto + frete). Ao alterar este valor, o desconto (%) sobre o
+                      bruto é recalculado com duas casas decimais.
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <div>
+                  <label>VALOR TOTAL</label>
+                  <input
+                    value={form.total_amount}
+                    onChange={(e) => setForm({ ...form, total_amount: e.target.value })}
+                    required
+                  />
+                </div>
+              )}
+              <div className="sm:col-span-2 lg:col-span-3">
                 <label>OBSERVAÇÕES</label>
                 <input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
               </div>
 
-              <div className="sm:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="sm:col-span-2 lg:col-span-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <h4 className="mb-2 text-sm font-semibold text-slate-800">ITENS (CATÁLOGO)</h4>
                 <div className="grid gap-3 sm:grid-cols-12">
                   <div className="sm:col-span-4">
                     <label>PRODUTO</label>
-                    <select value={draftProductName} onChange={(e) => setDraftProductName(e.target.value)}>
-                      <option value="">— SELECIONE —</option>
-                      {uniqueProductNames.map((name) => (
-                        <option key={name} value={name}>
-                          {name}
-                        </option>
-                      ))}
-                    </select>
+                    <SearchableSelect
+                      value={draftProductName}
+                      onChange={setDraftProductName}
+                      options={productSelectOptions}
+                      placeholder="— DIGITE OU SELECIONE —"
+                      aria-label="Produto do catálogo"
+                    />
                   </div>
                   <div className="sm:col-span-3">
                     <label>TIPO</label>
-                    <select value={draftProductType} onChange={(e) => setDraftProductType(e.target.value)} disabled={!draftProductName}>
-                      <option value="">— SELECIONE —</option>
-                      {productTypeOptions.map((t) => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
-                      ))}
-                    </select>
+                    <SearchableSelect
+                      value={draftProductType}
+                      onChange={setDraftProductType}
+                      options={typeSelectOptions}
+                      placeholder="— DIGITE OU SELECIONE —"
+                      disabled={!draftProductName}
+                      aria-label="Tipo do produto"
+                    />
                   </div>
                   <div className="sm:col-span-3">
                     <label>VARIAÇÃO (CÓDIGO / DIMENSÕES)</label>
-                    <select
+                    <SearchableSelect
                       value={draftVariationCode}
-                      onChange={(e) => setDraftVariationCode(e.target.value)}
+                      onChange={setDraftVariationCode}
+                      options={variationSelectOptions}
+                      placeholder={variationOptions.length === 0 ? '— SEM VARIAÇÕES —' : '— DIGITE OU SELECIONE —'}
                       disabled={!selectedOffer || variationOptions.length === 0}
-                    >
-                      <option value="">{variationOptions.length === 0 ? '— SEM VARIAÇÕES —' : '— SELECIONE —'}</option>
-                      {variationOptions.map((v) => (
-                        <option key={v.code} value={v.code}>
-                          [{v.code}] {v.dimensions || '—'} — {formatBRL(v.price)}
-                        </option>
-                      ))}
-                    </select>
+                      aria-label="Variação do produto"
+                    />
                   </div>
                   <div className="sm:col-span-2">
                     <label>QTD</label>
@@ -1108,7 +1212,7 @@ export function BemAvivPedidosPage() {
                 )}
               </div>
 
-              <div className="flex flex-wrap gap-2 sm:col-span-2">
+              <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-3">
                 <Button type="submit" variant="primary">
                   {editingOrderId ? 'SALVAR ALTERAÇÕES' : form.document_type === 'ORCAMENTO' ? 'ADICIONAR ORÇAMENTO' : 'ADICIONAR PEDIDO'}
                 </Button>

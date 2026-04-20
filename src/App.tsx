@@ -33,16 +33,6 @@ const AgendaPage = lazy(() => import('./pages/AgendaPage').then((m) => ({ defaul
 const TasksPage = lazy(() => import('./pages/TasksPage').then((m) => ({ default: m.TasksPage })))
 const LshStartPage = lazy(() => import('./pages/LshStartPage').then((m) => ({ default: m.LshStartPage })))
 
-const LAST_VISITED_PATH_KEY = 'sistema_financeiro:last_path'
-
-function RootRedirect() {
-  const fallback = '/lsh/inicio'
-  const allowedPrefixes = ['/lsh', '/bem-aviv', '/contas-bancarias', '/categorias', '/fluxo', '/cartoes']
-  const saved = typeof window !== 'undefined' ? window.localStorage.getItem(LAST_VISITED_PATH_KEY) ?? '' : ''
-  const canUseSaved = saved !== '/' && allowedPrefixes.some((prefix) => saved.startsWith(prefix))
-  return <Navigate to={canUseSaved ? saved : fallback} replace />
-}
-
 export default function App() {
   return (
     <Suspense fallback={<p className="text-sm text-slate-500">Carregando módulo...</p>}>
@@ -53,7 +43,7 @@ export default function App() {
           <Route element={<AllowedEmailGuard />}>
             <Route element={<AppLayout />}>
               <Route element={<RequireTasksHomologAccess />}>
-                <Route path="/" element={<RootRedirect />} />
+                <Route path="/" element={<Navigate to="/lsh/inicio" replace />} />
                 <Route path="/lsh/inicio" element={<LshStartPage />} />
               </Route>
               <Route path="/lsh/resumo" element={<Dashboard />} />

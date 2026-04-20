@@ -10,6 +10,20 @@ import { addMonths, toISODate } from '../lib/dates'
 import { formatBRL, parseMoney } from '../lib/format'
 import { toUpperTrim } from '../lib/text'
 
+function alertDbError(message: string) {
+  if (/row-level security|permission denied|new row violates/i.test(message)) {
+    alert(
+      `${message}\n\n` +
+        'Se o financeiro é compartilhado entre contas (variável VITE_SHARED_DATA_OWNER_ID), ' +
+        'no Supabase é preciso usar as políticas RLS de workspace compartilhado. ' +
+        'Aplique a migration `supabase/migrations/20260422160000_ensure_finance_shared_workspace_rls.sql` ' +
+        '(ou rode `supabase db push` / migrations pendentes do repositório).',
+    )
+  } else {
+    alert(message)
+  }
+}
+
 function stripParcelDesc(d: string) {
   return d.replace(/\s*\(PARCELA \d+\/\d+\)\s*$/i, '').trim()
 }
@@ -72,6 +86,7 @@ export function CashflowPage() {
   const [cats, setCats] = useState<{ id: string; name: string }[]>([])
   const [banks, setBanks] = useState<{ id: string; name: string; initial_balance: number | null }[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const [mode, setMode] = useState<'vista' | 'parcelado'>('vista')
   const [description, setDescription] = useState('')
@@ -102,7 +117,8 @@ export function CashflowPage() {
   const load = useCallback(async () => {
     if (!supabase || !ownerUserId) return
     setLoading(true)
-    const [{ data: p }, { data: c }, { data: b }, { data: inv }] = await Promise.all([
+    setLoadError(null)
+    const [pRes, cRes, bRes, invRes] = await Promise.all([
       supabase
         .from('payables_receivables')
         .select('*')
@@ -117,6 +133,14 @@ export function CashflowPage() {
         .order('name'),
       supabase.from('credit_card_invoices').select('id, credit_card_id, payable_id').eq('user_id', ownerUserId).not('payable_id', 'is', null),
     ])
+    const errs = [pRes.error, cRes.error, bRes.error, invRes.error].filter(Boolean) as { message: string }[]
+    if (errs.length) setLoadError(errs.map((e) => e.message).join(' · '))
+
+    const p = pRes.data
+    const c = cRes.data
+    const b = bRes.data
+    const inv = invRes.data
+
     setRows((p as Pr[]) ?? [])
     setCats((c as { id: string; name: string }[]) ?? [])
     setBanks((b as { id: string; name: string; initial_balance: number | null }[]) ?? [])
@@ -212,7 +236,7 @@ export function CashflowPage() {
         const first = new Date(firstDue + 'T12:00:00')
         const { error: delErr } = await supabase.from('payables_receivables').delete().eq('id', editing.id)
         if (delErr) {
-          alert(delErr.message)
+          alertDbError(delErr.message)
           return
         }
         const inserts = Array.from({ length: n }, (_, i) => ({
@@ -230,7 +254,7 @@ export function CashflowPage() {
         }))
         const { error: insErr } = await supabase.from('payables_receivables').insert(inserts)
         if (insErr) {
-          alert(insErr.message)
+          alertDbError(insErr.message)
           return
         }
         setEditing(null)
@@ -259,7 +283,7 @@ export function CashflowPage() {
           paid_at: nextPaidAt,
         })
         .eq('id', editing.id)
-      if (error) alert(error.message)
+      if (error) alertDbError(error.message)
       else {
         // O saldo atual é derivado dos lançamentos quitados; não mutamos saldo da conta aqui.
         setEditing(null)
@@ -284,7 +308,7 @@ export function CashflowPage() {
         installment_number: null,
         installment_count: null,
       })
-      if (error) alert(error.message)
+      if (error) alertDbError(error.message)
       else {
         clearForm()
         setCreateOpen(false)
@@ -311,7 +335,7 @@ export function CashflowPage() {
       installment_count: n,
     }))
     const { error } = await supabase.from('payables_receivables').insert(inserts)
-    if (error) alert(error.message)
+    if (error) alertDbError(error.message)
     else {
       clearForm()
       setCreateOpen(false)
@@ -361,7 +385,7 @@ export function CashflowPage() {
       .update({ status: 'paid', paid_at: payDateInput })
       .eq('id', r.id)
     if (error) {
-      alert(error.message)
+      alertDbError(error.message)
       return
     }
     setPayModalRow(null)
@@ -374,7 +398,7 @@ export function CashflowPage() {
       .from('payables_receivables')
       .update({ status: 'open', paid_at: null })
       .eq('id', r.id)
-    if (error) alert(error.message)
+    if (error) alertDbError(error.message)
     else {
       load()
     }
@@ -383,7 +407,7 @@ export function CashflowPage() {
   async function removeRow(r: Pr) {
     if (!supabase || !confirm('Excluir este lançamento?')) return
     const { error } = await supabase.from('payables_receivables').delete().eq('id', r.id)
-    if (error) alert(error.message)
+    if (error) alertDbError(error.message)
     else load()
   }
 
@@ -394,7 +418,7 @@ export function CashflowPage() {
       .delete()
       .eq('installment_group_id', groupId)
       .eq('status', 'open')
-    if (error) alert(error.message)
+    if (error) alertDbError(error.message)
     else load()
   }
 
@@ -452,7 +476,7 @@ export function CashflowPage() {
               toRemove.map((r) => r.id),
             )
           if (delErr) {
-            alert(delErr.message)
+            alertDbError(delErr.message)
             return
           }
         }
@@ -480,7 +504,7 @@ export function CashflowPage() {
         })
         const { error: insErr } = await supabase.from('payables_receivables').insert(inserts)
         if (insErr) {
-          alert(insErr.message)
+          alertDbError(insErr.message)
           return
         }
         await Promise.all(sorted.map((r) => syncRowMeta(r, r.installment_number!, newN)))
@@ -491,7 +515,8 @@ export function CashflowPage() {
       setParcelGroupModalId(null)
       load()
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Erro ao atualizar parcelamento')
+      const msg = e instanceof Error ? e.message : 'Erro ao atualizar parcelamento'
+      alertDbError(msg)
     }
   }
 
@@ -505,8 +530,29 @@ export function CashflowPage() {
   const editParceladoBlockedByPaid =
     !!editing && editOpen && !editing.installment_group_id && formStatus === 'paid'
 
+  const sharedFinance = Boolean(user?.id && ownerUserId && user.id !== ownerUserId)
+
   return (
     <div className="space-y-8">
+      {loadError ? (
+        <div
+          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
+          role="alert"
+        >
+          <strong className="font-semibold">Não foi possível carregar parte dos dados.</strong>{' '}
+          {loadError}
+        </div>
+      ) : null}
+      {sharedFinance && cats.length === 0 ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          Nenhuma categoria listada para o workspace compartilhado. Se outra pessoa já cadastrou
+          categorias e você não vê nada aqui, o banco provavelmente ainda usa RLS antiga (só o dono
+          do registro enxerga). Aplique no Supabase a migration{' '}
+          <code className="rounded bg-amber-100/80 px-1">20260422160000_ensure_finance_shared_workspace_rls.sql</code>.
+          Confira também na Vercel se <code className="rounded bg-amber-100/80 px-1">VITE_SHARED_EMAILS</code> inclui o
+          e-mail da conta logada.
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-2xl font-semibold">{title}</h2>
         <Button

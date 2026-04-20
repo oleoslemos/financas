@@ -5,8 +5,6 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { canAccessTasksHomolog } from '../lib/tasksHomologAccess'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 
-const LAST_VISITED_PATH_KEY = 'sistema_financeiro:last_path'
-
 const navLinkBase = 'flex items-center gap-2 rounded-md px-2.5 py-2 text-[13px] font-normal leading-snug transition-colors normal-case'
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
@@ -31,11 +29,6 @@ export function AppLayout() {
 
   useEffect(() => {
     setMobileMenuOpen(false)
-  }, [path])
-
-  useEffect(() => {
-    if (!path.startsWith('/lsh') && !path.startsWith('/bem-aviv')) return
-    window.localStorage.setItem(LAST_VISITED_PATH_KEY, path)
   }, [path])
 
   const emails = clerkEmailCandidates(user)
