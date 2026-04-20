@@ -133,7 +133,9 @@ export function BemAvivCatalogoPrecoDetailPage() {
               </select>
             </div>
             <div className="sm:col-span-2">
-              <Button variant="primary">ADICIONAR BLOCO</Button>
+              <Button type="submit" variant="primary">
+                ADICIONAR BLOCO
+              </Button>
             </div>
           </form>
 

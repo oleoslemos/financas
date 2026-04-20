@@ -309,7 +309,9 @@ export function BemAvivCatalogoMatrizBlocoPage() {
                   <h3 className="mb-2 text-sm font-semibold text-slate-800">{rowAxis.axis_label}</h3>
                   <form onSubmit={addRowValue} className="flex flex-wrap gap-2">
                     <input className="min-w-[12rem] flex-1" value={newRowLabel} onChange={(e) => setNewRowLabel(e.target.value)} placeholder="EX.: SOLTEIRO 0,88M" />
-                    <Button variant="secondary">ADICIONAR LINHA</Button>
+                    <Button type="submit" variant="secondary">
+                      ADICIONAR LINHA
+                    </Button>
                   </form>
                   <ul className="mt-2 space-y-1 text-sm">
                     {rowValues.map((v) => (
@@ -326,7 +328,9 @@ export function BemAvivCatalogoMatrizBlocoPage() {
                   <h3 className="mb-2 text-sm font-semibold text-slate-800">{colAxis.axis_label}</h3>
                   <form onSubmit={addColValue} className="flex flex-wrap gap-2">
                     <input className="min-w-[12rem] flex-1" value={newColLabel} onChange={(e) => setNewColLabel(e.target.value)} placeholder="EX.: 500 G/M², MALHA" />
-                    <Button variant="secondary">ADICIONAR COLUNA</Button>
+                    <Button type="submit" variant="secondary">
+                      ADICIONAR COLUNA
+                    </Button>
                   </form>
                   <ul className="mt-2 space-y-1 text-sm">
                     {colValues.map((v) => (
@@ -393,7 +397,9 @@ export function BemAvivCatalogoMatrizBlocoPage() {
             <form onSubmit={addAddon} className="mb-3 flex flex-wrap gap-2">
               <input className="min-w-[10rem] flex-1" value={addonName} onChange={(e) => setAddonName(e.target.value)} placeholder="NOME (EX.: ELETRÔNICOS)" />
               <input className="w-32" value={addonPrice} onChange={(e) => setAddonPrice(e.target.value)} placeholder="PREÇO" />
-              <Button variant="secondary">ADICIONAR</Button>
+              <Button type="submit" variant="secondary">
+                ADICIONAR
+              </Button>
             </form>
             <ul className="space-y-1 text-sm">
               {addons.map((a) => (

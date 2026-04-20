@@ -112,7 +112,9 @@ export function BemAvivCatalogosPrecoPage() {
           </label>
         </div>
         <div className="sm:col-span-2">
-          <Button variant="primary">ADICIONAR CATÁLOGO</Button>
+          <Button type="submit" variant="primary">
+            ADICIONAR CATÁLOGO
+          </Button>
         </div>
       </form>
 

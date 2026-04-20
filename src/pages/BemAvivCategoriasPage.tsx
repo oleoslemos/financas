@@ -49,7 +49,9 @@ export function BemAvivCategoriasPage() {
       <h2 className="text-2xl font-semibold">GERAL — CATEGORIAS</h2>
       <form onSubmit={submit} className="flex gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
         <input className="flex-1" value={name} onChange={(e) => setName(e.target.value)} required />
-        <Button variant="primary">ADICIONAR</Button>
+        <Button type="submit" variant="primary">
+          ADICIONAR
+        </Button>
       </form>
       <div className="table-wrap">
         <table>

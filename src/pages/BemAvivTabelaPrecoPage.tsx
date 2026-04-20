@@ -210,7 +210,9 @@ export function BemAvivTabelaPrecoPage() {
           <input value={description} onChange={(e) => setDescription(e.target.value)} />
         </div>
         <div className="sm:col-span-2 flex flex-wrap items-center gap-3">
-          <Button variant="primary">ADICIONAR</Button>
+          <Button type="submit" variant="primary">
+            ADICIONAR
+          </Button>
         </div>
       </form>
 
