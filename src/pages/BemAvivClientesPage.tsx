@@ -338,10 +338,9 @@ export function BemAvivClientesPage() {
                   <td>{r.client_status || 'CLIENTE'}</td>
                   <td className="whitespace-nowrap">
                     <div className="flex items-center justify-end gap-2">
-                      <Button
+                      <button
                         type="button"
-                        variant="ghost"
-                        className="inline-flex h-9 w-9 items-center justify-center p-0"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
                         onClick={() => {
                           setEditing(r)
                           setForm({
@@ -362,12 +361,20 @@ export function BemAvivClientesPage() {
                           })
                           setFormOpen(true)
                         }}
+                        title="EDITAR CLIENTE"
+                        aria-label="Editar cliente"
                       >
-                        <Pencil size={16} />
-                      </Button>
-                      <Button type="button" variant="ghost" className="inline-flex h-9 w-9 items-center justify-center p-0 text-red-600" onClick={() => remove(r.id)}>
-                        <Trash2 size={16} />
-                      </Button>
+                        <Pencil size={15} strokeWidth={2.2} />
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-red-300 bg-white text-red-700 shadow-sm hover:bg-red-50"
+                        onClick={() => remove(r.id)}
+                        title="EXCLUIR CLIENTE"
+                        aria-label="Excluir cliente"
+                      >
+                        <Trash2 size={15} strokeWidth={2.2} />
+                      </button>
                     </div>
                   </td>
                 </tr>

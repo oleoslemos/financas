@@ -61,9 +61,15 @@ export function BemAvivCategoriasPage() {
               <tr key={r.id}>
                 <td>{r.name}</td>
                 <td className="whitespace-nowrap">
-                  <Button type="button" variant="ghost" className="inline-flex h-9 w-9 items-center justify-center p-0 text-red-600" onClick={() => remove(r.id)}>
-                    <Trash2 size={16} />
-                  </Button>
+                  <button
+                    type="button"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-red-300 bg-white text-red-700 shadow-sm hover:bg-red-50"
+                    onClick={() => remove(r.id)}
+                    title="EXCLUIR CATEGORIA"
+                    aria-label="Excluir categoria"
+                  >
+                    <Trash2 size={15} strokeWidth={2.2} />
+                  </button>
                 </td>
               </tr>
             ))}

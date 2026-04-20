@@ -317,9 +317,15 @@ export function BemAvivCatalogoMatrizBlocoPage() {
                     {rowValues.map((v) => (
                       <li key={v.id} className="flex items-center justify-between gap-2 rounded border border-slate-100 bg-slate-50/80 px-2 py-1">
                         <span>{v.value_label}</span>
-                        <Button type="button" variant="ghost" className="h-8 w-8 p-0 text-red-600" onClick={() => removeAxisValue(v.id)}>
-                          <Trash2 size={14} />
-                        </Button>
+                        <button
+                          type="button"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-300 bg-white text-red-700 shadow-sm hover:bg-red-50"
+                          onClick={() => removeAxisValue(v.id)}
+                          title="EXCLUIR VALOR"
+                          aria-label="Excluir valor"
+                        >
+                          <Trash2 size={14} strokeWidth={2.2} />
+                        </button>
                       </li>
                     ))}
                   </ul>
@@ -336,9 +342,15 @@ export function BemAvivCatalogoMatrizBlocoPage() {
                     {colValues.map((v) => (
                       <li key={v.id} className="flex items-center justify-between gap-2 rounded border border-slate-100 bg-slate-50/80 px-2 py-1">
                         <span>{v.value_label}</span>
-                        <Button type="button" variant="ghost" className="h-8 w-8 p-0 text-red-600" onClick={() => removeAxisValue(v.id)}>
-                          <Trash2 size={14} />
-                        </Button>
+                        <button
+                          type="button"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-300 bg-white text-red-700 shadow-sm hover:bg-red-50"
+                          onClick={() => removeAxisValue(v.id)}
+                          title="EXCLUIR VALOR"
+                          aria-label="Excluir valor"
+                        >
+                          <Trash2 size={14} strokeWidth={2.2} />
+                        </button>
                       </li>
                     ))}
                   </ul>
@@ -407,9 +419,15 @@ export function BemAvivCatalogoMatrizBlocoPage() {
                   <span>
                     {a.name} — {formatBRL(Number(a.price))}
                   </span>
-                  <Button type="button" variant="ghost" className="h-8 w-8 p-0 text-red-600" onClick={() => removeAddon(a.id)}>
-                    <Trash2 size={14} />
-                  </Button>
+                  <button
+                    type="button"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-300 bg-white text-red-700 shadow-sm hover:bg-red-50"
+                    onClick={() => removeAddon(a.id)}
+                    title="EXCLUIR ADICIONAL"
+                    aria-label="Excluir adicional"
+                  >
+                    <Trash2 size={14} strokeWidth={2.2} />
+                  </button>
                 </li>
               ))}
             </ul>

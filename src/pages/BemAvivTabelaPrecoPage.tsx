@@ -232,12 +232,24 @@ export function BemAvivTabelaPrecoPage() {
                   <p className="text-xs text-slate-500">{r.description || '—'}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button type="button" variant="ghost" className="inline-flex h-9 w-9 shrink-0 items-center justify-center p-0" onClick={() => duplicateTable(r.id)} title="DUPLICAR TABELA">
-                    <Copy size={16} />
-                  </Button>
-                  <Button type="button" variant="ghost" className="inline-flex h-9 w-9 shrink-0 items-center justify-center p-0 text-red-600" onClick={() => remove(r.id)} title="EXCLUIR TABELA">
-                    <Trash2 size={16} />
-                  </Button>
+                  <button
+                    type="button"
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
+                    onClick={() => duplicateTable(r.id)}
+                    title="CLONAR TABELA"
+                    aria-label="Clonar tabela"
+                  >
+                    <Copy size={15} strokeWidth={2.2} />
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-red-300 bg-white text-red-700 shadow-sm hover:bg-red-50"
+                    onClick={() => remove(r.id)}
+                    title="EXCLUIR TABELA"
+                    aria-label="Excluir tabela"
+                  >
+                    <Trash2 size={15} strokeWidth={2.2} />
+                  </button>
                 </div>
               </div>
               {lines.length === 0 ? (
@@ -259,27 +271,27 @@ export function BemAvivTabelaPrecoPage() {
                           <td className="tabular-nums">
                             <div className="flex items-center justify-between gap-2">
                               <span>{formatBRL(Number(it.price))}</span>
-                              <Button
+                              <button
                                 type="button"
-                                variant="ghost"
-                                className="inline-flex h-7 w-7 items-center justify-center p-0"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
                                 onClick={() => editItemPrice(it)}
                                 title="EDITAR PREÇO"
+                                aria-label="Editar preço"
                               >
-                                <Pencil size={14} />
-                              </Button>
+                                <Pencil size={13} strokeWidth={2.2} />
+                              </button>
                             </div>
                           </td>
                           <td className="whitespace-nowrap text-right">
-                            <Button
+                            <button
                               type="button"
-                              variant="ghost"
-                              className="inline-flex h-7 w-7 items-center justify-center p-0"
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
                               onClick={() => setProductCompare({ productId: it.product_id, lineDescription: it.line_description })}
                               title="GRÁFICO POR PRODUTO"
+                              aria-label="Gráfico por produto"
                             >
-                              <BarChart3 size={14} />
-                            </Button>
+                              <BarChart3 size={13} strokeWidth={2.2} />
+                            </button>
                           </td>
                         </tr>
                       ))}

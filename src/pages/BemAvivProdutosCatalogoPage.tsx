@@ -499,6 +499,21 @@ export function BemAvivProdutosCatalogoPage() {
             <option value="GRADE">GRADE</option>
           </select>
         </div>
+        <div className="sm:col-span-10 flex justify-end pt-1">
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => {
+              setFilterName('')
+              setFilterCategory('')
+              setFilterLine('')
+              setFilterType('')
+              setFilterMode('TODOS')
+            }}
+          >
+            LIMPAR FILTROS
+          </Button>
+        </div>
       </div>
 
       <div className="table-wrap">
@@ -529,25 +544,43 @@ export function BemAvivProdutosCatalogoPage() {
                   <td className="whitespace-nowrap">
                     <div className="flex items-center justify-end gap-1">
                       {r.pricing_mode === 'GRADE' ? (
-                        <Button type="button" variant="secondary" className="inline-flex h-8 w-8 items-center justify-center p-0" onClick={() => setGradePreview(r)} title="VER GRADE">
-                          <Eye size={14} />
-                        </Button>
+                        <button
+                          type="button"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
+                          onClick={() => setGradePreview(r)}
+                          title="VER GRADE"
+                          aria-label="Ver grade"
+                        >
+                          <Eye size={15} strokeWidth={2.2} />
+                        </button>
                       ) : null}
-                      <Button type="button" variant="secondary" className="inline-flex h-8 w-8 items-center justify-center p-0" onClick={() => openEdit(r)} title="EDITAR">
-                        <Pencil size={14} />
-                      </Button>
-                      <Button type="button" variant="secondary" className="inline-flex h-8 w-8 items-center justify-center p-0" onClick={() => duplicateFrom(r)} title="CLONAR">
-                        <Copy size={14} />
-                      </Button>
-                      <Button
+                      <button
                         type="button"
-                        variant="secondary"
-                        className="inline-flex h-8 w-8 items-center justify-center p-0 text-red-700"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
+                        onClick={() => openEdit(r)}
+                        title="EDITAR"
+                        aria-label="Editar produto"
+                      >
+                        <Pencil size={15} strokeWidth={2.2} />
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
+                        onClick={() => duplicateFrom(r)}
+                        title="CLONAR"
+                        aria-label="Clonar produto"
+                      >
+                        <Copy size={15} strokeWidth={2.2} />
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-300 bg-white text-red-700 shadow-sm hover:bg-red-50"
                         onClick={() => remove(r.id)}
                         title="EXCLUIR"
+                        aria-label="Excluir produto"
                       >
-                        <Trash2 size={14} />
-                      </Button>
+                        <Trash2 size={15} strokeWidth={2.2} />
+                      </button>
                     </div>
                   </td>
                 </tr>

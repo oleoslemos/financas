@@ -376,21 +376,33 @@ export function BemAvivTabelaPrecoCatalogoPage() {
                     <RefreshCw size={14} />
                     ATUALIZAR TODOS PRODUTOS
                   </Button>
-                  <Button type="button" variant="ghost" className="inline-flex h-9 w-9 shrink-0 items-center justify-center p-0" onClick={() => editTable(r)} title="EDITAR TABELA">
-                    <Pencil size={16} />
-                  </Button>
-                  <Button type="button" variant="ghost" className="inline-flex h-9 w-9 shrink-0 items-center justify-center p-0" onClick={() => duplicateTable(r.id)} title="CLONAR TABELA">
-                    <Copy size={16} />
-                  </Button>
-                  <Button
+                  <button
                     type="button"
-                    variant="ghost"
-                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center p-0 text-red-600"
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
+                    onClick={() => editTable(r)}
+                    title="EDITAR TABELA"
+                    aria-label="Editar tabela"
+                  >
+                    <Pencil size={15} strokeWidth={2.2} />
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
+                    onClick={() => duplicateTable(r.id)}
+                    title="CLONAR TABELA"
+                    aria-label="Clonar tabela"
+                  >
+                    <Copy size={15} strokeWidth={2.2} />
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-red-300 bg-white text-red-700 shadow-sm hover:bg-red-50"
                     onClick={() => remove(r.id)}
                     title="EXCLUIR TABELA"
+                    aria-label="Excluir tabela"
                   >
-                    <Trash2 size={16} />
-                  </Button>
+                    <Trash2 size={15} strokeWidth={2.2} />
+                  </button>
                 </div>
               </div>
               {lines.length === 0 ? (
@@ -421,35 +433,35 @@ export function BemAvivTabelaPrecoCatalogoPage() {
                             <div className="inline-flex items-center gap-1">
                               {row.isGrade ? (
                                 <>
-                                  <Button
+                                  <button
                                     type="button"
-                                    variant="secondary"
-                                    className="inline-flex h-8 w-8 items-center justify-center p-0"
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
                                     title="VER GRADE E VALORES"
+                                    aria-label="Ver grade e valores"
                                     onClick={() => openGradeModal(r.id, row.productId, false)}
                                   >
-                                    <Eye size={14} />
-                                  </Button>
-                                  <Button
+                                    <Eye size={14} strokeWidth={2.2} />
+                                  </button>
+                                  <button
                                     type="button"
-                                    variant="secondary"
-                                    className="inline-flex h-8 w-8 items-center justify-center p-0"
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
                                     title="EDITAR VALORES DA GRADE"
+                                    aria-label="Editar valores da grade"
                                     onClick={() => openGradeModal(r.id, row.productId, true)}
                                   >
-                                    <Pencil size={14} />
-                                  </Button>
+                                    <Pencil size={14} strokeWidth={2.2} />
+                                  </button>
                                 </>
                               ) : (
-                                <Button
+                                <button
                                   type="button"
-                                  variant="secondary"
-                                  className="inline-flex h-8 w-8 items-center justify-center p-0"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
                                   title="EDITAR VALOR"
+                                  aria-label="Editar valor"
                                   onClick={() => editItemPrice(row.items[0])}
                                 >
-                                  <Pencil size={14} />
-                                </Button>
+                                  <Pencil size={14} strokeWidth={2.2} />
+                                </button>
                               )}
                             </div>
                           </td>
@@ -472,9 +484,15 @@ export function BemAvivTabelaPrecoCatalogoPage() {
                 <h3 className="text-base font-semibold text-slate-900">{gradeModal.productName}</h3>
                 <p className="text-xs text-slate-500">{gradeModal.editable ? 'EDIÇÃO DE VALORES DA GRADE' : 'VISUALIZAÇÃO DA GRADE'}</p>
               </div>
-              <Button type="button" variant="secondary" className="inline-flex h-8 w-8 items-center justify-center p-0" onClick={() => setGradeModal(null)}>
-                <X size={14} />
-              </Button>
+              <button
+                type="button"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
+                onClick={() => setGradeModal(null)}
+                title="Fechar grade"
+                aria-label="Fechar grade"
+              >
+                <X size={14} strokeWidth={2.2} />
+              </button>
             </div>
 
             <div className="table-wrap border-0">

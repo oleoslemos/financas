@@ -1,5 +1,5 @@
 import { useUser, UserButton } from '@clerk/clerk-react'
-import { CalendarDays, CreditCard, LayoutDashboard, Landmark, ListTodo, Menu, Package, ShoppingCart, Table2, Tags, UserCircle, X } from 'lucide-react'
+import { CalendarDays, CircleDollarSign, CreditCard, LayoutDashboard, Landmark, ListTodo, Menu, Package, ShoppingCart, Table2, Tags, UserCircle, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { canAccessTasksHomolog } from '../lib/tasksHomologAccess'
@@ -11,6 +11,9 @@ const navLinkBase = 'flex items-center gap-2 rounded-md px-2.5 py-2 text-[13px] 
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   `${navLinkBase} ${isActive ? 'bg-emerald-100/70 font-medium text-emerald-900' : 'text-slate-700 hover:bg-slate-50 hover:text-slate-950'}`
+
+const navSubmenuClass = ({ isActive }: { isActive: boolean }) =>
+  `${navLinkBase} ml-5 text-[12.5px] ${isActive ? 'bg-emerald-50 font-medium text-emerald-900' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`
 
 function SectionTitle({ children }: { children: string }) {
   return <h2 className="px-2.5 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{children}</h2>
@@ -82,19 +85,19 @@ export function AppLayout() {
             Visão geral
           </NavLink>
           <NavLink to="/lsh/fluxo" className={navLinkClass}>
-            <ShoppingCart size={16} className="shrink-0 opacity-70" aria-hidden />
+            <CircleDollarSign size={16} className="shrink-0 opacity-70" aria-hidden />
             Movimentos financeiros
           </NavLink>
           <SubTitle>Cadastros</SubTitle>
-          <NavLink to="/lsh/contas-bancarias" className={navLinkClass}>
+          <NavLink to="/lsh/contas-bancarias" className={navSubmenuClass}>
             <Landmark size={16} className="shrink-0 opacity-70" aria-hidden />
             Contas bancárias
           </NavLink>
-          <NavLink to="/lsh/categorias" className={navLinkClass}>
+          <NavLink to="/lsh/categorias" className={navSubmenuClass}>
             <Tags size={16} className="shrink-0 opacity-70" aria-hidden />
             Categorias
           </NavLink>
-          <NavLink to="/lsh/cartoes" className={navLinkClass}>
+          <NavLink to="/lsh/cartoes" className={navSubmenuClass}>
             <CreditCard size={16} className="shrink-0 opacity-70" aria-hidden />
             Cartões
           </NavLink>
