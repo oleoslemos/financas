@@ -1,6 +1,6 @@
 import { useUser } from '@clerk/clerk-react'
 import { Copy, Eye, Pencil, Plus, Trash2, X } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
@@ -65,6 +65,11 @@ export function BemAvivProdutosCatalogoPage() {
   const [varRows, setVarRows] = useState([emptyVariationRow()])
   const [loadError, setLoadError] = useState<string | null>(null)
   const [gradePreview, setGradePreview] = useState<OfferProduct | null>(null)
+  const [filterName, setFilterName] = useState('')
+  const [filterCategory, setFilterCategory] = useState('')
+  const [filterLine, setFilterLine] = useState('')
+  const [filterType, setFilterType] = useState('')
+  const [filterMode, setFilterMode] = useState<'TODOS' | 'UNICO' | 'GRADE'>('TODOS')
 
   const load = useCallback(async () => {
     if (!supabase || !ownerUserId) return
@@ -251,6 +256,21 @@ export function BemAvivProdutosCatalogoPage() {
     }
   }
 
+  const filteredRows = useMemo(() => {
+    const nameQ = filterName.trim().toLowerCase()
+    const categoryQ = filterCategory.trim().toLowerCase()
+    const lineQ = filterLine.trim().toLowerCase()
+    const typeQ = filterType.trim().toLowerCase()
+    return rows.filter((r) => {
+      if (nameQ && !r.name.toLowerCase().includes(nameQ)) return false
+      if (categoryQ && !(r.category ?? '').toLowerCase().includes(categoryQ)) return false
+      if (lineQ && !(r.product_line ?? '').toLowerCase().includes(lineQ)) return false
+      if (typeQ && !(r.product_type ?? '').toLowerCase().includes(typeQ)) return false
+      if (filterMode !== 'TODOS' && (r.pricing_mode === 'GRADE' ? 'GRADE' : 'UNICO') !== filterMode) return false
+      return true
+    })
+  }, [rows, filterName, filterCategory, filterLine, filterType, filterMode])
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
@@ -329,7 +349,7 @@ export function BemAvivProdutosCatalogoPage() {
                       + LINHA
                     </Button>
                   </div>
-                  <div className="space-y-2">
+                  <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
                     {varRows.map((row, idx) => (
                       <div key={idx} className="grid gap-2 sm:grid-cols-12 sm:items-end">
                         <div className="sm:col-span-2">
@@ -454,6 +474,33 @@ export function BemAvivProdutosCatalogoPage() {
         </div>
       ) : null}
 
+      <div className="grid gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-10">
+        <div className="sm:col-span-3">
+          <label>NOME</label>
+          <input value={filterName} onChange={(e) => setFilterName(e.target.value)} placeholder="FILTRAR NOME" />
+        </div>
+        <div className="sm:col-span-2">
+          <label>CATEGORIA</label>
+          <input value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} placeholder="FILTRAR CATEGORIA" />
+        </div>
+        <div className="sm:col-span-2">
+          <label>LINHA</label>
+          <input value={filterLine} onChange={(e) => setFilterLine(e.target.value)} placeholder="FILTRAR LINHA" />
+        </div>
+        <div className="sm:col-span-2">
+          <label>TIPO</label>
+          <input value={filterType} onChange={(e) => setFilterType(e.target.value)} placeholder="FILTRAR TIPO" />
+        </div>
+        <div className="sm:col-span-1">
+          <label>MODO</label>
+          <select value={filterMode} onChange={(e) => setFilterMode(e.target.value as 'TODOS' | 'UNICO' | 'GRADE')}>
+            <option value="TODOS">TODOS</option>
+            <option value="UNICO">ÚNICO</option>
+            <option value="GRADE">GRADE</option>
+          </select>
+        </div>
+      </div>
+
       <div className="table-wrap">
         {loading ? (
           <p className="p-4 text-slate-500">CARREGANDO...</p>
@@ -471,7 +518,7 @@ export function BemAvivProdutosCatalogoPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {filteredRows.map((r) => (
                 <tr key={r.id}>
                   <td>{r.name}</td>
                   <td>{r.category || '—'}</td>
