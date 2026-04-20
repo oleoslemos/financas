@@ -1,22 +1,32 @@
 import { useUser } from '@clerk/clerk-react'
-import { Copy, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { Copy, Eye, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
-import { parseMoney } from '../lib/format'
+import { formatBRL, parseDigitsCentsToNumber, numberToCentsDigits } from '../lib/format'
 import { normalizePayload, type OfferPayload, type OfferProduct, type OfferVariation } from '../lib/bemAvivOfferProduct'
 import { toUpperTrim } from '../lib/text'
 
 type PriceTable = { id: string; name: string; is_default: boolean }
 
-function emptyVariationRow(): { dimensions: string; price: string } {
-  return { dimensions: '', price: '' }
+type VariationFormRow = { dimensions: string; priceDigits: string }
+
+function emptyVariationRow(): VariationFormRow {
+  return { dimensions: '', priceDigits: '' }
 }
 
 function autoVariationCode(index: number) {
   return String(index + 1).padStart(2, '0')
+}
+
+function formatPriceMaskFromDigits(digits: string) {
+  if (!digits) return ''
+  return parseDigitsCentsToNumber(digits).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
 }
 
 function isMissingOfferProductsTable(message: string) {
@@ -54,6 +64,7 @@ export function BemAvivProdutosCatalogoPage() {
   const [priceTableId, setPriceTableId] = useState('')
   const [varRows, setVarRows] = useState([emptyVariationRow()])
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [gradePreview, setGradePreview] = useState<OfferProduct | null>(null)
 
   const load = useCallback(async () => {
     if (!supabase || !ownerUserId) return
@@ -111,7 +122,7 @@ export function BemAvivProdutosCatalogoPage() {
     setPriceTableId(r.price_table_id ?? '')
     const vars = normalizePayload(r.payload).variations ?? []
     setVarRows(
-      vars.length ? vars.map((v) => ({ dimensions: v.dimensions, price: String(v.price).replace('.', ',') })) : [emptyVariationRow()],
+      vars.length ? vars.map((v) => ({ dimensions: v.dimensions, priceDigits: numberToCentsDigits(Number(v.price)) })) : [emptyVariationRow()],
     )
     setShowForm(true)
   }
@@ -126,7 +137,7 @@ export function BemAvivProdutosCatalogoPage() {
     setPriceTableId(r.price_table_id ?? '')
     const vars = normalizePayload(r.payload).variations ?? []
     setVarRows(
-      vars.length ? vars.map((v) => ({ dimensions: v.dimensions, price: String(v.price).replace('.', ',') })) : [emptyVariationRow()],
+      vars.length ? vars.map((v) => ({ dimensions: v.dimensions, priceDigits: numberToCentsDigits(Number(v.price)) })) : [emptyVariationRow()],
     )
     setShowForm(true)
   }
@@ -137,7 +148,7 @@ export function BemAvivProdutosCatalogoPage() {
     sourceRows.forEach((row, i) => {
       const code = autoVariationCode(i)
       const dimensions = row.dimensions.trim()
-      const price = parseMoney(row.price || '0')
+      const price = parseDigitsCentsToNumber(row.priceDigits || '0')
       if (price <= 0) return
       variations.push({ code, dimensions: dimensions ? toUpperTrim(dimensions) : '', price })
     })
@@ -339,9 +350,11 @@ export function BemAvivProdutosCatalogoPage() {
                           <label className="text-xs">PREÇO (R$)</label>
                           <input
                             inputMode="decimal"
-                            value={row.price}
-                            onChange={(e) => setVarRows((r) => r.map((x, i) => (i === idx ? { ...x, price: e.target.value } : x)))}
-                            placeholder="2300,00"
+                            value={formatPriceMaskFromDigits(row.priceDigits)}
+                            onChange={(e) =>
+                              setVarRows((r) => r.map((x, i) => (i === idx ? { ...x, priceDigits: e.target.value.replace(/\D/g, '') } : x)))
+                            }
+                            placeholder="2.300,00"
                           />
                         </div>
                         <div className="sm:col-span-2">
@@ -373,7 +386,7 @@ export function BemAvivProdutosCatalogoPage() {
                       <label className="text-xs">DESCRIÇÃO / DIMENSÕES (OPCIONAL)</label>
                       <input
                         value={varRows[0]?.dimensions ?? ''}
-                        onChange={(e) => setVarRows([{ dimensions: e.target.value, price: varRows[0]?.price ?? '' }])}
+                        onChange={(e) => setVarRows([{ dimensions: e.target.value, priceDigits: varRows[0]?.priceDigits ?? '' }])}
                         placeholder="EX.: PADRÃO"
                       />
                     </div>
@@ -381,9 +394,9 @@ export function BemAvivProdutosCatalogoPage() {
                       <label className="text-xs">PREÇO (R$)</label>
                       <input
                         inputMode="decimal"
-                        value={varRows[0]?.price ?? ''}
-                        onChange={(e) => setVarRows([{ dimensions: varRows[0]?.dimensions ?? '', price: e.target.value }])}
-                        placeholder="2300,00"
+                        value={formatPriceMaskFromDigits(varRows[0]?.priceDigits ?? '')}
+                        onChange={(e) => setVarRows([{ dimensions: varRows[0]?.dimensions ?? '', priceDigits: e.target.value.replace(/\D/g, '') }])}
+                        placeholder="2.300,00"
                       />
                     </div>
                   </div>
@@ -399,6 +412,44 @@ export function BemAvivProdutosCatalogoPage() {
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {gradePreview ? (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/45 p-4 sm:items-center">
+          <div className="max-h-[88vh] w-full max-w-2xl overflow-auto rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">GRADE — {gradePreview.name}</h3>
+                <p className="text-xs text-slate-500">{gradePreview.payload.variations?.length ?? 0} variações</p>
+              </div>
+              <Button type="button" variant="secondary" className="inline-flex items-center gap-1" onClick={() => setGradePreview(null)}>
+                <X size={14} />
+                FECHAR
+              </Button>
+            </div>
+
+            <div className="table-wrap border-0">
+              <table>
+                <thead>
+                  <tr>
+                    <th>CÓDIGO</th>
+                    <th>DIMENSÕES</th>
+                    <th>PREÇO</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(gradePreview.payload.variations ?? []).map((variation) => (
+                    <tr key={variation.code}>
+                      <td>{variation.code}</td>
+                      <td>{variation.dimensions || '—'}</td>
+                      <td>{formatBRL(Number(variation.price))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       ) : null}
@@ -422,7 +473,20 @@ export function BemAvivProdutosCatalogoPage() {
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id}>
-                  <td>{r.name}</td>
+                  <td>
+                    {r.pricing_mode === 'GRADE' ? (
+                      <button
+                        type="button"
+                        className="font-medium text-emerald-800 underline-offset-2 hover:underline"
+                        onClick={() => setGradePreview(r)}
+                        title="VER GRADE"
+                      >
+                        {r.name}
+                      </button>
+                    ) : (
+                      r.name
+                    )}
+                  </td>
                   <td>{r.category || '—'}</td>
                   <td>{r.product_line || '—'}</td>
                   <td>{r.product_type || '—'}</td>
@@ -430,22 +494,25 @@ export function BemAvivProdutosCatalogoPage() {
                   <td>{r.payload.variations?.length ?? 0}</td>
                   <td className="whitespace-nowrap">
                     <div className="flex items-center justify-end gap-1">
-                      <Button type="button" variant="secondary" className="inline-flex h-8 items-center gap-1 px-2 text-xs" onClick={() => openEdit(r)}>
-                        <Pencil size={13} />
-                        Editar
+                      {r.pricing_mode === 'GRADE' ? (
+                        <Button type="button" variant="secondary" className="inline-flex h-8 w-8 items-center justify-center p-0" onClick={() => setGradePreview(r)} title="VER GRADE">
+                          <Eye size={14} />
+                        </Button>
+                      ) : null}
+                      <Button type="button" variant="secondary" className="inline-flex h-8 w-8 items-center justify-center p-0" onClick={() => openEdit(r)} title="EDITAR">
+                        <Pencil size={14} />
                       </Button>
-                      <Button type="button" variant="secondary" className="inline-flex h-8 items-center gap-1 px-2 text-xs" onClick={() => duplicateFrom(r)}>
-                        <Copy size={13} />
-                        Clonar
+                      <Button type="button" variant="secondary" className="inline-flex h-8 w-8 items-center justify-center p-0" onClick={() => duplicateFrom(r)} title="CLONAR">
+                        <Copy size={14} />
                       </Button>
                       <Button
                         type="button"
                         variant="secondary"
-                        className="inline-flex h-8 items-center gap-1 px-2 text-xs text-red-700"
+                        className="inline-flex h-8 w-8 items-center justify-center p-0 text-red-700"
                         onClick={() => remove(r.id)}
+                        title="EXCLUIR"
                       >
-                        <Trash2 size={13} />
-                        Excluir
+                        <Trash2 size={14} />
                       </Button>
                     </div>
                   </td>
