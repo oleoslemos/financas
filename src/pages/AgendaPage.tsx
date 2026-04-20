@@ -2,6 +2,7 @@ import { useUser } from '@clerk/clerk-react'
 import { CalendarClock, CalendarDays, CalendarPlus, CheckCircle2, LoaderCircle, Plus, RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 
@@ -153,24 +154,25 @@ export function AgendaPage() {
               href="https://calendar.google.com/calendar/u/0/r/eventedit"
               target="_blank"
               rel="noreferrer"
-              className="btn btn-ghost inline-flex items-center gap-2"
+              className="btn-ghost inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium"
             >
               <CalendarPlus size={14} />
               CADASTRAR AGENDA
             </a>
-            <Link to="/lsh/tarefas#nova-tarefa" className="btn btn-ghost inline-flex items-center gap-2">
+            <Link to="/lsh/tarefas#nova-tarefa" className="btn-ghost inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium">
               <Plus size={14} />
               CADASTRAR TAREFA
             </Link>
-            <button
+            <Button
               type="button"
               onClick={() => void requestSyncNow()}
               disabled={syncing}
-              className="btn btn-primary inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-70"
+              variant="primary"
+              className="inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-70"
             >
               {syncing ? <LoaderCircle size={14} className="animate-spin" /> : <RefreshCw size={14} />}
               SINCRONIZAR AGORA
-            </button>
+            </Button>
           </div>
         </div>
         {syncMessage ? <p className="mt-2 text-xs text-slate-600">{syncMessage}</p> : null}

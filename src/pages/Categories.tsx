@@ -1,6 +1,7 @@
 import { useUser } from '@clerk/clerk-react'
 import { Pencil, Trash2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
@@ -24,18 +25,17 @@ export function Categories() {
   const [type, setType] = useState<Cat['type']>('expense')
   const [editing, setEditing] = useState<Cat | null>(null)
 
-  async function load() {
+  const load = useCallback(async () => {
     if (!supabase || !ownerUserId) return
     setLoading(true)
     const { data } = await supabase.from('categories').select('*').eq('user_id', ownerUserId).order('name')
     setRows((data as Cat[]) ?? [])
     setLoading(false)
-  }
+  }, [ownerUserId, supabase])
 
   useEffect(() => {
-    load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase, ownerUserId])
+    void load()
+  }, [load])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -88,20 +88,20 @@ export function Categories() {
             ))}
           </select>
         </div>
-        <button type="submit" className="btn btn-primary">
+        <Button type="submit" variant="primary">
           {editing ? 'Salvar' : 'Adicionar'}
-        </button>
+        </Button>
         {editing && (
-          <button
+          <Button
             type="button"
-            className="btn btn-secondary"
+            variant="secondary"
             onClick={() => {
               setEditing(null)
               setName('')
             }}
           >
             Cancelar
-          </button>
+          </Button>
         )}
       </form>
 
@@ -124,9 +124,10 @@ export function Categories() {
                   <td>{types.find((t) => t.v === c.type)?.l}</td>
                   <td>
                     <div className="flex items-center justify-end gap-2">
-                      <button
+                      <Button
                         type="button"
-                        className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0"
+                        variant="ghost"
+                        className="inline-flex h-9 w-9 items-center justify-center p-0"
                         title="EDITAR"
                         aria-label="EDITAR"
                         onClick={() => {
@@ -136,16 +137,17 @@ export function Categories() {
                         }}
                       >
                         <Pencil size={16} />
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-600"
+                        variant="ghost"
+                        className="inline-flex h-9 w-9 items-center justify-center p-0 text-red-600"
                         title="EXCLUIR"
                         aria-label="EXCLUIR"
                         onClick={() => remove(c.id)}
                       >
                         <Trash2 size={16} />
-                      </button>
+                      </Button>
                     </div>
                   </td>
                 </tr>

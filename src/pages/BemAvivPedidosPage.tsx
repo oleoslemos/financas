@@ -1,5 +1,6 @@
 import { useUser } from '@clerk/clerk-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
@@ -31,7 +32,7 @@ export function BemAvivPedidosPage() {
     notes: '',
   })
 
-  async function load() {
+  const load = useCallback(async () => {
     if (!supabase || !ownerUserId) return
     setLoading(true)
     const [{ data: orders }, { data: cl }] = await Promise.all([
@@ -41,12 +42,11 @@ export function BemAvivPedidosPage() {
     setRows((orders as Pedido[]) ?? [])
     setClients((cl as ClienteOpt[]) ?? [])
     setLoading(false)
-  }
+  }, [ownerUserId, supabase])
 
   useEffect(() => {
-    load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase, ownerUserId])
+    void load()
+  }, [load])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -93,7 +93,7 @@ export function BemAvivPedidosPage() {
           <label>OBSERVAÇÕES</label>
           <input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
         </div>
-        <div className="sm:col-span-2"><button className="btn btn-primary">ADICIONAR PEDIDO</button></div>
+        <div className="sm:col-span-2"><Button variant="primary">ADICIONAR PEDIDO</Button></div>
       </form>
 
       <div className="table-wrap">

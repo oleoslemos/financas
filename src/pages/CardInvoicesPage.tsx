@@ -1,6 +1,7 @@
 import { useUser } from '@clerk/clerk-react'
 import { FileText, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Button } from '../components/ui/Button'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
@@ -41,7 +42,7 @@ export function CardInvoicesPage() {
     return iso.slice(0, 7)
   }
 
-  async function load() {
+  const load = useCallback(async () => {
     if (!supabase || !ownerUserId || !cardId) return
     setLoading(true)
     const [{ data: c }, { data: cardsList }] = await Promise.all([
@@ -70,12 +71,11 @@ export function CardInvoicesPage() {
     }
     setTotalByInvoice(totals)
     setLoading(false)
-  }
+  }, [cardId, ownerUserId, supabase])
 
   useEffect(() => {
-    load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase, ownerUserId, cardId])
+    void load()
+  }, [load])
 
   const sortedRows = useMemo(() => {
     const copy = [...rows]
@@ -179,9 +179,9 @@ export function CardInvoicesPage() {
             />
             <span className="whitespace-nowrap text-[10px] text-slate-700 sm:text-xs">Abrir após criar</span>
           </label>
-          <button type="submit" className="btn btn-primary h-10 shrink-0 text-xs sm:text-sm">
+          <Button type="submit" variant="primary" className="h-10 shrink-0 text-xs sm:text-sm">
             NOVA FATURA
-          </button>
+          </Button>
         </div>
       </form>
 
@@ -208,24 +208,26 @@ export function CardInvoicesPage() {
                   <td>{r.status === 'open' ? 'ABERTO' : r.status === 'paid' ? 'PAGO' : r.status.toUpperCase()}</td>
                   <td className="whitespace-nowrap">
                     <div className="flex items-center justify-end gap-2">
-                      <button
+                      <Button
                         type="button"
-                        className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0"
+                        variant="ghost"
+                        className="inline-flex h-9 w-9 items-center justify-center p-0"
                         title="DETALHAR"
                         aria-label="DETALHAR"
                         onClick={() => navigate(`/lsh/cartoes/${cardId}/faturas/${r.id}`)}
                       >
                         <FileText size={16} />
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-600"
+                        variant="ghost"
+                        className="inline-flex h-9 w-9 items-center justify-center p-0 text-red-600"
                         title="EXCLUIR"
                         aria-label="EXCLUIR"
                         onClick={() => removeInv(r.id)}
                       >
                         <Trash2 size={16} />
-                      </button>
+                      </Button>
                     </div>
                   </td>
                 </tr>

@@ -1,6 +1,7 @@
 import { useUser } from '@clerk/clerk-react'
 import { Copy, Pencil, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Button } from '../components/ui/Button'
 import { useLocation } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
@@ -204,7 +205,7 @@ export function BemAvivProdutosPage() {
   const isAccessory = form.category === ACCESSORY_CATEGORY
   const needsStructuredPrice = isComfort || isBaseBed || isHeadboard || isAccessory
 
-  async function load() {
+  const load = useCallback(async () => {
     if (!supabase || !ownerUserId) return
     setLoading(true)
     const [{ data: products }, { data: tables }] = await Promise.all([
@@ -214,12 +215,11 @@ export function BemAvivProdutosPage() {
     setRows((products as Produto[]) ?? [])
     setPriceTables((tables as PriceTableOpt[]) ?? [])
     setLoading(false)
-  }
+  }, [ownerUserId, supabase])
 
   useEffect(() => {
-    load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase, ownerUserId])
+    void load()
+  }, [load])
 
   useEffect(() => {
     if (location.pathname.includes('/plataforma-de-descanso')) setFilterCategory('PLATAFORMA DE DESCANSO')
@@ -678,19 +678,19 @@ export function BemAvivProdutosPage() {
         <div className="min-w-0 flex-1 space-y-3">
           <h2 className="text-2xl font-semibold">PRODUTOS GERAL</h2>
           <div className="flex flex-wrap gap-2">
-            <button className={`btn ${filterCategory === 'TODOS' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setFilterCategory('TODOS')} type="button">
+            <Button variant={filterCategory === 'TODOS' ? 'primary' : 'secondary'} onClick={() => setFilterCategory('TODOS')} type="button">
               TODOS
-            </button>
+            </Button>
             {productCategories.map((c) => (
-              <button key={c} className={`btn ${filterCategory === c ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setFilterCategory(c)} type="button">
+              <Button key={c} variant={filterCategory === c ? 'primary' : 'secondary'} onClick={() => setFilterCategory(c)} type="button">
                 {c}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
-        <button className="btn btn-primary shrink-0 self-start sm:self-auto" type="button" onClick={openAddProductForm}>
+        <Button variant="primary" className="shrink-0 self-start sm:self-auto" type="button" onClick={openAddProductForm}>
           ADICIONAR PRODUTO
-        </button>
+        </Button>
       </div>
 
       {showForm && (
@@ -701,9 +701,9 @@ export function BemAvivProdutosPage() {
                 <h3 className="text-base font-semibold text-slate-900">
                   {editing ? 'EDITAR PRODUTO' : duplicateBase ? 'DUPLICAR PRODUTO' : 'ADICIONAR PRODUTO'}
                 </h3>
-                <button className="btn btn-secondary" type="button" onClick={closeProductForm}>
+                <Button variant="secondary" type="button" onClick={closeProductForm}>
                   FECHAR
-                </button>
+                </Button>
               </div>
 
               <div className="sm:col-span-4">
@@ -944,12 +944,12 @@ export function BemAvivProdutosPage() {
               )}
 
               <div className="sm:col-span-12 flex flex-wrap gap-2">
-                <button className="btn btn-primary" type="submit">
+                <Button variant="primary" type="submit">
                   {editing ? 'SALVAR' : duplicateBase ? 'SALVAR DUPLICADO' : 'ADICIONAR'}
-                </button>
-                <button className="btn btn-secondary" type="button" onClick={closeProductForm}>
+                </Button>
+                <Button variant="secondary" type="button" onClick={closeProductForm}>
                   CANCELAR
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -1058,15 +1058,15 @@ export function BemAvivProdutosPage() {
                     <td>{r.price == null ? '—' : formatBRL(Number(r.price))}</td>
                     <td className="whitespace-nowrap">
                       <div className="flex items-center justify-end gap-2">
-                        <button type="button" className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0" onClick={() => startEdit(r)}>
+                        <Button type="button" variant="ghost" className="inline-flex h-9 w-9 items-center justify-center p-0" onClick={() => startEdit(r)}>
                           <Pencil size={16} />
-                        </button>
-                        <button type="button" className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0" onClick={() => startDuplicate(r)}>
+                        </Button>
+                        <Button type="button" variant="ghost" className="inline-flex h-9 w-9 items-center justify-center p-0" onClick={() => startDuplicate(r)}>
                           <Copy size={16} />
-                        </button>
-                        <button type="button" className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-600" onClick={() => remove(r.id)}>
+                        </Button>
+                        <Button type="button" variant="ghost" className="inline-flex h-9 w-9 items-center justify-center p-0 text-red-600" onClick={() => remove(r.id)}>
                           <Trash2 size={16} />
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>

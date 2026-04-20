@@ -1,6 +1,7 @@
 import { useUser } from '@clerk/clerk-react'
 import { Trash2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
@@ -15,16 +16,15 @@ export function BemAvivCategoriasPage() {
   const [rows, setRows] = useState<Cat[]>([])
   const [name, setName] = useState('')
 
-  async function load() {
+  const load = useCallback(async () => {
     if (!supabase || !ownerUserId) return
     const { data } = await supabase.from('bem_aviv_categories').select('id, name').eq('user_id', ownerUserId).order('name')
     setRows((data as Cat[]) ?? [])
-  }
+  }, [ownerUserId, supabase])
 
   useEffect(() => {
-    load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase, ownerUserId])
+    void load()
+  }, [load])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -49,7 +49,7 @@ export function BemAvivCategoriasPage() {
       <h2 className="text-2xl font-semibold">GERAL — CATEGORIAS</h2>
       <form onSubmit={submit} className="flex gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
         <input className="flex-1" value={name} onChange={(e) => setName(e.target.value)} required />
-        <button className="btn btn-primary">ADICIONAR</button>
+        <Button variant="primary">ADICIONAR</Button>
       </form>
       <div className="table-wrap">
         <table>
@@ -59,9 +59,9 @@ export function BemAvivCategoriasPage() {
               <tr key={r.id}>
                 <td>{r.name}</td>
                 <td className="whitespace-nowrap">
-                  <button type="button" className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-600" onClick={() => remove(r.id)}>
+                  <Button type="button" variant="ghost" className="inline-flex h-9 w-9 items-center justify-center p-0 text-red-600" onClick={() => remove(r.id)}>
                     <Trash2 size={16} />
-                  </button>
+                  </Button>
                 </td>
               </tr>
             ))}

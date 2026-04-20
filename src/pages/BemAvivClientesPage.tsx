@@ -1,6 +1,7 @@
 import { useUser } from '@clerk/clerk-react'
 import { ChevronDown, ChevronRight, Pencil, Search, Trash2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
@@ -78,18 +79,17 @@ export function BemAvivClientesPage() {
     client_status: 'CLIENTE',
   })
 
-  async function load() {
+  const load = useCallback(async () => {
     if (!supabase || !ownerUserId) return
     setLoading(true)
     const { data } = await supabase.from('bem_aviv_clients').select('*').eq('user_id', ownerUserId).order('full_name')
     setRows((data as Cliente[]) ?? [])
     setLoading(false)
-  }
+  }, [ownerUserId, supabase])
 
   useEffect(() => {
-    load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase, ownerUserId])
+    void load()
+  }, [load])
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -239,9 +239,9 @@ export function BemAvivClientesPage() {
                     if (onlyDigits(form.cep).length === 8) void lookupCep()
                   }}
                 />
-                <button type="button" className="btn btn-secondary px-3" onClick={() => void lookupCep()} disabled={cepLoading}>
+                <Button type="button" variant="secondary" className="px-3" onClick={() => void lookupCep()} disabled={cepLoading}>
                   <Search size={14} />
-                </button>
+                </Button>
               </div>
             </div>
             <div className="sm:col-span-6">
@@ -280,10 +280,10 @@ export function BemAvivClientesPage() {
               </select>
             </div>
             <div className="sm:col-span-12 flex gap-2">
-              <button className="btn btn-primary" type="submit">{editing ? 'SALVAR' : 'ADICIONAR'}</button>
+              <Button variant="primary" type="submit">{editing ? 'SALVAR' : 'ADICIONAR'}</Button>
               {editing && (
-                <button
-                  className="btn btn-secondary"
+                <Button
+                  variant="secondary"
                   type="button"
                   onClick={() => {
                     setEditing(null)
@@ -306,7 +306,7 @@ export function BemAvivClientesPage() {
                   }}
                 >
                   CANCELAR
-                </button>
+                </Button>
               )}
             </div>
           </form>
@@ -338,9 +338,10 @@ export function BemAvivClientesPage() {
                   <td>{r.client_status || 'CLIENTE'}</td>
                   <td className="whitespace-nowrap">
                     <div className="flex items-center justify-end gap-2">
-                      <button
+                      <Button
                         type="button"
-                        className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0"
+                        variant="ghost"
+                        className="inline-flex h-9 w-9 items-center justify-center p-0"
                         onClick={() => {
                           setEditing(r)
                           setForm({
@@ -363,10 +364,10 @@ export function BemAvivClientesPage() {
                         }}
                       >
                         <Pencil size={16} />
-                      </button>
-                      <button type="button" className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-600" onClick={() => remove(r.id)}>
+                      </Button>
+                      <Button type="button" variant="ghost" className="inline-flex h-9 w-9 items-center justify-center p-0 text-red-600" onClick={() => remove(r.id)}>
                         <Trash2 size={16} />
-                      </button>
+                      </Button>
                     </div>
                   </td>
                 </tr>

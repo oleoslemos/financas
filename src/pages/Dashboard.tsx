@@ -2,6 +2,7 @@ import { useUser } from '@clerk/clerk-react'
 import { CalendarDays, CreditCard, Landmark, Wallet } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
@@ -300,13 +301,14 @@ export function Dashboard() {
           <section className="space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-semibold tracking-wide text-slate-600">CONTAS BANCÁRIAS</h3>
-              <button
+              <Button
                 type="button"
-                className={`btn btn-secondary text-[11px] ${selectedBankId === 'ALL' ? 'ring-1 ring-sky-500/60' : ''}`}
+                variant="secondary"
+                className={`text-[11px] ${selectedBankId === 'ALL' ? 'ring-1 ring-sky-500/60' : ''}`}
                 onClick={() => setSelectedBankId('ALL')}
               >
                 TODAS
-              </button>
+              </Button>
             </div>
 
             {banks.length === 0 ? (

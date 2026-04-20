@@ -1,5 +1,6 @@
 import { SignOutButton, useUser } from '@clerk/clerk-react'
 import { Outlet } from 'react-router-dom'
+import { Button } from './ui/Button'
 import { getAllowedEmailSet, isEmailAllowed } from '../lib/allowedEmails'
 
 /** Bloqueia o app se o e-mail do usuário não estiver em VITE_ALLOWED_EMAILS (quando definido). */
@@ -38,9 +39,9 @@ export function AllowedEmailGuard() {
           permitida.
         </p>
         <SignOutButton>
-          <button type="button" className="btn btn-secondary">
+          <Button type="button" variant="secondary">
             Sair e tentar outra conta
-          </button>
+          </Button>
         </SignOutButton>
       </div>
     )

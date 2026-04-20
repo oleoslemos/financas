@@ -1,6 +1,7 @@
 import { useUser } from '@clerk/clerk-react'
 import { BarChart3, Copy, Pencil, Trash2, X } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
@@ -74,7 +75,7 @@ export function BemAvivTabelaPrecoPage() {
     return max > 0 ? max : 1
   }, [productCompareSeries])
 
-  async function load() {
+  const load = useCallback(async () => {
     if (!supabase || !ownerUserId) return
     const [{ data, error }, { data: itemRows, error: itemError }] = await Promise.all([
       supabase.from('bem_aviv_price_tables').select('id, name, description, is_default').eq('user_id', ownerUserId).order('name'),
@@ -90,12 +91,11 @@ export function BemAvivTabelaPrecoPage() {
     }
     setRows((data as PriceTable[]) ?? [])
     setItems((itemRows as PriceTableItem[]) ?? [])
-  }
+  }, [ownerUserId, supabase])
 
   useEffect(() => {
-    load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase, ownerUserId])
+    void load()
+  }, [load])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -210,7 +210,7 @@ export function BemAvivTabelaPrecoPage() {
           <input value={description} onChange={(e) => setDescription(e.target.value)} />
         </div>
         <div className="sm:col-span-2 flex flex-wrap items-center gap-3">
-          <button className="btn btn-primary">ADICIONAR</button>
+          <Button variant="primary">ADICIONAR</Button>
         </div>
       </form>
 
@@ -230,12 +230,12 @@ export function BemAvivTabelaPrecoPage() {
                   <p className="text-xs text-slate-500">{r.description || '—'}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button type="button" className="btn-ghost inline-flex h-9 w-9 shrink-0 items-center justify-center p-0" onClick={() => duplicateTable(r.id)} title="DUPLICAR TABELA">
+                  <Button type="button" variant="ghost" className="inline-flex h-9 w-9 shrink-0 items-center justify-center p-0" onClick={() => duplicateTable(r.id)} title="DUPLICAR TABELA">
                     <Copy size={16} />
-                  </button>
-                  <button type="button" className="btn-ghost inline-flex h-9 w-9 shrink-0 items-center justify-center p-0 text-red-600" onClick={() => remove(r.id)} title="EXCLUIR TABELA">
+                  </Button>
+                  <Button type="button" variant="ghost" className="inline-flex h-9 w-9 shrink-0 items-center justify-center p-0 text-red-600" onClick={() => remove(r.id)} title="EXCLUIR TABELA">
                     <Trash2 size={16} />
-                  </button>
+                  </Button>
                 </div>
               </div>
               {lines.length === 0 ? (
@@ -257,25 +257,27 @@ export function BemAvivTabelaPrecoPage() {
                           <td className="tabular-nums">
                             <div className="flex items-center justify-between gap-2">
                               <span>{formatBRL(Number(it.price))}</span>
-                              <button
+                              <Button
                                 type="button"
-                                className="btn-ghost inline-flex h-7 w-7 items-center justify-center p-0"
+                                variant="ghost"
+                                className="inline-flex h-7 w-7 items-center justify-center p-0"
                                 onClick={() => editItemPrice(it)}
                                 title="EDITAR PREÇO"
                               >
                                 <Pencil size={14} />
-                              </button>
+                              </Button>
                             </div>
                           </td>
                           <td className="whitespace-nowrap text-right">
-                            <button
+                            <Button
                               type="button"
-                              className="btn-ghost inline-flex h-7 w-7 items-center justify-center p-0"
+                              variant="ghost"
+                              className="inline-flex h-7 w-7 items-center justify-center p-0"
                               onClick={() => setProductCompare({ productId: it.product_id, lineDescription: it.line_description })}
                               title="GRÁFICO POR PRODUTO"
                             >
                               <BarChart3 size={14} />
-                            </button>
+                            </Button>
                           </td>
                         </tr>
                       ))}
@@ -296,10 +298,10 @@ export function BemAvivTabelaPrecoPage() {
                 <p className="text-sm font-semibold text-slate-900">GRÁFICO POR PRODUTO</p>
                 <p className="text-xs text-slate-500">{productCompare.lineDescription}</p>
               </div>
-              <button type="button" className="btn btn-secondary inline-flex items-center gap-1" onClick={() => setProductCompare(null)}>
+              <Button type="button" variant="secondary" className="inline-flex items-center gap-1" onClick={() => setProductCompare(null)}>
                 <X size={14} />
                 FECHAR
-              </button>
+              </Button>
             </div>
             {productCompareSeries.length === 0 ? (
               <p className="text-sm text-slate-500">ESTE PRODUTO NÃO POSSUI VALORES NAS TABELAS CADASTRADAS.</p>

@@ -1,6 +1,7 @@
 import { useUser } from '@clerk/clerk-react'
 import { Pencil, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
@@ -40,7 +41,7 @@ export function BankAccounts() {
   })
   const [editing, setEditing] = useState<Bank | null>(null)
 
-  async function load() {
+  const load = useCallback(async () => {
     if (!supabase || !ownerUserId) return
     setLoading(true)
     const [{ data: accounts }, { data: prs }] = await Promise.all([
@@ -54,7 +55,7 @@ export function BankAccounts() {
     setRows((accounts as Bank[]) ?? [])
     setMovements((prs as PrMovement[]) ?? [])
     setLoading(false)
-  }
+  }, [ownerUserId, supabase])
 
   const currentBalanceByBankId = useMemo(() => {
     const map = new Map<string, number>()
@@ -71,9 +72,8 @@ export function BankAccounts() {
   }, [rows, movements])
 
   useEffect(() => {
-    load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase, ownerUserId])
+    void load()
+  }, [load])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -172,20 +172,20 @@ export function BankAccounts() {
           </label>
         </div>
         <div className="flex flex-wrap gap-2 sm:col-span-2">
-          <button type="submit" className="btn btn-primary">
+          <Button type="submit" variant="primary">
             {editing ? 'Salvar alterações' : 'Adicionar'}
-          </button>
+          </Button>
           {editing && (
-            <button
+            <Button
               type="button"
-              className="btn btn-secondary"
+              variant="secondary"
               onClick={() => {
                 setEditing(null)
                 resetForm()
               }}
             >
               Cancelar
-            </button>
+            </Button>
           )}
         </div>
       </form>
@@ -219,24 +219,26 @@ export function BankAccounts() {
                   <td>{b.is_active ? 'Sim' : 'Não'}</td>
                   <td className="whitespace-nowrap">
                     <div className="flex items-center justify-end gap-2">
-                      <button
+                      <Button
                         type="button"
-                        className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0"
+                        variant="ghost"
+                        className="inline-flex h-9 w-9 items-center justify-center p-0"
                         title="EDITAR"
                         aria-label="EDITAR"
                         onClick={() => startEdit(b)}
                       >
                         <Pencil size={16} />
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-600"
+                        variant="ghost"
+                        className="inline-flex h-9 w-9 items-center justify-center p-0 text-red-600"
                         title="EXCLUIR"
                         aria-label="EXCLUIR"
                         onClick={() => remove(b.id)}
                       >
                         <Trash2 size={16} />
-                      </button>
+                      </Button>
                     </div>
                   </td>
                 </tr>

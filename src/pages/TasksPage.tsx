@@ -1,6 +1,7 @@
 import { useUser } from '@clerk/clerk-react'
 import { CheckCircle2, CircleDashed, LoaderCircle, Plus, RotateCcw, Search, Trash2 } from 'lucide-react'
-import { useDeferredValue, useEffect, useMemo, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
+import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
@@ -51,7 +52,7 @@ export function TasksPage() {
   const [dueDate, setDueDate] = useState(toISODate(new Date()))
   const [mirrorGoogle, setMirrorGoogle] = useState(true)
 
-  async function loadTasks() {
+  const loadTasks = useCallback(async () => {
     if (!supabase || !ownerUserId) return
     setLoading(true)
     const { data, error } = await supabase
@@ -62,19 +63,20 @@ export function TasksPage() {
     if (error) alert(error.message)
     setRows((data as TaskRow[]) ?? [])
     setLoading(false)
-  }
+  }, [ownerUserId, supabase])
 
   useEffect(() => {
     void loadTasks()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase, ownerUserId])
+  }, [loadTasks])
 
   const filtered = useMemo(() => {
     const q = deferredQuery.trim().toUpperCase()
     return rows.filter((r) => {
       if (statusFilter !== 'ALL' && r.status !== statusFilter) return false
       if (!q) return true
-      return (r.title ?? '').includes(q) || (r.details ?? '').includes(q)
+      const normalizedTitle = (r.title ?? '').toUpperCase()
+      const normalizedDetails = (r.details ?? '').toUpperCase()
+      return normalizedTitle.includes(q) || normalizedDetails.includes(q)
     })
   }, [rows, statusFilter, deferredQuery])
 
@@ -203,10 +205,10 @@ export function TasksPage() {
             </label>
           </div>
         </div>
-        <button type="submit" className="btn btn-primary inline-flex items-center gap-2">
+        <Button type="submit" variant="primary" className="inline-flex items-center gap-2">
           <Plus size={16} />
           ADICIONAR TAREFA
-        </button>
+        </Button>
       </form>
 
       <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -281,47 +283,51 @@ export function TasksPage() {
                     <td>
                       <div className="flex items-center justify-end gap-2">
                         {task.status === 'TODO' ? (
-                          <button
+                          <Button
                             type="button"
-                            className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0"
+                            variant="ghost"
+                            className="inline-flex h-9 w-9 items-center justify-center p-0"
                             aria-label="INICIAR"
                             title="INICIAR"
                             onClick={() => void setStatus(task.id, 'IN_PROGRESS')}
                           >
                             <CircleDashed size={16} />
-                          </button>
+                          </Button>
                         ) : null}
                         {task.status === 'IN_PROGRESS' ? (
-                          <button
+                          <Button
                             type="button"
-                            className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0"
+                            variant="ghost"
+                            className="inline-flex h-9 w-9 items-center justify-center p-0"
                             aria-label="CONCLUIR"
                             title="CONCLUIR"
                             onClick={() => void setStatus(task.id, 'DONE')}
                           >
                             <CheckCircle2 size={16} />
-                          </button>
+                          </Button>
                         ) : null}
                         {task.status === 'DONE' ? (
-                          <button
+                          <Button
                             type="button"
-                            className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0"
+                            variant="ghost"
+                            className="inline-flex h-9 w-9 items-center justify-center p-0"
                             aria-label="REABRIR"
                             title="REABRIR"
                             onClick={() => void setStatus(task.id, 'TODO')}
                           >
                             <RotateCcw size={16} />
-                          </button>
+                          </Button>
                         ) : null}
-                        <button
+                        <Button
                           type="button"
-                          className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-600"
+                          variant="ghost"
+                          className="inline-flex h-9 w-9 items-center justify-center p-0 text-red-600"
                           aria-label="EXCLUIR"
                           title="EXCLUIR"
                           onClick={() => void removeTask(task.id)}
                         >
                           <Trash2 size={16} />
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>

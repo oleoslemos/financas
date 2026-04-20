@@ -1,6 +1,7 @@
 import { useUser } from '@clerk/clerk-react'
 import { Pencil, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
+import { Button } from '../components/ui/Button'
 import { Link, useParams } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
@@ -549,9 +550,9 @@ export function InvoiceDetailPage() {
           <label>Vencimento da fatura</label>
           <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
         </div>
-        <button type="submit" className="btn btn-secondary">
+        <Button type="submit" variant="secondary">
           Atualizar vencimento
-        </button>
+        </Button>
         <p className="mb-0 max-w-xl text-xs text-slate-600">
           Esta fatura mantém conta a pagar vinculada automaticamente; o valor é atualizado quando os itens mudam
           (exceto se a conta já estiver paga).
@@ -648,13 +649,13 @@ export function InvoiceDetailPage() {
           />
         </div>
         <div className="flex items-end gap-2">
-          <button type="submit" className="btn btn-primary" disabled={itemsLocked}>
+          <Button type="submit" variant="primary" disabled={itemsLocked}>
             {editingItem ? 'Salvar item' : 'Adicionar item'}
-          </button>
+          </Button>
           {editingItem && (
-            <button
+            <Button
               type="button"
-              className="btn btn-secondary"
+              variant="secondary"
               onClick={() => {
                 setEditingItem(null)
                 setItemForm({
@@ -668,7 +669,7 @@ export function InvoiceDetailPage() {
               }}
             >
               Cancelar
-            </button>
+            </Button>
           )}
         </div>
       </form>
@@ -699,9 +700,10 @@ export function InvoiceDetailPage() {
                 <td>{formatBRL(Number(it.amount))}</td>
                 <td className="whitespace-nowrap">
                   <div className="flex items-center justify-end gap-2">
-                    <button
+                    <Button
                       type="button"
-                      className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0"
+                      variant="ghost"
+                      className="inline-flex h-9 w-9 items-center justify-center p-0"
                       title="EDITAR"
                       aria-label="EDITAR"
                       disabled={itemsLocked}
@@ -718,17 +720,18 @@ export function InvoiceDetailPage() {
                       }}
                     >
                       <Pencil size={16} />
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
-                      className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-600"
+                      variant="ghost"
+                      className="inline-flex h-9 w-9 items-center justify-center p-0 text-red-600"
                       title="EXCLUIR"
                       aria-label="EXCLUIR"
                       disabled={itemsLocked}
                       onClick={() => deleteItem(it.id)}
                     >
                       <Trash2 size={16} />
-                    </button>
+                    </Button>
                   </div>
                 </td>
               </tr>

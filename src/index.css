@@ -4,32 +4,59 @@
 
 :root {
   color-scheme: light;
+  --color-bg: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-soft: #f8fafc;
+  --color-border: #cbd5e1;
+  --color-border-soft: #e2e8f0;
+  --color-text: #0f172a;
+  --color-text-muted: #475569;
+  --color-primary: #0284c7;
+  --color-primary-hover: #0ea5e9;
+  --color-danger: #dc2626;
+  --color-danger-hover: #ef4444;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
 }
 
 body {
-  @apply min-h-screen bg-white text-slate-900 antialiased;
+  @apply min-h-screen antialiased;
+  background-color: var(--color-bg);
+  color: var(--color-text);
   text-transform: uppercase;
 }
 
 input,
 select,
 textarea {
-  @apply rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-sky-500/30 focus:ring-2;
+  @apply px-3 py-2 text-sm outline-none ring-sky-500/30 focus:ring-2;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  color: var(--color-text);
   text-transform: uppercase;
   width: 100%;
 }
 
 button {
-  @apply rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-sky-500/30 focus:ring-2;
+  @apply px-3 py-2 text-sm outline-none ring-sky-500/30 focus:ring-2;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  color: var(--color-text);
   text-transform: uppercase;
 }
 
 label {
-  @apply mb-1 block text-xs font-medium text-slate-600;
+  @apply mb-1 block text-xs font-medium;
+  color: var(--color-text-muted);
 }
 
 .table-wrap {
-  @apply overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm;
+  @apply overflow-x-auto shadow-sm;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface);
 }
 
 table {
@@ -37,29 +64,61 @@ table {
 }
 
 th {
-  @apply border-b border-slate-200 bg-slate-100 px-3 py-2 font-medium text-slate-600;
+  @apply border-b px-3 py-2 font-medium;
+  border-color: var(--color-border-soft);
+  background-color: var(--color-surface-soft);
+  color: var(--color-text-muted);
 }
 
 td {
-  @apply border-b border-slate-100 px-3 py-2 text-slate-800;
+  @apply border-b px-3 py-2;
+  border-color: var(--color-border-soft);
+  color: var(--color-text);
 }
 
 .btn {
-  @apply inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition;
+  @apply inline-flex items-center justify-center px-4 py-2 text-sm font-medium transition;
+  border-radius: var(--radius-md);
 }
 
 .btn-primary {
-  @apply bg-sky-600 text-white hover:bg-sky-500;
+  background-color: var(--color-primary);
+  color: #ffffff;
+}
+
+.btn-primary:hover {
+  background-color: var(--color-primary-hover);
 }
 
 .btn-secondary {
-  @apply border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-50;
+  @apply shadow-sm;
+  border-color: var(--color-border);
+  background-color: var(--color-surface);
+  color: var(--color-text-muted);
+}
+
+.btn-secondary:hover {
+  background-color: var(--color-surface-soft);
 }
 
 .btn-danger {
-  @apply bg-red-600 text-white hover:bg-red-500;
+  background-color: var(--color-danger);
+  color: #ffffff;
+}
+
+.btn-danger:hover {
+  background-color: var(--color-danger-hover);
 }
 
 .btn-ghost {
-  @apply border border-slate-200 bg-white text-sky-700 shadow-sm hover:border-slate-300 hover:bg-slate-50 hover:text-sky-800;
+  @apply shadow-sm;
+  border-color: var(--color-border-soft);
+  background-color: var(--color-surface);
+  color: var(--color-primary);
+}
+
+.btn-ghost:hover {
+  border-color: var(--color-border);
+  background-color: var(--color-surface-soft);
+  color: var(--color-primary-hover);
 }

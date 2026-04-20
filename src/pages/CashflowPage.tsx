@@ -1,6 +1,7 @@
 import { useUser } from '@clerk/clerk-react'
 import { Check, FileText, Pencil, Plus, Split, Trash2, Undo2, X } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Button } from '../components/ui/Button'
 import { useNavigate } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
@@ -98,7 +99,7 @@ export function CashflowPage() {
   const [filterFrom, setFilterFrom] = useState(monthRange.from)
   const [filterTo, setFilterTo] = useState(monthRange.to)
 
-  async function load() {
+  const load = useCallback(async () => {
     if (!supabase || !ownerUserId) return
     setLoading(true)
     const [{ data: p }, { data: c }, { data: b }, { data: inv }] = await Promise.all([
@@ -128,12 +129,11 @@ export function CashflowPage() {
     )
     setInvoiceDetailByPayable(links)
     setLoading(false)
-  }
+  }, [ownerUserId, supabase])
 
   useEffect(() => {
-    load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase, ownerUserId])
+    void load()
+  }, [load])
 
   const filteredRows = useMemo(
     () =>
@@ -509,9 +509,10 @@ export function CashflowPage() {
     <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-2xl font-semibold">{title}</h2>
-        <button
+        <Button
           type="button"
-          className="btn btn-primary inline-flex items-center gap-2"
+          variant="primary"
+          className="inline-flex items-center gap-2"
           onClick={() => {
             clearForm()
             setEditing(null)
@@ -520,7 +521,7 @@ export function CashflowPage() {
         >
           <Plus size={16} />
           ADICIONAR MOVIMENTO
-        </button>
+        </Button>
       </div>
 
       {createOpen ? (
@@ -543,9 +544,10 @@ export function CashflowPage() {
               <h3 id="create-movement-title" className="text-lg font-medium text-slate-900">
                 {editing ? 'Editar movimento' : 'Novo movimento'}
               </h3>
-              <button
+              <Button
                 type="button"
-                className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0"
+                variant="ghost"
+                className="inline-flex h-9 w-9 items-center justify-center p-0"
                 aria-label="Fechar"
                 onClick={() => {
                   setCreateOpen(false)
@@ -554,27 +556,29 @@ export function CashflowPage() {
                 }}
               >
                 <X size={16} />
-              </button>
+              </Button>
             </div>
 
             <form onSubmit={submit} className="mt-4 space-y-4">
               <div className="flex flex-wrap gap-2">
-                <button
+                <Button
                   type="button"
-                  className={`btn text-sm ${formKind === 'payable' ? 'btn-primary' : 'btn-secondary'}`}
+                  variant={formKind === 'payable' ? 'primary' : 'secondary'}
+                  className="text-sm"
                   disabled={editLocksKind}
                   onClick={() => setFormKind('payable')}
                 >
                   CONTA A PAGAR
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
-                  className={`btn text-sm ${formKind === 'receivable' ? 'btn-primary' : 'btn-secondary'}`}
+                  variant={formKind === 'receivable' ? 'primary' : 'secondary'}
+                  className="text-sm"
                   disabled={editLocksKind}
                   onClick={() => setFormKind('receivable')}
                 >
                   CONTA A RECEBER
-                </button>
+                </Button>
                 <div className="ml-auto flex items-center gap-2">
                   <label className="mb-0 text-xs text-slate-600">STATUS</label>
                   <select
@@ -597,17 +601,19 @@ export function CashflowPage() {
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <button
+                <Button
                   type="button"
-                  className={`btn text-sm ${mode === 'vista' ? 'btn-primary' : 'btn-secondary'}`}
+                  variant={mode === 'vista' ? 'primary' : 'secondary'}
+                  className="text-sm"
                   onClick={() => setMode('vista')}
                   disabled={editLocksMode}
                 >
                   À vista
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
-                  className={`btn text-sm ${mode === 'parcelado' ? 'btn-primary' : 'btn-secondary'}`}
+                  variant={mode === 'parcelado' ? 'primary' : 'secondary'}
+                  className="text-sm"
                   onClick={() => {
                     setMode('parcelado')
                     if (editing && editing.status === 'open' && !editing.installment_group_id) {
@@ -619,7 +625,7 @@ export function CashflowPage() {
                   disabled={editLocksMode || editParceladoBlockedByPaid}
                 >
                   Parcelado
-                </button>
+                </Button>
               </div>
 
               {editing?.installment_group_id &&
@@ -702,9 +708,9 @@ export function CashflowPage() {
               </div>
 
               <div className="flex flex-wrap justify-end gap-2">
-                <button
+                <Button
                   type="button"
-                  className="btn btn-secondary"
+                  variant="secondary"
                   onClick={() => {
                     setCreateOpen(false)
                     setEditing(null)
@@ -712,14 +718,14 @@ export function CashflowPage() {
                   }}
                 >
                   Cancelar
-                </button>
-                <button type="submit" className="btn btn-primary">
+                </Button>
+                <Button type="submit" variant="primary">
                   {editing
                     ? editing.installment_group_id
                       ? 'Salvar esta parcela'
                       : 'Salvar'
                     : 'Adicionar'}
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -834,27 +840,30 @@ export function CashflowPage() {
                   <td>{r.status === 'paid' ? statusQuitadoLabel(r.kind) : 'ABERTO'}</td>
                   <td className="whitespace-nowrap">
                     <div className="flex items-center justify-end gap-2">
-                    <button
+                    <Button
                       type="button"
-                      className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0"
+                      variant="ghost"
+                      className="inline-flex h-9 w-9 items-center justify-center p-0"
                       title={r.status === 'paid' ? 'REABRIR' : acaoQuitarLabel(r.kind)}
                       aria-label={r.status === 'paid' ? 'REABRIR' : acaoQuitarLabel(r.kind)}
                       onClick={() => (r.status === 'paid' ? void reopenPaid(r) : openPayModal(r))}
                     >
                       {r.status === 'paid' ? <Undo2 size={16} /> : <Check size={16} />}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
-                      className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0"
+                      variant="ghost"
+                      className="inline-flex h-9 w-9 items-center justify-center p-0"
                       title="EDITAR"
                       aria-label="EDITAR"
                       onClick={() => startEdit(r)}
                     >
                       <Pencil size={16} />
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
-                      className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 disabled:cursor-not-allowed disabled:opacity-40"
+                      variant="ghost"
+                      className="inline-flex h-9 w-9 items-center justify-center p-0 disabled:cursor-not-allowed disabled:opacity-40"
                       title="ALTERAR PARCELAS"
                       aria-label="ALTERAR PARCELAS"
                       disabled={!r.installment_group_id}
@@ -863,10 +872,11 @@ export function CashflowPage() {
                       }}
                     >
                       <Split size={16} />
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
-                      className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 disabled:cursor-not-allowed disabled:opacity-40"
+                      variant="ghost"
+                      className="inline-flex h-9 w-9 items-center justify-center p-0 disabled:cursor-not-allowed disabled:opacity-40"
                       title="DETALHAR FATURA"
                       aria-label="DETALHAR FATURA"
                       disabled={!(r.kind === 'payable' && invoiceDetailByPayable[r.id])}
@@ -876,16 +886,17 @@ export function CashflowPage() {
                       }}
                     >
                       <FileText size={16} />
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
-                      className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-600"
+                      variant="ghost"
+                      className="inline-flex h-9 w-9 items-center justify-center p-0 text-red-600"
                       title="EXCLUIR"
                       aria-label="EXCLUIR"
                       onClick={() => removeRow(r)}
                     >
                       <Trash2 size={16} />
-                    </button>
+                    </Button>
                     </div>
                   </td>
                 </tr>
@@ -925,12 +936,12 @@ export function CashflowPage() {
               />
             </div>
             <div className="mt-4 flex justify-end gap-2">
-              <button type="button" className="btn btn-secondary" onClick={() => setPayModalRow(null)}>
+              <Button type="button" variant="secondary" onClick={() => setPayModalRow(null)}>
                 CANCELAR
-              </button>
-              <button type="button" className="btn btn-primary" onClick={() => void confirmPay()}>
+              </Button>
+              <Button type="button" variant="primary" onClick={() => void confirmPay()}>
                 {payModalRow.kind === 'payable' ? 'CONFIRMAR PAGAMENTO' : 'CONFIRMAR RECEBIMENTO'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -980,12 +991,12 @@ export function CashflowPage() {
               />
             </div>
             <div className="mt-4 flex justify-end gap-2">
-              <button type="button" className="btn btn-secondary" onClick={() => setParcelGroupModalId(null)}>
+              <Button type="button" variant="secondary" onClick={() => setParcelGroupModalId(null)}>
                 Cancelar
-              </button>
-              <button type="button" className="btn btn-primary" onClick={() => void applyParcelGroupCount()}>
+              </Button>
+              <Button type="button" variant="primary" onClick={() => void applyParcelGroupCount()}>
                 Aplicar
-              </button>
+              </Button>
             </div>
           </div>
         </div>

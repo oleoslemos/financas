@@ -1,6 +1,7 @@
 import { useUser } from '@clerk/clerk-react'
 import { CreditCard, Pencil, Trash2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { Button } from '../components/ui/Button'
 import { useNavigate } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
@@ -37,7 +38,7 @@ export function CreditCardsPage() {
   const [editing, setEditing] = useState<Card | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
 
-  async function load() {
+  const load = useCallback(async () => {
     if (!supabase || !ownerUserId) return
     setLoading(true)
     const { data } = await supabase.from('credit_cards').select('*').eq('user_id', ownerUserId).order('name')
@@ -115,12 +116,11 @@ export function CreditCardsPage() {
     setNextOpenInvoicesValueByCard(nextOpenMap)
     setOpenDueByCard(dueMap)
     setLoading(false)
-  }
+  }, [ownerUserId, supabase])
 
   useEffect(() => {
-    load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase, ownerUserId])
+    void load()
+  }, [load])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -188,9 +188,9 @@ export function CreditCardsPage() {
     <div className="space-y-8">
       <div className="space-y-2">
         <h2 className="text-2xl font-semibold">CARTÕES DE CRÉDITO</h2>
-        <button type="button" className="btn btn-primary text-sm" onClick={openAddModal}>
+        <Button type="button" variant="primary" className="text-sm" onClick={openAddModal}>
           ADICIONAR NOVO CARTÃO
-        </button>
+        </Button>
       </div>
 
       <div className="table-wrap">
@@ -220,33 +220,36 @@ export function CreditCardsPage() {
                   <td>{c.limit_amount != null ? formatBRL(Number(c.limit_amount)) : '—'}</td>
                   <td className="whitespace-nowrap">
                     <div className="flex items-center justify-end gap-2">
-                      <button
+                      <Button
                         type="button"
-                        className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0"
+                        variant="ghost"
+                        className="inline-flex h-9 w-9 items-center justify-center p-0"
                         title="FATURAS"
                         aria-label="FATURAS"
                         onClick={() => navigate(`/lsh/cartoes/${c.id}`)}
                       >
                         <CreditCard size={16} />
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0"
+                        variant="ghost"
+                        className="inline-flex h-9 w-9 items-center justify-center p-0"
                         title="EDITAR"
                         aria-label="EDITAR"
                         onClick={() => startEdit(c)}
                       >
                         <Pencil size={16} />
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        className="btn-ghost inline-flex h-9 w-9 items-center justify-center p-0 text-red-600"
+                        variant="ghost"
+                        className="inline-flex h-9 w-9 items-center justify-center p-0 text-red-600"
                         title="EXCLUIR"
                         aria-label="EXCLUIR"
                         onClick={() => remove(c.id)}
                       >
                         <Trash2 size={16} />
-                      </button>
+                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -309,12 +312,12 @@ export function CreditCardsPage() {
                 <input value={form.limit_amount} onChange={(e) => setForm({ ...form, limit_amount: e.target.value })} />
               </div>
               <div className="flex gap-2 sm:col-span-2">
-                <button type="submit" className="btn btn-primary">
+                <Button type="submit" variant="primary">
                   {editing ? 'SALVAR' : 'ADICIONAR'}
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
-                  className="btn btn-secondary"
+                  variant="secondary"
                   onClick={() => {
                     setModalOpen(false)
                     setEditing(null)
@@ -322,7 +325,7 @@ export function CreditCardsPage() {
                   }}
                 >
                   CANCELAR
-                </button>
+                </Button>
               </div>
             </form>
           </div>
