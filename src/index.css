@@ -4,20 +4,20 @@
 
 :root {
   color-scheme: light;
-  --color-bg: #f4f7fb;
-  --color-bg-elevated: #eaf0f8;
-  --color-surface: #ffffff;
-  --color-surface-soft: #f7faff;
-  --color-border: #cfd9e8;
-  --color-border-soft: #e4ebf5;
-  --color-text: #152238;
-  --color-text-muted: #54657e;
+  --color-bg: #f5f0e6;
+  --color-bg-elevated: #efe8db;
+  --color-surface: #fffdf8;
+  --color-surface-soft: #faf6ee;
+  --color-border: #e0d3c2;
+  --color-border-soft: #ebe2d4;
+  --color-text: #2b2419;
+  --color-text-muted: #6e5f4f;
   --color-primary: #0f5bd5;
   --color-primary-hover: #0d4fb8;
   --color-danger: #c43434;
   --color-danger-hover: #aa2525;
-  --shadow-sm: 0 1px 2px rgba(13, 32, 63, 0.08), 0 10px 20px rgba(13, 32, 63, 0.04);
-  --shadow-md: 0 14px 28px rgba(13, 32, 63, 0.1);
+  --shadow-sm: 0 1px 2px rgba(43, 36, 25, 0.08), 0 10px 20px rgba(43, 36, 25, 0.04);
+  --shadow-md: 0 14px 28px rgba(43, 36, 25, 0.1);
   --radius-md: 0.65rem;
   --radius-lg: 1rem;
 }
@@ -25,7 +25,7 @@
 body {
   @apply min-h-screen antialiased;
   font-family: 'Segoe UI', 'Trebuchet MS', 'Verdana', sans-serif;
-  background: radial-gradient(circle at top, #ffffff 0%, var(--color-bg) 50%, var(--color-bg-elevated) 100%);
+  background: radial-gradient(circle at top, #fffef9 0%, var(--color-bg) 52%, var(--color-bg-elevated) 100%);
   color: var(--color-text);
   text-transform: uppercase;
 }
@@ -104,15 +104,15 @@ td {
   @apply border-b px-3 py-2;
   border-color: var(--color-border-soft);
   color: var(--color-text);
-  background-color: color-mix(in srgb, var(--color-surface) 92%, #f7faff);
+  background-color: color-mix(in srgb, var(--color-surface) 92%, var(--color-surface-soft));
 }
 
 tbody tr:nth-child(even) td {
-  background-color: #fbfdff;
+  background-color: #fbf8f2;
 }
 
 tbody tr:hover td {
-  background-color: #f3f8ff;
+  background-color: #f6f0e4;
 }
 
 .btn {

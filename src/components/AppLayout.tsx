@@ -165,7 +165,7 @@ export function AppLayout() {
   const agendaSectionActive = agendaActive || tasksActive
 
   return (
-    <div className="flex min-h-screen flex-col lg:flex-row lg:bg-[#f3ecdf]">
+    <div className="flex min-h-screen flex-col lg:flex-row lg:bg-[color:var(--color-bg)]">
       <header className="flex items-center justify-between border-b border-amber-200 bg-[#fffdf8] px-3 py-2 uppercase lg:hidden">
         <h1 className="text-xs font-semibold tracking-wide text-emerald-800">Sistema de gestão</h1>
         <button
@@ -339,7 +339,7 @@ export function AppLayout() {
           <UserButton afterSignOutUrl="/sign-in" />
         </div>
       </aside>
-      <main className="w-full min-w-0 flex-1 bg-[#fffdf8]/70 p-3 sm:p-4 lg:bg-[#f5efe4] lg:p-6 xl:px-10 xl:py-8 2xl:px-12">
+      <main className="w-full min-w-0 flex-1 bg-[color:var(--color-bg)] p-3 sm:p-4 lg:bg-[color:var(--color-bg-elevated)] lg:p-6 xl:px-10 xl:py-8 2xl:px-12">
         <Outlet />
       </main>
     </div>
