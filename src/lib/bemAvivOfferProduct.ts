@@ -10,6 +10,8 @@ export type OfferProduct = {
   category: string | null
   product_line: string | null
   product_type: string | null
+  pricing_mode?: 'UNICO' | 'GRADE' | null
+  price_table_id?: string | null
   payload: OfferPayload
 }
 

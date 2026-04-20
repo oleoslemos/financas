@@ -199,7 +199,7 @@ export function BemAvivTabelaPrecoPage() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-semibold">GERAL — TABELA DE PREÇO</h2>
+      <h2 className="text-2xl font-semibold">GERAL — TABELA DE PREÇO GOLD</h2>
       <form onSubmit={submit} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-2">
         <div>
           <label>NOME</label>

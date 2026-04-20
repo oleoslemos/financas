@@ -22,6 +22,9 @@ const BemAvivProdutosCatalogoPage = lazy(() =>
 const BemAvivPedidosPage = lazy(() => import('./pages/BemAvivPedidosPage').then((m) => ({ default: m.BemAvivPedidosPage })))
 const BemAvivCategoriasPage = lazy(() => import('./pages/BemAvivCategoriasPage').then((m) => ({ default: m.BemAvivCategoriasPage })))
 const BemAvivTabelaPrecoPage = lazy(() => import('./pages/BemAvivTabelaPrecoPage').then((m) => ({ default: m.BemAvivTabelaPrecoPage })))
+const BemAvivTabelaPrecoCatalogoPage = lazy(() =>
+  import('./pages/BemAvivTabelaPrecoCatalogoPage').then((m) => ({ default: m.BemAvivTabelaPrecoCatalogoPage })),
+)
 const BemAvivCatalogosPrecoPage = lazy(() => import('./pages/BemAvivCatalogosPrecoPage').then((m) => ({ default: m.BemAvivCatalogosPrecoPage })))
 const BemAvivCatalogoPrecoDetailPage = lazy(() => import('./pages/BemAvivCatalogoPrecoDetailPage').then((m) => ({ default: m.BemAvivCatalogoPrecoDetailPage })))
 const BemAvivCatalogoMatrizBlocoPage = lazy(() => import('./pages/BemAvivCatalogoMatrizBlocoPage').then((m) => ({ default: m.BemAvivCatalogoMatrizBlocoPage })))
@@ -29,6 +32,16 @@ const BemAvivHomePage = lazy(() => import('./pages/BemAvivHomePage').then((m) =>
 const AgendaPage = lazy(() => import('./pages/AgendaPage').then((m) => ({ default: m.AgendaPage })))
 const TasksPage = lazy(() => import('./pages/TasksPage').then((m) => ({ default: m.TasksPage })))
 const LshStartPage = lazy(() => import('./pages/LshStartPage').then((m) => ({ default: m.LshStartPage })))
+
+const LAST_VISITED_PATH_KEY = 'sistema_financeiro:last_path'
+
+function RootRedirect() {
+  const fallback = '/lsh/inicio'
+  const allowedPrefixes = ['/lsh', '/bem-aviv', '/contas-bancarias', '/categorias', '/fluxo', '/cartoes']
+  const saved = typeof window !== 'undefined' ? window.localStorage.getItem(LAST_VISITED_PATH_KEY) ?? '' : ''
+  const canUseSaved = saved !== '/' && allowedPrefixes.some((prefix) => saved.startsWith(prefix))
+  return <Navigate to={canUseSaved ? saved : fallback} replace />
+}
 
 export default function App() {
   return (
@@ -40,7 +53,7 @@ export default function App() {
           <Route element={<AllowedEmailGuard />}>
             <Route element={<AppLayout />}>
               <Route element={<RequireTasksHomologAccess />}>
-                <Route path="/" element={<Navigate to="/lsh/inicio" replace />} />
+                <Route path="/" element={<RootRedirect />} />
                 <Route path="/lsh/inicio" element={<LshStartPage />} />
               </Route>
               <Route path="/lsh/resumo" element={<Dashboard />} />
@@ -77,6 +90,7 @@ export default function App() {
               <Route path="/bem-aviv/pedidos" element={<BemAvivPedidosPage />} />
               <Route path="/bem-aviv/categorias" element={<BemAvivCategoriasPage />} />
               <Route path="/bem-aviv/tabela-preco" element={<BemAvivTabelaPrecoPage />} />
+              <Route path="/bem-aviv/tabela-preco-catalogo" element={<BemAvivTabelaPrecoCatalogoPage />} />
               <Route path="/bem-aviv/catalogos-preco" element={<BemAvivCatalogosPrecoPage />} />
               <Route path="/bem-aviv/catalogos-preco/:catalogId" element={<BemAvivCatalogoPrecoDetailPage />} />
               <Route path="/bem-aviv/catalogos-preco/:catalogId/bloco/:blockId" element={<BemAvivCatalogoMatrizBlocoPage />} />

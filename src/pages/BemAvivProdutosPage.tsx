@@ -940,7 +940,7 @@ export function BemAvivProdutosPage() {
               )}
 
               {priceTables.length === 0 && needsStructuredPrice && (
-                <p className="sm:col-span-12 text-sm text-amber-800">CADASTRE PELO MENOS UMA TABELA DE PREÇO EM GERAL → TABELA DE PREÇO.</p>
+                <p className="sm:col-span-12 text-sm text-amber-800">CADASTRE PELO MENOS UMA TABELA DE PREÇO EM GERAL → TABELA DE PREÇO GOLD.</p>
               )}
 
               <div className="sm:col-span-12 flex flex-wrap gap-2">

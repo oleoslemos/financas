@@ -19,7 +19,8 @@ const cards = [
   },
   { to: '/bem-aviv/pedidos', title: 'Pedidos de vendas', desc: 'Orçamentos e pedidos', icon: ShoppingCart, tone: 'emerald' as const },
   { to: '/bem-aviv/categorias', title: 'Categorias', desc: 'Classificação de itens', icon: Tags, tone: 'amber' as const },
-  { to: '/bem-aviv/tabela-preco', title: 'Tabela de preço', desc: 'Preços e regras comerciais', icon: Table2, tone: 'violet' as const },
+  { to: '/bem-aviv/tabela-preco', title: 'Tabela de preço Gold', desc: 'Estrutura legada (gold)', icon: Table2, tone: 'violet' as const },
+  { to: '/bem-aviv/tabela-preco-catalogo', title: 'Tabela de preço', desc: 'Nova estrutura para produtos do catálogo', icon: Table2, tone: 'violet' as const },
   {
     to: '/bem-aviv/catalogos-preco',
     title: 'Catálogos em grade',
