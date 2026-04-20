@@ -1,6 +1,6 @@
 import { useUser } from '@clerk/clerk-react'
 import { CheckCircle2, Pencil, Plus, ThumbsDown, Trash2, X } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
 import { SearchableSelect } from '../components/ui/SearchableSelect'
@@ -185,14 +185,6 @@ export function BemAvivPedidosPage() {
   const [draftQty, setDraftQty] = useState('1')
   const [lineItems, setLineItems] = useState<LinhaItem[]>([])
   const [liquidTotalDraft, setLiquidTotalDraft] = useState('')
-  const liquidDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  function clearLiquidDebounce() {
-    if (liquidDebounceRef.current) {
-      clearTimeout(liquidDebounceRef.current)
-      liquidDebounceRef.current = null
-    }
-  }
 
   const uniqueProductNames = useMemo(() => {
     const names = new Set<string>()
@@ -316,12 +308,20 @@ export function BemAvivPedidosPage() {
     return clampMoney(parseMoney(form.total_amount || '0') - orderDiscount + freightAmountNum)
   }, [lineItems.length, form.total_amount, orderDiscount, freightAmountNum])
 
-  useEffect(() => {
-    return () => {
-      if (liquidDebounceRef.current) clearTimeout(liquidDebounceRef.current)
-    }
-  }, [])
+  const applyLiquidRawToDiscount = useCallback(
+    (raw: string) => {
+      if (lineItems.length === 0 || sumLinesNet <= 0) return
+      const target = parseMoney(raw)
+      const pct = percentFromTargetLiquid(sumLinesNet, freightAmountNum, target)
+      const pctStr = formatPercentInput(pct)
+      const net = clampMoney(sumLinesNet - (sumLinesNet * parsePercent(pctStr)) / 100 + freightAmountNum)
+      setForm((f) => ({ ...f, discount_percent: pctStr }))
+      setLiquidTotalDraft(formatMoneyInput(net))
+    },
+    [lineItems.length, sumLinesNet, freightAmountNum],
+  )
 
+  /** Sincroniza o líquido exibido com o % quando mudam itens ou frete (não depende de discount_percent para não resetar durante digitação no líquido). */
   useEffect(() => {
     if (lineItems.length === 0) {
       setLiquidTotalDraft('')
@@ -330,7 +330,9 @@ export function BemAvivPedidosPage() {
     const p = parsePercent(form.discount_percent)
     const net = clampMoney(sumLinesNet - (sumLinesNet * p) / 100 + freightAmountNum)
     setLiquidTotalDraft(formatMoneyInput(net))
-  }, [lineItems.length, sumLinesNet, freightAmountNum, form.discount_percent])
+    // form.discount_percent omitido de deps de propósito
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lineItems.length, sumLinesNet, freightAmountNum])
 
   function resetFormForNew() {
     setForm({
@@ -354,7 +356,6 @@ export function BemAvivPedidosPage() {
     setDraftVariationCode('')
     setDraftQty('1')
     setEditingOrderId(null)
-    clearLiquidDebounce()
     setLiquidTotalDraft('')
   }
 
@@ -444,7 +445,6 @@ export function BemAvivPedidosPage() {
   }
 
   function addLineFromDraft() {
-    clearLiquidDebounce()
     const p = selectedOffer
     if (!p) {
       alert('SELECIONE PRODUTO E TIPO DO CATÁLOGO.')
@@ -486,12 +486,10 @@ export function BemAvivPedidosPage() {
   }
 
   function removeLine(key: string) {
-    clearLiquidDebounce()
     setLineItems((prev) => prev.filter((l) => l.key !== key))
   }
 
   function updateLineQty(key: string, qtyStr: string) {
-    clearLiquidDebounce()
     const qty = Math.max(1, parseInt(qtyStr.replace(/\D/g, ''), 10) || 1)
     setLineItems((prev) =>
       prev.map((l) => {
@@ -518,7 +516,14 @@ export function BemAvivPedidosPage() {
 
     const hasLines = lineItems.length > 0
     const manualGross = parseMoney(form.total_amount || '0')
-    const discOrder = orderDiscount
+    let discOrder = orderDiscount
+    if (hasLines && sumLinesNet > 0) {
+      const pctStr = formatPercentInput(percentFromTargetLiquid(sumLinesNet, freightAmountNum, parseMoney(liquidTotalDraft)))
+      discOrder = clampMoney((sumLinesNet * parsePercent(pctStr)) / 100)
+      const netCanon = clampMoney(sumLinesNet - discOrder + freightAmountNum)
+      setForm((f) => ({ ...f, discount_percent: pctStr }))
+      setLiquidTotalDraft(formatMoneyInput(netCanon))
+    }
     const inst = installmentsNum
     const entrada = form.payment_option === 'A_PRAZO' ? downPaymentNum : 0
     const totalBruto = (hasLines ? linesGrossTotal : manualGross) + freightAmountNum
@@ -1014,8 +1019,13 @@ export function BemAvivPedidosPage() {
                 <input
                   value={form.discount_percent}
                   onChange={(e) => {
-                    clearLiquidDebounce()
-                    setForm({ ...form, discount_percent: e.target.value })
+                    const v = e.target.value
+                    setForm({ ...form, discount_percent: v })
+                    if (lineItems.length > 0) {
+                      const p = parsePercent(v)
+                      const net = clampMoney(sumLinesNet - (sumLinesNet * p) / 100 + freightAmountNum)
+                      setLiquidTotalDraft(formatMoneyInput(net))
+                    }
                   }}
                   placeholder="0"
                   inputMode="decimal"
@@ -1024,7 +1034,7 @@ export function BemAvivPedidosPage() {
                   Valor do desconto (sobre o bruto): {formatBRL(orderDiscount)}
                   {lineItems.length > 0 ? (
                     <span className="block text-slate-500">
-                      Ao alterar o valor líquido (com frete) abaixo, este percentual é recalculado (duas casas decimais).
+                      No campo líquido, use Enter ou clique fora para recalcular este % (duas casas decimais).
                     </span>
                   ) : null}
                 </p>
@@ -1053,10 +1063,7 @@ export function BemAvivPedidosPage() {
                 <label>FRETE (R$)</label>
                 <input
                   value={form.freight_amount}
-                  onChange={(e) => {
-                    clearLiquidDebounce()
-                    setForm({ ...form, freight_amount: e.target.value })
-                  }}
+                  onChange={(e) => setForm({ ...form, freight_amount: e.target.value })}
                   placeholder="0"
                   inputMode="decimal"
                 />
@@ -1071,27 +1078,21 @@ export function BemAvivPedidosPage() {
                     <label>VALOR LÍQUIDO (COM FRETE)</label>
                     <input
                       value={liquidTotalDraft}
-                      onChange={(e) => {
-                        const raw = e.target.value
-                        setLiquidTotalDraft(raw)
-                        if (liquidDebounceRef.current) clearTimeout(liquidDebounceRef.current)
-                        liquidDebounceRef.current = setTimeout(() => {
-                          liquidDebounceRef.current = null
-                          const target = parseMoney(raw)
-                          if (sumLinesNet <= 0) return
-                          const pct = percentFromTargetLiquid(sumLinesNet, freightAmountNum, target)
-                          const pctStr = formatPercentInput(pct)
-                          const net = clampMoney(sumLinesNet - (sumLinesNet * parsePercent(pctStr)) / 100 + freightAmountNum)
-                          setForm((f) => ({ ...f, discount_percent: pctStr }))
-                          setLiquidTotalDraft(formatMoneyInput(net))
-                        }, 220)
+                      onChange={(e) => setLiquidTotalDraft(e.target.value)}
+                      onBlur={(e) => applyLiquidRawToDiscount(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          applyLiquidRawToDiscount((e.target as HTMLInputElement).value)
+                        }
                       }}
                       placeholder="0,00"
                       inputMode="decimal"
                     />
                     <p className="mt-1 text-xs font-normal normal-case text-slate-600">
-                      Total líquido do pedido (bruto com desconto + frete). Ao alterar este valor, o desconto (%) sobre o
-                      bruto é recalculado com duas casas decimais.
+                      Total líquido (bruto com desconto + frete). Digite o valor e pressione <strong>Enter</strong> ou
+                      clique fora do campo para recalcular o desconto (%) com duas casas decimais — evita recalcular a
+                      cada tecla (ex.: 130,00).
                     </p>
                   </div>
                 </>

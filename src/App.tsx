@@ -42,10 +42,9 @@ export default function App() {
         <Route element={<RequireAuth />}>
           <Route element={<AllowedEmailGuard />}>
             <Route element={<AppLayout />}>
-              <Route element={<RequireTasksHomologAccess />}>
-                <Route path="/" element={<Navigate to="/lsh/inicio" replace />} />
-                <Route path="/lsh/inicio" element={<LshStartPage />} />
-              </Route>
+              <Route path="/" element={<Navigate to="/lsh/inicio" replace />} />
+              <Route path="/inicio" element={<Navigate to="/lsh/inicio" replace />} />
+              <Route path="/lsh/inicio" element={<LshStartPage />} />
               <Route path="/lsh/resumo" element={<Dashboard />} />
               <Route path="/lsh/contas-bancarias" element={<BankAccounts />} />
               <Route path="/lsh/categorias" element={<Categories />} />
@@ -63,7 +62,6 @@ export default function App() {
               <Route path="/fluxo" element={<Navigate to="/lsh/fluxo" replace />} />
               <Route path="/cartoes" element={<Navigate to="/lsh/cartoes" replace />} />
               <Route element={<RequireTasksHomologAccess />}>
-                <Route path="/inicio" element={<Navigate to="/lsh/inicio" replace />} />
                 <Route path="/agenda" element={<Navigate to="/lsh/agenda" replace />} />
                 <Route path="/tarefas" element={<Navigate to="/lsh/tarefas" replace />} />
               </Route>
