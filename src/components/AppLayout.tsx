@@ -27,19 +27,19 @@ const navLinkBase =
   'flex items-center gap-2 rounded-md px-2.5 py-2 text-[13px] font-normal leading-snug transition-colors normal-case'
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
-  `${navLinkBase} ${isActive ? 'bg-emerald-100/70 font-medium text-emerald-900' : 'text-amber-900/75 hover:bg-amber-50 hover:text-amber-950'}`
+  `${navLinkBase} ${isActive ? 'bg-emerald-100/70 font-medium text-emerald-900' : 'text-slate-700 hover:bg-slate-50 hover:text-slate-950'}`
 
 const navLinkNested = ({ isActive }: { isActive: boolean }) =>
-  `${navLinkBase} ${isActive ? 'bg-emerald-50 font-medium text-emerald-900' : 'text-amber-900/70 hover:bg-amber-50 hover:text-amber-950'}`
+  `${navLinkBase} ${isActive ? 'bg-emerald-50 font-medium text-emerald-900' : 'text-slate-700 hover:bg-slate-50 hover:text-slate-950'}`
 
 const navLinkDeep = ({ isActive }: { isActive: boolean }) =>
-  `${navLinkBase} pl-1 text-[12.5px] ${isActive ? 'bg-emerald-50 font-medium text-emerald-900' : 'text-amber-900/65 hover:bg-amber-50 hover:text-amber-900'}`
+  `${navLinkBase} pl-1 text-[12.5px] ${isActive ? 'bg-emerald-50 font-medium text-emerald-900' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`
 
 const groupCardClass =
-  'rounded-xl border border-amber-200/90 bg-gradient-to-b from-[#fffdf8] to-[#f8f2e7] shadow-sm ring-1 ring-amber-950/[0.05]'
+  'rounded-xl border border-slate-200/90 bg-white shadow-sm ring-1 ring-slate-900/[0.04]'
 
 const subGroupCardClass =
-  'rounded-lg border border-amber-200/80 bg-[#fffdf9]/95 shadow-sm ring-1 ring-amber-950/[0.03]'
+  'rounded-lg border border-slate-200/80 bg-white shadow-sm ring-1 ring-slate-900/[0.03]'
 
 /** Grupo principal: caixa moderna; chevron só expande; título navega para resumo. */
 function NavGroupCard(props: {
@@ -62,7 +62,7 @@ function NavGroupCard(props: {
             e.preventDefault()
             onToggle()
           }}
-          className="flex w-10 shrink-0 items-center justify-center rounded-l-[0.65rem] border-r border-amber-200/70 text-amber-900/70 transition hover:bg-amber-100/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500/40"
+          className="flex w-10 shrink-0 items-center justify-center rounded-l-[0.65rem] border-r border-slate-200/80 text-slate-600 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500/40"
         >
           {open ? <ChevronDown size={18} strokeWidth={2} /> : <ChevronRight size={18} strokeWidth={2} />}
         </button>
@@ -70,11 +70,11 @@ function NavGroupCard(props: {
           to={summaryTo}
           className={({ isActive }) =>
             `flex min-w-0 flex-1 items-center gap-2 rounded-r-[0.65rem] px-3 py-2.5 text-left text-[13px] font-semibold normal-case transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500/35 ${
-              sectionActive || isActive ? 'bg-emerald-50/80 text-emerald-950' : 'text-amber-950/85 hover:bg-amber-50'
+              sectionActive || isActive ? 'bg-emerald-50/80 text-emerald-950' : 'text-slate-800 hover:bg-slate-50'
             }`
           }
         >
-          {icon ? <span className="shrink-0 text-amber-900/65">{icon}</span> : null}
+          {icon ? <span className="shrink-0 text-slate-500">{icon}</span> : null}
           <span className="min-w-0 truncate">{label}</span>
         </NavLink>
       </div>
@@ -102,7 +102,7 @@ function NavSubGroupCard(props: {
             e.preventDefault()
             onToggle()
           }}
-          className="flex w-9 shrink-0 items-center justify-center rounded-l-md border-r border-amber-200/60 text-amber-900/55 transition hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500/35"
+          className="flex w-9 shrink-0 items-center justify-center rounded-l-md border-r border-slate-200/70 text-slate-600 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500/35"
         >
           {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
         </button>
@@ -110,7 +110,7 @@ function NavSubGroupCard(props: {
           to={summaryTo}
           className={({ isActive }) =>
             `flex min-w-0 flex-1 items-center px-2.5 py-2 text-left text-[12.5px] font-medium normal-case transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500/35 ${
-              sectionActive || isActive ? 'bg-emerald-50/80 text-emerald-950' : 'text-amber-900/70 hover:bg-amber-50'
+              sectionActive || isActive ? 'bg-emerald-50/80 text-emerald-950' : 'text-slate-700 hover:bg-slate-50'
             }`
           }
         >
@@ -165,19 +165,19 @@ export function AppLayout() {
   const agendaSectionActive = agendaActive || tasksActive
 
   return (
-    <div className="flex min-h-screen flex-col lg:flex-row lg:bg-[color:var(--color-bg)]">
-      <header className="flex items-center justify-between border-b border-amber-200 bg-[#fffdf8] px-3 py-2 uppercase lg:hidden">
+    <div className="flex min-h-screen flex-col lg:flex-row lg:bg-white">
+      <header className="flex items-center justify-between border-b border-slate-200 bg-white px-3 py-2 uppercase lg:hidden">
         <h1 className="text-xs font-semibold tracking-wide text-emerald-800">Sistema de gestão</h1>
         <button
           type="button"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-amber-300 bg-[#fffdf8] uppercase"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white uppercase"
           onClick={() => setMobileMenuOpen((v) => !v)}
         >
           {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
         </button>
       </header>
       <aside
-        className={`${mobileMenuOpen ? 'block' : 'hidden'} shrink-0 border-b border-amber-200 bg-[#fffdf8]/95 p-3 shadow-sm normal-case backdrop-blur-sm sm:p-4 lg:block lg:w-64 lg:border-b-0 lg:border-r lg:shadow-none`}
+        className={`${mobileMenuOpen ? 'block' : 'hidden'} shrink-0 border-b border-slate-200 bg-white/95 p-3 shadow-sm normal-case backdrop-blur-sm sm:p-4 lg:block lg:w-64 lg:border-b-0 lg:border-r lg:shadow-none`}
       >
         <h1 className="mb-4 text-sm font-semibold leading-tight tracking-tight text-emerald-800 sm:mb-6">
           Sistema de gestão
@@ -194,7 +194,7 @@ export function AppLayout() {
                 icon={<CalendarDays size={17} className="text-slate-500" aria-hidden />}
               />
               {agendaMenuOpen && (
-                <div className="ml-1.5 mt-1 flex flex-col gap-0.5 border-l-2 border-amber-200/90 py-0.5 pl-3">
+                <div className="ml-1.5 mt-1 flex flex-col gap-0.5 border-l-2 border-slate-200/90 py-0.5 pl-3">
                   <NavLink to="/lsh/agenda" className={navLinkClass}>
                     <CalendarDays size={16} className="shrink-0 opacity-70" aria-hidden />
                     Resumo da agenda
@@ -219,7 +219,7 @@ export function AppLayout() {
             />
             {lshOpen && (
               <div
-                className="ml-1.5 mt-1 flex flex-col gap-0.5 border-l-2 border-amber-200/90 py-0.5 pl-3"
+                className="ml-1.5 mt-1 flex flex-col gap-0.5 border-l-2 border-slate-200/90 py-0.5 pl-3"
                 role="group"
                 aria-label="LSH"
               >
@@ -258,7 +258,7 @@ export function AppLayout() {
             />
             {bemAvivOpen && (
               <div
-                className="ml-1.5 mt-1 flex flex-col gap-0.5 border-l-2 border-amber-200/90 py-0.5 pl-3"
+                className="ml-1.5 mt-1 flex flex-col gap-0.5 border-l-2 border-slate-200/90 py-0.5 pl-3"
                 role="group"
                 aria-label="Bem Aviv"
               >
@@ -270,7 +270,7 @@ export function AppLayout() {
                   onToggle={() => setBemCadastroOpen((v) => !v)}
                 />
                 {bemCadastroOpen && (
-                  <div className="ml-2 border-l border-amber-200 pl-2.5">
+                  <div className="ml-2 border-l border-slate-200 pl-2.5">
                     <NavLink to="/bem-aviv/clientes" className={navLinkNested}>
                       <UserCircle size={15} className="shrink-0 opacity-70" aria-hidden />
                       Clientes
@@ -283,7 +283,7 @@ export function AppLayout() {
                       onToggle={() => setBemProdutosOpen((v) => !v)}
                     />
                     {bemProdutosOpen && (
-                      <div className="ml-2 border-l border-amber-200 pl-2.5">
+                      <div className="ml-2 border-l border-slate-200 pl-2.5">
                         <NavLink to="/bem-aviv/produtos/plataforma-de-descanso" className={navLinkDeep}>
                           <Package size={14} className="shrink-0 opacity-60" aria-hidden />
                           Plataforma de descanso
@@ -316,7 +316,7 @@ export function AppLayout() {
                   onToggle={() => setBemGeralOpen((v) => !v)}
                 />
                 {bemGeralOpen && (
-                  <div className="ml-2 border-l border-amber-200 pl-2.5">
+                  <div className="ml-2 border-l border-slate-200 pl-2.5">
                     <NavLink to="/bem-aviv/categorias" className={navLinkNested}>
                       <Tags size={15} className="shrink-0 opacity-70" aria-hidden />
                       Categorias
@@ -339,7 +339,7 @@ export function AppLayout() {
           <UserButton afterSignOutUrl="/sign-in" />
         </div>
       </aside>
-      <main className="w-full min-w-0 flex-1 bg-[color:var(--color-bg)] p-3 sm:p-4 lg:bg-[color:var(--color-bg-elevated)] lg:p-6 xl:px-10 xl:py-8 2xl:px-12">
+      <main className="w-full min-w-0 flex-1 bg-white p-3 sm:p-4 lg:bg-white lg:p-6 xl:px-10 xl:py-8 2xl:px-12">
         <Outlet />
       </main>
     </div>

@@ -4,20 +4,20 @@
 
 :root {
   color-scheme: light;
-  --color-bg: #f5f0e6;
-  --color-bg-elevated: #efe8db;
-  --color-surface: #fffdf8;
-  --color-surface-soft: #faf6ee;
-  --color-border: #e0d3c2;
-  --color-border-soft: #ebe2d4;
-  --color-text: #2b2419;
-  --color-text-muted: #6e5f4f;
+  --color-bg: #ffffff;
+  --color-bg-elevated: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-soft: #fafafa;
+  --color-border: #e5e7eb;
+  --color-border-soft: #f1f5f9;
+  --color-text: #0f172a;
+  --color-text-muted: #64748b;
   --color-primary: #0f5bd5;
   --color-primary-hover: #0d4fb8;
   --color-danger: #c43434;
   --color-danger-hover: #aa2525;
-  --shadow-sm: 0 1px 2px rgba(43, 36, 25, 0.08), 0 10px 20px rgba(43, 36, 25, 0.04);
-  --shadow-md: 0 14px 28px rgba(43, 36, 25, 0.1);
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06), 0 10px 20px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 14px 28px rgba(15, 23, 42, 0.1);
   --radius-md: 0.65rem;
   --radius-lg: 1rem;
 }
@@ -25,7 +25,7 @@
 body {
   @apply min-h-screen antialiased;
   font-family: 'Segoe UI', 'Trebuchet MS', 'Verdana', sans-serif;
-  background: radial-gradient(circle at top, #fffef9 0%, var(--color-bg) 52%, var(--color-bg-elevated) 100%);
+  background-color: #ffffff;
   color: var(--color-text);
   text-transform: uppercase;
 }
@@ -108,11 +108,11 @@ td {
 }
 
 tbody tr:nth-child(even) td {
-  background-color: #fbf8f2;
+  background-color: #fafafa;
 }
 
 tbody tr:hover td {
-  background-color: #f6f0e4;
+  background-color: #f3f4f6;
 }
 
 .btn {

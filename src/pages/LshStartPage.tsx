@@ -23,7 +23,7 @@ export function LshStartPage() {
         {tasksHomologEnabled ? (
           <Link
             to="/lsh/agenda"
-            className="group relative overflow-hidden rounded-2xl border border-[color:var(--color-border-soft)] bg-gradient-to-br from-sky-50 via-white to-emerald-50 p-5 shadow-sm transition duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-primary)] focus-visible:ring-offset-2"
+            className="group relative overflow-hidden rounded-2xl border border-[color:var(--color-border-soft)] bg-white p-5 shadow-sm transition duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-primary)] focus-visible:ring-offset-2"
           >
             <span
               className="pointer-events-none absolute inset-0 opacity-0 transition duration-300 group-hover:opacity-100"
@@ -35,10 +35,10 @@ export function LshStartPage() {
             />
             <div className="relative flex flex-col gap-3">
               <div className="flex items-center gap-2 text-[color:var(--color-text)]">
-                <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/90 ring-1 ring-black/5">
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-slate-50 ring-1 ring-black/5">
                   <CalendarDays size={20} className="text-sky-600" aria-hidden />
                 </span>
-                <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/90 ring-1 ring-black/5">
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-slate-50 ring-1 ring-black/5">
                   <ListTodo size={20} className="text-emerald-600" aria-hidden />
                 </span>
               </div>
@@ -52,7 +52,7 @@ export function LshStartPage() {
             </div>
           </Link>
         ) : (
-          <div className="rounded-2xl border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-surface-soft)] p-5 text-sm text-[color:var(--color-text-muted)]">
+          <div className="rounded-2xl border border-dashed border-[color:var(--color-border)] bg-white p-5 text-sm text-[color:var(--color-text-muted)]">
             Agenda e tarefas não estão disponíveis para esta conta.
           </div>
         )}

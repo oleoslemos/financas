@@ -30,7 +30,7 @@ createRoot(document.getElementById('root')!).render(
         </ClerkProvider>
       </RootErrorBoundary>
     ) : (
-      <div className="flex min-h-screen items-center justify-center bg-[#f5f1e8] p-4 text-center text-amber-900 sm:p-6">
+      <div className="flex min-h-screen items-center justify-center bg-white p-4 text-center text-slate-800 sm:p-6">
         {clerkPub && !hasValidClerkPrefix ? (
           <p>
             Chave do Clerk invalida no <code className="text-sky-700">.env</code>. Use{' '}
