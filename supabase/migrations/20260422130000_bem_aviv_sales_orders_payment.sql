@@ -3,7 +3,8 @@
 ALTER TABLE public.bem_aviv_sales_orders
   ADD COLUMN IF NOT EXISTS payment_option text NOT NULL DEFAULT 'A_VISTA',
   ADD COLUMN IF NOT EXISTS payment_method text NOT NULL DEFAULT 'DINHEIRO',
-  ADD COLUMN IF NOT EXISTS down_payment_amount numeric(14,2);
+  ADD COLUMN IF NOT EXISTS down_payment_amount numeric(14,2),
+  ADD COLUMN IF NOT EXISTS down_payment_method text;
 
 ALTER TABLE public.bem_aviv_sales_orders
   DROP CONSTRAINT IF EXISTS bem_aviv_sales_orders_payment_option_check;
@@ -19,6 +20,21 @@ ALTER TABLE public.bem_aviv_sales_orders
   ADD CONSTRAINT bem_aviv_sales_orders_payment_method_check
   CHECK (
     payment_method IN (
+      'DINHEIRO',
+      'PIX',
+      'CARTAO_DEBITO',
+      'CARTAO_CREDITO',
+      'BOLETO'
+    )
+  );
+
+ALTER TABLE public.bem_aviv_sales_orders
+  DROP CONSTRAINT IF EXISTS bem_aviv_sales_orders_down_payment_method_check;
+
+ALTER TABLE public.bem_aviv_sales_orders
+  ADD CONSTRAINT bem_aviv_sales_orders_down_payment_method_check
+  CHECK (
+    down_payment_method IS NULL OR down_payment_method IN (
       'DINHEIRO',
       'PIX',
       'CARTAO_DEBITO',
@@ -72,6 +88,7 @@ BEGIN
     NEW.notes := upper(coalesce(NEW.notes, ''));
     NEW.payment_option := upper(coalesce(NEW.payment_option, 'A_VISTA'));
     NEW.payment_method := upper(coalesce(NEW.payment_method, 'DINHEIRO'));
+    NEW.down_payment_method := upper(NEW.down_payment_method);
   ELSIF TG_TABLE_NAME = 'bem_aviv_categories' THEN
     NEW.name := upper(coalesce(NEW.name, ''));
   ELSIF TG_TABLE_NAME = 'bem_aviv_price_tables' THEN

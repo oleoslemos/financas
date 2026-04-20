@@ -37,6 +37,7 @@ type Pedido = {
   payment_option?: string | null
   payment_method?: string | null
   down_payment_amount?: number | null
+  down_payment_method?: string | null
 }
 
 type ClienteOpt = { id: string; full_name: string }
@@ -48,6 +49,7 @@ type LinhaItem = {
   name: string
   unit_price: number
   quantity: number
+  discount_percent: number
   discount_amount: number
 }
 
@@ -58,6 +60,15 @@ function newLineKey() {
 function clampMoney(n: number) {
   if (!Number.isFinite(n)) return 0
   return Math.max(0, Math.round(n * 100) / 100)
+}
+
+function clampPercent(n: number) {
+  if (!Number.isFinite(n)) return 0
+  return Math.max(0, Math.min(100, Math.round(n * 100) / 100))
+}
+
+function parsePercent(raw: string) {
+  return clampPercent(parseMoney(raw || '0'))
 }
 
 function parsePaymentOption(v: string | null | undefined): PaymentOption {
@@ -77,6 +88,10 @@ function netTotal(r: Pedido) {
   return clampMoney(Number(r.total_amount))
 }
 
+function grossTotal(r: Pedido) {
+  return clampMoney(netTotal(r) + Number(r.discount_total ?? 0))
+}
+
 function downVal(r: Pedido) {
   return clampMoney(Number(r.down_payment_amount ?? 0))
 }
@@ -90,7 +105,7 @@ function displayValorAvista(r: Pedido) {
 function displayValorPrazo(r: Pedido) {
   const opt = parsePaymentOption(r.payment_option)
   if (opt !== 'A_PRAZO') return null
-  return clampMoney(netTotal(r) - downVal(r))
+  return grossTotal(r)
 }
 
 function installmentCell(r: Pedido) {
@@ -102,7 +117,7 @@ function installmentCell(r: Pedido) {
     const each = inst > 0 ? net / inst : net
     return `${inst}x ${formatBRL(each)}`
   }
-  const financed = clampMoney(net - entrada)
+  const financed = clampMoney(grossTotal(r) - entrada)
   const each = inst > 0 ? financed / inst : financed
   return `${inst}x ${formatBRL(each)}`
 }
@@ -139,12 +154,13 @@ export function BemAvivPedidosPage() {
     document_type: 'ORCAMENTO' as 'ORCAMENTO' | 'PEDIDO',
     status: 'ABERTO',
     total_amount: '',
-    discount_total: '',
+    discount_percent: '',
     installments_count: '1',
     notes: '',
     payment_option: 'A_VISTA' as PaymentOption,
     payment_method: 'DINHEIRO' as PaymentMethod,
     down_payment: '',
+    down_payment_method: 'DINHEIRO' as PaymentMethod,
   })
   const [draftOfferId, setDraftOfferId] = useState('')
   const [draftVariationCode, setDraftVariationCode] = useState('')
@@ -203,7 +219,7 @@ export function BemAvivPedidosPage() {
     [lineItems],
   )
 
-  const orderDiscount = useMemo(() => clampMoney(parseMoney(form.discount_total || '0')), [form.discount_total])
+  const orderDiscountPercent = useMemo(() => parsePercent(form.discount_percent), [form.discount_percent])
 
   const installmentsNum = useMemo(
     () => Math.min(120, Math.max(1, parseInt(form.installments_count.replace(/\D/g, ''), 10) || 1)),
@@ -211,6 +227,13 @@ export function BemAvivPedidosPage() {
   )
 
   const downPaymentNum = useMemo(() => clampMoney(parseMoney(form.down_payment || '0')), [form.down_payment])
+
+  const linesGrossTotal = useMemo(() => lineItems.reduce((acc, l) => acc + l.quantity * l.unit_price, 0), [lineItems])
+
+  const orderDiscount = useMemo(() => {
+    const base = lineItems.length > 0 ? linesGrossTotal : parseMoney(form.total_amount || '0')
+    return clampMoney((base * orderDiscountPercent) / 100)
+  }, [lineItems.length, linesGrossTotal, form.total_amount, orderDiscountPercent])
 
   const previewOrderTotal = useMemo(() => {
     if (lineItems.length === 0) return null
@@ -234,12 +257,13 @@ export function BemAvivPedidosPage() {
       document_type: 'ORCAMENTO',
       status: 'ABERTO',
       total_amount: '',
-      discount_total: '',
+      discount_percent: '',
       installments_count: '1',
       notes: '',
       payment_option: 'A_VISTA',
       payment_method: 'DINHEIRO',
       down_payment: '',
+      down_payment_method: 'DINHEIRO',
     })
     setLineItems([])
     setDraftOfferId('')
@@ -288,15 +312,29 @@ export function BemAvivPedidosPage() {
       return
     }
 
-    const mapped: LinhaItem[] = items.map((it) => ({
-      key: newLineKey(),
-      offer_product_id: it.offer_product_id!,
-      variation_code: it.variation_code!,
-      name: it.item_description,
-      unit_price: Number(it.unit_price),
-      quantity: Number(it.quantity),
-      discount_amount: clampMoney(Number(it.discount_amount ?? 0)),
-    }))
+    const mapped: LinhaItem[] = items.map((it) => {
+      const qty = Number(it.quantity)
+      const unit = Number(it.unit_price)
+      const gross = qty * unit
+      const discAmount = clampMoney(Number(it.discount_amount ?? 0))
+      const discPercent = gross > 0 ? clampPercent((discAmount / gross) * 100) : 0
+      return {
+        key: newLineKey(),
+        offer_product_id: it.offer_product_id!,
+        variation_code: it.variation_code!,
+        name: it.item_description,
+        unit_price: unit,
+        quantity: qty,
+        discount_percent: discPercent,
+        discount_amount: discAmount,
+      }
+    })
+
+    const totalGrossFromItems = mapped.reduce((acc, it) => acc + it.quantity * it.unit_price, 0)
+    const quoteDiscountAmount = Number(quote.discount_total ?? 0)
+    const manualGross = mapped.length === 0 ? clampMoney(Number(quote.total_amount) + quoteDiscountAmount) : 0
+    const discountBase = mapped.length > 0 ? totalGrossFromItems : manualGross
+    const discountPercent = discountBase > 0 ? clampPercent((quoteDiscountAmount / discountBase) * 100) : 0
 
     setEditingOrderId(quote.id)
     setForm({
@@ -305,10 +343,7 @@ export function BemAvivPedidosPage() {
       document_type: quote.document_type,
       status: quote.status,
       total_amount: mapped.length === 0 ? String(Number(quote.total_amount)).replace('.', ',') : '',
-      discount_total:
-        quote.discount_total != null && Number(quote.discount_total) > 0
-          ? String(Number(quote.discount_total)).replace('.', ',')
-          : '',
+      discount_percent: discountPercent > 0 ? String(discountPercent).replace('.', ',') : '',
       installments_count: String(quote.installments_count ?? 1),
       notes: quote.notes ?? '',
       payment_option: parsePaymentOption(quote.payment_option),
@@ -317,6 +352,7 @@ export function BemAvivPedidosPage() {
         quote.down_payment_amount != null && Number(quote.down_payment_amount) > 0
           ? String(Number(quote.down_payment_amount)).replace('.', ',')
           : '',
+      down_payment_method: parsePaymentMethod(quote.down_payment_method ?? quote.payment_method),
     })
     setLineItems(mapped)
     setDraftOfferId('')
@@ -349,11 +385,8 @@ export function BemAvivPedidosPage() {
       return
     }
     const gross = qty * unit
-    const disc = clampMoney(parseMoney(draftLineDiscount || '0'))
-    if (disc > gross) {
-      alert('DESCONTO DO ITEM NÃO PODE SER MAIOR QUE O SUBTOTAL (QTD × UNITÁRIO).')
-      return
-    }
+    const discPercent = parsePercent(draftLineDiscount)
+    const disc = clampMoney((gross * discPercent) / 100)
     const dimPart = v!.dimensions ? ` — ${v!.dimensions}` : ''
     const descName = `${p.name} [${v!.code}]${dimPart}`
     setLineItems((prev) => [
@@ -365,6 +398,7 @@ export function BemAvivPedidosPage() {
         name: descName,
         unit_price: unit,
         quantity: qty,
+        discount_percent: discPercent,
         discount_amount: disc,
       },
     ])
@@ -384,19 +418,19 @@ export function BemAvivPedidosPage() {
       prev.map((l) => {
         if (l.key !== key) return l
         const gross = qty * l.unit_price
-        const disc = Math.min(l.discount_amount, gross)
+        const disc = clampMoney((gross * l.discount_percent) / 100)
         return { ...l, quantity: qty, discount_amount: disc }
       }),
     )
   }
 
   function updateLineDiscount(key: string, raw: string) {
-    const disc = clampMoney(parseMoney(raw || '0'))
+    const discPercent = parsePercent(raw)
     setLineItems((prev) =>
       prev.map((l) => {
         if (l.key !== key) return l
         const gross = l.quantity * l.unit_price
-        return { ...l, discount_amount: Math.min(disc, gross) }
+        return { ...l, discount_percent: discPercent, discount_amount: clampMoney((gross * discPercent) / 100) }
       }),
     )
   }
@@ -421,6 +455,7 @@ export function BemAvivPedidosPage() {
     const discOrder = orderDiscount
     const inst = installmentsNum
     const entrada = form.payment_option === 'A_PRAZO' ? downPaymentNum : 0
+    const totalBruto = hasLines ? linesGrossTotal : manualGross
 
     if (form.payment_option === 'A_PRAZO' && entrada < 0) {
       alert('VALOR DE ENTRADA INVÁLIDO.')
@@ -433,8 +468,8 @@ export function BemAvivPedidosPage() {
         alert('DESCONTO NO PEDIDO É MAIOR QUE A SOMA DOS ITENS.')
         return
       }
-      if (form.payment_option === 'A_PRAZO' && entrada > net) {
-        alert('ENTRADA NÃO PODE SER MAIOR QUE O TOTAL LÍQUIDO DO ORÇAMENTO.')
+      if (form.payment_option === 'A_PRAZO' && entrada > totalBruto) {
+        alert('ENTRADA NÃO PODE SER MAIOR QUE O VALOR A PRAZO (BRUTO).')
         return
       }
     } else {
@@ -446,9 +481,8 @@ export function BemAvivPedidosPage() {
         alert('DESCONTO NO PEDIDO NÃO PODE SER MAIOR QUE O VALOR INFORMADO.')
         return
       }
-      const netManual = clampMoney(manualGross - discOrder)
-      if (form.payment_option === 'A_PRAZO' && entrada > netManual) {
-        alert('ENTRADA NÃO PODE SER MAIOR QUE O TOTAL LÍQUIDO.')
+      if (form.payment_option === 'A_PRAZO' && entrada > totalBruto) {
+        alert('ENTRADA NÃO PODE SER MAIOR QUE O VALOR A PRAZO (BRUTO).')
         return
       }
     }
@@ -467,6 +501,7 @@ export function BemAvivPedidosPage() {
       payment_option: form.payment_option,
       payment_method: form.payment_method,
       down_payment_amount: form.payment_option === 'A_PRAZO' && entrada > 0 ? entrada : null,
+      down_payment_method: form.payment_option === 'A_PRAZO' ? form.down_payment_method : null,
     }
 
     if (editingOrderId) {
@@ -616,6 +651,7 @@ export function BemAvivPedidosPage() {
     const inst = quote.installments_count != null ? Number(quote.installments_count) : 1
     const payOpt = parsePaymentOption(quote.payment_option)
     const payMeth = parsePaymentMethod(quote.payment_method)
+    const downMethod = parsePaymentMethod(quote.down_payment_method ?? quote.payment_method)
     const down = quote.down_payment_amount != null ? Number(quote.down_payment_amount) : null
 
     const { data: inserted, error: insertError } = await supabase
@@ -634,6 +670,7 @@ export function BemAvivPedidosPage() {
         payment_option: payOpt,
         payment_method: payMeth,
         down_payment_amount: payOpt === 'A_PRAZO' ? down : null,
+        down_payment_method: payOpt === 'A_PRAZO' ? downMethod : null,
       })
       .select('id, document_number')
       .single()
@@ -734,6 +771,7 @@ export function BemAvivPedidosPage() {
             <tbody>
               {rows.map((r) => {
                 const prazo = displayValorPrazo(r)
+                const downMethod = parsePaymentMethod(r.down_payment_method ?? r.payment_method)
                 return (
                   <tr key={r.id}>
                     <td className="whitespace-nowrap font-medium">{r.document_number || '—'}</td>
@@ -743,7 +781,14 @@ export function BemAvivPedidosPage() {
                     <td className="text-right whitespace-nowrap">{formatBRL(displayValorAvista(r))}</td>
                     <td className="text-right whitespace-nowrap">{prazo != null ? formatBRL(prazo) : '—'}</td>
                     <td className="text-right whitespace-nowrap">
-                      {parsePaymentOption(r.payment_option) === 'A_PRAZO' ? formatBRL(downVal(r)) : '—'}
+                      {parsePaymentOption(r.payment_option) === 'A_PRAZO' ? (
+                        <span className="inline-flex flex-col items-end">
+                          <span>{formatBRL(downVal(r))}</span>
+                          <span className="text-[11px] text-slate-500">{PAYMENT_METHOD_LABEL[downMethod]}</span>
+                        </span>
+                      ) : (
+                        '—'
+                      )}
                     </td>
                     <td className="text-right whitespace-nowrap text-xs sm:text-sm">{installmentCell(r)}</td>
                     <td className="text-right">
@@ -883,14 +928,30 @@ export function BemAvivPedidosPage() {
                   />
                 </div>
               ) : null}
+              {form.payment_option === 'A_PRAZO' ? (
+                <div>
+                  <label>FORMA DE PAGAMENTO DA ENTRADA</label>
+                  <select
+                    value={form.down_payment_method}
+                    onChange={(e) => setForm({ ...form, down_payment_method: e.target.value as PaymentMethod })}
+                  >
+                    {(Object.keys(PAYMENT_METHOD_LABEL) as PaymentMethod[]).map((k) => (
+                      <option key={k} value={k}>
+                        {PAYMENT_METHOD_LABEL[k]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
               <div>
-                <label>DESCONTO NO PEDIDO (R$)</label>
+                <label>DESCONTO NO PEDIDO (%)</label>
                 <input
-                  value={form.discount_total}
-                  onChange={(e) => setForm({ ...form, discount_total: e.target.value })}
+                  value={form.discount_percent}
+                  onChange={(e) => setForm({ ...form, discount_percent: e.target.value })}
                   placeholder="0"
                   inputMode="decimal"
                 />
+                <p className="mt-1 text-xs font-normal normal-case text-slate-600">Valor do desconto: {formatBRL(orderDiscount)}</p>
               </div>
               <div>
                 <label>PARCELAS</label>
@@ -967,7 +1028,7 @@ export function BemAvivPedidosPage() {
                     <input inputMode="numeric" value={draftQty} onChange={(e) => setDraftQty(e.target.value)} />
                   </div>
                   <div className="sm:col-span-4">
-                    <label>DESCONTO NO ITEM (R$)</label>
+                    <label>DESCONTO NO ITEM (%)</label>
                     <input inputMode="decimal" value={draftLineDiscount} onChange={(e) => setDraftLineDiscount(e.target.value)} placeholder="0" />
                   </div>
                   <div className="flex items-end sm:col-span-2">
@@ -993,7 +1054,7 @@ export function BemAvivPedidosPage() {
                           <th className="text-left">DESCRIÇÃO</th>
                           <th className="text-right">UNIT.</th>
                           <th className="text-right">QTD</th>
-                          <th className="text-right">DESC. R$</th>
+                          <th className="text-right">DESC. %</th>
                           <th className="text-right">LÍQUIDO</th>
                           <th className="w-10"></th>
                         </tr>
@@ -1018,7 +1079,7 @@ export function BemAvivPedidosPage() {
                                 <input
                                   className="w-24 text-right"
                                   inputMode="decimal"
-                                  value={l.discount_amount > 0 ? String(l.discount_amount).replace('.', ',') : ''}
+                                  value={l.discount_percent > 0 ? String(l.discount_percent).replace('.', ',') : ''}
                                   placeholder="0"
                                   onChange={(e) => updateLineDiscount(l.key, e.target.value)}
                                 />
