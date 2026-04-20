@@ -14,8 +14,31 @@ import {
 } from '../lib/bemAvivOfferProduct'
 import { toUpperTrim } from '../lib/text'
 
-function emptyVariationRow(): { code: string; dimensions: string; price: string } {
-  return { code: '', dimensions: '', price: '' }
+/** Linha do formulário: só dimensões e preço; código é gerado na ordem (01, 02, …). */
+function emptyVariationRow(): { dimensions: string; price: string } {
+  return { dimensions: '', price: '' }
+}
+
+function autoVariationCode(index: number) {
+  return String(index + 1).padStart(2, '0')
+}
+
+function isMissingOfferProductsTable(message: string) {
+  const m = message.toLowerCase()
+  return (
+    m.includes('bem_aviv_offer_products') &&
+    (m.includes('schema cache') || m.includes('does not exist') || m.includes('could not find') || m.includes('relation'))
+  )
+}
+
+function catalogErrorMessage(message: string) {
+  if (isMissingOfferProductsTable(message)) {
+    return (
+      'A tabela bem_aviv_offer_products ainda não existe neste projeto Supabase (migration não aplicada). ' +
+      'No repositório, rode: npx supabase db push — ou aplique o SQL da migration 20260421120000_bem_aviv_offer_products no painel do Supabase (SQL Editor).'
+    )
+  }
+  return message
 }
 
 export function BemAvivProdutosCatalogoPage() {
@@ -30,17 +53,23 @@ export function BemAvivProdutosCatalogoPage() {
   const [productLine, setProductLine] = useState('')
   const [productType, setProductType] = useState('')
   const [varRows, setVarRows] = useState([emptyVariationRow()])
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     if (!supabase || !ownerUserId) return
     setLoading(true)
+    setLoadError(null)
     const { data, error } = await supabase
       .from('bem_aviv_offer_products')
       .select('id, name, category, product_line, product_type, payload')
       .eq('user_id', ownerUserId)
       .order('name')
-    if (error) alert(error.message)
-    setRows(((data ?? []) as OfferProduct[]).map((r) => ({ ...r, payload: normalizePayload(r.payload) })))
+    if (error) {
+      setLoadError(catalogErrorMessage(error.message))
+      setRows([])
+    } else {
+      setRows(((data ?? []) as OfferProduct[]).map((r) => ({ ...r, payload: normalizePayload(r.payload) })))
+    }
     setLoading(false)
   }, [ownerUserId, supabase])
 
@@ -69,7 +98,6 @@ export function BemAvivProdutosCatalogoPage() {
     } else {
       setVarRows(
         vars.map((v) => ({
-          code: v.code,
           dimensions: v.dimensions,
           price: String(v.price).replace('.', ','),
         })),
@@ -79,14 +107,13 @@ export function BemAvivProdutosCatalogoPage() {
 
   function buildPayloadFromForm(): OfferPayload {
     const variations: OfferVariation[] = []
-    for (const row of varRows) {
-      const code = toUpperTrim(row.code)
+    varRows.forEach((row, i) => {
+      const code = autoVariationCode(i)
       const dimensions = row.dimensions.trim()
       const price = parseMoney(row.price || '0')
-      if (!code) continue
-      if (price <= 0) continue
+      if (price <= 0) return
       variations.push({ code, dimensions: dimensions ? toUpperTrim(dimensions) : '', price })
-    }
+    })
     return { variations }
   }
 
@@ -100,7 +127,7 @@ export function BemAvivProdutosCatalogoPage() {
     }
     const payload = buildPayloadFromForm()
     if (!payload.variations?.length) {
-      alert('INCLUA AO MENOS UMA VARIAÇÃO COM CÓDIGO E PREÇO VÁLIDO.')
+      alert('INCLUA AO MENOS UMA VARIAÇÃO COM PREÇO VÁLIDO (DIMENSÕES OPCIONAIS). OS CÓDIGOS 01, 02… SÃO GERADOS PELA ORDEM DAS LINHAS.')
       return
     }
 
@@ -116,10 +143,10 @@ export function BemAvivProdutosCatalogoPage() {
 
     if (editing) {
       const { error } = await supabase.from('bem_aviv_offer_products').update(row).eq('id', editing.id)
-      if (error) alert(error.message)
+      if (error) alert(catalogErrorMessage(error.message))
     } else {
       const { error } = await supabase.from('bem_aviv_offer_products').insert(row)
-      if (error) alert(error.message)
+      if (error) alert(catalogErrorMessage(error.message))
     }
     openNew()
     await load()
@@ -128,7 +155,7 @@ export function BemAvivProdutosCatalogoPage() {
   async function remove(id: string) {
     if (!supabase || !confirm('EXCLUIR ESTE PRODUTO DO CATÁLOGO?')) return
     const { error } = await supabase.from('bem_aviv_offer_products').delete().eq('id', id)
-    if (error) alert(error.message)
+    if (error) alert(catalogErrorMessage(error.message))
     else {
       if (editing?.id === id) openNew()
       await load()
@@ -144,7 +171,7 @@ export function BemAvivProdutosCatalogoPage() {
     const vars = normalizePayload(r.payload).variations ?? []
     setVarRows(
       vars.length
-        ? vars.map((v) => ({ code: v.code, dimensions: v.dimensions, price: String(v.price).replace('.', ',') }))
+        ? vars.map((v) => ({ dimensions: v.dimensions, price: String(v.price).replace('.', ',') }))
         : [emptyVariationRow()],
     )
   }
@@ -154,9 +181,18 @@ export function BemAvivProdutosCatalogoPage() {
       <div>
         <h2 className="text-2xl font-semibold">CADASTRO — PRODUTOS (CATÁLOGO)</h2>
         <p className="mt-1 max-w-2xl text-sm font-normal normal-case text-slate-600">
-          Modelo flexível: variações (código, dimensões, preço) ficam em <code className="rounded bg-slate-100 px-1 text-xs">payload</code> no
-          Supabase (JSONB). Use em pedidos/orçamentos na tela de vendas.
+          Modelo flexível: variações (dimensões e preço) ficam em <code className="rounded bg-slate-100 px-1 text-xs">payload</code> no Supabase
+          (JSONB). Os <strong>códigos são automáticos</strong> na ordem das linhas (<strong>01, 02, 03…</strong>). Ao reordenar ou remover linhas e
+          salvar, os códigos são recalculados — orçamentos já feitos continuam com o código gravado na venda. Use em pedidos na tela de vendas.
         </p>
+        {loadError ? (
+          <div
+            role="alert"
+            className="mt-3 max-w-3xl rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-normal normal-case text-amber-950"
+          >
+            {loadError}
+          </div>
+        ) : null}
       </div>
 
       <form onSubmit={submit} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-2">
@@ -187,7 +223,7 @@ export function BemAvivProdutosCatalogoPage() {
 
         <div className="sm:col-span-2 rounded-lg border border-slate-100 bg-slate-50/80 p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <span className="text-sm font-semibold text-slate-800">VARIAÇÕES (CÓDIGO + DIMENSÕES + PREÇO)</span>
+            <span className="text-sm font-semibold text-slate-800">VARIAÇÕES (CÓD. AUTO + DIMENSÕES + PREÇO)</span>
             <Button
               type="button"
               variant="secondary"
@@ -200,8 +236,10 @@ export function BemAvivProdutosCatalogoPage() {
             {varRows.map((row, idx) => (
               <div key={idx} className="grid gap-2 sm:grid-cols-12 sm:items-end">
                 <div className="sm:col-span-2">
-                  <label className="text-xs">CÓD.</label>
-                  <input value={row.code} onChange={(e) => setVarRows((r) => r.map((x, i) => (i === idx ? { ...x, code: e.target.value } : x)))} placeholder="01" />
+                  <label className="text-xs">CÓD. (AUTO)</label>
+                  <div className="flex h-[38px] items-center rounded border border-slate-200 bg-slate-100 px-2 font-mono text-sm font-semibold text-slate-700">
+                    {autoVariationCode(idx)}
+                  </div>
                 </div>
                 <div className="sm:col-span-5">
                   <label className="text-xs">DIMENSÕES</label>

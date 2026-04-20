@@ -1,4 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
+import { CheckCircle2, Pencil, Plus, ThumbsDown, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
@@ -8,6 +9,17 @@ import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { formatBRL, parseMoney } from '../lib/format'
 import { toUpperTrim } from '../lib/text'
 import { normalizePayload, type OfferProduct, type OfferVariation } from '../lib/bemAvivOfferProduct'
+
+type PaymentOption = 'A_VISTA' | 'A_PRAZO'
+type PaymentMethod = 'DINHEIRO' | 'PIX' | 'CARTAO_DEBITO' | 'CARTAO_CREDITO' | 'BOLETO'
+
+const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
+  DINHEIRO: 'Dinheiro',
+  PIX: 'Pix',
+  CARTAO_DEBITO: 'Cartão débito',
+  CARTAO_CREDITO: 'Cartão crédito',
+  BOLETO: 'Boleto',
+}
 
 type Pedido = {
   id: string
@@ -22,6 +34,9 @@ type Pedido = {
   notes: string | null
   discount_total: number | null
   installments_count: number | null
+  payment_option?: string | null
+  payment_method?: string | null
+  down_payment_amount?: number | null
 }
 
 type ClienteOpt = { id: string; full_name: string }
@@ -45,6 +60,68 @@ function clampMoney(n: number) {
   return Math.max(0, Math.round(n * 100) / 100)
 }
 
+function parsePaymentOption(v: string | null | undefined): PaymentOption {
+  return v === 'A_PRAZO' ? 'A_PRAZO' : 'A_VISTA'
+}
+
+function parsePaymentMethod(v: string | null | undefined): PaymentMethod {
+  const u = (v ?? 'DINHEIRO').toUpperCase()
+  if (u === 'PIX') return 'PIX'
+  if (u === 'CARTAO_DEBITO') return 'CARTAO_DEBITO'
+  if (u === 'CARTAO_CREDITO') return 'CARTAO_CREDITO'
+  if (u === 'BOLETO') return 'BOLETO'
+  return 'DINHEIRO'
+}
+
+function netTotal(r: Pedido) {
+  return clampMoney(Number(r.total_amount))
+}
+
+function downVal(r: Pedido) {
+  return clampMoney(Number(r.down_payment_amount ?? 0))
+}
+
+/** Total líquido do pedido/orçamento (já com desconto aplicado). */
+function displayValorAvista(r: Pedido) {
+  return netTotal(r)
+}
+
+/** Valor financiado (total − entrada) quando a prazo. */
+function displayValorPrazo(r: Pedido) {
+  const opt = parsePaymentOption(r.payment_option)
+  if (opt !== 'A_PRAZO') return null
+  return clampMoney(netTotal(r) - downVal(r))
+}
+
+function installmentCell(r: Pedido) {
+  const net = netTotal(r)
+  const inst = Math.min(120, Math.max(1, r.installments_count ?? 1))
+  const opt = parsePaymentOption(r.payment_option)
+  const entrada = downVal(r)
+  if (opt === 'A_VISTA') {
+    const each = inst > 0 ? net / inst : net
+    return `${inst}x ${formatBRL(each)}`
+  }
+  const financed = clampMoney(net - entrada)
+  const each = inst > 0 ? financed / inst : financed
+  return `${inst}x ${formatBRL(each)}`
+}
+
+function canEditOrcamento(r: Pedido) {
+  return r.document_type === 'ORCAMENTO' && !r.converted_order_id && r.status === 'ABERTO'
+}
+
+function canMarcarPerdido(r: Pedido) {
+  return r.document_type === 'ORCAMENTO' && !r.converted_order_id && r.status === 'ABERTO'
+}
+
+function canFecharGerarPedido(r: Pedido) {
+  return r.document_type === 'ORCAMENTO' && !r.converted_order_id && r.status === 'ABERTO'
+}
+
+const iconBtn =
+  'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-40'
+
 export function BemAvivPedidosPage() {
   const { user } = useUser()
   const supabase = useSupabase()
@@ -53,6 +130,9 @@ export function BemAvivPedidosPage() {
   const [clients, setClients] = useState<ClienteOpt[]>([])
   const [offerProducts, setOfferProducts] = useState<OfferProduct[]>([])
   const [loading, setLoading] = useState(true)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null)
+
   const [form, setForm] = useState({
     client_id: '',
     order_date: new Date().toISOString().slice(0, 10),
@@ -62,6 +142,9 @@ export function BemAvivPedidosPage() {
     discount_total: '',
     installments_count: '1',
     notes: '',
+    payment_option: 'A_VISTA' as PaymentOption,
+    payment_method: 'DINHEIRO' as PaymentMethod,
+    down_payment: '',
   })
   const [draftOfferId, setDraftOfferId] = useState('')
   const [draftVariationCode, setDraftVariationCode] = useState('')
@@ -122,7 +205,12 @@ export function BemAvivPedidosPage() {
 
   const orderDiscount = useMemo(() => clampMoney(parseMoney(form.discount_total || '0')), [form.discount_total])
 
-  const installmentsNum = useMemo(() => Math.min(120, Math.max(1, parseInt(form.installments_count.replace(/\D/g, ''), 10) || 1)), [form.installments_count])
+  const installmentsNum = useMemo(
+    () => Math.min(120, Math.max(1, parseInt(form.installments_count.replace(/\D/g, ''), 10) || 1)),
+    [form.installments_count],
+  )
+
+  const downPaymentNum = useMemo(() => clampMoney(parseMoney(form.down_payment || '0')), [form.down_payment])
 
   const previewOrderTotal = useMemo(() => {
     if (lineItems.length === 0) return null
@@ -138,6 +226,105 @@ export function BemAvivPedidosPage() {
     if (lineItems.length > 0) return null
     return clampMoney(parseMoney(form.total_amount || '0') - orderDiscount)
   }, [lineItems.length, form.total_amount, orderDiscount])
+
+  function resetFormForNew() {
+    setForm({
+      client_id: '',
+      order_date: new Date().toISOString().slice(0, 10),
+      document_type: 'ORCAMENTO',
+      status: 'ABERTO',
+      total_amount: '',
+      discount_total: '',
+      installments_count: '1',
+      notes: '',
+      payment_option: 'A_VISTA',
+      payment_method: 'DINHEIRO',
+      down_payment: '',
+    })
+    setLineItems([])
+    setDraftOfferId('')
+    setDraftVariationCode('')
+    setDraftQty('1')
+    setDraftLineDiscount('')
+    setEditingOrderId(null)
+  }
+
+  function openModalNew() {
+    resetFormForNew()
+    setModalOpen(true)
+  }
+
+  function closeModal() {
+    setModalOpen(false)
+    resetFormForNew()
+  }
+
+  async function openModalEdit(quote: Pedido) {
+    if (!supabase || !canEditOrcamento(quote)) return
+    const { data: its, error } = await supabase
+      .from('bem_aviv_sales_order_items')
+      .select(
+        'offer_product_id, variation_code, item_description, quantity, unit_price, discount_amount, total_price',
+      )
+      .eq('sales_order_id', quote.id)
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    const items = (its ?? []) as Array<{
+      offer_product_id: string | null
+      variation_code: string | null
+      item_description: string
+      quantity: number
+      unit_price: number
+      discount_amount: number | null
+      total_price: number
+    }>
+
+    if (items.length > 0 && items.some((it) => !it.offer_product_id || !it.variation_code)) {
+      alert('ESTE ORÇAMENTO TEM ITENS ANTIGOS SEM CATÁLOGO. NÃO É POSSÍVEL EDITAR POR ESTA TELA.')
+      return
+    }
+
+    const mapped: LinhaItem[] = items.map((it) => ({
+      key: newLineKey(),
+      offer_product_id: it.offer_product_id!,
+      variation_code: it.variation_code!,
+      name: it.item_description,
+      unit_price: Number(it.unit_price),
+      quantity: Number(it.quantity),
+      discount_amount: clampMoney(Number(it.discount_amount ?? 0)),
+    }))
+
+    setEditingOrderId(quote.id)
+    setForm({
+      client_id: quote.client_id ?? '',
+      order_date: quote.order_date,
+      document_type: quote.document_type,
+      status: quote.status,
+      total_amount: mapped.length === 0 ? String(Number(quote.total_amount)).replace('.', ',') : '',
+      discount_total:
+        quote.discount_total != null && Number(quote.discount_total) > 0
+          ? String(Number(quote.discount_total)).replace('.', ',')
+          : '',
+      installments_count: String(quote.installments_count ?? 1),
+      notes: quote.notes ?? '',
+      payment_option: parsePaymentOption(quote.payment_option),
+      payment_method: parsePaymentMethod(quote.payment_method),
+      down_payment:
+        quote.down_payment_amount != null && Number(quote.down_payment_amount) > 0
+          ? String(Number(quote.down_payment_amount)).replace('.', ',')
+          : '',
+    })
+    setLineItems(mapped)
+    setDraftOfferId('')
+    setDraftVariationCode('')
+    setDraftQty('1')
+    setDraftLineDiscount('')
+    setModalOpen(true)
+  }
 
   function addLineFromDraft() {
     const p = offerProducts.find((x) => x.id === draftOfferId)
@@ -214,6 +401,17 @@ export function BemAvivPedidosPage() {
     )
   }
 
+  async function markLost(quote: Pedido) {
+    if (!supabase || !canMarcarPerdido(quote)) return
+    if (!confirm(`MARCAR O ORÇAMENTO ${quote.document_number ?? ''} COMO PERDIDO?`)) return
+    const { error } = await supabase.from('bem_aviv_sales_orders').update({ status: 'PERDIDO' }).eq('id', quote.id)
+    if (error) {
+      alert(error.message)
+      return
+    }
+    await load()
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!supabase || !ownerUserId) return
@@ -222,11 +420,21 @@ export function BemAvivPedidosPage() {
     const manualGross = parseMoney(form.total_amount || '0')
     const discOrder = orderDiscount
     const inst = installmentsNum
+    const entrada = form.payment_option === 'A_PRAZO' ? downPaymentNum : 0
+
+    if (form.payment_option === 'A_PRAZO' && entrada < 0) {
+      alert('VALOR DE ENTRADA INVÁLIDO.')
+      return
+    }
 
     if (hasLines) {
       const net = clampMoney(sumLinesNet - discOrder)
       if (net < 0) {
         alert('DESCONTO NO PEDIDO É MAIOR QUE A SOMA DOS ITENS.')
+        return
+      }
+      if (form.payment_option === 'A_PRAZO' && entrada > net) {
+        alert('ENTRADA NÃO PODE SER MAIOR QUE O TOTAL LÍQUIDO DO ORÇAMENTO.')
         return
       }
     } else {
@@ -238,22 +446,107 @@ export function BemAvivPedidosPage() {
         alert('DESCONTO NO PEDIDO NÃO PODE SER MAIOR QUE O VALOR INFORMADO.')
         return
       }
+      const netManual = clampMoney(manualGross - discOrder)
+      if (form.payment_option === 'A_PRAZO' && entrada > netManual) {
+        alert('ENTRADA NÃO PODE SER MAIOR QUE O TOTAL LÍQUIDO.')
+        return
+      }
     }
 
     const totalInsert = hasLines ? clampMoney(sumLinesNet - discOrder) : clampMoney(manualGross - discOrder)
 
+    const headerPayload = {
+      user_id: ownerUserId,
+      client_id: form.client_id || null,
+      order_date: form.order_date,
+      document_type: form.document_type,
+      status: toUpperTrim(form.status),
+      discount_total: discOrder,
+      installments_count: inst,
+      notes: toUpperTrim(form.notes) || null,
+      payment_option: form.payment_option,
+      payment_method: form.payment_method,
+      down_payment_amount: form.payment_option === 'A_PRAZO' && entrada > 0 ? entrada : null,
+    }
+
+    if (editingOrderId) {
+      const cleanUpdate = {
+        client_id: headerPayload.client_id,
+        order_date: headerPayload.order_date,
+        document_type: headerPayload.document_type,
+        status: headerPayload.status,
+        discount_total: headerPayload.discount_total,
+        installments_count: headerPayload.installments_count,
+        notes: headerPayload.notes,
+        payment_option: headerPayload.payment_option,
+        payment_method: headerPayload.payment_method,
+        down_payment_amount: headerPayload.down_payment_amount,
+      }
+
+      const { error: delErr } = await supabase.from('bem_aviv_sales_order_items').delete().eq('sales_order_id', editingOrderId)
+      if (delErr) {
+        alert(delErr.message)
+        return
+      }
+
+      if (hasLines) {
+        const { error: updErr } = await supabase
+          .from('bem_aviv_sales_orders')
+          .update(cleanUpdate)
+          .eq('id', editingOrderId)
+          .eq('user_id', ownerUserId)
+        if (updErr) {
+          alert(updErr.message)
+          return
+        }
+
+        const rowsToInsert = lineItems.map((l) => {
+          const gross = l.quantity * l.unit_price
+          const net = clampMoney(gross - l.discount_amount)
+          return {
+            user_id: ownerUserId,
+            sales_order_id: editingOrderId,
+            product_id: null,
+            catalog_price_cell_id: null,
+            offer_product_id: l.offer_product_id,
+            variation_code: l.variation_code,
+            item_description: toUpperTrim(l.name),
+            quantity: l.quantity,
+            unit_price: l.unit_price,
+            discount_amount: l.discount_amount,
+            total_price: net,
+          }
+        })
+        const { error: itemsErr } = await supabase.from('bem_aviv_sales_order_items').insert(rowsToInsert)
+        if (itemsErr) {
+          alert(itemsErr.message)
+          return
+        }
+      } else {
+        const { error: updErr } = await supabase
+          .from('bem_aviv_sales_orders')
+          .update({
+            ...cleanUpdate,
+            total_amount: totalInsert,
+          })
+          .eq('id', editingOrderId)
+          .eq('user_id', ownerUserId)
+        if (updErr) {
+          alert(updErr.message)
+          return
+        }
+      }
+
+      closeModal()
+      await load()
+      return
+    }
+
     const { data: inserted, error } = await supabase
       .from('bem_aviv_sales_orders')
       .insert({
-        user_id: ownerUserId,
-        client_id: form.client_id || null,
-        order_date: form.order_date,
-        document_type: form.document_type,
-        status: toUpperTrim(form.status),
+        ...headerPayload,
         total_amount: totalInsert,
-        discount_total: discOrder,
-        installments_count: inst,
-        notes: toUpperTrim(form.notes) || null,
       })
       .select('id')
       .single()
@@ -290,21 +583,7 @@ export function BemAvivPedidosPage() {
       }
     }
 
-    setForm({
-      client_id: '',
-      order_date: new Date().toISOString().slice(0, 10),
-      document_type: 'ORCAMENTO',
-      status: 'ABERTO',
-      total_amount: '',
-      discount_total: '',
-      installments_count: '1',
-      notes: '',
-    })
-    setLineItems([])
-    setDraftOfferId('')
-    setDraftVariationCode('')
-    setDraftQty('1')
-    setDraftLineDiscount('')
+    closeModal()
     await load()
   }
 
@@ -313,6 +592,10 @@ export function BemAvivPedidosPage() {
     if (quote.document_type !== 'ORCAMENTO') return
     if (quote.converted_order_id) {
       alert('ESTE ORÇAMENTO JÁ FOI CONVERTIDO EM PEDIDO.')
+      return
+    }
+    if (quote.status === 'PERDIDO') {
+      alert('ORÇAMENTO PERDIDO NÃO PODE SER CONVERTIDO.')
       return
     }
     if (!confirm(`FECHAR O ORÇAMENTO ${quote.document_number ?? ''} E CRIAR UM PEDIDO?`)) return
@@ -331,6 +614,9 @@ export function BemAvivPedidosPage() {
 
     const disc = quote.discount_total != null ? Number(quote.discount_total) : 0
     const inst = quote.installments_count != null ? Number(quote.installments_count) : 1
+    const payOpt = parsePaymentOption(quote.payment_option)
+    const payMeth = parsePaymentMethod(quote.payment_method)
+    const down = quote.down_payment_amount != null ? Number(quote.down_payment_amount) : null
 
     const { data: inserted, error: insertError } = await supabase
       .from('bem_aviv_sales_orders')
@@ -345,6 +631,9 @@ export function BemAvivPedidosPage() {
         installments_count: Math.min(120, Math.max(1, inst)),
         notes: quote.notes ? `${quote.notes} | GERADO A PARTIR DE ${quote.document_number ?? 'ORÇAMENTO'}` : `GERADO A PARTIR DE ${quote.document_number ?? 'ORÇAMENTO'}`,
         source_quote_id: quote.id,
+        payment_option: payOpt,
+        payment_method: payMeth,
+        down_payment_amount: payOpt === 'A_PRAZO' ? down : null,
       })
       .select('id, document_number')
       .single()
@@ -408,252 +697,365 @@ export function BemAvivPedidosPage() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-semibold">PEDIDOS DE VENDAS</h2>
-      <p className="max-w-2xl text-sm font-normal normal-case text-slate-600">
-        Itens usam o cadastro <strong>Produtos (catálogo)</strong>. Tipo padrão: <strong>orçamento</strong>.{' '}
-        <Link className="font-medium text-emerald-800 underline-offset-2 hover:underline" to="/bem-aviv/produtos-catalogo">
-          Abrir cadastro de produtos
-        </Link>
-      </p>
-      <form onSubmit={submit} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-2">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <label>CLIENTE</label>
-          <select value={form.client_id} onChange={(e) => setForm({ ...form, client_id: e.target.value })}>
-            <option value="">—</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.full_name}
-              </option>
-            ))}
-          </select>
+          <h2 className="text-2xl font-semibold">PEDIDOS DE VENDAS</h2>
+          <p className="mt-1 max-w-2xl text-sm font-normal normal-case text-slate-600">
+            Itens usam o cadastro <strong>Produtos (catálogo)</strong>. Tipo padrão: <strong>orçamento</strong>.{' '}
+            <Link className="font-medium text-emerald-800 underline-offset-2 hover:underline" to="/bem-aviv/produtos-catalogo">
+              Abrir cadastro de produtos
+            </Link>
+          </p>
         </div>
-        <div>
-          <label>DATA</label>
-          <input type="date" value={form.order_date} onChange={(e) => setForm({ ...form, order_date: e.target.value })} required />
-        </div>
-        <div>
-          <label>TIPO</label>
-          <select
-            value={form.document_type}
-            onChange={(e) => setForm({ ...form, document_type: e.target.value as 'ORCAMENTO' | 'PEDIDO' })}
-          >
-            <option value="ORCAMENTO">ORÇAMENTO</option>
-            <option value="PEDIDO">PEDIDO</option>
-          </select>
-        </div>
-        <div>
-          <label>STATUS</label>
-          <input value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} required />
-        </div>
-        <div>
-          <label>DESCONTO NO PEDIDO (R$)</label>
-          <input
-            value={form.discount_total}
-            onChange={(e) => setForm({ ...form, discount_total: e.target.value })}
-            placeholder="0"
-            inputMode="decimal"
-          />
-        </div>
-        <div>
-          <label>PARCELAS</label>
-          <input
-            inputMode="numeric"
-            min={1}
-            max={120}
-            value={form.installments_count}
-            onChange={(e) => setForm({ ...form, installments_count: e.target.value })}
-          />
-          {previewInstallment != null && previewOrderTotal != null && installmentsNum > 1 ? (
-            <p className="mt-1 text-xs font-normal normal-case text-slate-600">
-              Prévia: {installmentsNum}x de {formatBRL(previewInstallment)} (total {formatBRL(previewOrderTotal)})
-            </p>
-          ) : null}
-          {lineItems.length === 0 && manualNetTotal != null && installmentsNum > 1 && form.total_amount.trim() ? (
-            <p className="mt-1 text-xs font-normal normal-case text-slate-600">
-              Prévia: {installmentsNum}x de {formatBRL(manualNetTotal / installmentsNum)} (líquido {formatBRL(manualNetTotal)})
-            </p>
-          ) : null}
-        </div>
-        <div>
-          <label>VALOR TOTAL {lineItems.length > 0 ? '(BRUTO DOS ITENS)' : ''}</label>
-          <input
-            value={lineItems.length > 0 ? formatBRL(lineItems.reduce((a, l) => a + l.quantity * l.unit_price, 0)) : form.total_amount}
-            onChange={(e) => {
-              if (lineItems.length === 0) setForm({ ...form, total_amount: e.target.value })
-            }}
-            readOnly={lineItems.length > 0}
-            required={lineItems.length === 0}
-          />
-          {lineItems.length > 0 && previewOrderTotal != null ? (
-            <p className="mt-1 text-xs font-normal normal-case text-slate-600">
-              Líquido estimado: <strong>{formatBRL(previewOrderTotal)}</strong>
-            </p>
-          ) : null}
-        </div>
-        <div className="sm:col-span-2">
-          <label>OBSERVAÇÕES</label>
-          <input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-        </div>
-
-        <div className="sm:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <h3 className="mb-2 text-sm font-semibold text-slate-800">ITENS (CATÁLOGO)</h3>
-          <div className="grid gap-3 sm:grid-cols-12">
-            <div className="sm:col-span-5">
-              <label>PRODUTO</label>
-              <select value={draftOfferId} onChange={(e) => setDraftOfferId(e.target.value)}>
-                <option value="">— SELECIONE —</option>
-                {offerProducts.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="sm:col-span-5">
-              <label>VARIAÇÃO (CÓDIGO / DIMENSÕES)</label>
-              <select
-                value={draftVariationCode}
-                onChange={(e) => setDraftVariationCode(e.target.value)}
-                disabled={!draftOfferId || variationOptions.length === 0}
-              >
-                <option value="">{variationOptions.length === 0 ? '— SEM VARIAÇÕES —' : '— SELECIONE —'}</option>
-                {variationOptions.map((v) => (
-                  <option key={v.code} value={v.code}>
-                    [{v.code}] {v.dimensions || '—'} — {formatBRL(v.price)}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="sm:col-span-2">
-              <label>QTD</label>
-              <input inputMode="numeric" value={draftQty} onChange={(e) => setDraftQty(e.target.value)} />
-            </div>
-            <div className="sm:col-span-4">
-              <label>DESCONTO NO ITEM (R$)</label>
-              <input inputMode="decimal" value={draftLineDiscount} onChange={(e) => setDraftLineDiscount(e.target.value)} placeholder="0" />
-            </div>
-            <div className="flex items-end sm:col-span-2">
-              <Button type="button" variant="secondary" onClick={addLineFromDraft}>
-                ADICIONAR ITEM
-              </Button>
-            </div>
-          </div>
-          {offerProducts.length === 0 && (
-            <p className="mt-2 text-sm text-amber-800">
-              NENHUM PRODUTO NO CATÁLOGO.{' '}
-              <Link className="font-medium underline" to="/bem-aviv/produtos-catalogo">
-                Cadastre em Produtos (catálogo)
-              </Link>
-              .
-            </p>
-          )}
-          {lineItems.length > 0 && (
-            <div className="mt-3 overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr>
-                    <th className="text-left">DESCRIÇÃO</th>
-                    <th className="text-right">UNIT.</th>
-                    <th className="text-right">QTD</th>
-                    <th className="text-right">DESC. R$</th>
-                    <th className="text-right">LÍQUIDO</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lineItems.map((l) => {
-                    const gross = l.quantity * l.unit_price
-                    const net = clampMoney(gross - l.discount_amount)
-                    return (
-                      <tr key={l.key}>
-                        <td className="max-w-[18rem] whitespace-normal">{l.name}</td>
-                        <td className="text-right">{formatBRL(l.unit_price)}</td>
-                        <td className="text-right">
-                          <input
-                            className="w-16 text-right"
-                            inputMode="numeric"
-                            value={String(l.quantity)}
-                            onChange={(e) => updateLineQty(l.key, e.target.value)}
-                          />
-                        </td>
-                        <td className="text-right">
-                          <input
-                            className="w-24 text-right"
-                            inputMode="decimal"
-                            value={l.discount_amount > 0 ? String(l.discount_amount).replace('.', ',') : ''}
-                            placeholder="0"
-                            onChange={(e) => updateLineDiscount(l.key, e.target.value)}
-                          />
-                        </td>
-                        <td className="text-right">{formatBRL(net)}</td>
-                        <td>
-                          <Button type="button" variant="ghost" className="text-red-600" onClick={() => removeLine(l.key)}>
-                            REMOVER
-                          </Button>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        <div className="sm:col-span-2">
-          <Button type="submit" variant="primary">
-            {form.document_type === 'ORCAMENTO' ? 'ADICIONAR ORÇAMENTO' : 'ADICIONAR PEDIDO'}
-          </Button>
-        </div>
-      </form>
+        <Button type="button" variant="primary" className="inline-flex items-center gap-2" onClick={openModalNew}>
+          <Plus size={18} aria-hidden />
+          ADICIONAR PEDIDO
+        </Button>
+      </div>
 
       <div className="table-wrap">
         {loading ? (
           <p className="p-4 text-slate-500">CARREGANDO...</p>
         ) : (
-          <table>
+          <table className="text-sm">
             <thead>
               <tr>
-                <th>NÚMERO</th>
+                <th>Nº DOCUMENTO</th>
                 <th>TIPO</th>
                 <th>DATA</th>
                 <th>STATUS</th>
-                <th>PARCELAS</th>
-                <th>TOTAL</th>
-                <th>OBS</th>
-                <th></th>
+                <th className="text-right">À VISTA (C/ DESC.)</th>
+                <th className="text-right">À PRAZO</th>
+                <th className="text-right">ENTRADA</th>
+                <th className="text-right">PARCELAS (VALOR)</th>
+                <th className="text-right">AÇÕES</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
-                <tr key={r.id}>
-                  <td>{r.document_number || '—'}</td>
-                  <td>{r.document_type}</td>
-                  <td>{r.order_date}</td>
-                  <td>{r.status}</td>
-                  <td>{r.installments_count ?? 1}</td>
-                  <td>{formatBRL(Number(r.total_amount))}</td>
-                  <td>{r.notes || '—'}</td>
-                  <td className="whitespace-nowrap">
-                    {r.document_type === 'ORCAMENTO' ? (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        disabled={!!r.converted_order_id}
-                        onClick={() => closeQuoteAndCreateOrder(r)}
-                      >
-                        {r.converted_order_id ? 'CONVERTIDO' : 'FECHAR E GERAR PEDIDO'}
-                      </Button>
-                    ) : (
-                      '—'
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {rows.map((r) => {
+                const prazo = displayValorPrazo(r)
+                return (
+                  <tr key={r.id}>
+                    <td className="whitespace-nowrap font-medium">{r.document_number || '—'}</td>
+                    <td>{r.document_type}</td>
+                    <td className="whitespace-nowrap">{r.order_date}</td>
+                    <td>{r.status}</td>
+                    <td className="text-right whitespace-nowrap">{formatBRL(displayValorAvista(r))}</td>
+                    <td className="text-right whitespace-nowrap">{prazo != null ? formatBRL(prazo) : '—'}</td>
+                    <td className="text-right whitespace-nowrap">
+                      {parsePaymentOption(r.payment_option) === 'A_PRAZO' ? formatBRL(downVal(r)) : '—'}
+                    </td>
+                    <td className="text-right whitespace-nowrap text-xs sm:text-sm">{installmentCell(r)}</td>
+                    <td className="text-right">
+                      <div className="flex flex-wrap items-center justify-end gap-1">
+                        {canEditOrcamento(r) ? (
+                          <button
+                            type="button"
+                            className={iconBtn}
+                            title="Editar orçamento"
+                            aria-label="Editar orçamento"
+                            onClick={() => void openModalEdit(r)}
+                          >
+                            <Pencil size={16} aria-hidden />
+                          </button>
+                        ) : null}
+                        {canMarcarPerdido(r) ? (
+                          <button
+                            type="button"
+                            className={`${iconBtn} text-amber-800 border-amber-200 hover:bg-amber-50`}
+                            title="Marcar como perdido"
+                            aria-label="Marcar como perdido"
+                            onClick={() => void markLost(r)}
+                          >
+                            <ThumbsDown size={16} aria-hidden />
+                          </button>
+                        ) : null}
+                        {canFecharGerarPedido(r) ? (
+                          <button
+                            type="button"
+                            className={`${iconBtn} text-emerald-800 border-emerald-200 hover:bg-emerald-50`}
+                            title="Fechar e gerar pedido"
+                            aria-label="Fechar e gerar pedido"
+                            disabled={!!r.converted_order_id}
+                            onClick={() => void closeQuoteAndCreateOrder(r)}
+                          >
+                            <CheckCircle2 size={16} aria-hidden />
+                          </button>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         )}
       </div>
+
+      {modalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-3 py-8 sm:p-6"
+          role="presentation"
+          onClick={closeModal}
+        >
+          <div
+            role="dialog"
+            aria-labelledby="pedido-modal-title"
+            className="relative w-full max-w-3xl rounded-xl border border-slate-200 bg-white p-4 shadow-xl sm:p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className={`${iconBtn} absolute right-3 top-3 border-0 shadow-none`}
+              aria-label="Fechar"
+              onClick={closeModal}
+            >
+              <X size={18} aria-hidden />
+            </button>
+            <h3 id="pedido-modal-title" className="pr-10 text-lg font-semibold text-slate-900">
+              {editingOrderId ? 'EDITAR ORÇAMENTO / PEDIDO' : 'NOVO ORÇAMENTO / PEDIDO'}
+            </h3>
+
+            <form onSubmit={submit} className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div>
+                <label>CLIENTE</label>
+                <select value={form.client_id} onChange={(e) => setForm({ ...form, client_id: e.target.value })}>
+                  <option value="">—</option>
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.full_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label>DATA</label>
+                <input type="date" value={form.order_date} onChange={(e) => setForm({ ...form, order_date: e.target.value })} required />
+              </div>
+              <div>
+                <label>TIPO</label>
+                <select
+                  value={form.document_type}
+                  onChange={(e) => setForm({ ...form, document_type: e.target.value as 'ORCAMENTO' | 'PEDIDO' })}
+                >
+                  <option value="ORCAMENTO">ORÇAMENTO</option>
+                  <option value="PEDIDO">PEDIDO</option>
+                </select>
+              </div>
+              <div>
+                <label>STATUS</label>
+                <input value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} required />
+              </div>
+              <div>
+                <label>OPÇÃO DE PAGAMENTO</label>
+                <select
+                  value={form.payment_option}
+                  onChange={(e) => {
+                    const v = e.target.value as PaymentOption
+                    setForm({ ...form, payment_option: v, down_payment: v === 'A_VISTA' ? '' : form.down_payment })
+                  }}
+                >
+                  <option value="A_VISTA">À vista</option>
+                  <option value="A_PRAZO">À prazo</option>
+                </select>
+              </div>
+              <div>
+                <label>TIPO DE PAGAMENTO</label>
+                <select
+                  value={form.payment_method}
+                  onChange={(e) => setForm({ ...form, payment_method: e.target.value as PaymentMethod })}
+                >
+                  {(Object.keys(PAYMENT_METHOD_LABEL) as PaymentMethod[]).map((k) => (
+                    <option key={k} value={k}>
+                      {PAYMENT_METHOD_LABEL[k]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {form.payment_option === 'A_PRAZO' ? (
+                <div>
+                  <label>VALOR ENTRADA (R$)</label>
+                  <input
+                    value={form.down_payment}
+                    onChange={(e) => setForm({ ...form, down_payment: e.target.value })}
+                    placeholder="0"
+                    inputMode="decimal"
+                  />
+                </div>
+              ) : null}
+              <div>
+                <label>DESCONTO NO PEDIDO (R$)</label>
+                <input
+                  value={form.discount_total}
+                  onChange={(e) => setForm({ ...form, discount_total: e.target.value })}
+                  placeholder="0"
+                  inputMode="decimal"
+                />
+              </div>
+              <div>
+                <label>PARCELAS</label>
+                <input
+                  inputMode="numeric"
+                  min={1}
+                  max={120}
+                  value={form.installments_count}
+                  onChange={(e) => setForm({ ...form, installments_count: e.target.value })}
+                />
+                {previewInstallment != null && previewOrderTotal != null && installmentsNum > 1 ? (
+                  <p className="mt-1 text-xs font-normal normal-case text-slate-600">
+                    Prévia: {installmentsNum}x de {formatBRL(previewInstallment)} (total {formatBRL(previewOrderTotal)})
+                  </p>
+                ) : null}
+                {lineItems.length === 0 && manualNetTotal != null && installmentsNum > 1 && form.total_amount.trim() ? (
+                  <p className="mt-1 text-xs font-normal normal-case text-slate-600">
+                    Prévia: {installmentsNum}x de {formatBRL(manualNetTotal / installmentsNum)} (líquido {formatBRL(manualNetTotal)})
+                  </p>
+                ) : null}
+              </div>
+              <div>
+                <label>VALOR TOTAL {lineItems.length > 0 ? '(BRUTO DOS ITENS)' : ''}</label>
+                <input
+                  value={lineItems.length > 0 ? formatBRL(lineItems.reduce((a, l) => a + l.quantity * l.unit_price, 0)) : form.total_amount}
+                  onChange={(e) => {
+                    if (lineItems.length === 0) setForm({ ...form, total_amount: e.target.value })
+                  }}
+                  readOnly={lineItems.length > 0}
+                  required={lineItems.length === 0}
+                />
+                {lineItems.length > 0 && previewOrderTotal != null ? (
+                  <p className="mt-1 text-xs font-normal normal-case text-slate-600">
+                    Líquido estimado: <strong>{formatBRL(previewOrderTotal)}</strong>
+                  </p>
+                ) : null}
+              </div>
+              <div className="sm:col-span-2">
+                <label>OBSERVAÇÕES</label>
+                <input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+              </div>
+
+              <div className="sm:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <h4 className="mb-2 text-sm font-semibold text-slate-800">ITENS (CATÁLOGO)</h4>
+                <div className="grid gap-3 sm:grid-cols-12">
+                  <div className="sm:col-span-5">
+                    <label>PRODUTO</label>
+                    <select value={draftOfferId} onChange={(e) => setDraftOfferId(e.target.value)}>
+                      <option value="">— SELECIONE —</option>
+                      {offerProducts.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="sm:col-span-5">
+                    <label>VARIAÇÃO (CÓDIGO / DIMENSÕES)</label>
+                    <select
+                      value={draftVariationCode}
+                      onChange={(e) => setDraftVariationCode(e.target.value)}
+                      disabled={!draftOfferId || variationOptions.length === 0}
+                    >
+                      <option value="">{variationOptions.length === 0 ? '— SEM VARIAÇÕES —' : '— SELECIONE —'}</option>
+                      {variationOptions.map((v) => (
+                        <option key={v.code} value={v.code}>
+                          [{v.code}] {v.dimensions || '—'} — {formatBRL(v.price)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label>QTD</label>
+                    <input inputMode="numeric" value={draftQty} onChange={(e) => setDraftQty(e.target.value)} />
+                  </div>
+                  <div className="sm:col-span-4">
+                    <label>DESCONTO NO ITEM (R$)</label>
+                    <input inputMode="decimal" value={draftLineDiscount} onChange={(e) => setDraftLineDiscount(e.target.value)} placeholder="0" />
+                  </div>
+                  <div className="flex items-end sm:col-span-2">
+                    <Button type="button" variant="secondary" onClick={addLineFromDraft}>
+                      ADICIONAR ITEM
+                    </Button>
+                  </div>
+                </div>
+                {offerProducts.length === 0 && (
+                  <p className="mt-2 text-sm text-amber-800">
+                    NENHUM PRODUTO NO CATÁLOGO.{' '}
+                    <Link className="font-medium underline" to="/bem-aviv/produtos-catalogo">
+                      Cadastre em Produtos (catálogo)
+                    </Link>
+                    .
+                  </p>
+                )}
+                {lineItems.length > 0 && (
+                  <div className="mt-3 overflow-x-auto">
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr>
+                          <th className="text-left">DESCRIÇÃO</th>
+                          <th className="text-right">UNIT.</th>
+                          <th className="text-right">QTD</th>
+                          <th className="text-right">DESC. R$</th>
+                          <th className="text-right">LÍQUIDO</th>
+                          <th className="w-10"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {lineItems.map((l) => {
+                          const gross = l.quantity * l.unit_price
+                          const net = clampMoney(gross - l.discount_amount)
+                          return (
+                            <tr key={l.key}>
+                              <td className="max-w-[18rem] whitespace-normal">{l.name}</td>
+                              <td className="text-right">{formatBRL(l.unit_price)}</td>
+                              <td className="text-right">
+                                <input
+                                  className="w-16 text-right"
+                                  inputMode="numeric"
+                                  value={String(l.quantity)}
+                                  onChange={(e) => updateLineQty(l.key, e.target.value)}
+                                />
+                              </td>
+                              <td className="text-right">
+                                <input
+                                  className="w-24 text-right"
+                                  inputMode="decimal"
+                                  value={l.discount_amount > 0 ? String(l.discount_amount).replace('.', ',') : ''}
+                                  placeholder="0"
+                                  onChange={(e) => updateLineDiscount(l.key, e.target.value)}
+                                />
+                              </td>
+                              <td className="text-right">{formatBRL(net)}</td>
+                              <td>
+                                <button
+                                  type="button"
+                                  className={`${iconBtn} h-8 w-8 border-red-200 text-red-600 hover:bg-red-50`}
+                                  title="Remover item"
+                                  aria-label="Remover item"
+                                  onClick={() => removeLine(l.key)}
+                                >
+                                  <Trash2 size={14} aria-hidden />
+                                </button>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-wrap gap-2 sm:col-span-2">
+                <Button type="submit" variant="primary">
+                  {editingOrderId ? 'SALVAR ALTERAÇÕES' : form.document_type === 'ORCAMENTO' ? 'ADICIONAR ORÇAMENTO' : 'ADICIONAR PEDIDO'}
+                </Button>
+                <Button type="button" variant="secondary" onClick={closeModal}>
+                  CANCELAR
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
