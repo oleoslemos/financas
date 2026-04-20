@@ -134,20 +134,16 @@ export function AppLayout() {
   const { user } = useUser()
   const location = useLocation()
   const path = location.pathname
-  const [lshOpen, setLshOpen] = useState(true)
+  const [lshOpen, setLshOpen] = useState(false)
   const [bemAvivOpen, setBemAvivOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [agendaMenuOpen, setAgendaMenuOpen] = useState(true)
-  const [bemCadastroOpen, setBemCadastroOpen] = useState(true)
-  const [bemProdutosOpen, setBemProdutosOpen] = useState(true)
-  const [bemGeralOpen, setBemGeralOpen] = useState(true)
+  const [agendaMenuOpen, setAgendaMenuOpen] = useState(false)
+  const [bemCadastroOpen, setBemCadastroOpen] = useState(false)
+  const [bemProdutosOpen, setBemProdutosOpen] = useState(false)
+  const [bemGeralOpen, setBemGeralOpen] = useState(false)
 
   useEffect(() => {
-    if (isLshSectionPath(path)) setLshOpen(true)
-    if (path.startsWith('/lsh/agenda') || path.startsWith('/lsh/tarefas') || path === '/agenda' || path === '/tarefas') {
-      setAgendaMenuOpen(true)
-    }
-    if (path.startsWith('/bem-aviv')) setBemAvivOpen(true)
+    // Keep sidebar groups collapsed by default; only close the mobile drawer on navigation.
     setMobileMenuOpen(false)
   }, [path])
 
