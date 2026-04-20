@@ -4,24 +4,27 @@
 
 :root {
   color-scheme: light;
-  --color-bg: #ffffff;
-  --color-surface: #ffffff;
-  --color-surface-soft: #f8fafc;
-  --color-border: #cbd5e1;
-  --color-border-soft: #e2e8f0;
-  --color-text: #0f172a;
-  --color-text-muted: #475569;
-  --color-primary: #0284c7;
-  --color-primary-hover: #0ea5e9;
-  --color-danger: #dc2626;
-  --color-danger-hover: #ef4444;
+  --color-bg: #f5f1e8;
+  --color-bg-elevated: #f0eadf;
+  --color-surface: #fffdf8;
+  --color-surface-soft: #f8f3e9;
+  --color-border: #d7ccba;
+  --color-border-soft: #e6dccd;
+  --color-text: #2d2419;
+  --color-text-muted: #6b5a46;
+  --color-primary: #0f766e;
+  --color-primary-hover: #0d9488;
+  --color-danger: #b91c1c;
+  --color-danger-hover: #dc2626;
+  --shadow-sm: 0 1px 2px rgba(45, 36, 25, 0.06), 0 6px 14px rgba(45, 36, 25, 0.04);
+  --shadow-md: 0 8px 24px rgba(45, 36, 25, 0.08);
   --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
+  --radius-lg: 0.875rem;
 }
 
 body {
   @apply min-h-screen antialiased;
-  background-color: var(--color-bg);
+  background: radial-gradient(circle at top, #fffdf7 0%, var(--color-bg) 55%, var(--color-bg-elevated) 100%);
   color: var(--color-text);
   text-transform: uppercase;
 }
@@ -29,22 +32,37 @@ body {
 input,
 select,
 textarea {
-  @apply px-3 py-2 text-sm outline-none ring-sky-500/30 focus:ring-2;
+  @apply px-3 py-2 text-sm outline-none focus:ring-2;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background-color: var(--color-surface);
   color: var(--color-text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
   text-transform: uppercase;
   width: 100%;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 14%, transparent);
 }
 
 button {
-  @apply px-3 py-2 text-sm outline-none ring-sky-500/30 focus:ring-2;
+  @apply px-3 py-2 text-sm outline-none focus:ring-2;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background-color: var(--color-surface);
   color: var(--color-text);
+  box-shadow: var(--shadow-sm);
   text-transform: uppercase;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 120ms ease, box-shadow 160ms ease;
+}
+
+button:active {
+  transform: translateY(1px);
 }
 
 label {
@@ -53,10 +71,11 @@ label {
 }
 
 .table-wrap {
-  @apply overflow-x-auto shadow-sm;
+  @apply overflow-x-auto;
   border: 1px solid var(--color-border-soft);
   border-radius: var(--radius-lg);
   background-color: var(--color-surface);
+  box-shadow: var(--shadow-sm);
 }
 
 table {
@@ -74,16 +93,19 @@ td {
   @apply border-b px-3 py-2;
   border-color: var(--color-border-soft);
   color: var(--color-text);
+  background-color: color-mix(in srgb, var(--color-surface) 90%, #ffffff);
 }
 
 .btn {
-  @apply inline-flex items-center justify-center px-4 py-2 text-sm font-medium transition;
+  @apply inline-flex items-center justify-center px-4 py-2 text-sm font-medium;
   border-radius: var(--radius-md);
+  letter-spacing: 0.01em;
 }
 
 .btn-primary {
   background-color: var(--color-primary);
   color: #ffffff;
+  border-color: color-mix(in srgb, var(--color-primary) 75%, #000000);
 }
 
 .btn-primary:hover {
@@ -104,6 +126,7 @@ td {
 .btn-danger {
   background-color: var(--color-danger);
   color: #ffffff;
+  border-color: color-mix(in srgb, var(--color-danger) 70%, #000000);
 }
 
 .btn-danger:hover {
@@ -113,7 +136,7 @@ td {
 .btn-ghost {
   @apply shadow-sm;
   border-color: var(--color-border-soft);
-  background-color: var(--color-surface);
+  background-color: color-mix(in srgb, var(--color-surface-soft) 65%, #ffffff);
   color: var(--color-primary);
 }
 

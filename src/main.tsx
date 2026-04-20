@@ -29,7 +29,7 @@ createRoot(document.getElementById('root')!).render(
         </ClerkProvider>
       </RootErrorBoundary>
     ) : (
-      <div className="flex min-h-screen items-center justify-center bg-white p-4 text-center text-amber-900 sm:p-6">
+      <div className="flex min-h-screen items-center justify-center bg-[#f5f1e8] p-4 text-center text-amber-900 sm:p-6">
         <p>
           Defina <code className="text-sky-700">VITE_CLERK_PUBLISHABLE_KEY</code> e{' '}
           <code className="text-sky-700">VITE_SUPABASE_*</code> no arquivo <code className="text-sky-700">.env</code>.
