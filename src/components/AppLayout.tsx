@@ -14,6 +14,7 @@ import {
   ShoppingCart,
   Table2,
   Tags,
+  LayoutGrid,
   UserCircle,
   X,
 } from 'lucide-react'
@@ -151,7 +152,10 @@ export function AppLayout() {
   const bemAvivActive = path.startsWith('/bem-aviv')
   const cadastroSectionActive = path.startsWith('/bem-aviv/clientes') || path.startsWith('/bem-aviv/produtos')
   const produtosSectionActive = path.startsWith('/bem-aviv/produtos')
-  const geralSectionActive = path.startsWith('/bem-aviv/categorias') || path.startsWith('/bem-aviv/tabela-preco')
+  const geralSectionActive =
+    path.startsWith('/bem-aviv/categorias') ||
+    path.startsWith('/bem-aviv/tabela-preco') ||
+    path.startsWith('/bem-aviv/catalogos-preco')
 
   const emails = clerkEmailCandidates(user)
   const hideAgendaTasks = emails.includes('suelenjalves@gmail.com')
@@ -320,6 +324,10 @@ export function AppLayout() {
                     <NavLink to="/bem-aviv/tabela-preco" className={navLinkNested}>
                       <Table2 size={15} className="shrink-0 opacity-70" aria-hidden />
                       Tabela de preço
+                    </NavLink>
+                    <NavLink to="/bem-aviv/catalogos-preco" className={navLinkNested}>
+                      <LayoutGrid size={15} className="shrink-0 opacity-70" aria-hidden />
+                      Catálogos em grade
                     </NavLink>
                   </div>
                 )}

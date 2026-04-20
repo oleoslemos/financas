@@ -11,7 +11,7 @@ export function LshStartPage() {
   const tasksHomologEnabled = !hideAgendaTasks && canAccessTasksHomolog(user?.primaryEmailAddress?.emailAddress)
 
   return (
-    <div className="mx-auto flex min-h-[calc(100vh-7rem)] max-w-5xl flex-col normal-case">
+    <div className="mx-auto max-w-5xl space-y-6 normal-case">
       <header className="rounded-2xl border border-[color:var(--color-border-soft)] bg-[color:var(--color-surface)] p-6 shadow-sm">
         <h1 className="text-2xl font-semibold tracking-tight text-[color:var(--color-text)]">Início</h1>
         <p className="mt-1 text-sm text-[color:var(--color-text-muted)]">
@@ -19,11 +19,7 @@ export function LshStartPage() {
         </p>
       </header>
 
-      <div className="flex flex-1 flex-col justify-end pb-2 pt-8 sm:pt-12">
-        <nav
-          className="grid gap-3 sm:grid-cols-3"
-          aria-label="Módulos principais"
-        >
+      <nav className="grid gap-3 sm:grid-cols-3" aria-label="Módulos principais">
           {tasksHomologEnabled ? (
             <Link
               to="/lsh/agenda"
@@ -108,8 +104,7 @@ export function LshStartPage() {
               <span className="text-xs font-semibold text-[color:var(--color-primary)]">Entrar</span>
             </div>
           </Link>
-        </nav>
-      </div>
+      </nav>
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { Building2, Package, ShoppingCart, Table2, Tags, UserCircle } from 'lucide-react'
+import { Building2, LayoutGrid, Package, ShoppingCart, Table2, Tags, UserCircle } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 const cards = [
@@ -7,6 +7,13 @@ const cards = [
   { to: '/bem-aviv/pedidos', title: 'Pedidos de vendas', desc: 'Acompanhar pedidos', icon: ShoppingCart, tone: 'emerald' as const },
   { to: '/bem-aviv/categorias', title: 'Categorias', desc: 'Classificação de itens', icon: Tags, tone: 'amber' as const },
   { to: '/bem-aviv/tabela-preco', title: 'Tabela de preço', desc: 'Preços e regras comerciais', icon: Table2, tone: 'violet' as const },
+  {
+    to: '/bem-aviv/catalogos-preco',
+    title: 'Catálogos em grade',
+    desc: 'Matrizes de preço (linha × coluna)',
+    icon: LayoutGrid,
+    tone: 'cyan' as const,
+  },
 ]
 
 const toneRing: Record<(typeof cards)[number]['tone'], string> = {
@@ -15,6 +22,7 @@ const toneRing: Record<(typeof cards)[number]['tone'], string> = {
   emerald: 'ring-emerald-100 hover:border-emerald-200/80 hover:ring-emerald-100',
   amber: 'ring-amber-100 hover:border-amber-200/80 hover:ring-amber-100',
   violet: 'ring-violet-100 hover:border-violet-200/80 hover:ring-violet-100',
+  cyan: 'ring-cyan-100 hover:border-cyan-200/80 hover:ring-cyan-100',
 }
 
 export function BemAvivHomePage() {
