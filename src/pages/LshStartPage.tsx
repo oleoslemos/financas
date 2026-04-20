@@ -1,51 +1,115 @@
-import { CalendarDays, ListTodo } from 'lucide-react'
+import { useUser } from '@clerk/clerk-react'
+import { Building2, CalendarDays, LayoutDashboard, ListTodo } from 'lucide-react'
 import { Link } from 'react-router-dom'
-
-const options = [
-  {
-    to: '/lsh/agenda',
-    title: 'Agenda',
-    description: 'Visão do dia com compromissos e pendências.',
-    icon: CalendarDays,
-    tone: 'border-cyan-200 bg-cyan-50 text-cyan-900 hover:bg-cyan-100',
-  },
-  {
-    to: '/lsh/tarefas',
-    title: 'Tarefas',
-    description: 'Cadastro e acompanhamento de execução.',
-    icon: ListTodo,
-    tone: 'border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100',
-  },
-]
+import { clerkEmailCandidates } from '../lib/clerkEmails'
+import { canAccessTasksHomolog } from '../lib/tasksHomologAccess'
 
 export function LshStartPage() {
+  const { user } = useUser()
+  const emails = clerkEmailCandidates(user)
+  const hideAgendaTasks = emails.includes('suelenjalves@gmail.com')
+  const tasksHomologEnabled = !hideAgendaTasks && canAccessTasksHomolog(user?.primaryEmailAddress?.emailAddress)
+
   return (
-    <div className="mx-auto max-w-4xl space-y-6 normal-case">
-      <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Início LSH</h1>
-        <p className="mt-1 text-sm text-slate-600">Escolha a área de trabalho:</p>
+    <div className="mx-auto flex min-h-[calc(100vh-7rem)] max-w-5xl flex-col normal-case">
+      <header className="rounded-2xl border border-[color:var(--color-border-soft)] bg-[color:var(--color-surface)] p-6 shadow-sm">
+        <h1 className="text-2xl font-semibold tracking-tight text-[color:var(--color-text)]">Início</h1>
+        <p className="mt-1 text-sm text-[color:var(--color-text-muted)]">
+          Escolha o módulo abaixo. Agenda e tarefas ficam agrupadas no primeiro atalho.
+        </p>
       </header>
 
-      <section className="grid gap-3 md:grid-cols-2">
-        {options.map(({ to, title, description, icon: Icon, tone }) => (
+      <div className="flex flex-1 flex-col justify-end pb-2 pt-8 sm:pt-12">
+        <nav
+          className="grid gap-3 sm:grid-cols-3"
+          aria-label="Módulos principais"
+        >
+          {tasksHomologEnabled ? (
+            <Link
+              to="/lsh/agenda"
+              className="group relative overflow-hidden rounded-2xl border border-[color:var(--color-border-soft)] bg-gradient-to-br from-sky-50 via-white to-emerald-50 p-5 shadow-sm transition duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-primary)] focus-visible:ring-offset-2"
+            >
+              <span
+                className="pointer-events-none absolute inset-0 opacity-0 transition duration-300 group-hover:opacity-100"
+                style={{
+                  background:
+                    'radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--color-primary) 12%, transparent), transparent 55%)',
+                }}
+                aria-hidden
+              />
+              <div className="relative flex flex-col gap-3">
+                <div className="flex items-center gap-2 text-[color:var(--color-text)]">
+                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/90 ring-1 ring-black/5">
+                    <CalendarDays size={20} className="text-sky-600" aria-hidden />
+                  </span>
+                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/90 ring-1 ring-black/5">
+                    <ListTodo size={20} className="text-emerald-600" aria-hidden />
+                  </span>
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold tracking-tight">Agenda / Tarefas</h2>
+                  <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                    Abre a agenda; use o menu para tarefas quando precisar.
+                  </p>
+                </div>
+                <span className="text-xs font-semibold text-[color:var(--color-primary)]">Entrar</span>
+              </div>
+            </Link>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-surface-soft)] p-5 text-sm text-[color:var(--color-text-muted)]">
+              Agenda e tarefas não estão disponíveis para esta conta.
+            </div>
+          )}
+
           <Link
-            key={to}
-            to={to}
-            className={`rounded-xl border p-5 transition ${tone}`}
+            to="/lsh/resumo"
+            className="group relative overflow-hidden rounded-2xl border border-[color:var(--color-border-soft)] bg-[color:var(--color-surface)] p-5 shadow-sm transition duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-primary)] focus-visible:ring-offset-2"
           >
-            <div className="space-y-3">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-white/80 ring-1 ring-black/5">
-                <Icon size={21} aria-hidden />
+            <span
+              className="pointer-events-none absolute inset-0 opacity-0 transition duration-300 group-hover:opacity-100"
+              style={{
+                background:
+                  'radial-gradient(circle at 80% 0%, color-mix(in srgb, var(--color-primary) 10%, transparent), transparent 50%)',
+              }}
+              aria-hidden
+            />
+            <div className="relative flex flex-col gap-3">
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[color:var(--color-surface-soft)] ring-1 ring-black/5">
+                <LayoutDashboard size={20} className="text-[color:var(--color-primary)]" aria-hidden />
               </span>
               <div>
-                <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
-                <p className="mt-1 text-sm">{description}</p>
+                <h2 className="text-lg font-semibold tracking-tight text-[color:var(--color-text)]">LSH — Financeiro</h2>
+                <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">Resumo, contas, fluxo e cartões.</p>
               </div>
-              <span className="text-sm font-semibold">Abrir</span>
+              <span className="text-xs font-semibold text-[color:var(--color-primary)]">Entrar</span>
             </div>
           </Link>
-        ))}
-      </section>
+
+          <Link
+            to="/bem-aviv"
+            className="group relative overflow-hidden rounded-2xl border border-[color:var(--color-border-soft)] bg-[color:var(--color-surface)] p-5 shadow-sm transition duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-primary)] focus-visible:ring-offset-2"
+          >
+            <span
+              className="pointer-events-none absolute inset-0 opacity-0 transition duration-300 group-hover:opacity-100"
+              style={{
+                background:
+                  'radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--color-primary) 8%, transparent), transparent 55%)',
+              }}
+              aria-hidden
+            />
+            <div className="relative flex flex-col gap-3">
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[color:var(--color-surface-soft)] ring-1 ring-black/5">
+                <Building2 size={20} className="text-[color:var(--color-text-muted)]" aria-hidden />
+              </span>
+              <div>
+                <h2 className="text-lg font-semibold tracking-tight text-[color:var(--color-text)]">Bem Aviv</h2>
+                <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">Clientes, produtos e pedidos.</p>
+              </div>
+              <span className="text-xs font-semibold text-[color:var(--color-primary)]">Entrar</span>
+            </div>
+          </Link>
+        </nav>
+      </div>
     </div>
   )
 }
