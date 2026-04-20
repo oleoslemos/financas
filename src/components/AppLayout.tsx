@@ -150,8 +150,12 @@ export function AppLayout() {
 
   const lshActive = isLshSectionPath(path)
   const bemAvivActive = path.startsWith('/bem-aviv')
-  const cadastroSectionActive = path.startsWith('/bem-aviv/clientes') || path.startsWith('/bem-aviv/produtos')
-  const produtosSectionActive = path.startsWith('/bem-aviv/produtos')
+  const cadastroSectionActive =
+    path.startsWith('/bem-aviv/clientes') ||
+    path.startsWith('/bem-aviv/produtos-catalogo') ||
+    path === '/bem-aviv/produtos' ||
+    path.startsWith('/bem-aviv/produtos/')
+  const produtosSectionActive = path === '/bem-aviv/produtos' || path.startsWith('/bem-aviv/produtos/')
   const geralSectionActive =
     path.startsWith('/bem-aviv/categorias') ||
     path.startsWith('/bem-aviv/tabela-preco') ||
@@ -275,11 +279,15 @@ export function AppLayout() {
                       <UserCircle size={15} className="shrink-0 opacity-70" aria-hidden />
                       Clientes
                     </NavLink>
+                    <NavLink to="/bem-aviv/produtos-catalogo" className={navLinkNested}>
+                      <Package size={15} className="shrink-0 opacity-70" aria-hidden />
+                      Produtos (catálogo)
+                    </NavLink>
                     <NavSubGroupCard
                       open={bemProdutosOpen}
                       sectionActive={produtosSectionActive}
                       summaryTo="/bem-aviv/produtos/plataforma-de-descanso"
-                      label="Produtos"
+                      label="Produto old"
                       onToggle={() => setBemProdutosOpen((v) => !v)}
                     />
                     {bemProdutosOpen && (

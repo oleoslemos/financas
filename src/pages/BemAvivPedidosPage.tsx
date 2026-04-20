@@ -1,11 +1,13 @@
 import { useUser } from '@clerk/clerk-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { formatBRL, parseMoney } from '../lib/format'
 import { toUpperTrim } from '../lib/text'
+import { normalizePayload, type OfferProduct, type OfferVariation } from '../lib/bemAvivOfferProduct'
 
 type Pedido = {
   id: string
@@ -24,19 +26,10 @@ type Pedido = {
 
 type ClienteOpt = { id: string; full_name: string }
 
-type ProdutoOpt = { id: string; name: string; price: number | null }
-
-type CellOpt = {
-  id: string
-  price: number
-  label: string
-}
-
 type LinhaItem = {
   key: string
-  product_id: string
-  catalog_price_cell_id: string | null
-  dimension_label: string | null
+  offer_product_id: string
+  variation_code: string
   name: string
   unit_price: number
   quantity: number
@@ -58,116 +51,65 @@ export function BemAvivPedidosPage() {
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const [rows, setRows] = useState<Pedido[]>([])
   const [clients, setClients] = useState<ClienteOpt[]>([])
-  const [products, setProducts] = useState<ProdutoOpt[]>([])
+  const [offerProducts, setOfferProducts] = useState<OfferProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [form, setForm] = useState({
     client_id: '',
     order_date: new Date().toISOString().slice(0, 10),
-    document_type: 'PEDIDO' as 'ORCAMENTO' | 'PEDIDO',
+    document_type: 'ORCAMENTO' as 'ORCAMENTO' | 'PEDIDO',
     status: 'ABERTO',
     total_amount: '',
     discount_total: '',
     installments_count: '1',
     notes: '',
   })
-  const [draftProductId, setDraftProductId] = useState('')
-  const [draftCellId, setDraftCellId] = useState('')
-  const [cellOptions, setCellOptions] = useState<CellOpt[]>([])
-  const [loadingCells, setLoadingCells] = useState(false)
+  const [draftOfferId, setDraftOfferId] = useState('')
+  const [draftVariationCode, setDraftVariationCode] = useState('')
   const [draftQty, setDraftQty] = useState('1')
   const [draftLineDiscount, setDraftLineDiscount] = useState('')
   const [lineItems, setLineItems] = useState<LinhaItem[]>([])
 
+  const selectedOffer = useMemo(
+    () => offerProducts.find((p) => p.id === draftOfferId) ?? null,
+    [draftOfferId, offerProducts],
+  )
+
+  const variationOptions = useMemo(() => {
+    if (!selectedOffer) return [] as OfferVariation[]
+    return normalizePayload(selectedOffer.payload).variations ?? []
+  }, [selectedOffer])
+
+  useEffect(() => {
+    setDraftVariationCode('')
+  }, [draftOfferId])
+
+  useEffect(() => {
+    if (variationOptions.length === 1) {
+      setDraftVariationCode(variationOptions[0].code)
+    }
+  }, [variationOptions])
+
   const load = useCallback(async () => {
     if (!supabase || !ownerUserId) return
     setLoading(true)
-    const [{ data: orders }, { data: cl }, { data: prods }] = await Promise.all([
+    const [{ data: orders }, { data: cl }, { data: offers }] = await Promise.all([
       supabase.from('bem_aviv_sales_orders').select('*').eq('user_id', ownerUserId).order('order_date', { ascending: false }),
       supabase.from('bem_aviv_clients').select('id, full_name').eq('user_id', ownerUserId).order('full_name'),
-      supabase.from('bem_aviv_products').select('id, name, price').eq('user_id', ownerUserId).order('name'),
+      supabase
+        .from('bem_aviv_offer_products')
+        .select('id, name, category, product_line, product_type, payload')
+        .eq('user_id', ownerUserId)
+        .order('name'),
     ])
     setRows((orders as Pedido[]) ?? [])
     setClients((cl as ClienteOpt[]) ?? [])
-    setProducts((prods as ProdutoOpt[]) ?? [])
+    setOfferProducts(((offers ?? []) as OfferProduct[]).map((r) => ({ ...r, payload: normalizePayload(r.payload) })))
     setLoading(false)
   }, [ownerUserId, supabase])
 
   useEffect(() => {
     void load()
   }, [load])
-
-  useEffect(() => {
-    let cancelled = false
-    async function loadCells() {
-      if (!supabase || !ownerUserId || !draftProductId) {
-        setCellOptions([])
-        setDraftCellId('')
-        return
-      }
-      setLoadingCells(true)
-      const { data: blocks } = await supabase
-        .from('bem_aviv_catalog_products')
-        .select('id, name')
-        .eq('user_id', ownerUserId)
-        .eq('product_id', draftProductId)
-        .eq('active', true)
-
-      if (cancelled) return
-
-      if (!blocks?.length) {
-        setCellOptions([])
-        setDraftCellId('')
-        setLoadingCells(false)
-        return
-      }
-
-      const blockIds = blocks.map((b: { id: string }) => b.id)
-      const blockNameById = Object.fromEntries(blocks.map((b: { id: string; name: string }) => [b.id, b.name]))
-
-      const { data: cells } = await supabase
-        .from('bem_aviv_catalog_price_cells')
-        .select('id, price, catalog_product_id, row_value_id, col_value_id')
-        .in('catalog_product_id', blockIds)
-        .eq('active', true)
-
-      if (cancelled) return
-
-      if (!cells?.length) {
-        setCellOptions([])
-        setDraftCellId('')
-        setLoadingCells(false)
-        return
-      }
-
-      const valueIds = [
-        ...new Set(
-          cells.flatMap((c: { row_value_id: string | null; col_value_id: string | null }) => [c.row_value_id, c.col_value_id].filter(Boolean) as string[]),
-        ),
-      ]
-      const { data: vals } = await supabase.from('bem_aviv_catalog_axis_values').select('id, value_label').in('id', valueIds)
-
-      if (cancelled) return
-
-      const labelById: Record<string, string> = Object.fromEntries((vals ?? []).map((v: { id: string; value_label: string }) => [v.id, v.value_label]))
-
-      const opts: CellOpt[] = (cells as Array<{ id: string; price: number; catalog_product_id: string; row_value_id: string | null; col_value_id: string | null }>)
-        .filter((c) => c.row_value_id && c.col_value_id)
-        .map((c) => ({
-          id: c.id,
-          price: Number(c.price),
-          label: `${blockNameById[c.catalog_product_id]}: ${labelById[c.row_value_id!] ?? '?'} × ${labelById[c.col_value_id!] ?? '?'}`,
-        }))
-        .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'))
-
-      setCellOptions(opts)
-      setDraftCellId('')
-      setLoadingCells(false)
-    }
-    void loadCells()
-    return () => {
-      cancelled = true
-    }
-  }, [draftProductId, ownerUserId, supabase])
 
   const sumLinesNet = useMemo(
     () =>
@@ -198,20 +140,25 @@ export function BemAvivPedidosPage() {
   }, [lineItems.length, form.total_amount, orderDiscount])
 
   function addLineFromDraft() {
-    const p = products.find((x) => x.id === draftProductId)
+    const p = offerProducts.find((x) => x.id === draftOfferId)
     if (!p) {
-      alert('SELECIONE UM PRODUTO.')
+      alert('SELECIONE UM PRODUTO DO CATÁLOGO.')
       return
     }
-    const cell = draftCellId ? cellOptions.find((c) => c.id === draftCellId) : null
-    if (cellOptions.length > 0 && !cell) {
-      alert('SELECIONE A COMBINAÇÃO (TAMANHO / DIMENSÃO) NA MATRIZ DE PREÇO DESTE PRODUTO.')
+    const vars = normalizePayload(p.payload).variations ?? []
+    const v = vars.find((x) => x.code === draftVariationCode)
+    if (vars.length > 0 && !v) {
+      alert('SELECIONE A VARIAÇÃO (CÓDIGO / DIMENSÕES).')
+      return
+    }
+    if (vars.length === 0) {
+      alert('ESTE PRODUTO NÃO TEM VARIAÇÕES CADASTRADAS. EDITE O CADASTRO EM PRODUTOS (CATÁLOGO).')
       return
     }
     const qty = Math.max(1, parseInt(draftQty.replace(/\D/g, ''), 10) || 1)
-    const unit = cell ? cell.price : p.price != null ? Number(p.price) : 0
-    if (unit <= 0) {
-      alert('PREÇO INVÁLIDO. USE UMA CÉLULA DA MATRIZ OU CADASTRE PREÇO NO PRODUTO.')
+    const unit = Number(v!.price)
+    if (!Number.isFinite(unit) || unit <= 0) {
+      alert('PREÇO DA VARIAÇÃO INVÁLIDO.')
       return
     }
     const gross = qty * unit
@@ -220,23 +167,22 @@ export function BemAvivPedidosPage() {
       alert('DESCONTO DO ITEM NÃO PODE SER MAIOR QUE O SUBTOTAL (QTD × UNITÁRIO).')
       return
     }
-    const dimLabel = cell ? cell.label : null
-    const descName = cell ? `${p.name} — ${cell.label}` : p.name
+    const dimPart = v!.dimensions ? ` — ${v!.dimensions}` : ''
+    const descName = `${p.name} [${v!.code}]${dimPart}`
     setLineItems((prev) => [
       ...prev,
       {
         key: newLineKey(),
-        product_id: p.id,
-        catalog_price_cell_id: cell ? cell.id : null,
-        dimension_label: dimLabel,
+        offer_product_id: p.id,
+        variation_code: v!.code,
         name: descName,
         unit_price: unit,
         quantity: qty,
         discount_amount: disc,
       },
     ])
-    setDraftProductId('')
-    setDraftCellId('')
+    setDraftOfferId('')
+    setDraftVariationCode('')
     setDraftQty('1')
     setDraftLineDiscount('')
   }
@@ -285,7 +231,7 @@ export function BemAvivPedidosPage() {
       }
     } else {
       if (!form.total_amount.trim()) {
-        alert('INFORME O VALOR TOTAL OU ADICIONE ITENS AO PEDIDO.')
+        alert('INFORME O VALOR TOTAL OU ADICIONE ITENS.')
         return
       }
       if (clampMoney(manualGross - discOrder) < 0) {
@@ -294,9 +240,7 @@ export function BemAvivPedidosPage() {
       }
     }
 
-    const totalInsert = hasLines
-      ? clampMoney(sumLinesNet - discOrder)
-      : clampMoney(manualGross - discOrder)
+    const totalInsert = hasLines ? clampMoney(sumLinesNet - discOrder) : clampMoney(manualGross - discOrder)
 
     const { data: inserted, error } = await supabase
       .from('bem_aviv_sales_orders')
@@ -328,8 +272,10 @@ export function BemAvivPedidosPage() {
         return {
           user_id: ownerUserId,
           sales_order_id: orderId,
-          product_id: l.product_id,
-          catalog_price_cell_id: l.catalog_price_cell_id,
+          product_id: null,
+          catalog_price_cell_id: null,
+          offer_product_id: l.offer_product_id,
+          variation_code: l.variation_code,
           item_description: toUpperTrim(l.name),
           quantity: l.quantity,
           unit_price: l.unit_price,
@@ -347,7 +293,7 @@ export function BemAvivPedidosPage() {
     setForm({
       client_id: '',
       order_date: new Date().toISOString().slice(0, 10),
-      document_type: 'PEDIDO',
+      document_type: 'ORCAMENTO',
       status: 'ABERTO',
       total_amount: '',
       discount_total: '',
@@ -355,8 +301,8 @@ export function BemAvivPedidosPage() {
       notes: '',
     })
     setLineItems([])
-    setDraftProductId('')
-    setDraftCellId('')
+    setDraftOfferId('')
+    setDraftVariationCode('')
     setDraftQty('1')
     setDraftLineDiscount('')
     await load()
@@ -373,7 +319,9 @@ export function BemAvivPedidosPage() {
 
     const { data: quoteItems, error: qiErr } = await supabase
       .from('bem_aviv_sales_order_items')
-      .select('product_id, catalog_price_cell_id, item_description, quantity, unit_price, discount_amount, total_price')
+      .select(
+        'product_id, catalog_price_cell_id, offer_product_id, variation_code, item_description, quantity, unit_price, discount_amount, total_price',
+      )
       .eq('sales_order_id', quote.id)
 
     if (qiErr) {
@@ -411,6 +359,8 @@ export function BemAvivPedidosPage() {
     const items = (quoteItems ?? []) as Array<{
       product_id: string | null
       catalog_price_cell_id: string | null
+      offer_product_id: string | null
+      variation_code: string | null
       item_description: string
       quantity: number
       unit_price: number
@@ -424,6 +374,8 @@ export function BemAvivPedidosPage() {
         sales_order_id: newOrder.id,
         product_id: it.product_id,
         catalog_price_cell_id: it.catalog_price_cell_id,
+        offer_product_id: it.offer_product_id,
+        variation_code: it.variation_code ?? null,
         item_description: it.item_description,
         quantity: it.quantity,
         unit_price: it.unit_price,
@@ -457,6 +409,12 @@ export function BemAvivPedidosPage() {
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-semibold">PEDIDOS DE VENDAS</h2>
+      <p className="max-w-2xl text-sm font-normal normal-case text-slate-600">
+        Itens usam o cadastro <strong>Produtos (catálogo)</strong>. Tipo padrão: <strong>orçamento</strong>.{' '}
+        <Link className="font-medium text-emerald-800 underline-offset-2 hover:underline" to="/bem-aviv/produtos-catalogo">
+          Abrir cadastro de produtos
+        </Link>
+      </p>
       <form onSubmit={submit} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-2">
         <div>
           <label>CLIENTE</label>
@@ -470,7 +428,7 @@ export function BemAvivPedidosPage() {
           </select>
         </div>
         <div>
-          <label>DATA DO PEDIDO</label>
+          <label>DATA</label>
           <input type="date" value={form.order_date} onChange={(e) => setForm({ ...form, order_date: e.target.value })} required />
         </div>
         <div>
@@ -528,7 +486,7 @@ export function BemAvivPedidosPage() {
           />
           {lineItems.length > 0 && previewOrderTotal != null ? (
             <p className="mt-1 text-xs font-normal normal-case text-slate-600">
-              Líquido estimado (itens − desconto pedido): <strong>{formatBRL(previewOrderTotal)}</strong> — o valor gravado após salvar segue a regra do banco (soma dos itens − desconto).
+              Líquido estimado: <strong>{formatBRL(previewOrderTotal)}</strong>
             </p>
           ) : null}
         </div>
@@ -538,13 +496,13 @@ export function BemAvivPedidosPage() {
         </div>
 
         <div className="sm:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <h3 className="mb-2 text-sm font-semibold text-slate-800">ITENS</h3>
+          <h3 className="mb-2 text-sm font-semibold text-slate-800">ITENS (CATÁLOGO)</h3>
           <div className="grid gap-3 sm:grid-cols-12">
             <div className="sm:col-span-5">
               <label>PRODUTO</label>
-              <select value={draftProductId} onChange={(e) => setDraftProductId(e.target.value)}>
+              <select value={draftOfferId} onChange={(e) => setDraftOfferId(e.target.value)}>
                 <option value="">— SELECIONE —</option>
-                {products.map((p) => (
+                {offerProducts.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
                   </option>
@@ -552,20 +510,19 @@ export function BemAvivPedidosPage() {
               </select>
             </div>
             <div className="sm:col-span-5">
-              <label>TAMANHO / DIMENSÃO (MATRIZ)</label>
+              <label>VARIAÇÃO (CÓDIGO / DIMENSÕES)</label>
               <select
-                value={draftCellId}
-                onChange={(e) => setDraftCellId(e.target.value)}
-                disabled={!draftProductId || cellOptions.length === 0}
+                value={draftVariationCode}
+                onChange={(e) => setDraftVariationCode(e.target.value)}
+                disabled={!draftOfferId || variationOptions.length === 0}
               >
-                <option value="">{cellOptions.length === 0 ? '— USE PREÇO DO CADASTRO —' : '— SELECIONE A COMBINAÇÃO —'}</option>
-                {cellOptions.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.label} — {formatBRL(c.price)}
+                <option value="">{variationOptions.length === 0 ? '— SEM VARIAÇÕES —' : '— SELECIONE —'}</option>
+                {variationOptions.map((v) => (
+                  <option key={v.code} value={v.code}>
+                    [{v.code}] {v.dimensions || '—'} — {formatBRL(v.price)}
                   </option>
                 ))}
               </select>
-              {loadingCells && draftProductId ? <p className="mt-1 text-xs text-slate-500">Carregando combinações…</p> : null}
             </div>
             <div className="sm:col-span-2">
               <label>QTD</label>
@@ -581,10 +538,13 @@ export function BemAvivPedidosPage() {
               </Button>
             </div>
           </div>
-          {products.length === 0 && <p className="mt-2 text-sm text-amber-800">CADASTRE PRODUTOS EM GERAL → PRODUTOS.</p>}
-          {draftProductId && cellOptions.length === 0 && !loadingCells && (
-            <p className="mt-2 text-xs font-normal normal-case text-slate-600">
-              Este produto não está em nenhum bloco de catálogo em grade com células cadastradas; o preço será o do cadastro de produtos.
+          {offerProducts.length === 0 && (
+            <p className="mt-2 text-sm text-amber-800">
+              NENHUM PRODUTO NO CATÁLOGO.{' '}
+              <Link className="font-medium underline" to="/bem-aviv/produtos-catalogo">
+                Cadastre em Produtos (catálogo)
+              </Link>
+              .
             </p>
           )}
           {lineItems.length > 0 && (
@@ -606,7 +566,7 @@ export function BemAvivPedidosPage() {
                     const net = clampMoney(gross - l.discount_amount)
                     return (
                       <tr key={l.key}>
-                        <td className="max-w-[14rem] whitespace-normal">{l.name}</td>
+                        <td className="max-w-[18rem] whitespace-normal">{l.name}</td>
                         <td className="text-right">{formatBRL(l.unit_price)}</td>
                         <td className="text-right">
                           <input

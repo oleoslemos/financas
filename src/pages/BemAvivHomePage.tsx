@@ -3,8 +3,21 @@ import { Link } from 'react-router-dom'
 
 const cards = [
   { to: '/bem-aviv/clientes', title: 'Clientes', desc: 'Cadastro e gestão de clientes', icon: UserCircle, tone: 'sky' as const },
-  { to: '/bem-aviv/produtos/plataforma-de-descanso', title: 'Produtos', desc: 'Catálogo por linha de produto', icon: Package, tone: 'slate' as const },
-  { to: '/bem-aviv/pedidos', title: 'Pedidos de vendas', desc: 'Acompanhar pedidos', icon: ShoppingCart, tone: 'emerald' as const },
+  {
+    to: '/bem-aviv/produtos-catalogo',
+    title: 'Produtos (catálogo)',
+    desc: 'Cadastro atual com variações e preço por item',
+    icon: Package,
+    tone: 'slate' as const,
+  },
+  {
+    to: '/bem-aviv/produtos/plataforma-de-descanso',
+    title: 'Produto old',
+    desc: 'Cadastro legado por linha de produto',
+    icon: Package,
+    tone: 'slate' as const,
+  },
+  { to: '/bem-aviv/pedidos', title: 'Pedidos de vendas', desc: 'Orçamentos e pedidos', icon: ShoppingCart, tone: 'emerald' as const },
   { to: '/bem-aviv/categorias', title: 'Categorias', desc: 'Classificação de itens', icon: Tags, tone: 'amber' as const },
   { to: '/bem-aviv/tabela-preco', title: 'Tabela de preço', desc: 'Preços e regras comerciais', icon: Table2, tone: 'violet' as const },
   {
