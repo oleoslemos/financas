@@ -1,5 +1,5 @@
 import { useUser, UserButton } from '@clerk/clerk-react'
-import { CalendarDays, CircleDollarSign, CreditCard, LayoutDashboard, Landmark, ListTodo, Menu, Package, ShoppingCart, Table2, Tags, UserCircle, X } from 'lucide-react'
+import { CalendarDays, ChevronDown, ChevronRight, CircleDollarSign, CreditCard, LayoutDashboard, Landmark, ListTodo, Menu, Package, ShoppingCart, Table2, Tags, UserCircle, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { canAccessTasksHomolog } from '../lib/tasksHomologAccess'
@@ -13,12 +13,11 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
 const navSubmenuClass = ({ isActive }: { isActive: boolean }) =>
   `${navLinkBase} ml-5 text-[12.5px] ${isActive ? 'bg-emerald-50 font-medium text-emerald-900' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`
 
+const navSubmenuToggleClass =
+  'flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700'
+
 function SectionTitle({ children }: { children: string }) {
   return <h2 className="px-2.5 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{children}</h2>
-}
-
-function SubTitle({ children }: { children: string }) {
-  return <p className="px-2.5 pb-0.5 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{children}</p>
 }
 
 export function AppLayout() {
@@ -26,6 +25,8 @@ export function AppLayout() {
   const location = useLocation()
   const path = location.pathname
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [lshCadastrosOpen, setLshCadastrosOpen] = useState(false)
+  const [bemAvivCadastrosOpen, setBemAvivCadastrosOpen] = useState(false)
 
   useEffect(() => {
     setMobileMenuOpen(false)
@@ -81,19 +82,26 @@ export function AppLayout() {
             <CircleDollarSign size={16} className="shrink-0 opacity-70" aria-hidden />
             Movimentos financeiros
           </NavLink>
-          <SubTitle>Cadastros</SubTitle>
-          <NavLink to="/lsh/contas-bancarias" className={navSubmenuClass}>
-            <Landmark size={16} className="shrink-0 opacity-70" aria-hidden />
-            Contas bancárias
-          </NavLink>
-          <NavLink to="/lsh/categorias" className={navSubmenuClass}>
-            <Tags size={16} className="shrink-0 opacity-70" aria-hidden />
-            Categorias
-          </NavLink>
-          <NavLink to="/lsh/cartoes" className={navSubmenuClass}>
-            <CreditCard size={16} className="shrink-0 opacity-70" aria-hidden />
-            Cartões
-          </NavLink>
+          <button type="button" className={navSubmenuToggleClass} onClick={() => setLshCadastrosOpen((v) => !v)} aria-expanded={lshCadastrosOpen}>
+            <span>Cadastros</span>
+            {lshCadastrosOpen ? <ChevronDown size={14} className="opacity-70" aria-hidden /> : <ChevronRight size={14} className="opacity-70" aria-hidden />}
+          </button>
+          {lshCadastrosOpen ? (
+            <>
+              <NavLink to="/lsh/contas-bancarias" className={navSubmenuClass}>
+                <Landmark size={16} className="shrink-0 opacity-70" aria-hidden />
+                Contas bancárias
+              </NavLink>
+              <NavLink to="/lsh/categorias" className={navSubmenuClass}>
+                <Tags size={16} className="shrink-0 opacity-70" aria-hidden />
+                Categorias
+              </NavLink>
+              <NavLink to="/lsh/cartoes" className={navSubmenuClass}>
+                <CreditCard size={16} className="shrink-0 opacity-70" aria-hidden />
+                Cartões
+              </NavLink>
+            </>
+          ) : null}
 
           <SectionTitle>Bem Aviv</SectionTitle>
           <NavLink to="/bem-aviv" className={navLinkClass}>
@@ -116,19 +124,26 @@ export function AppLayout() {
             <Package size={16} className="shrink-0 opacity-70" aria-hidden />
             Produtos old (todos)
           </NavLink>
-          <SubTitle>Cadastros</SubTitle>
-          <NavLink to="/bem-aviv/categorias" className={navLinkClass}>
-            <Tags size={16} className="shrink-0 opacity-70" aria-hidden />
-            Categorias
-          </NavLink>
-          <NavLink to="/bem-aviv/tabela-preco-catalogo" className={navLinkClass}>
-            <Table2 size={16} className="shrink-0 opacity-70" aria-hidden />
-            Tabela de preço
-          </NavLink>
-          <NavLink to="/bem-aviv/catalogos-preco" className={navLinkClass}>
-            <Table2 size={16} className="shrink-0 opacity-70" aria-hidden />
-            Catálogos em grade
-          </NavLink>
+          <button type="button" className={navSubmenuToggleClass} onClick={() => setBemAvivCadastrosOpen((v) => !v)} aria-expanded={bemAvivCadastrosOpen}>
+            <span>Cadastros</span>
+            {bemAvivCadastrosOpen ? <ChevronDown size={14} className="opacity-70" aria-hidden /> : <ChevronRight size={14} className="opacity-70" aria-hidden />}
+          </button>
+          {bemAvivCadastrosOpen ? (
+            <>
+              <NavLink to="/bem-aviv/categorias" className={navSubmenuClass}>
+                <Tags size={16} className="shrink-0 opacity-70" aria-hidden />
+                Categorias
+              </NavLink>
+              <NavLink to="/bem-aviv/tabela-preco-catalogo" className={navSubmenuClass}>
+                <Table2 size={16} className="shrink-0 opacity-70" aria-hidden />
+                Tabela de preço
+              </NavLink>
+              <NavLink to="/bem-aviv/catalogos-preco" className={navSubmenuClass}>
+                <Table2 size={16} className="shrink-0 opacity-70" aria-hidden />
+                Catálogos em grade
+              </NavLink>
+            </>
+          ) : null}
         </nav>
 
         <div className="mt-6 flex items-center gap-2 sm:mt-8">
