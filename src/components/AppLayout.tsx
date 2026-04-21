@@ -1,157 +1,151 @@
 import { useUser, UserButton } from '@clerk/clerk-react'
-import { CalendarDays, ChevronDown, ChevronRight, CircleDollarSign, CreditCard, LayoutDashboard, Landmark, ListTodo, Menu, Package, ShoppingCart, Table2, Tags, UserCircle, X } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { CalendarDays, ChevronDown, CircleDollarSign, CreditCard, LayoutDashboard, Landmark, ListTodo, Package, ShoppingCart, Table2, Tags, UserCircle } from 'lucide-react'
+import { type ComponentType, useMemo, useState } from 'react'
+import { NavLink, Outlet } from 'react-router-dom'
 import { canAccessTasksHomolog } from '../lib/tasksHomologAccess'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 
-const navLinkBase = 'flex items-center gap-2 rounded-md px-2.5 py-2 text-[13px] font-normal leading-snug transition-colors normal-case'
+type MenuItem = {
+  label: string
+  to?: string
+  icon?: ComponentType<{ size?: number; className?: string; 'aria-hidden'?: boolean }>
+  children?: Array<{ label: string; to: string; icon?: ComponentType<{ size?: number; className?: string; 'aria-hidden'?: boolean }> }>
+}
 
-const navLinkClass = ({ isActive }: { isActive: boolean }) =>
-  `${navLinkBase} ${isActive ? 'bg-emerald-100/70 font-medium text-emerald-900' : 'text-slate-700 hover:bg-slate-50 hover:text-slate-950'}`
+const topTriggerBase =
+  'inline-flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900'
 
-const navSubmenuClass = ({ isActive }: { isActive: boolean }) =>
-  `${navLinkBase} ml-5 text-[12.5px] ${isActive ? 'bg-emerald-50 font-medium text-emerald-900' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`
+const dropdownItemBase =
+  'flex items-center gap-2 rounded-md px-2.5 py-2 text-[13px] font-normal leading-snug text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-950'
 
-const navSubmenuToggleClass =
-  'flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700'
-
-function SectionTitle({ children }: { children: string }) {
-  return <h2 className="px-2.5 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{children}</h2>
+function TreeDropdown({ title, items, open, onToggle, onClose }: { title: string; items: MenuItem[]; open: boolean; onToggle: () => void; onClose: () => void }) {
+  return (
+    <div className="relative" onMouseLeave={onClose}>
+      <button type="button" className={`${topTriggerBase} ${open ? 'bg-slate-100 text-slate-900' : ''}`} onMouseEnter={onToggle} onClick={onToggle} aria-expanded={open}>
+        {title}
+        <ChevronDown size={15} className={`transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
+      </button>
+      {open ? (
+        <div className="absolute left-0 top-full z-50 mt-2 w-80 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
+          {items.map((item) => (
+            <div key={item.label} className="mb-1 last:mb-0">
+              {item.to ? (
+                <NavLink to={item.to} className={({ isActive }) => `${dropdownItemBase} ${isActive ? 'bg-emerald-100/70 text-emerald-900' : ''}`}>
+                  {item.icon ? <item.icon size={16} className="shrink-0 opacity-70" aria-hidden /> : null}
+                  {item.label}
+                </NavLink>
+              ) : (
+                <p className="px-2.5 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{item.label}</p>
+              )}
+              {item.children ? (
+                <div className="ml-3 border-l border-slate-200 pl-2">
+                  {item.children.map((child) => (
+                    <NavLink key={child.label} to={child.to} className={({ isActive }) => `${dropdownItemBase} text-[12.5px] ${isActive ? 'bg-emerald-50 text-emerald-900' : 'text-slate-600'}`}>
+                      {child.icon ? <child.icon size={15} className="shrink-0 opacity-70" aria-hidden /> : null}
+                      {child.label}
+                    </NavLink>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  )
 }
 
 export function AppLayout() {
   const { user } = useUser()
-  const location = useLocation()
-  const path = location.pathname
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [lshCadastrosOpen, setLshCadastrosOpen] = useState(false)
-  const [bemAvivCadastrosOpen, setBemAvivCadastrosOpen] = useState(false)
-
-  useEffect(() => {
-    setMobileMenuOpen(false)
-  }, [path])
+  const [openMenu, setOpenMenu] = useState<string | null>(null)
 
   const emails = clerkEmailCandidates(user)
   const hideAgendaTasks = emails.includes('suelenjalves@gmail.com')
   const tasksHomologEnabled = !hideAgendaTasks && canAccessTasksHomolog(user?.primaryEmailAddress?.emailAddress)
 
+  const agendaItems = useMemo<MenuItem[]>(
+    () => [
+      { label: 'Visão geral', to: '/lsh/agenda', icon: LayoutDashboard },
+      { label: 'Agenda', to: '/lsh/agenda', icon: CalendarDays },
+      { label: 'Tarefas', to: '/lsh/tarefas', icon: ListTodo },
+    ],
+    [],
+  )
+
+  const lshItems = useMemo<MenuItem[]>(
+    () => [
+      { label: 'Visão geral', to: '/lsh/resumo', icon: LayoutDashboard },
+      { label: 'Movimentos financeiros', to: '/lsh/fluxo', icon: CircleDollarSign },
+      {
+        label: 'Cadastros',
+        children: [
+          { label: 'Contas bancárias', to: '/lsh/contas-bancarias', icon: Landmark },
+          { label: 'Categorias', to: '/lsh/categorias', icon: Tags },
+          { label: 'Cartões', to: '/lsh/cartoes', icon: CreditCard },
+        ],
+      },
+    ],
+    [],
+  )
+
+  const bemAvivItems = useMemo<MenuItem[]>(
+    () => [
+      { label: 'Visão geral', to: '/bem-aviv', icon: LayoutDashboard },
+      { label: 'Pedidos de vendas / orçamento', to: '/bem-aviv/pedidos', icon: ShoppingCart },
+      { label: 'Clientes', to: '/bem-aviv/clientes', icon: UserCircle },
+      { label: 'Produtos', to: '/bem-aviv/produtos-catalogo', icon: Package },
+      { label: 'Produtos old (todos)', to: '/bem-aviv/produtos', icon: Package },
+      {
+        label: 'Cadastros',
+        children: [
+          { label: 'Categorias', to: '/bem-aviv/categorias', icon: Tags },
+          { label: 'Tabela de preço', to: '/bem-aviv/tabela-preco-catalogo', icon: Table2 },
+          { label: 'Catálogos em grade', to: '/bem-aviv/catalogos-preco', icon: Table2 },
+        ],
+      },
+    ],
+    [],
+  )
+
   return (
-    <div className="flex min-h-screen flex-col lg:flex-row lg:bg-white">
-      <header className="flex items-center justify-between border-b border-slate-200 bg-white px-3 py-2 uppercase lg:hidden">
-        <h1 className="text-xs font-semibold tracking-wide text-emerald-800">Sistema de gestão</h1>
-        <button
-          type="button"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white uppercase"
-          onClick={() => setMobileMenuOpen((v) => !v)}
-        >
-          {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
-        </button>
+    <div className="min-h-screen bg-white">
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 sm:px-4 lg:px-6">
+          <h1 className="text-sm font-semibold tracking-tight text-emerald-800">Sistema de gestão</h1>
+          <div className="flex items-center gap-2">
+            <nav className="flex items-center gap-1" aria-label="Navegação principal">
+              {tasksHomologEnabled ? (
+                <TreeDropdown
+                  title="Agenda e Tarefas"
+                  items={agendaItems}
+                  open={openMenu === 'agenda'}
+                  onToggle={() => setOpenMenu((current) => (current === 'agenda' ? null : 'agenda'))}
+                  onClose={() => setOpenMenu((current) => (current === 'agenda' ? null : current))}
+                />
+              ) : null}
+              <TreeDropdown
+                title="Gestão LSH"
+                items={lshItems}
+                open={openMenu === 'lsh'}
+                onToggle={() => setOpenMenu((current) => (current === 'lsh' ? null : 'lsh'))}
+                onClose={() => setOpenMenu((current) => (current === 'lsh' ? null : current))}
+              />
+              <TreeDropdown
+                title="Bem Aviv"
+                items={bemAvivItems}
+                open={openMenu === 'bem-aviv'}
+                onToggle={() => setOpenMenu((current) => (current === 'bem-aviv' ? null : 'bem-aviv'))}
+                onClose={() => setOpenMenu((current) => (current === 'bem-aviv' ? null : current))}
+              />
+            </nav>
+          </div>
+          <div className="flex items-center gap-2">
+            <UserButton afterSignOutUrl="/sign-in" />
+          </div>
+        </div>
       </header>
 
-      <aside
-        className={`${mobileMenuOpen ? 'block' : 'hidden'} shrink-0 border-b border-slate-200 bg-white/95 p-3 shadow-sm normal-case backdrop-blur-sm sm:p-4 lg:block lg:w-64 lg:border-b-0 lg:border-r lg:shadow-none`}
-      >
-        <h1 className="mb-4 text-sm font-semibold leading-tight tracking-tight text-emerald-800 sm:mb-6">Sistema de gestão</h1>
-
-        <nav className="flex flex-col gap-0.5" aria-label="Navegação principal">
-          {tasksHomologEnabled ? (
-            <>
-              <SectionTitle>Agenda e Tarefas</SectionTitle>
-              <NavLink to="/lsh/agenda" className={navLinkClass}>
-                <LayoutDashboard size={16} className="shrink-0 opacity-70" aria-hidden />
-                Visão geral
-              </NavLink>
-              <NavLink to="/lsh/agenda" className={navLinkClass}>
-                <CalendarDays size={16} className="shrink-0 opacity-70" aria-hidden />
-                Agenda
-              </NavLink>
-              <NavLink to="/lsh/tarefas" className={navLinkClass}>
-                <ListTodo size={16} className="shrink-0 opacity-70" aria-hidden />
-                Tarefas
-              </NavLink>
-            </>
-          ) : null}
-
-          <SectionTitle>Gestão LSH</SectionTitle>
-          <NavLink to="/lsh/resumo" className={navLinkClass}>
-            <LayoutDashboard size={16} className="shrink-0 opacity-70" aria-hidden />
-            Visão geral
-          </NavLink>
-          <NavLink to="/lsh/fluxo" className={navLinkClass}>
-            <CircleDollarSign size={16} className="shrink-0 opacity-70" aria-hidden />
-            Movimentos financeiros
-          </NavLink>
-          <button type="button" className={navSubmenuToggleClass} onClick={() => setLshCadastrosOpen((v) => !v)} aria-expanded={lshCadastrosOpen}>
-            <span>Cadastros</span>
-            {lshCadastrosOpen ? <ChevronDown size={14} className="opacity-70" aria-hidden /> : <ChevronRight size={14} className="opacity-70" aria-hidden />}
-          </button>
-          {lshCadastrosOpen ? (
-            <>
-              <NavLink to="/lsh/contas-bancarias" className={navSubmenuClass}>
-                <Landmark size={16} className="shrink-0 opacity-70" aria-hidden />
-                Contas bancárias
-              </NavLink>
-              <NavLink to="/lsh/categorias" className={navSubmenuClass}>
-                <Tags size={16} className="shrink-0 opacity-70" aria-hidden />
-                Categorias
-              </NavLink>
-              <NavLink to="/lsh/cartoes" className={navSubmenuClass}>
-                <CreditCard size={16} className="shrink-0 opacity-70" aria-hidden />
-                Cartões
-              </NavLink>
-            </>
-          ) : null}
-
-          <SectionTitle>Bem Aviv</SectionTitle>
-          <NavLink to="/bem-aviv" className={navLinkClass}>
-            <LayoutDashboard size={16} className="shrink-0 opacity-70" aria-hidden />
-            Visão geral
-          </NavLink>
-          <NavLink to="/bem-aviv/pedidos" className={navLinkClass}>
-            <ShoppingCart size={16} className="shrink-0 opacity-70" aria-hidden />
-            Pedidos de vendas / orçamento
-          </NavLink>
-          <NavLink to="/bem-aviv/clientes" className={navLinkClass}>
-            <UserCircle size={16} className="shrink-0 opacity-70" aria-hidden />
-            Clientes
-          </NavLink>
-          <NavLink to="/bem-aviv/produtos-catalogo" className={navLinkClass}>
-            <Package size={16} className="shrink-0 opacity-70" aria-hidden />
-            Produtos
-          </NavLink>
-          <NavLink to="/bem-aviv/produtos" className={navLinkClass}>
-            <Package size={16} className="shrink-0 opacity-70" aria-hidden />
-            Produtos old (todos)
-          </NavLink>
-          <button type="button" className={navSubmenuToggleClass} onClick={() => setBemAvivCadastrosOpen((v) => !v)} aria-expanded={bemAvivCadastrosOpen}>
-            <span>Cadastros</span>
-            {bemAvivCadastrosOpen ? <ChevronDown size={14} className="opacity-70" aria-hidden /> : <ChevronRight size={14} className="opacity-70" aria-hidden />}
-          </button>
-          {bemAvivCadastrosOpen ? (
-            <>
-              <NavLink to="/bem-aviv/categorias" className={navSubmenuClass}>
-                <Tags size={16} className="shrink-0 opacity-70" aria-hidden />
-                Categorias
-              </NavLink>
-              <NavLink to="/bem-aviv/tabela-preco-catalogo" className={navSubmenuClass}>
-                <Table2 size={16} className="shrink-0 opacity-70" aria-hidden />
-                Tabela de preço
-              </NavLink>
-              <NavLink to="/bem-aviv/catalogos-preco" className={navSubmenuClass}>
-                <Table2 size={16} className="shrink-0 opacity-70" aria-hidden />
-                Catálogos em grade
-              </NavLink>
-            </>
-          ) : null}
-        </nav>
-
-        <div className="mt-6 flex items-center gap-2 sm:mt-8">
-          <UserButton afterSignOutUrl="/sign-in" />
-        </div>
-      </aside>
-
-      <main className="w-full min-w-0 flex-1 bg-white p-3 sm:p-4 lg:bg-white lg:p-6 xl:px-10 xl:py-8 2xl:px-12">
+      <main className="w-full min-w-0 bg-white p-3 sm:p-4 lg:p-6 xl:px-10 xl:py-8 2xl:px-12" onClick={() => setOpenMenu(null)}>
         <Outlet />
       </main>
     </div>
