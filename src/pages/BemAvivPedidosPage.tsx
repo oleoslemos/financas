@@ -76,15 +76,23 @@ function formatMoneyInput(n: number) {
 }
 
 /** % sobre o bruto para atingir líquido com frete: bruto × (1 − p/100) + frete = líquido */
-function percentFromTargetLiquid(gross: number, freight: number, targetLiquid: number) {
+function percentFromTargetLiquid(gross: number, freight: number, targetLiquid: number, entrada: number) {
   if (gross <= 0) return 0
-  const afterDiscount = clampMoney(targetLiquid - freight)
+  const afterDiscount = clampMoney(targetLiquid + entrada - freight)
   const p = (1 - afterDiscount / gross) * 100
   return clampPercent(p)
 }
 
 function formatPercentInput(n: number) {
   return clampPercent(n).toFixed(2).replace('.', ',')
+}
+
+function normalizeTextKey(v: string) {
+  return v
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
 }
 
 function parsePaymentOption(v: string | null | undefined): PaymentOption {
@@ -187,16 +195,22 @@ export function BemAvivPedidosPage() {
   const [liquidTotalDraft, setLiquidTotalDraft] = useState('')
 
   const uniqueProductNames = useMemo(() => {
-    const names = new Set<string>()
-    for (const p of offerProducts) names.add(p.name)
-    return [...names].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }))
+    const byKey = new Map<string, string>()
+    for (const p of offerProducts) {
+      const name = (p.name ?? '').trim()
+      if (!name) continue
+      const key = normalizeTextKey(name)
+      if (!byKey.has(key)) byKey.set(key, name)
+    }
+    return [...byKey.values()].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }))
   }, [offerProducts])
 
   const productTypeOptions = useMemo(() => {
     if (!draftProductName) return [] as string[]
     const types = new Set<string>()
+    const selectedNameKey = normalizeTextKey(draftProductName)
     for (const p of offerProducts) {
-      if (p.name !== draftProductName) continue
+      if (normalizeTextKey(p.name) !== selectedNameKey) continue
       types.add((p.product_type ?? '').trim() || '—')
     }
     return [...types].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }))
@@ -205,7 +219,7 @@ export function BemAvivPedidosPage() {
   const selectedOffer = useMemo(
     () =>
       offerProducts.find((p) => {
-        if (p.name !== draftProductName) return false
+        if (normalizeTextKey(p.name) !== normalizeTextKey(draftProductName)) return false
         const t = (p.product_type ?? '').trim() || '—'
         return t === draftProductType
       }) ?? null,
@@ -295,8 +309,10 @@ export function BemAvivPedidosPage() {
 
   const previewOrderTotal = useMemo(() => {
     if (lineItems.length === 0) return null
-    return clampMoney(sumLinesNet - orderDiscount + freightAmountNum)
-  }, [lineItems.length, sumLinesNet, orderDiscount, freightAmountNum])
+    const net = clampMoney(sumLinesNet - orderDiscount + freightAmountNum)
+    const entrada = form.payment_option === 'A_PRAZO' ? downPaymentNum : 0
+    return clampMoney(net - entrada)
+  }, [lineItems.length, sumLinesNet, orderDiscount, freightAmountNum, form.payment_option, downPaymentNum])
 
   const previewInstallment = useMemo(() => {
     if (previewOrderTotal == null || installmentsNum <= 0) return null
@@ -312,13 +328,14 @@ export function BemAvivPedidosPage() {
     (raw: string) => {
       if (lineItems.length === 0 || sumLinesNet <= 0) return
       const target = parseMoney(raw)
-      const pct = percentFromTargetLiquid(sumLinesNet, freightAmountNum, target)
+      const entrada = form.payment_option === 'A_PRAZO' ? downPaymentNum : 0
+      const pct = percentFromTargetLiquid(sumLinesNet, freightAmountNum, target, entrada)
       const pctStr = formatPercentInput(pct)
-      const net = clampMoney(sumLinesNet - (sumLinesNet * parsePercent(pctStr)) / 100 + freightAmountNum)
+      const net = clampMoney(sumLinesNet - (sumLinesNet * parsePercent(pctStr)) / 100 + freightAmountNum - entrada)
       setForm((f) => ({ ...f, discount_percent: pctStr }))
       setLiquidTotalDraft(formatMoneyInput(net))
     },
-    [lineItems.length, sumLinesNet, freightAmountNum],
+    [lineItems.length, sumLinesNet, freightAmountNum, form.payment_option, downPaymentNum],
   )
 
   /** Sincroniza o líquido exibido com o % quando mudam itens ou frete (não depende de discount_percent para não resetar durante digitação no líquido). */
@@ -328,11 +345,12 @@ export function BemAvivPedidosPage() {
       return
     }
     const p = parsePercent(form.discount_percent)
-    const net = clampMoney(sumLinesNet - (sumLinesNet * p) / 100 + freightAmountNum)
+    const entrada = form.payment_option === 'A_PRAZO' ? downPaymentNum : 0
+    const net = clampMoney(sumLinesNet - (sumLinesNet * p) / 100 + freightAmountNum - entrada)
     setLiquidTotalDraft(formatMoneyInput(net))
     // form.discount_percent omitido de deps de propósito
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lineItems.length, sumLinesNet, freightAmountNum])
+  }, [lineItems.length, sumLinesNet, freightAmountNum, form.payment_option, downPaymentNum])
 
   function resetFormForNew() {
     setForm({
@@ -486,7 +504,20 @@ export function BemAvivPedidosPage() {
   }
 
   function removeLine(key: string) {
-    setLineItems((prev) => prev.filter((l) => l.key !== key))
+    setLineItems((prev) => {
+      const next = prev.filter((l) => l.key !== key)
+      if (prev.length > 0 && next.length === 0) {
+        // Quando todos os itens forem removidos, volta para estado zerado do total manual.
+        setForm((f) => ({
+          ...f,
+          total_amount: '0',
+          discount_percent: '0',
+          freight_amount: '0',
+        }))
+        setLiquidTotalDraft('')
+      }
+      return next
+    })
   }
 
   function updateLineQty(key: string, qtyStr: string) {
@@ -516,16 +547,16 @@ export function BemAvivPedidosPage() {
 
     const hasLines = lineItems.length > 0
     const manualGross = parseMoney(form.total_amount || '0')
+    const entrada = form.payment_option === 'A_PRAZO' ? downPaymentNum : 0
     let discOrder = orderDiscount
     if (hasLines && sumLinesNet > 0) {
-      const pctStr = formatPercentInput(percentFromTargetLiquid(sumLinesNet, freightAmountNum, parseMoney(liquidTotalDraft)))
+      const pctStr = formatPercentInput(percentFromTargetLiquid(sumLinesNet, freightAmountNum, parseMoney(liquidTotalDraft), entrada))
       discOrder = clampMoney((sumLinesNet * parsePercent(pctStr)) / 100)
-      const netCanon = clampMoney(sumLinesNet - discOrder + freightAmountNum)
+      const netCanon = clampMoney(sumLinesNet - discOrder + freightAmountNum - entrada)
       setForm((f) => ({ ...f, discount_percent: pctStr }))
       setLiquidTotalDraft(formatMoneyInput(netCanon))
     }
     const inst = installmentsNum
-    const entrada = form.payment_option === 'A_PRAZO' ? downPaymentNum : 0
     const totalBruto = (hasLines ? linesGrossTotal : manualGross) + freightAmountNum
 
     if (form.payment_option === 'A_PRAZO' && entrada < 0) {
@@ -1090,7 +1121,7 @@ export function BemAvivPedidosPage() {
                       inputMode="decimal"
                     />
                     <p className="mt-1 text-xs font-normal normal-case text-slate-600">
-                      Total líquido (bruto com desconto + frete). Digite o valor e pressione <strong>Enter</strong> ou
+                      Total líquido (bruto com desconto + frete{form.payment_option === 'A_PRAZO' ? ' − entrada' : ''}). Digite o valor e pressione <strong>Enter</strong> ou
                       clique fora do campo para recalcular o desconto (%) com duas casas decimais — evita recalcular a
                       cada tecla (ex.: 130,00).
                     </p>

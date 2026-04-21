@@ -3,6 +3,14 @@ import { cn } from '../../lib/cn'
 
 export type SearchableSelectOption = { value: string; label: string }
 
+function normalizeSearchValue(v: string) {
+  return v
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
 type SearchableSelectProps = {
   value: string
   onChange: (value: string) => void
@@ -51,11 +59,13 @@ export function SearchableSelect({
   }, [open])
 
   const filtered = useMemo(() => {
-    const q = text.trim().toLowerCase()
+    const q = normalizeSearchValue(text)
     if (!q) return options
-    return options.filter(
-      (o) => o.label.toLowerCase().includes(q) || o.value.toLowerCase().includes(q),
-    )
+    return options.filter((o) => {
+      const label = normalizeSearchValue(o.label)
+      const value = normalizeSearchValue(o.value)
+      return label.includes(q) || value.includes(q)
+    })
   }, [options, text])
 
   function pick(opt: SearchableSelectOption) {
@@ -108,8 +118,9 @@ export function SearchableSelect({
             e.preventDefault()
             if (filtered.length === 1) pick(filtered[0]!)
             else if (filtered.length > 0) {
+              const typed = normalizeSearchValue(text)
               const exact = filtered.find(
-                (o) => o.label.toLowerCase() === text.trim().toLowerCase() || o.value.toLowerCase() === text.trim().toLowerCase(),
+                (o) => normalizeSearchValue(o.label) === typed || normalizeSearchValue(o.value) === typed,
               )
               if (exact) pick(exact)
             }
