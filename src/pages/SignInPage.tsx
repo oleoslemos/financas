@@ -7,8 +7,8 @@ export function SignInPage() {
         routing="path"
         path="/sign-in"
         signUpUrl="/sign-up"
-        fallbackRedirectUrl="/lsh/resumo"
-        forceRedirectUrl="/lsh/resumo"
+        fallbackRedirectUrl="/lsh/inicio"
+        forceRedirectUrl="/lsh/inicio"
       />
     </div>
   )

@@ -1,6 +1,6 @@
 import { useUser, UserButton } from '@clerk/clerk-react'
 import { CalendarDays, ChevronDown, CircleDollarSign, CreditCard, LayoutDashboard, Landmark, ListTodo, Package, ShoppingCart, Table2, Tags, UserCircle } from 'lucide-react'
-import { type ComponentType, useMemo, useState } from 'react'
+import { type ComponentType, useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { canAccessTasksHomolog } from '../lib/tasksHomologAccess'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
@@ -18,19 +18,37 @@ const topTriggerBase =
 const dropdownItemBase =
   'flex items-center gap-2 rounded-md px-2.5 py-2 text-[13px] font-normal leading-snug text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-950'
 
-function TreeDropdown({ title, items, open, onToggle, onClose }: { title: string; items: MenuItem[]; open: boolean; onToggle: () => void; onClose: () => void }) {
+function TreeDropdown({
+  title,
+  items,
+  open,
+  onOpen,
+  onToggleClick,
+  onClose,
+  onCancelClose,
+  onNavigate,
+}: {
+  title: string
+  items: MenuItem[]
+  open: boolean
+  onOpen: () => void
+  onToggleClick: () => void
+  onClose: () => void
+  onCancelClose: () => void
+  onNavigate: () => void
+}) {
   return (
-    <div className="relative" onMouseLeave={onClose}>
-      <button type="button" className={`${topTriggerBase} ${open ? 'bg-slate-100 text-slate-900' : ''}`} onMouseEnter={onToggle} onClick={onToggle} aria-expanded={open}>
+    <div className="relative" onMouseEnter={onCancelClose} onMouseLeave={onClose}>
+      <button type="button" className={`${topTriggerBase} ${open ? 'bg-slate-100 text-slate-900' : ''}`} onMouseEnter={onOpen} onClick={onToggleClick} aria-expanded={open}>
         {title}
         <ChevronDown size={15} className={`transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
       </button>
       {open ? (
-        <div className="absolute left-0 top-full z-50 mt-2 w-80 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
+        <div className="absolute left-0 top-full z-50 mt-2 w-80 rounded-lg border border-slate-200 bg-white p-2 shadow-lg" onMouseEnter={onCancelClose} onMouseLeave={onClose}>
           {items.map((item) => (
             <div key={item.label} className="mb-1 last:mb-0">
               {item.to ? (
-                <NavLink to={item.to} className={({ isActive }) => `${dropdownItemBase} ${isActive ? 'bg-emerald-100/70 text-emerald-900' : ''}`}>
+                <NavLink to={item.to} onClick={onNavigate} className={({ isActive }) => `${dropdownItemBase} ${isActive ? 'bg-emerald-100/70 text-emerald-900' : ''}`}>
                   {item.icon ? <item.icon size={16} className="shrink-0 opacity-70" aria-hidden /> : null}
                   {item.label}
                 </NavLink>
@@ -40,7 +58,7 @@ function TreeDropdown({ title, items, open, onToggle, onClose }: { title: string
               {item.children ? (
                 <div className="ml-3 border-l border-slate-200 pl-2">
                   {item.children.map((child) => (
-                    <NavLink key={child.label} to={child.to} className={({ isActive }) => `${dropdownItemBase} text-[12.5px] ${isActive ? 'bg-emerald-50 text-emerald-900' : 'text-slate-600'}`}>
+                    <NavLink key={child.label} to={child.to} onClick={onNavigate} className={({ isActive }) => `${dropdownItemBase} text-[12.5px] ${isActive ? 'bg-emerald-50 text-emerald-900' : 'text-slate-600'}`}>
                       {child.icon ? <child.icon size={15} className="shrink-0 opacity-70" aria-hidden /> : null}
                       {child.label}
                     </NavLink>
@@ -58,10 +76,39 @@ function TreeDropdown({ title, items, open, onToggle, onClose }: { title: string
 export function AppLayout() {
   const { user } = useUser()
   const [openMenu, setOpenMenu] = useState<string | null>(null)
+  const closeTimerRef = useRef<number | null>(null)
 
   const emails = clerkEmailCandidates(user)
   const hideAgendaTasks = emails.includes('suelenjalves@gmail.com')
   const tasksHomologEnabled = !hideAgendaTasks && canAccessTasksHomolog(user?.primaryEmailAddress?.emailAddress)
+
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current !== null) {
+        window.clearTimeout(closeTimerRef.current)
+      }
+    }
+  }, [])
+
+  const cancelClose = () => {
+    if (closeTimerRef.current !== null) {
+      window.clearTimeout(closeTimerRef.current)
+      closeTimerRef.current = null
+    }
+  }
+
+  const scheduleClose = (key: string) => {
+    cancelClose()
+    closeTimerRef.current = window.setTimeout(() => {
+      setOpenMenu((current) => (current === key ? null : current))
+      closeTimerRef.current = null
+    }, 220)
+  }
+
+  const openMenuNow = (key: string) => {
+    cancelClose()
+    setOpenMenu(key)
+  }
 
   const agendaItems = useMemo<MenuItem[]>(
     () => [
@@ -74,7 +121,7 @@ export function AppLayout() {
 
   const lshItems = useMemo<MenuItem[]>(
     () => [
-      { label: 'Visão geral', to: '/lsh/resumo', icon: LayoutDashboard },
+      { label: 'Visão geral', to: '/lsh/inicio', icon: LayoutDashboard },
       { label: 'Movimentos financeiros', to: '/lsh/fluxo', icon: CircleDollarSign },
       {
         label: 'Cadastros',
@@ -119,23 +166,32 @@ export function AppLayout() {
                   title="Agenda e Tarefas"
                   items={agendaItems}
                   open={openMenu === 'agenda'}
-                  onToggle={() => setOpenMenu((current) => (current === 'agenda' ? null : 'agenda'))}
-                  onClose={() => setOpenMenu((current) => (current === 'agenda' ? null : current))}
+                  onOpen={() => openMenuNow('agenda')}
+                  onToggleClick={() => setOpenMenu((current) => (current === 'agenda' ? null : 'agenda'))}
+                  onClose={() => scheduleClose('agenda')}
+                  onCancelClose={cancelClose}
+                  onNavigate={() => setOpenMenu(null)}
                 />
               ) : null}
               <TreeDropdown
                 title="Gestão LSH"
                 items={lshItems}
                 open={openMenu === 'lsh'}
-                onToggle={() => setOpenMenu((current) => (current === 'lsh' ? null : 'lsh'))}
-                onClose={() => setOpenMenu((current) => (current === 'lsh' ? null : current))}
+                onOpen={() => openMenuNow('lsh')}
+                onToggleClick={() => setOpenMenu((current) => (current === 'lsh' ? null : 'lsh'))}
+                onClose={() => scheduleClose('lsh')}
+                onCancelClose={cancelClose}
+                onNavigate={() => setOpenMenu(null)}
               />
               <TreeDropdown
                 title="Bem Aviv"
                 items={bemAvivItems}
                 open={openMenu === 'bem-aviv'}
-                onToggle={() => setOpenMenu((current) => (current === 'bem-aviv' ? null : 'bem-aviv'))}
-                onClose={() => setOpenMenu((current) => (current === 'bem-aviv' ? null : current))}
+                onOpen={() => openMenuNow('bem-aviv')}
+                onToggleClick={() => setOpenMenu((current) => (current === 'bem-aviv' ? null : 'bem-aviv'))}
+                onClose={() => scheduleClose('bem-aviv')}
+                onCancelClose={cancelClose}
+                onNavigate={() => setOpenMenu(null)}
               />
             </nav>
           </div>
