@@ -170,6 +170,13 @@ export function AgendaPage() {
               <CalendarPlus size={14} />
               CADASTRAR AGENDA
             </a>
+            <a
+              href="/api/auth/signin/google?callbackUrl=/agenda"
+              className="btn-ghost inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium"
+            >
+              <CalendarPlus size={14} />
+              CONECTAR GOOGLE
+            </a>
             <Link to="/lsh/tarefas#nova-tarefa" className="btn-ghost inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium">
               <Plus size={14} />
               CADASTRAR TAREFA
