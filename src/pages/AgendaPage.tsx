@@ -1,4 +1,4 @@
-import { useUser } from '@clerk/clerk-react'
+import { useAuth, useUser } from '@clerk/clerk-react'
 import { CalendarClock, CalendarDays, CalendarPlus, CheckCircle2, LoaderCircle, Plus, RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -41,6 +41,7 @@ function formatDateTime(value: string) {
 
 export function AgendaPage() {
   const { user } = useUser()
+  const { getToken } = useAuth()
   const supabase = useSupabase()
   const currentUserId = user?.id ?? null
   const ownerUserId = resolveDataOwnerId(currentUserId)
@@ -51,7 +52,6 @@ export function AgendaPage() {
   const [syncing, setSyncing] = useState(false)
   const [syncMessage, setSyncMessage] = useState<string | null>(null)
   const syncEndpoint = import.meta.env.VITE_SYNC_TASKS_WEBHOOK_URL?.trim() || '/api/sync-tasks'
-  const syncToken = import.meta.env.VITE_SYNC_TASKS_WEBHOOK_TOKEN?.trim() || ''
 
   const loadAgenda = useCallback(async () => {
     if (!supabase || !ownerUserId || !currentUserId) return
@@ -92,11 +92,15 @@ export function AgendaPage() {
     try {
       setSyncing(true)
       setSyncMessage(null)
+      const sessionToken = await getToken()
+      if (!sessionToken) {
+        throw new Error('Sessão inválida. Faça login novamente.')
+      }
       const response = await fetch(syncEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(syncToken ? { 'x-sync-token': syncToken } : {}),
+          Authorization: `Bearer ${sessionToken}`,
         },
         body: JSON.stringify({
           source: 'agenda-page',

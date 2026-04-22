@@ -1,4 +1,5 @@
 import { runTasksSync } from '../scripts/tasks-sync-core.mjs'
+import { verifyToken } from '@clerk/backend'
 
 function json(res, statusCode, payload) {
   res.statusCode = statusCode
@@ -16,17 +17,38 @@ function getToken(req) {
   return ''
 }
 
+async function getAuthenticatedUserId(req) {
+  const auth = req.headers.authorization
+  if (typeof auth !== 'string' || !auth.toLowerCase().startsWith('bearer ')) return ''
+
+  const token = auth.slice(7).trim()
+  if (!token) return ''
+
+  const secretKey = process.env.CLERK_SECRET_KEY?.trim()
+  if (!secretKey) return ''
+
+  try {
+    const payload = await verifyToken(token, { secretKey })
+    return typeof payload?.sub === 'string' ? payload.sub : ''
+  } catch (_error) {
+    return ''
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return json(res, 405, { ok: false, error: 'Method not allowed. Use POST.' })
   }
 
+  const authUserId = await getAuthenticatedUserId(req)
+  let isWebhookAuthorized = false
   const expectedToken = process.env.SYNC_WEBHOOK_TOKEN?.trim()
   if (expectedToken) {
     const provided = getToken(req)
-    if (!provided || provided !== expectedToken) {
-      return json(res, 401, { ok: false, error: 'Unauthorized' })
-    }
+    isWebhookAuthorized = Boolean(provided && provided === expectedToken)
+  }
+  if (!authUserId && !isWebhookAuthorized) {
+    return json(res, 401, { ok: false, error: 'Unauthorized' })
   }
 
   const required = ['SUPABASE_SERVICE_ROLE_KEY']
@@ -41,10 +63,11 @@ export default async function handler(req, res) {
 
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {}
+    const targetUserId = authUserId || body.integrationUserId || body.userId
     const result = await runTasksSync({
       loadDotEnv: false,
       logger: console,
-      targetUserId: body.integrationUserId || body.userId,
+      targetUserId,
       taskOwnerUserId: body.taskOwnerUserId,
     })
     return json(res, 200, result)
