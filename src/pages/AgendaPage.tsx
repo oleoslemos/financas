@@ -66,7 +66,7 @@ export function AgendaPage() {
       supabase
         .from('lsh_calendar_events')
         .select('id, summary, details, location, start_at, end_at, status')
-        .eq('user_id', currentUserId)
+        .eq('user_id', ownerUserId)
         .gte('start_at', startOfDay.toISOString())
         .lte('start_at', endOfDay.toISOString())
         .neq('status', 'cancelled')
@@ -104,8 +104,8 @@ export function AgendaPage() {
         },
         body: JSON.stringify({
           source: 'agenda-page',
-          userId: currentUserId,
-          integrationUserId: currentUserId,
+          userId: ownerUserId,
+          integrationUserId: ownerUserId,
           taskOwnerUserId: ownerUserId,
         }),
       })
@@ -122,7 +122,14 @@ export function AgendaPage() {
         throw new Error(msg)
       }
       await loadAgenda()
-      setSyncMessage('Sincronização concluída com sucesso.')
+      const synced = Number(payload?.calendar?.synced ?? 0)
+      const skipped = Boolean(payload?.calendar?.skipped)
+      const reason = payload?.calendar?.reason ? String(payload.calendar.reason) : ''
+      if (skipped) {
+        setSyncMessage(`Sincronização concluída com pendência: ${reason || 'Google Calendar não configurado para este usuário.'}`)
+      } else {
+        setSyncMessage(`Sincronização concluída com sucesso. Eventos processados: ${synced}.`)
+      }
     } catch (err) {
       setSyncMessage(`Erro ao sincronizar: ${String((err as Error)?.message || err)}`)
     } finally {
