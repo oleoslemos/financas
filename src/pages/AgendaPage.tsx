@@ -171,7 +171,7 @@ export function AgendaPage() {
               CADASTRAR AGENDA
             </a>
             <a
-              href="/api/auth/signin/google?callbackUrl=/agenda"
+              href={`/api/google-connect?callbackUrl=/agenda&integrationUserId=${encodeURIComponent(ownerUserId || '')}`}
               className="btn-ghost inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium"
             >
               <CalendarPlus size={14} />
