@@ -112,20 +112,46 @@ async function loadGoogleConfigForUser(supabase, env, integrationUserId) {
     calendarId: env.GOOGLE_CALENDAR_ID || 'primary',
     source: 'env',
   }
-  if (!integrationUserId) return fallback
+  const candidateUserIds = new Set(
+    [integrationUserId, env.SYNC_OWNER_USER_ID].filter(
+      (value) => typeof value === 'string' && value.trim(),
+    ),
+  )
 
-  const { data, error } = await supabase
+  for (const userId of candidateUserIds) {
+    const { data, error } = await supabase
+      .from('google_user_sync_credentials')
+      .select('refresh_token, tasklist_id, calendar_id, is_active')
+      .eq('user_id', userId)
+      .maybeSingle()
+    if (error || !data || data.is_active === false) continue
+    return {
+      refreshToken: data.refresh_token || fallback.refreshToken,
+      tasklistId: data.tasklist_id || fallback.tasklistId,
+      calendarId: data.calendar_id || fallback.calendarId,
+      source: userId === integrationUserId ? 'table:user' : 'table:owner',
+    }
+  }
+
+  if (!integrationUserId && !env.SYNC_OWNER_USER_ID) return fallback
+
+  // Fallback controlado para cenários antigos: usa a única credencial ativa, se houver.
+  const { data: activeRows, error: activeRowsError } = await supabase
     .from('google_user_sync_credentials')
-    .select('refresh_token, tasklist_id, calendar_id, is_active')
-    .eq('user_id', integrationUserId)
-    .maybeSingle()
+    .select('user_id, refresh_token, tasklist_id, calendar_id')
+    .eq('is_active', true)
+    .limit(2)
 
-  if (error || !data || data.is_active === false) return fallback
+  if (activeRowsError || !Array.isArray(activeRows) || activeRows.length !== 1) {
+    return fallback
+  }
+
+  const [single] = activeRows
   return {
-    refreshToken: data.refresh_token || fallback.refreshToken,
-    tasklistId: data.tasklist_id || fallback.tasklistId,
-    calendarId: data.calendar_id || fallback.calendarId,
-    source: 'table',
+    refreshToken: single.refresh_token || fallback.refreshToken,
+    tasklistId: single.tasklist_id || fallback.tasklistId,
+    calendarId: single.calendar_id || fallback.calendarId,
+    source: 'table:single-active',
   }
 }
 
@@ -457,8 +483,9 @@ export async function runTasksSync(options = {}) {
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     GOOGLE_TASKLIST_ID: process.env.GOOGLE_TASKLIST_ID || process.env.GWS_TASKLIST_ID,
     GOOGLE_CALENDAR_ID: process.env.GOOGLE_CALENDAR_ID || process.env.GWS_CALENDAR_ID || 'primary',
-    GOOGLE_OAUTH_CLIENT_ID: process.env.GOOGLE_OAUTH_CLIENT_ID,
-    GOOGLE_OAUTH_CLIENT_SECRET: process.env.GOOGLE_OAUTH_CLIENT_SECRET,
+    GOOGLE_OAUTH_CLIENT_ID: process.env.GOOGLE_OAUTH_CLIENT_ID || process.env.GOOGLE_CLIENT_ID,
+    GOOGLE_OAUTH_CLIENT_SECRET:
+      process.env.GOOGLE_OAUTH_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET,
     GOOGLE_OAUTH_REFRESH_TOKEN: process.env.GOOGLE_OAUTH_REFRESH_TOKEN,
     GOOGLE_TASKS_AUTO_IMPORT: process.env.GOOGLE_TASKS_AUTO_IMPORT,
     LARK_APP_ID: process.env.LARK_APP_ID,

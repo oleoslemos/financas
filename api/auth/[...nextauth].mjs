@@ -64,6 +64,10 @@ async function persistGoogleCredentials({ userId, refreshToken }) {
   )
 }
 
+function resolveCredentialOwnerId(defaultUserId) {
+  return process.env.SYNC_OWNER_USER_ID?.trim() || defaultUserId
+}
+
 function getBaseUrl() {
   const nextAuthUrl = process.env.NEXTAUTH_URL?.trim()
   if (nextAuthUrl) return nextAuthUrl.replace(/\/+$/, '')
@@ -138,8 +142,9 @@ const handler = NextAuth({
   callbacks: {
     async jwt({ token, account, profile }) {
       if (account) {
-        const integrationUserId =
+        const providerUserId =
           token.sub || profile?.sub || account.providerAccountId
+        const integrationUserId = resolveCredentialOwnerId(providerUserId)
         await persistGoogleCredentials({
           userId: integrationUserId,
           refreshToken: account.refresh_token,
@@ -148,7 +153,7 @@ const handler = NextAuth({
 
         return {
           ...token,
-          sub: integrationUserId,
+          sub: providerUserId,
           accessToken: account.access_token,
           accessTokenExpires: account.expires_at ? account.expires_at * 1000 : 0,
           refreshToken: account.refresh_token || token.refreshToken,
