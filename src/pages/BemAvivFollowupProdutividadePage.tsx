@@ -6,10 +6,13 @@ import { useSupabase } from '../hooks/useSupabase'
 import { BEM_AVIV_CLIENT_COMMERCIAL_STAGE_OPTIONS } from '../lib/bemAvivClientStatus'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { resolveDataOwnerId } from '../lib/dataOwner'
+import { buildWhatsappUrl } from '../lib/whatsapp'
 
 type ClienteRow = {
   id: string
   full_name: string
+  phone_1: string | null
+  phone_2: string | null
   client_status: string | null
   commercial_stage: string | null
   last_contact_at: string | null
@@ -29,6 +32,8 @@ type FollowupRow = {
 type ClientHistoryTarget = {
   id: string
   full_name: string
+  phone_1: string | null
+  phone_2: string | null
 }
 
 type HistoryFormState = {
@@ -109,7 +114,7 @@ export function BemAvivFollowupProdutividadePage() {
     const [clientsRes, followupsRes] = await Promise.all([
       supabase
         .from('bem_aviv_clients')
-        .select('id, full_name, client_status, commercial_stage, last_contact_at, next_followup_at, next_followup_status')
+        .select('id, full_name, phone_1, phone_2, client_status, commercial_stage, last_contact_at, next_followup_at, next_followup_status')
         .eq('user_id', ownerUserId),
       supabase
         .from('bem_aviv_client_followups')
@@ -149,6 +154,15 @@ export function BemAvivFollowupProdutividadePage() {
       setHistoryRows((data as FollowupRow[]) ?? [])
     }
     setLoadingHistory(false)
+  }
+
+  function openWhatsapp(target: ClientHistoryTarget) {
+    const url = buildWhatsappUrl(target.phone_1 || target.phone_2)
+    if (!url) {
+      alert('CLIENTE SEM TELEFONE VÁLIDO PARA WHATSAPP.')
+      return
+    }
+    window.open(url, '_blank', 'noopener,noreferrer')
   }
 
   async function submitHistoryEntry(e: React.FormEvent) {
@@ -298,7 +312,7 @@ export function BemAvivFollowupProdutividadePage() {
                       variant="ghost"
                       className="px-2.5"
                       title="Ver histórico de follow-ups"
-                      onClick={() => void openClientHistory({ id: item.id, full_name: item.full_name })}
+                      onClick={() => void openClientHistory({ id: item.id, full_name: item.full_name, phone_1: item.phone_1, phone_2: item.phone_2 })}
                     >
                       <History size={15} />
                     </Button>
@@ -320,6 +334,9 @@ export function BemAvivFollowupProdutividadePage() {
 
             <div className="max-h-80 space-y-2 overflow-y-auto rounded-lg border border-slate-200 p-3">
               <div className="mb-2 flex justify-end">
+                <Button variant="secondary" onClick={() => openWhatsapp(historyTarget)}>
+                  WhatsApp
+                </Button>
                 <Button variant="ghost" onClick={() => setHistoryFormOpen((v) => !v)}>
                   {historyFormOpen ? 'Cancelar inclusão' : 'Incluir histórico'}
                 </Button>

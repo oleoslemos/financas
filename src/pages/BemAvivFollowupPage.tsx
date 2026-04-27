@@ -1,5 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
-import { CalendarPlus, MessageCircle, PhoneForwarded, Search, Trash2 } from 'lucide-react'
+import { CalendarPlus, MessageCircle, Pencil, PhoneForwarded, Search, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
@@ -93,6 +93,7 @@ export function BemAvivFollowupPage() {
   const [schedulingClient, setSchedulingClient] = useState<Cliente | null>(null)
   const [historyRows, setHistoryRows] = useState<FollowupHistoryRow[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
+  const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null)
 
   const [registerForm, setRegisterForm] = useState({
     contacted_at: toInputDateTimeLocal(new Date().toISOString()),
@@ -163,6 +164,16 @@ export function BemAvivFollowupPage() {
     await load()
   }
 
+  function startEditHistoryEntry(item: FollowupHistoryRow) {
+    setEditingHistoryId(item.id)
+    setRegisterForm({
+      contacted_at: toInputDateTimeLocal(item.contacted_at),
+      channel: item.channel,
+      result: item.result ?? '',
+      notes: item.notes ?? '',
+    })
+  }
+
   const filteredRows = useMemo(() => {
     const q = search.trim().toUpperCase()
     const now = new Date()
@@ -211,18 +222,35 @@ export function BemAvivFollowupPage() {
     }
 
     const contactedAtIso = new Date(registerForm.contacted_at).toISOString()
-    const { error: insertError } = await supabase.from('bem_aviv_client_followups').insert({
-      user_id: followupUserId,
-      client_id: registeringClient.id,
-      contacted_at: contactedAtIso,
-      channel: registerForm.channel,
-      result: registerForm.result || null,
-      notes: registerForm.notes || null,
-    })
+    if (editingHistoryId) {
+      const { error: updateError } = await supabase
+        .from('bem_aviv_client_followups')
+        .update({
+          contacted_at: contactedAtIso,
+          channel: registerForm.channel,
+          result: registerForm.result || null,
+          notes: registerForm.notes || null,
+        })
+        .eq('id', editingHistoryId)
 
-    if (insertError) {
-      alert(insertError.message)
-      return
+      if (updateError) {
+        alert(updateError.message)
+        return
+      }
+    } else {
+      const { error: insertError } = await supabase.from('bem_aviv_client_followups').insert({
+        user_id: followupUserId,
+        client_id: registeringClient.id,
+        contacted_at: contactedAtIso,
+        channel: registerForm.channel,
+        result: registerForm.result || null,
+        notes: registerForm.notes || null,
+      })
+
+      if (insertError) {
+        alert(insertError.message)
+        return
+      }
     }
 
     const { error: clientUpdateError } = await supabase
@@ -244,6 +272,7 @@ export function BemAvivFollowupPage() {
       result: '',
       notes: '',
     })
+    setEditingHistoryId(null)
     setRegisteringClient(null)
     await load()
   }
@@ -479,12 +508,29 @@ export function BemAvivFollowupPage() {
               </div>
 
               <div className="sm:col-span-2 flex gap-2">
-                <Button type="submit">Salvar contato</Button>
+                <Button type="submit">{editingHistoryId ? 'Salvar edição' : 'Salvar contato'}</Button>
+                {editingHistoryId ? (
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setEditingHistoryId(null)
+                      setRegisterForm({
+                        contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+                        channel: 'WHATSAPP',
+                        result: '',
+                        notes: '',
+                      })
+                    }}
+                  >
+                    Cancelar edição
+                  </Button>
+                ) : null}
                 <Button
                   variant="secondary"
                   onClick={() => {
                     setRegisteringClient(null)
                     setHistoryRows([])
+                    setEditingHistoryId(null)
                   }}
                 >
                   Fechar
@@ -506,12 +552,21 @@ export function BemAvivFollowupPage() {
                           </p>
                           <button
                             type="button"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                            onClick={() => startEditHistoryEntry(item)}
+                            title="Editar contato"
+                            aria-label="Editar contato"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            type="button"
                             className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-red-300 bg-white text-red-700 hover:bg-red-50"
                             onClick={() => void removeHistoryEntry(item.id)}
                             title="Excluir contato"
                             aria-label="Excluir contato"
                           >
-                            <Trash2 size={13} />
+                            <Trash2 size={14} />
                           </button>
                         </div>
                         <p>{item.result || 'SEM RESULTADO'}</p>

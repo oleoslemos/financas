@@ -4,6 +4,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { AllowedEmailGuard } from './components/AllowedEmailGuard'
 import { AppLayout } from './components/AppLayout'
 import { RequireAuth } from './components/RequireAuth'
+import { RequireProjectsAccess } from './components/RequireProjectsAccess'
 import { RequireTasksHomologAccess } from './components/RequireTasksHomologAccess'
 import { clerkEmailCandidates } from './lib/clerkEmails'
 
@@ -38,6 +39,8 @@ const BemAvivHomePage = lazy(() => import('./pages/BemAvivHomePage').then((m) =>
 const AgendaPage = lazy(() => import('./pages/AgendaPage').then((m) => ({ default: m.AgendaPage })))
 const TasksPage = lazy(() => import('./pages/TasksPage').then((m) => ({ default: m.TasksPage })))
 const LshStartPage = lazy(() => import('./pages/LshStartPage').then((m) => ({ default: m.LshStartPage })))
+const ProjectsHubPage = lazy(() => import('./pages/ProjectsHubPage').then((m) => ({ default: m.ProjectsHubPage })))
+const ProjectNotesPage = lazy(() => import('./pages/ProjectNotesPage').then((m) => ({ default: m.ProjectNotesPage })))
 
 function HomeRedirect() {
   const { user } = useUser()
@@ -58,6 +61,14 @@ export default function App() {
               <Route path="/" element={<HomeRedirect />} />
               <Route path="/inicio" element={<HomeRedirect />} />
               <Route path="/lsh/inicio" element={<LshStartPage />} />
+              <Route element={<RequireProjectsAccess />}>
+                <Route path="/projetos" element={<ProjectsHubPage />} />
+                <Route path="/projetos/kanban" element={<ProjectsHubPage />} />
+                <Route path="/projetos/backlog" element={<ProjectsHubPage />} />
+                <Route path="/projetos/sprints" element={<ProjectsHubPage />} />
+                <Route path="/projetos/atividades" element={<ProjectsHubPage />} />
+                <Route path="/projetos/anotacoes" element={<ProjectNotesPage />} />
+              </Route>
               <Route path="/lsh/resumo" element={<Dashboard />} />
               <Route path="/lsh/contas-bancarias" element={<BankAccounts />} />
               <Route path="/lsh/categorias" element={<Categories />} />

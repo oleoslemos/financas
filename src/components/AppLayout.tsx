@@ -1,9 +1,10 @@
 import { useUser, UserButton } from '@clerk/clerk-react'
-import { BarChart3, CalendarDays, ChevronDown, CircleDollarSign, CreditCard, LayoutDashboard, Landmark, ListTodo, MessageCircleMore, Package, ShoppingCart, Table2, Tags, UserCircle } from 'lucide-react'
+import { BarChart3, CalendarDays, ChevronDown, CircleDollarSign, CreditCard, FolderKanban, Gauge, KanbanSquare, LayoutDashboard, Landmark, ListTodo, MessageCircleMore, NotebookText, Package, ShoppingCart, StickyNote, Table2, Tags, UserCircle, Workflow } from 'lucide-react'
 import { type ComponentType, useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { canAccessTasksHomolog } from '../lib/tasksHomologAccess'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
+import { canAccessProjects } from '../lib/projectsAccess'
 
 type MenuItem = {
   label: string
@@ -82,6 +83,7 @@ export function AppLayout() {
   const bemAvivOnlyUser = emails.includes('suelenjalves@gmail.com')
   const hideAgendaTasks = emails.includes('suelenjalves@gmail.com')
   const tasksHomologEnabled = !hideAgendaTasks && canAccessTasksHomolog(user?.primaryEmailAddress?.emailAddress)
+  const projectsEnabled = emails.some((email) => canAccessProjects(email))
 
   useEffect(() => {
     return () => {
@@ -157,6 +159,31 @@ export function AppLayout() {
     [],
   )
 
+  const projectItems = useMemo<MenuItem[]>(
+    () => [
+      { label: 'Visão geral', to: '/projetos', icon: Gauge },
+      { label: 'Quadro Kanban', to: '/projetos/kanban', icon: KanbanSquare },
+      { label: 'Backlog e planejamento', to: '/projetos/backlog', icon: FolderKanban },
+      {
+        label: 'Execução',
+        children: [
+          { label: 'Sprints', to: '/projetos/sprints', icon: Workflow },
+          { label: 'Tarefas e atividades', to: '/projetos/atividades', icon: ListTodo },
+          { label: 'Lista de tarefas', to: '/projetos/anotacoes', icon: NotebookText },
+          { label: 'Post-its', to: '/projetos/anotacoes', icon: StickyNote },
+        ],
+      },
+      {
+        label: 'Integrações',
+        children: [
+          { label: 'Sincronização agenda', to: '/lsh/agenda', icon: CalendarDays },
+          { label: 'Sincronização tarefas', to: '/lsh/tarefas', icon: ListTodo },
+        ],
+      },
+    ],
+    [],
+  )
+
   return (
     <div className="min-h-screen bg-white">
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
@@ -172,6 +199,18 @@ export function AppLayout() {
                   onOpen={() => openMenuNow('agenda')}
                   onToggleClick={() => setOpenMenu((current) => (current === 'agenda' ? null : 'agenda'))}
                   onClose={() => scheduleClose('agenda')}
+                  onCancelClose={cancelClose}
+                  onNavigate={() => setOpenMenu(null)}
+                />
+              ) : null}
+              {projectsEnabled ? (
+                <TreeDropdown
+                  title="Projetos"
+                  items={projectItems}
+                  open={openMenu === 'projects'}
+                  onOpen={() => openMenuNow('projects')}
+                  onToggleClick={() => setOpenMenu((current) => (current === 'projects' ? null : 'projects'))}
+                  onClose={() => scheduleClose('projects')}
                   onCancelClose={cancelClose}
                   onNavigate={() => setOpenMenu(null)}
                 />
