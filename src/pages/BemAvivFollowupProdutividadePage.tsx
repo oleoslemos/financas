@@ -65,7 +65,7 @@ export function BemAvivFollowupProdutividadePage() {
   const supabase = useSupabase()
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const [periodFilter, setPeriodFilter] = useState<'ULTIMOS_7_DIAS' | 'ULTIMOS_30_DIAS' | 'ULTIMOS_90_DIAS' | 'MES_ATUAL' | 'MES_PASSADO' | 'MES_PROXIMO'>(
-    'ULTIMOS_30_DIAS',
+    'MES_ATUAL',
   )
   const [clients, setClients] = useState<ClienteRow[]>([])
   const [followups, setFollowups] = useState<FollowupRow[]>([])
