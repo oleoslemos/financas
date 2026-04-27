@@ -590,7 +590,15 @@ export function ProjectKanbanPage() {
                       }}
                     >
                       {task.project_client?.name || task.panel ? (
-                        <p className="text-xs font-semibold text-emerald-700">
+                        <p
+                          className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold ${
+                            trafficLight === 'overdue'
+                              ? 'border-red-200 bg-red-100 text-red-700'
+                              : trafficLight === 'warning'
+                                ? 'border-amber-200 bg-amber-100 text-amber-700'
+                                : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                          }`}
+                        >
                           {task.project_client?.project_code ? `${task.project_client.project_code} - ` : ''}
                           {task.project_client?.name ?? 'SEM PROJETO'}
                           {task.panel ? (
