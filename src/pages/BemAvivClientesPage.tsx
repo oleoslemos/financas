@@ -76,7 +76,7 @@ export function BemAvivClientesPage() {
     address_city: '',
     address_state: '',
     email: '',
-    client_status: 'CLIENTE',
+    client_status: 'PROSPECÇÃO',
   })
 
   const load = useCallback(async () => {
@@ -122,7 +122,7 @@ export function BemAvivClientesPage() {
       address_state: toUpperTrim(form.address_state),
       full_address: fullAddress,
       email: toUpperTrim(form.email),
-      client_status: toUpperTrim(form.client_status) || 'CLIENTE',
+      client_status: editing ? toUpperTrim(editing.client_status ?? 'PROSPECÇÃO') : 'PROSPECÇÃO',
     }
     if (editing) {
       const { error } = await supabase.from('bem_aviv_clients').update(payload).eq('id', editing.id)
@@ -147,7 +147,7 @@ export function BemAvivClientesPage() {
       address_city: '',
       address_state: '',
       email: '',
-      client_status: 'CLIENTE',
+      client_status: 'PROSPECÇÃO',
     })
     await load()
   }
@@ -273,11 +273,8 @@ export function BemAvivClientesPage() {
               <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
             </div>
             <div className="sm:col-span-4">
-              <label>STATUS</label>
-              <select value={form.client_status} onChange={(e) => setForm({ ...form, client_status: e.target.value })}>
-                <option value="CLIENTE">CLIENTE</option>
-                <option value="PROSPECÇÃO">PROSPECÇÃO</option>
-              </select>
+              <label>CLASSIFICAÇÃO</label>
+              <input value={editing?.client_status ?? 'PROSPECÇÃO'} readOnly className="bg-slate-100 text-slate-600" />
             </div>
             <div className="sm:col-span-12 flex gap-2">
               <Button variant="primary" type="submit">{editing ? 'SALVAR' : 'ADICIONAR'}</Button>
@@ -301,7 +298,7 @@ export function BemAvivClientesPage() {
                       address_city: '',
                       address_state: '',
                       email: '',
-                      client_status: 'CLIENTE',
+                      client_status: 'PROSPECÇÃO',
                     })
                   }}
                 >
@@ -335,7 +332,7 @@ export function BemAvivClientesPage() {
                   <td>{formatCpf(r.cpf)}</td>
                   <td>{[formatPhone(r.phone_1), formatPhone(r.phone_2)].filter(Boolean).join(' / ') || '—'}</td>
                   <td>{r.email || '—'}</td>
-                  <td>{r.client_status || 'CLIENTE'}</td>
+                  <td>{r.client_status || 'PROSPECÇÃO'}</td>
                   <td className="whitespace-nowrap">
                     <div className="flex items-center justify-end gap-2">
                       <button
@@ -357,7 +354,7 @@ export function BemAvivClientesPage() {
                             address_city: r.address_city ?? '',
                             address_state: r.address_state ?? '',
                             email: r.email ?? '',
-                            client_status: r.client_status ?? 'CLIENTE',
+                            client_status: r.client_status ?? 'PROSPECÇÃO',
                           })
                           setFormOpen(true)
                         }}

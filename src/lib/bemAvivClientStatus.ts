@@ -1,0 +1,12 @@
+export const BEM_AVIV_CLIENT_STATUS_OPTIONS = ['PROSPECÇÃO', 'CLIENTE'] as const
+
+export const BEM_AVIV_CLIENT_COMMERCIAL_STAGE_OPTIONS = [
+  'CONTATO',
+  'VISITA AGENDADA',
+  'VISITA REALIZADA',
+  'FECHADO PLATAFORMA CONFORTO',
+  'FECHADO DEMAIS PRODUTOS',
+] as const
+
+export type BemAvivClientStatus = (typeof BEM_AVIV_CLIENT_STATUS_OPTIONS)[number]
+export type BemAvivClientCommercialStage = (typeof BEM_AVIV_CLIENT_COMMERCIAL_STAGE_OPTIONS)[number]

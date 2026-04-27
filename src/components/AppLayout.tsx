@@ -1,5 +1,5 @@
 import { useUser, UserButton } from '@clerk/clerk-react'
-import { CalendarDays, ChevronDown, CircleDollarSign, CreditCard, LayoutDashboard, Landmark, ListTodo, Package, ShoppingCart, Table2, Tags, UserCircle } from 'lucide-react'
+import { BarChart3, CalendarDays, ChevronDown, CircleDollarSign, CreditCard, LayoutDashboard, Landmark, ListTodo, MessageCircleMore, Package, ShoppingCart, Table2, Tags, UserCircle } from 'lucide-react'
 import { type ComponentType, useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { canAccessTasksHomolog } from '../lib/tasksHomologAccess'
@@ -140,6 +140,8 @@ export function AppLayout() {
       { label: 'Visão geral', to: '/bem-aviv', icon: LayoutDashboard },
       { label: 'Pedidos de vendas / orçamento', to: '/bem-aviv/pedidos', icon: ShoppingCart },
       { label: 'Clientes', to: '/bem-aviv/clientes', icon: UserCircle },
+      { label: 'Follow-up', to: '/bem-aviv/follow-up', icon: MessageCircleMore },
+      { label: 'Produtividade follow-up', to: '/bem-aviv/follow-up/produtividade', icon: BarChart3 },
       { label: 'Produtos', to: '/bem-aviv/produtos-catalogo', icon: Package },
       { label: 'Produtos old (todos)', to: '/bem-aviv/produtos', icon: Package },
       {

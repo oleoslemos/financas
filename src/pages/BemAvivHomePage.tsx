@@ -1,8 +1,22 @@
-import { Building2, LayoutGrid, Package, ShoppingCart, Table2, Tags, UserCircle } from 'lucide-react'
+import { BarChart3, Building2, LayoutGrid, MessageCircleMore, Package, ShoppingCart, Table2, Tags, UserCircle } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 const cards = [
   { to: '/bem-aviv/clientes', title: 'Clientes', desc: 'Cadastro e gestão de clientes', icon: UserCircle, tone: 'sky' as const },
+  {
+    to: '/bem-aviv/follow-up',
+    title: 'Follow-up de clientes',
+    desc: 'Retornos por data e registro de contatos',
+    icon: MessageCircleMore,
+    tone: 'emerald' as const,
+  },
+  {
+    to: '/bem-aviv/follow-up/produtividade',
+    title: 'Produtividade follow-up',
+    desc: 'Indicadores de execução e status comercial',
+    icon: BarChart3,
+    tone: 'violet' as const,
+  },
   {
     to: '/bem-aviv/produtos-catalogo',
     title: 'Produtos (catálogo)',

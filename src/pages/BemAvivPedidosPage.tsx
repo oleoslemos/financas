@@ -1,5 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
-import { CheckCircle2, Pencil, Plus, ThumbsDown, Trash2, X } from 'lucide-react'
+import { CheckCircle2, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
@@ -147,10 +147,6 @@ function installmentCell(r: Pedido) {
 }
 
 function canEditOrcamento(r: Pedido) {
-  return r.document_type === 'ORCAMENTO' && !r.converted_order_id && r.status === 'ABERTO'
-}
-
-function canMarcarPerdido(r: Pedido) {
   return r.document_type === 'ORCAMENTO' && !r.converted_order_id && r.status === 'ABERTO'
 }
 
@@ -530,17 +526,6 @@ export function BemAvivPedidosPage() {
     )
   }
 
-  async function markLost(quote: Pedido) {
-    if (!supabase || !canMarcarPerdido(quote)) return
-    if (!confirm(`MARCAR O ORÇAMENTO ${quote.document_number ?? ''} COMO PERDIDO?`)) return
-    const { error } = await supabase.from('bem_aviv_sales_orders').update({ status: 'PERDIDO' }).eq('id', quote.id)
-    if (error) {
-      alert(error.message)
-      return
-    }
-    await load()
-  }
-
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!supabase || !ownerUserId) return
@@ -729,10 +714,6 @@ export function BemAvivPedidosPage() {
       alert('ESTE ORÇAMENTO JÁ FOI CONVERTIDO EM PEDIDO.')
       return
     }
-    if (quote.status === 'PERDIDO') {
-      alert('ORÇAMENTO PERDIDO NÃO PODE SER CONVERTIDO.')
-      return
-    }
     if (!confirm(`FECHAR O ORÇAMENTO ${quote.document_number ?? ''} E CRIAR UM PEDIDO?`)) return
 
     const { data: quoteItems, error: qiErr } = await supabase
@@ -904,17 +885,6 @@ export function BemAvivPedidosPage() {
                             onClick={() => void openModalEdit(r)}
                           >
                             <Pencil size={16} aria-hidden />
-                          </button>
-                        ) : null}
-                        {canMarcarPerdido(r) ? (
-                          <button
-                            type="button"
-                            className={`${iconBtn} text-amber-800 border-amber-200 hover:bg-amber-50`}
-                            title="Marcar como perdido"
-                            aria-label="Marcar como perdido"
-                            onClick={() => void markLost(r)}
-                          >
-                            <ThumbsDown size={16} aria-hidden />
                           </button>
                         ) : null}
                         {canFecharGerarPedido(r) ? (
