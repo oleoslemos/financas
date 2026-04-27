@@ -1,5 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
-import { CalendarDays, Eye, EyeOff, LoaderCircle, MoveRight, Pencil, Trash2, X } from 'lucide-react'
+import { ArrowRight, CalendarDays, ClipboardList, Eye, EyeOff, LoaderCircle, Pencil, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
@@ -471,9 +471,19 @@ export function ProjectKanbanPage() {
                         setDragOverStatus(null)
                       }}
                     >
+                      {task.project_client?.name || task.panel ? (
+                        <p className="text-xs font-semibold text-emerald-700">
+                          {task.project_client?.project_code ? `${task.project_client.project_code} - ` : ''}
+                          {task.project_client?.name ?? 'SEM PROJETO'}
+                          {task.panel ? (
+                            <span className="ml-1 inline-flex items-center gap-1">
+                              [PAINEL <ArrowRight size={12} /> {task.panel}]
+                            </span>
+                          ) : null}
+                        </p>
+                      ) : null}
                       <p className="text-sm font-semibold text-slate-900">{task.title}</p>
                       {task.details ? <p className="mt-1 line-clamp-2 text-xs text-slate-500">{task.details}</p> : null}
-                      {task.panel ? <p className="mt-1 text-xs text-slate-600">Painel: {task.panel}</p> : null}
                       {task.estimated_time_hhmm ? <p className="mt-1 text-xs text-slate-600">Tempo estimado: {task.estimated_time_hhmm}</p> : null}
                       {task.assignee?.name ? <p className="mt-1 text-xs text-slate-600">Responsável: {task.assignee.name}</p> : null}
                       {worklogsByTask[task.id]?.length ? (
@@ -485,12 +495,6 @@ export function ProjectKanbanPage() {
                           Sem registros de execução
                         </button>
                       )}
-                      {task.project_client?.name ? (
-                        <p className="mt-1 text-xs text-emerald-700">
-                          {task.project_client.name}
-                          {task.project_client.project_code ? ` (${task.project_client.project_code})` : ''}
-                        </p>
-                      ) : null}
                       <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
                         <span>Prioridade: {priorityLabel[task.priority]}</span>
                         {task.due_date ? (
@@ -504,46 +508,30 @@ export function ProjectKanbanPage() {
                         <Button
                           type="button"
                           variant="ghost"
-                          className="h-8 px-2 text-xs"
+                          className="inline-flex h-8 w-8 items-center justify-center p-0"
                           onClick={() => setWorklogTaskId(task.id)}
+                          title="Registrar atividade"
                         >
-                          Registrar atividade
-                        </Button>
-                        <Button type="button" variant="ghost" className="h-8 px-2 text-xs" onClick={() => startEditTask(task)}>
-                          Editar tarefa
+                          <ClipboardList size={14} />
                         </Button>
                         <Button
                           type="button"
                           variant="ghost"
-                          className="h-8 px-2 text-xs text-red-600"
-                          onClick={() => void deleteTask(task.id)}
+                          className="inline-flex h-8 w-8 items-center justify-center p-0"
+                          onClick={() => startEditTask(task)}
+                          title="Editar tarefa"
                         >
-                          Excluir tarefa
+                          <Pencil size={14} />
                         </Button>
-                        {task.status !== 'TODO' ? (
-                          <Button type="button" variant="ghost" className="h-8 px-2 text-xs" onClick={() => void moveTask(task.id, 'TODO')}>
-                            <MoveRight size={13} />
-                            A Fazer
-                          </Button>
-                        ) : null}
-                        {task.status !== 'IN_PROGRESS' ? (
-                          <Button type="button" variant="ghost" className="h-8 px-2 text-xs" onClick={() => void moveTask(task.id, 'IN_PROGRESS')}>
-                            <MoveRight size={13} />
-                            Em andamento
-                          </Button>
-                        ) : null}
-                        {task.status !== 'REVIEW' ? (
-                          <Button type="button" variant="ghost" className="h-8 px-2 text-xs" onClick={() => void moveTask(task.id, 'REVIEW')}>
-                            <MoveRight size={13} />
-                            Revisão
-                          </Button>
-                        ) : null}
-                        {task.status !== 'DONE' ? (
-                          <Button type="button" variant="ghost" className="h-8 px-2 text-xs" onClick={() => void moveTask(task.id, 'DONE')}>
-                            <MoveRight size={13} />
-                            Concluir
-                          </Button>
-                        ) : null}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="inline-flex h-8 w-8 items-center justify-center p-0 text-red-600"
+                          onClick={() => void deleteTask(task.id)}
+                          title="Excluir tarefa"
+                        >
+                          <Trash2 size={14} />
+                        </Button>
                       </div>
                     </div>
                   ))
