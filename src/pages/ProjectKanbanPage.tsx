@@ -1,5 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
-import { CalendarDays, Eye, EyeOff, LoaderCircle, MoveRight, X } from 'lucide-react'
+import { CalendarDays, Eye, EyeOff, LoaderCircle, MoveRight, Pencil, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
@@ -88,6 +88,7 @@ export function ProjectKanbanPage() {
   const [worklogTaskId, setWorklogTaskId] = useState<string | null>(null)
   const [worklogDescription, setWorklogDescription] = useState('')
   const [worklogDuration, setWorklogDuration] = useState('00:30')
+  const [editingWorklogId, setEditingWorklogId] = useState<string | null>(null)
 
   const loadTasks = useCallback(async () => {
     if (!supabase || !ownerUserId) return
@@ -333,6 +334,67 @@ export function ProjectKanbanPage() {
     await loadTasks()
   }
 
+  function startEditWorklog(worklog: WorklogRow) {
+    setEditingWorklogId(worklog.id)
+    setWorklogDescription(worklog.description)
+    setWorklogDuration(worklog.duration_hhmm)
+  }
+
+  async function saveWorklogEdits(e: React.FormEvent) {
+    e.preventDefault()
+    if (!supabase || !editingWorklogId) return
+    const safeDescription = worklogDescription.trim().toUpperCase()
+    const safeDuration = worklogDuration.trim()
+    if (!safeDescription) return
+    if (!/^\d{2}:[0-5]\d$/.test(safeDuration)) {
+      alert('Tempo inválido. Use o formato hh:mm, por exemplo 01:30.')
+      return
+    }
+    const { error } = await supabase
+      .from('project_task_worklogs')
+      .update({ description: safeDescription, duration_hhmm: safeDuration })
+      .eq('id', editingWorklogId)
+    if (error) {
+      alert(error.message)
+      return
+    }
+    setEditingWorklogId(null)
+    setWorklogDescription('')
+    setWorklogDuration('00:30')
+    await loadTasks()
+  }
+
+  async function deleteWorklog(worklogId: string) {
+    if (!supabase || !confirm('Excluir este registro?')) return
+    const { error } = await supabase.from('project_task_worklogs').delete().eq('id', worklogId)
+    if (error) {
+      alert(error.message)
+      return
+    }
+    if (editingWorklogId === worklogId) {
+      setEditingWorklogId(null)
+      setWorklogDescription('')
+      setWorklogDuration('00:30')
+    }
+    await loadTasks()
+  }
+
+  async function deleteTask(taskId: string) {
+    if (!supabase || !confirm('Excluir tarefa? Esta ação remove também os registros da atividade.')) return
+    const { error } = await supabase.from('project_tasks').delete().eq('id', taskId)
+    if (error) {
+      alert(error.message)
+      return
+    }
+    if (editTaskId === taskId) {
+      setEditTaskId(null)
+    }
+    if (worklogTaskId === taskId) {
+      setWorklogTaskId(null)
+    }
+    await loadTasks()
+  }
+
   if (!supabase) return <p className="text-slate-600">CONECTANDO AO BANCO…</p>
 
   return (
@@ -450,6 +512,14 @@ export function ProjectKanbanPage() {
                         <Button type="button" variant="ghost" className="h-8 px-2 text-xs" onClick={() => startEditTask(task)}>
                           Editar tarefa
                         </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="h-8 px-2 text-xs text-red-600"
+                          onClick={() => void deleteTask(task.id)}
+                        >
+                          Excluir tarefa
+                        </Button>
                         {task.status !== 'TODO' ? (
                           <Button type="button" variant="ghost" className="h-8 px-2 text-xs" onClick={() => void moveTask(task.id, 'TODO')}>
                             <MoveRight size={13} />
@@ -561,12 +631,21 @@ export function ProjectKanbanPage() {
           <div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-semibold text-slate-900">Registro de execução da atividade</h3>
-              <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-100" onClick={() => setWorklogTaskId(null)}>
+              <button
+                type="button"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-100"
+                onClick={() => {
+                  setWorklogTaskId(null)
+                  setEditingWorklogId(null)
+                  setWorklogDescription('')
+                  setWorklogDuration('00:30')
+                }}
+              >
                 <X size={14} />
               </button>
             </div>
 
-            <form onSubmit={addWorklog} className="grid gap-3 sm:grid-cols-[1fr_120px_auto]">
+            <form onSubmit={editingWorklogId ? saveWorklogEdits : addWorklog} className="grid gap-3 sm:grid-cols-[1fr_120px_auto]">
               <div>
                 <label>O que foi realizado</label>
                 <input value={worklogDescription} onChange={(e) => setWorklogDescription(e.target.value)} required />
@@ -575,8 +654,21 @@ export function ProjectKanbanPage() {
                 <label>Tempo (hh:mm)</label>
                 <input value={worklogDuration} onChange={(e) => setWorklogDuration(e.target.value)} placeholder="01:30" />
               </div>
-              <div className="self-end">
-                <Button type="submit" variant="primary">Salvar</Button>
+              <div className="self-end flex gap-2">
+                <Button type="submit" variant="primary">{editingWorklogId ? 'Salvar edição' : 'Salvar'}</Button>
+                {editingWorklogId ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      setEditingWorklogId(null)
+                      setWorklogDescription('')
+                      setWorklogDuration('00:30')
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                ) : null}
               </div>
             </form>
 
@@ -588,6 +680,14 @@ export function ProjectKanbanPage() {
                   <div key={row.id} className="rounded-md border border-slate-200 p-2">
                     <p className="text-sm font-medium text-slate-900">{row.description}</p>
                     <p className="text-xs text-slate-500">Tempo: {row.duration_hhmm}</p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <Button type="button" variant="ghost" className="inline-flex h-7 w-7 items-center justify-center p-0" onClick={() => startEditWorklog(row)} title="Editar registro">
+                        <Pencil size={13} />
+                      </Button>
+                      <Button type="button" variant="ghost" className="inline-flex h-7 w-7 items-center justify-center p-0 text-red-600" onClick={() => void deleteWorklog(row.id)} title="Excluir registro">
+                        <Trash2 size={13} />
+                      </Button>
+                    </div>
                   </div>
                 ))
               )}
@@ -662,6 +762,7 @@ export function ProjectKanbanPage() {
               <div className="sm:col-span-2 flex items-center gap-2 pt-1">
                 <Button type="submit" variant="primary">Salvar edição</Button>
                 <Button type="button" variant="secondary" onClick={() => void concludeEditingTask()}>Concluir</Button>
+                <Button type="button" variant="danger" onClick={() => { if (editTaskId) void deleteTask(editTaskId) }}>Excluir tarefa</Button>
                 <Button type="button" variant="ghost" onClick={() => setEditTaskId(null)}>Cancelar</Button>
               </div>
             </form>
