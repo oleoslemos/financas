@@ -1,6 +1,7 @@
 import { useUser } from '@clerk/clerk-react'
 import { CalendarPlus, MessageCircle, PhoneForwarded, Search } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
 import { BEM_AVIV_CLIENT_COMMERCIAL_STAGE_OPTIONS } from '../lib/bemAvivClientStatus'
@@ -262,6 +263,28 @@ export function BemAvivFollowupPage() {
     await load()
   }
 
+  async function clearScheduledFollowup() {
+    if (!supabase || !schedulingClient) return
+    if (!confirm('EXCLUIR O AGENDAMENTO DESTE CLIENTE?')) return
+
+    const { error } = await supabase
+      .from('bem_aviv_clients')
+      .update({
+        next_followup_at: null,
+        next_followup_note: null,
+        next_followup_status: 'PENDENTE',
+      })
+      .eq('id', schedulingClient.id)
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    setSchedulingClient(null)
+    await load()
+  }
+
   function openWhatsapp(client: Cliente) {
     const url = buildWhatsappUrl(client.phone_1 || client.phone_2)
     if (!url) {
@@ -280,7 +303,12 @@ export function BemAvivFollowupPage() {
           <h2 className="text-2xl font-semibold">FOLLOW-UP DE CLIENTES</h2>
           <p className="text-sm text-slate-500">Registre contatos e organize os próximos retornos por data.</p>
         </div>
-        <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">TOTAL: {filteredRows.length}</p>
+        <div className="flex items-center gap-2">
+          <Link to="/bem-aviv/follow-up/produtividade">
+            <Button variant="ghost">Atalho produtividade</Button>
+          </Link>
+          <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">TOTAL: {filteredRows.length}</p>
+        </div>
       </div>
 
       <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-2 lg:grid-cols-4">
@@ -520,6 +548,9 @@ export function BemAvivFollowupPage() {
               </div>
               <div className="flex gap-2">
                 <Button type="submit">Salvar agendamento</Button>
+                <Button variant="danger" onClick={() => void clearScheduledFollowup()}>
+                  Excluir agendamento
+                </Button>
                 <Button variant="secondary" onClick={() => setSchedulingClient(null)}>
                   Fechar
                 </Button>

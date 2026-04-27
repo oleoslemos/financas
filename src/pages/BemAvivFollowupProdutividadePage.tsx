@@ -1,4 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
+import { History } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
@@ -17,8 +18,17 @@ type ClienteRow = {
 }
 
 type FollowupRow = {
+  id: string
+  client_id: string
   contacted_at: string
   channel: string | null
+  result: string | null
+  notes: string | null
+}
+
+type ClientHistoryTarget = {
+  id: string
+  full_name: string
 }
 
 function formatDateTime(value?: string | null) {
@@ -41,6 +51,9 @@ export function BemAvivFollowupProdutividadePage() {
   const [periodDays, setPeriodDays] = useState<7 | 30 | 90>(30)
   const [clients, setClients] = useState<ClienteRow[]>([])
   const [followups, setFollowups] = useState<FollowupRow[]>([])
+  const [historyRows, setHistoryRows] = useState<FollowupRow[]>([])
+  const [historyTarget, setHistoryTarget] = useState<ClientHistoryTarget | null>(null)
+  const [loadingHistory, setLoadingHistory] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
@@ -56,7 +69,7 @@ export function BemAvivFollowupProdutividadePage() {
         .eq('user_id', ownerUserId),
       supabase
         .from('bem_aviv_client_followups')
-        .select('contacted_at, channel')
+        .select('id, client_id, contacted_at, channel, result, notes')
         .eq('user_id', ownerUserId)
         .gte('contacted_at', since.toISOString()),
     ])
@@ -71,6 +84,27 @@ export function BemAvivFollowupProdutividadePage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  async function openClientHistory(client: ClientHistoryTarget) {
+    if (!supabase || !ownerUserId) return
+    setHistoryTarget(client)
+    setLoadingHistory(true)
+    const { data, error } = await supabase
+      .from('bem_aviv_client_followups')
+      .select('id, client_id, contacted_at, channel, result, notes')
+      .eq('user_id', ownerUserId)
+      .eq('client_id', client.id)
+      .order('contacted_at', { ascending: false })
+      .limit(30)
+
+    if (error) {
+      alert(error.message)
+      setHistoryRows([])
+    } else {
+      setHistoryRows((data as FollowupRow[]) ?? [])
+    }
+    setLoadingHistory(false)
+  }
 
   const metrics = useMemo(() => {
     const now = new Date()
@@ -174,16 +208,17 @@ export function BemAvivFollowupProdutividadePage() {
               <th>ETAPA COMERCIAL</th>
               <th>PRÓXIMO FOLLOW-UP</th>
               <th>STATUS FOLLOW-UP</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={5} className="py-6 text-center text-slate-500">CARREGANDO...</td>
+                <td colSpan={6} className="py-6 text-center text-slate-500">CARREGANDO...</td>
               </tr>
             ) : metrics.priority.length === 0 ? (
               <tr>
-                <td colSpan={5} className="py-6 text-center text-slate-500">SEM PENDÊNCIAS PRIORITÁRIAS.</td>
+                <td colSpan={6} className="py-6 text-center text-slate-500">SEM PENDÊNCIAS PRIORITÁRIAS.</td>
               </tr>
             ) : (
               metrics.priority.map((item) => (
@@ -193,12 +228,55 @@ export function BemAvivFollowupProdutividadePage() {
                   <td>{item.commercial_stage || 'CONTATO'}</td>
                   <td>{formatDateTime(item.next_followup_at)}</td>
                   <td>{item.next_followup_status || 'PENDENTE'}</td>
+                  <td className="text-right">
+                    <Button
+                      variant="ghost"
+                      className="px-2.5"
+                      title="Ver histórico de follow-ups"
+                      onClick={() => void openClientHistory({ id: item.id, full_name: item.full_name })}
+                    >
+                      <History size={15} />
+                    </Button>
+                  </td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
       </div>
+
+      {historyTarget ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/35 p-3">
+          <div className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white p-4 shadow-xl sm:p-5">
+            <div className="mb-3">
+              <h3 className="text-lg font-semibold">HISTÓRICO DE FOLLOW-UPS</h3>
+              <p className="text-sm text-slate-500">{historyTarget.full_name}</p>
+            </div>
+
+            <div className="max-h-80 space-y-2 overflow-y-auto rounded-lg border border-slate-200 p-3">
+              {loadingHistory ? <p className="text-slate-500">CARREGANDO...</p> : null}
+              {!loadingHistory && historyRows.length === 0 ? <p className="text-slate-500">SEM HISTÓRICO PARA ESTE CLIENTE.</p> : null}
+              {!loadingHistory
+                ? historyRows.map((item) => (
+                    <div key={item.id} className="rounded-md border border-slate-200 p-2">
+                      <p className="text-xs text-slate-500">
+                        {formatDateTime(item.contacted_at)} • {item.channel ?? 'OUTRO'}
+                      </p>
+                      <p>{item.result || 'SEM RESULTADO'}</p>
+                      {item.notes ? <p className="text-xs text-slate-500">{item.notes}</p> : null}
+                    </div>
+                  ))
+                : null}
+            </div>
+
+            <div className="mt-3 flex justify-end">
+              <Button variant="secondary" onClick={() => setHistoryTarget(null)}>
+                Fechar
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
