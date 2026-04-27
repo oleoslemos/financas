@@ -73,6 +73,11 @@ export function ProjectKanbanPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [hideBacklogColumn, setHideBacklogColumn] = useState(true)
   const [hideDoneColumn, setHideDoneColumn] = useState(true)
+  const [search, setSearch] = useState('')
+  const [projectFilter, setProjectFilter] = useState('')
+  const [panelFilter, setPanelFilter] = useState('')
+  const [assigneeFilter, setAssigneeFilter] = useState('')
+  const [priorityFilter, setPriorityFilter] = useState<'ALL' | TaskPriority>('ALL')
   const [title, setTitle] = useState('')
   const [details, setDetails] = useState('')
   const [priority, setPriority] = useState<TaskPriority>('MEDIUM')
@@ -158,6 +163,14 @@ export function ProjectKanbanPage() {
     return selected?.panels ?? []
   }, [projectClientId, projectClients])
 
+  const allPanels = useMemo(() => {
+    const unique = new Set<string>()
+    projectClients.forEach((client) => {
+      ;(client.panels ?? []).forEach((panelName) => unique.add(panelName))
+    })
+    return Array.from(unique).sort((a, b) => a.localeCompare(b, 'pt-BR'))
+  }, [projectClients])
+
   async function moveTask(id: string, status: TaskStatus) {
     if (!supabase) return
     const { error } = await supabase.from('project_tasks').update({ status }).eq('id', id)
@@ -178,15 +191,33 @@ export function ProjectKanbanPage() {
     setDragOverStatus(null)
   }
 
+  const filteredRows = useMemo(() => {
+    const safeSearch = search.trim().toUpperCase()
+    return rows.filter((task) => {
+      const matchSearch =
+        !safeSearch ||
+        task.title.toUpperCase().includes(safeSearch) ||
+        (task.details ?? '').toUpperCase().includes(safeSearch) ||
+        (task.project_client?.name ?? '').toUpperCase().includes(safeSearch) ||
+        (task.project_client?.project_code ?? '').toUpperCase().includes(safeSearch) ||
+        (task.assignee?.name ?? '').toUpperCase().includes(safeSearch)
+      const matchProject = !projectFilter || task.project_client_id === projectFilter
+      const matchPanel = !panelFilter || task.panel === panelFilter
+      const matchAssignee = !assigneeFilter || task.assignee_id === assigneeFilter
+      const matchPriority = priorityFilter === 'ALL' || task.priority === priorityFilter
+      return matchSearch && matchProject && matchPanel && matchAssignee && matchPriority
+    })
+  }, [assigneeFilter, panelFilter, priorityFilter, projectFilter, rows, search])
+
   const grouped = useMemo(
     () => ({
-      BACKLOG: rows.filter((r) => r.status === 'BACKLOG'),
-      TODO: rows.filter((r) => r.status === 'TODO'),
-      IN_PROGRESS: rows.filter((r) => r.status === 'IN_PROGRESS'),
-      REVIEW: rows.filter((r) => r.status === 'REVIEW'),
-      DONE: rows.filter((r) => r.status === 'DONE'),
+      BACKLOG: filteredRows.filter((r) => r.status === 'BACKLOG'),
+      TODO: filteredRows.filter((r) => r.status === 'TODO'),
+      IN_PROGRESS: filteredRows.filter((r) => r.status === 'IN_PROGRESS'),
+      REVIEW: filteredRows.filter((r) => r.status === 'REVIEW'),
+      DONE: filteredRows.filter((r) => r.status === 'DONE'),
     }),
-    [rows],
+    [filteredRows],
   )
 
   const visibleColumns = useMemo(
@@ -414,6 +445,60 @@ export function ProjectKanbanPage() {
             {hideDoneColumn ? <Eye size={15} /> : <EyeOff size={15} />}
             {hideDoneColumn ? 'Mostrar coluna Concluído' : 'Ocultar coluna Concluído'}
           </Button>
+        </div>
+        <div className="mt-3 grid gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-6">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar título, descrição, projeto..."
+            className="lg:col-span-2"
+          />
+          <select value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)}>
+            <option value="">Projeto (todos)</option>
+            {projectClients.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.project_code ? `${item.project_code} - ` : ''}
+                {item.name}
+              </option>
+            ))}
+          </select>
+          <select value={panelFilter} onChange={(e) => setPanelFilter(e.target.value)}>
+            <option value="">Painel (todos)</option>
+            {allPanels.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+          <select value={assigneeFilter} onChange={(e) => setAssigneeFilter(e.target.value)}>
+            <option value="">Responsável (todos)</option>
+            {assignees.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+          <div className="flex gap-2">
+            <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value as 'ALL' | TaskPriority)} className="flex-1">
+              <option value="ALL">Prioridade (todas)</option>
+              <option value="HIGH">Alta</option>
+              <option value="MEDIUM">Média</option>
+              <option value="LOW">Baixa</option>
+            </select>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setSearch('')
+                setProjectFilter('')
+                setPanelFilter('')
+                setAssigneeFilter('')
+                setPriorityFilter('ALL')
+              }}
+            >
+              Limpar
+            </Button>
+          </div>
         </div>
       </header>
 
