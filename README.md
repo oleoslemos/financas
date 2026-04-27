@@ -2,6 +2,16 @@
 
 Planejamento financeiro (web + PWA): **Clerk** (login) + **Supabase** (Postgres + RLS).
 
+## Documentação do módulo Bem Aviv
+
+- Visão funcional do menu, status de implementação e próximos passos:
+  - [`BEMAVIV_MENU_IMPLEMENTACAO_E_PROXIMOS_PASSOS.md`](./BEMAVIV_MENU_IMPLEMENTACAO_E_PROXIMOS_PASSOS.md)
+
+### Troubleshooting rápido (Follow-up)
+
+- Se o contato for registrado mas não aparecer no histórico, confirme se o front está usando o mesmo padrão de `user_id` da tabela `bem_aviv_client_followups`.
+- Referência da correção aplicada em 27/04/2026: seção **Correções recentes** no documento do Bem Aviv.
+
 ## Rodar local
 
 ```bash
