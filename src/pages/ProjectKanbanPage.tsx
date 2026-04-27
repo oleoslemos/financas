@@ -593,29 +593,32 @@ export function ProjectKanbanPage() {
                         <Button
                           type="button"
                           variant="ghost"
-                          className="inline-flex h-8 w-8 items-center justify-center p-0"
+                          className="inline-flex h-9 w-9 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white p-0 text-slate-600 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 xl:w-auto xl:px-3"
                           onClick={() => setWorklogTaskId(task.id)}
                           title="Registrar atividade"
                         >
-                          <ClipboardList size={14} />
+                          <ClipboardList size={16} />
+                          <span className="hidden text-xs font-medium xl:inline">Atividade</span>
                         </Button>
                         <Button
                           type="button"
                           variant="ghost"
-                          className="inline-flex h-8 w-8 items-center justify-center p-0"
+                          className="inline-flex h-9 w-9 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white p-0 text-slate-600 transition-colors hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 xl:w-auto xl:px-3"
                           onClick={() => startEditTask(task)}
                           title="Editar tarefa"
                         >
-                          <Pencil size={14} />
+                          <Pencil size={16} />
+                          <span className="hidden text-xs font-medium xl:inline">Editar</span>
                         </Button>
                         <Button
                           type="button"
                           variant="ghost"
-                          className="inline-flex h-8 w-8 items-center justify-center p-0 text-red-600"
+                          className="inline-flex h-9 w-9 items-center justify-center gap-1.5 rounded-full border border-red-200 bg-white p-0 text-red-600 transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-700 xl:w-auto xl:px-3"
                           onClick={() => void deleteTask(task.id)}
                           title="Excluir tarefa"
                         >
-                          <Trash2 size={14} />
+                          <Trash2 size={16} />
+                          <span className="hidden text-xs font-medium xl:inline">Excluir</span>
                         </Button>
                       </div>
                     </div>
@@ -754,11 +757,23 @@ export function ProjectKanbanPage() {
                     <p className="text-sm font-medium text-slate-900">{row.description}</p>
                     <p className="text-xs text-slate-500">Tempo: {row.duration_hhmm}</p>
                     <div className="mt-2 flex items-center gap-2">
-                      <Button type="button" variant="ghost" className="inline-flex h-7 w-7 items-center justify-center p-0" onClick={() => startEditWorklog(row)} title="Editar registro">
-                        <Pencil size={13} />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white p-0 text-slate-600 transition-colors hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
+                        onClick={() => startEditWorklog(row)}
+                        title="Editar registro"
+                      >
+                        <Pencil size={14} />
                       </Button>
-                      <Button type="button" variant="ghost" className="inline-flex h-7 w-7 items-center justify-center p-0 text-red-600" onClick={() => void deleteWorklog(row.id)} title="Excluir registro">
-                        <Trash2 size={13} />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-red-200 bg-white p-0 text-red-600 transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-700"
+                        onClick={() => void deleteWorklog(row.id)}
+                        title="Excluir registro"
+                      >
+                        <Trash2 size={14} />
                       </Button>
                     </div>
                   </div>
