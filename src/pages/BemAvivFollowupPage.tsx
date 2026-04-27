@@ -1,5 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
-import { CalendarPlus, MessageCircle, PhoneForwarded, Search } from 'lucide-react'
+import { CalendarPlus, MessageCircle, PhoneForwarded, Search, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
@@ -147,6 +147,20 @@ export function BemAvivFollowupPage() {
       setHistoryRows((data as FollowupHistoryRow[]) ?? [])
     }
     setLoadingHistory(false)
+  }
+
+  async function removeHistoryEntry(entryId: string) {
+    if (!supabase || !registeringClient) return
+    if (!confirm('EXCLUIR ESTE REGISTRO DE CONTATO?')) return
+
+    const { error } = await supabase.from('bem_aviv_client_followups').delete().eq('id', entryId)
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    await loadHistory(registeringClient.id)
+    await load()
   }
 
   const filteredRows = useMemo(() => {
@@ -486,9 +500,20 @@ export function BemAvivFollowupPage() {
                 {!loadingHistory
                   ? historyRows.map((item) => (
                       <div key={item.id} className="mb-2 rounded-md border border-slate-200 p-2 last:mb-0">
-                        <p className="text-xs text-slate-500">
-                          {formatDateTime(item.contacted_at)} • {item.channel}
-                        </p>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-xs text-slate-500">
+                            {formatDateTime(item.contacted_at)} • {item.channel}
+                          </p>
+                          <button
+                            type="button"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-red-300 bg-white text-red-700 hover:bg-red-50"
+                            onClick={() => void removeHistoryEntry(item.id)}
+                            title="Excluir contato"
+                            aria-label="Excluir contato"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
                         <p>{item.result || 'SEM RESULTADO'}</p>
                         {item.notes ? <p className="text-xs text-slate-500">{item.notes}</p> : null}
                       </div>

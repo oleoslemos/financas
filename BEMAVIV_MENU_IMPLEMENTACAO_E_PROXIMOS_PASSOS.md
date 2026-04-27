@@ -107,6 +107,32 @@ As rotas do módulo estão registradas no app para todas as telas acima, incluin
 - tabela de preço legacy e tabela de preço catálogo;
 - catálogos em grade, detalhe de catálogo e matriz por bloco.
 
+## Correções recentes
+
+### 27/04/2026 — Follow-up: registros de contato não apareciam após salvar
+
+**Sintoma**
+- Usuário registrava contato no Follow-up, mas o histórico parecia não salvar.
+
+**Causa raiz**
+- A tabela `bem_aviv_client_followups` tem trigger que aplica `UPPER` no campo `user_id`.
+- O frontend gravava/buscava com variação de caixa (não padronizada), gerando divergência no filtro por `user_id`.
+
+**Correção aplicada**
+- Padronização para usar `ownerUserId.toUpperCase()` nas operações de `bem_aviv_client_followups`:
+  - inserção de contato;
+  - leitura de histórico na tela de Follow-up;
+  - leitura e inserção de histórico na tela de Produtividade.
+
+**Arquivos ajustados**
+- `src/pages/BemAvivFollowupPage.tsx`
+- `src/pages/BemAvivFollowupProdutividadePage.tsx`
+
+**Validação recomendada**
+- Registrar um novo contato em `Bem Aviv > Follow-up`.
+- Reabrir o modal/histórico e confirmar que o registro permanece.
+- Validar também em `Produtividade follow-up` se o histórico do cliente lista o novo contato.
+
 ## Próximos passos recomendados para o menu Bem Aviv
 
 ### Prioridade alta (organização funcional)

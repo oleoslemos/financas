@@ -1,9 +1,11 @@
 import { lazy, Suspense } from 'react'
+import { useUser } from '@clerk/clerk-react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AllowedEmailGuard } from './components/AllowedEmailGuard'
 import { AppLayout } from './components/AppLayout'
 import { RequireAuth } from './components/RequireAuth'
 import { RequireTasksHomologAccess } from './components/RequireTasksHomologAccess'
+import { clerkEmailCandidates } from './lib/clerkEmails'
 
 const SignInPage = lazy(() => import('./pages/SignInPage').then((m) => ({ default: m.SignInPage })))
 const SignUpPage = lazy(() => import('./pages/SignUpPage').then((m) => ({ default: m.SignUpPage })))
@@ -37,6 +39,13 @@ const AgendaPage = lazy(() => import('./pages/AgendaPage').then((m) => ({ defaul
 const TasksPage = lazy(() => import('./pages/TasksPage').then((m) => ({ default: m.TasksPage })))
 const LshStartPage = lazy(() => import('./pages/LshStartPage').then((m) => ({ default: m.LshStartPage })))
 
+function HomeRedirect() {
+  const { user } = useUser()
+  const emails = clerkEmailCandidates(user)
+  const bemAvivOnlyUser = emails.includes('suelenjalves@gmail.com')
+  return <Navigate to={bemAvivOnlyUser ? '/bem-aviv/follow-up/produtividade' : '/lsh/inicio'} replace />
+}
+
 export default function App() {
   return (
     <Suspense fallback={<p className="text-sm text-slate-500">Carregando módulo...</p>}>
@@ -46,8 +55,8 @@ export default function App() {
         <Route element={<RequireAuth />}>
           <Route element={<AllowedEmailGuard />}>
             <Route element={<AppLayout />}>
-              <Route path="/" element={<Navigate to="/lsh/inicio" replace />} />
-              <Route path="/inicio" element={<Navigate to="/lsh/inicio" replace />} />
+              <Route path="/" element={<HomeRedirect />} />
+              <Route path="/inicio" element={<HomeRedirect />} />
               <Route path="/lsh/inicio" element={<LshStartPage />} />
               <Route path="/lsh/resumo" element={<Dashboard />} />
               <Route path="/lsh/contas-bancarias" element={<BankAccounts />} />
