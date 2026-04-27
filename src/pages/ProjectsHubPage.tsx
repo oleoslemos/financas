@@ -1,4 +1,4 @@
-import { ArrowRight, BriefcaseBusiness, CalendarDays, CheckSquare, FolderKanban, Gauge, KanbanSquare, Layers3, Workflow } from 'lucide-react'
+import { ArrowRight, BriefcaseBusiness, CheckSquare, FolderKanban, Gauge, KanbanSquare, Layers3, Workflow } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 
 type ModuleCard = {
@@ -58,13 +58,6 @@ const moduleCards: ModuleCard[] = [
     to: '/projetos/anotacoes',
     icon: CheckSquare,
     chip: 'Notas',
-  },
-  {
-    title: 'Agenda integrada',
-    description: 'Conecte tarefas e atividades com a agenda para visão de cronograma.',
-    to: '/lsh/agenda',
-    icon: CalendarDays,
-    chip: 'Integração',
   },
 ]
 

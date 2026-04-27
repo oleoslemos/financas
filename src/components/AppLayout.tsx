@@ -1,7 +1,7 @@
 import { useUser, UserButton } from '@clerk/clerk-react'
 import { BarChart3, BriefcaseBusiness, CalendarDays, ChevronDown, CircleDollarSign, CreditCard, FolderKanban, Gauge, KanbanSquare, LayoutDashboard, Landmark, ListTodo, MessageCircleMore, NotebookText, Package, ShoppingCart, StickyNote, Table2, Tags, UserCircle, Workflow } from 'lucide-react'
 import { type ComponentType, useEffect, useMemo, useRef, useState } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { canAccessTasksHomolog } from '../lib/tasksHomologAccess'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { canAccessProjects } from '../lib/projectsAccess'
@@ -76,6 +76,7 @@ function TreeDropdown({
 
 export function AppLayout() {
   const { user } = useUser()
+  const location = useLocation()
   const [openMenu, setOpenMenu] = useState<string | null>(null)
   const closeTimerRef = useRef<number | null>(null)
 
@@ -84,6 +85,7 @@ export function AppLayout() {
   const hideAgendaTasks = emails.includes('suelenjalves@gmail.com')
   const tasksHomologEnabled = !hideAgendaTasks && canAccessTasksHomolog(user?.primaryEmailAddress?.emailAddress)
   const projectsEnabled = emails.some((email) => canAccessProjects(email))
+  const inProjectsModule = location.pathname.startsWith('/projetos')
 
   useEffect(() => {
     return () => {
@@ -174,13 +176,6 @@ export function AppLayout() {
           { label: 'Post-its', to: '/projetos/anotacoes', icon: StickyNote },
         ],
       },
-      {
-        label: 'Integrações',
-        children: [
-          { label: 'Sincronização agenda', to: '/lsh/agenda', icon: CalendarDays },
-          { label: 'Sincronização tarefas', to: '/lsh/tarefas', icon: ListTodo },
-        ],
-      },
     ],
     [],
   )
@@ -192,7 +187,7 @@ export function AppLayout() {
           <h1 className="text-sm font-semibold tracking-tight text-emerald-800">Sistema de gestão</h1>
           <div className="flex items-center gap-2">
             <nav className="flex items-center gap-1" aria-label="Navegação principal">
-              {tasksHomologEnabled ? (
+              {tasksHomologEnabled && !inProjectsModule ? (
                 <TreeDropdown
                   title="Agenda e Tarefas"
                   items={agendaItems}

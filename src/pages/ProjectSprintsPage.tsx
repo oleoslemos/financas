@@ -7,7 +7,7 @@ import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { toISODate } from '../lib/dates'
 
-type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'DONE'
+type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'REVIEW' | 'DONE'
 type TaskRow = {
   id: string
   title: string
@@ -38,7 +38,7 @@ export function ProjectSprintsPage() {
     if (!supabase || !ownerUserId) return
     setLoading(true)
     const { data, error } = await supabase
-      .from('lsh_tasks')
+      .from('project_tasks')
       .select('id, title, status, due_date')
       .eq('user_id', ownerUserId)
       .order('created_at', { ascending: false })
@@ -63,7 +63,7 @@ export function ProjectSprintsPage() {
 
   async function planForSprint(taskId: string, targetEndDate: string) {
     if (!supabase) return
-    const { error } = await supabase.from('lsh_tasks').update({ due_date: targetEndDate }).eq('id', taskId)
+    const { error } = await supabase.from('project_tasks').update({ due_date: targetEndDate }).eq('id', taskId)
     if (error) alert(error.message)
     else await loadTasks()
   }

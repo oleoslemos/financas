@@ -21,19 +21,7 @@ type TaskRow = {
   source: 'LOCAL' | 'GOOGLE_TASKS' | 'LARK_TASK'
   google_sync_enabled: boolean
   google_external_id: string | null
-  project_client_id: string | null
-  project_client?: { name: string | null; project_code: string | null } | null
   created_at: string
-}
-type TaskRowRaw = Omit<TaskRow, 'project_client'> & {
-  project_client?: { name: string | null; project_code: string | null } | Array<{ name: string | null; project_code: string | null }> | null
-}
-
-type ProjectClientOption = {
-  id: string
-  name: string
-  project_code: string | null
-  active: boolean
 }
 
 const statusLabel: Record<TaskStatus, string> = {
@@ -63,48 +51,23 @@ export function TasksPage() {
   const [priority, setPriority] = useState<TaskPriority>('MEDIUM')
   const [dueDate, setDueDate] = useState(toISODate(new Date()))
   const [mirrorGoogle, setMirrorGoogle] = useState(true)
-  const [projectClientId, setProjectClientId] = useState('')
-  const [projectClients, setProjectClients] = useState<ProjectClientOption[]>([])
 
   const loadTasks = useCallback(async () => {
     if (!supabase || !ownerUserId) return
     setLoading(true)
     const { data, error } = await supabase
       .from('lsh_tasks')
-      .select('id, title, details, status, priority, due_date, source, google_sync_enabled, google_external_id, project_client_id, created_at, project_client:project_client_id(name, project_code)')
+      .select('id, title, details, status, priority, due_date, source, google_sync_enabled, google_external_id, created_at')
       .eq('user_id', ownerUserId)
       .order('created_at', { ascending: false })
     if (error) alert(error.message)
-    const mapped = ((data as TaskRowRaw[]) ?? []).map((row) => ({
-      ...row,
-      project_client: Array.isArray(row.project_client) ? (row.project_client[0] ?? null) : (row.project_client ?? null),
-    }))
-    setRows(mapped)
+    setRows((data as TaskRow[]) ?? [])
     setLoading(false)
   }, [ownerUserId, supabase])
 
   useEffect(() => {
     void loadTasks()
   }, [loadTasks])
-
-  const loadProjectClients = useCallback(async () => {
-    if (!supabase || !ownerUserId) return
-    const { data, error } = await supabase
-      .from('project_clients')
-      .select('id, name, project_code, active')
-      .eq('user_id', ownerUserId)
-      .eq('active', true)
-      .order('name', { ascending: true })
-    if (error) {
-      alert(error.message)
-      return
-    }
-    setProjectClients((data as ProjectClientOption[]) ?? [])
-  }, [ownerUserId, supabase])
-
-  useEffect(() => {
-    void loadProjectClients()
-  }, [loadProjectClients])
 
   const filtered = useMemo(() => {
     const q = deferredQuery.trim().toUpperCase()
@@ -140,7 +103,6 @@ export function TasksPage() {
       due_date: dueDate || null,
       source: 'LOCAL',
       google_sync_enabled: mirrorGoogle,
-      project_client_id: projectClientId || null,
     })
     if (error) {
       alert(error.message)
@@ -151,7 +113,6 @@ export function TasksPage() {
     setPriority('MEDIUM')
     setDueDate(toISODate(new Date()))
     setMirrorGoogle(true)
-    setProjectClientId('')
     await loadTasks()
   }
 
@@ -172,16 +133,6 @@ export function TasksPage() {
   async function removeTask(id: string) {
     if (!supabase || !confirm('Excluir tarefa?')) return
     const { error } = await supabase.from('lsh_tasks').delete().eq('id', id)
-    if (error) alert(error.message)
-    else await loadTasks()
-  }
-
-  async function setProjectClient(taskId: string, value: string) {
-    if (!supabase) return
-    const { error } = await supabase
-      .from('lsh_tasks')
-      .update({ project_client_id: value || null })
-      .eq('id', taskId)
     if (error) alert(error.message)
     else await loadTasks()
   }
@@ -241,17 +192,6 @@ export function TasksPage() {
             <label>Prazo</label>
             <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           </div>
-          <div className="sm:col-span-2">
-            <label>Projeto/Cliente</label>
-            <select value={projectClientId} onChange={(e) => setProjectClientId(e.target.value)}>
-              <option value="">SEM VÍNCULO</option>
-              {projectClients.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name} {item.project_code ? `(${item.project_code})` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
           <div className="sm:col-span-2 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
             <input
               id="mirror-google"
@@ -307,7 +247,6 @@ export function TasksPage() {
                   <th>PRIORIDADE</th>
                   <th>PRAZO</th>
                   <th>STATUS</th>
-                  <th>PROJETO/CLIENTE</th>
                   <th>GOOGLE</th>
                   <th className="text-right">AÇÕES</th>
                 </tr>
@@ -324,20 +263,6 @@ export function TasksPage() {
                     <td>{priorityLabel[task.priority]}</td>
                     <td>{task.due_date || '—'}</td>
                     <td>{statusLabel[task.status]}</td>
-                    <td>
-                      <select
-                        value={task.project_client_id ?? ''}
-                        onChange={(e) => void setProjectClient(task.id, e.target.value)}
-                        className="max-w-[220px]"
-                      >
-                        <option value="">SEM VÍNCULO</option>
-                        {projectClients.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.name} {item.project_code ? `(${item.project_code})` : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
                     <td>
                       {task.source === 'LOCAL' ? (
                         <label className="mb-0 flex cursor-pointer items-center gap-1.5 text-xs text-slate-600">

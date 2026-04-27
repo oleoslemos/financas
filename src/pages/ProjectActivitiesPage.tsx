@@ -6,7 +6,7 @@ import { useSupabase } from '../hooks/useSupabase'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 
-type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'DONE'
+type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'REVIEW' | 'DONE'
 type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH'
 type TaskRow = {
   id: string
@@ -32,6 +32,7 @@ type ProjectClientOption = {
 const statusLabel: Record<TaskStatus, string> = {
   TODO: 'PENDENTE',
   IN_PROGRESS: 'EM ANDAMENTO',
+  REVIEW: 'REVISÃO',
   DONE: 'CONCLUÍDA',
 }
 
@@ -50,7 +51,7 @@ export function ProjectActivitiesPage() {
     if (!supabase || !ownerUserId) return
     setLoading(true)
     const { data, error } = await supabase
-      .from('lsh_tasks')
+      .from('project_tasks')
       .select('id, title, details, status, priority, due_date, project_client_id, created_at, project_client:project_client_id(name, project_code)')
       .eq('user_id', ownerUserId)
       .order('created_at', { ascending: false })
@@ -97,14 +98,14 @@ export function ProjectActivitiesPage() {
 
   async function setStatus(id: string, status: TaskStatus) {
     if (!supabase) return
-    const { error } = await supabase.from('lsh_tasks').update({ status }).eq('id', id)
+    const { error } = await supabase.from('project_tasks').update({ status }).eq('id', id)
     if (error) alert(error.message)
     else await loadTasks()
   }
 
   async function setProjectClient(taskId: string, value: string) {
     if (!supabase) return
-    const { error } = await supabase.from('lsh_tasks').update({ project_client_id: value || null }).eq('id', taskId)
+    const { error } = await supabase.from('project_tasks').update({ project_client_id: value || null }).eq('id', taskId)
     if (error) alert(error.message)
     else await loadTasks()
   }
@@ -129,6 +130,7 @@ export function ProjectActivitiesPage() {
             <option value="ALL">TODOS OS STATUS</option>
             <option value="TODO">PENDENTE</option>
             <option value="IN_PROGRESS">EM ANDAMENTO</option>
+            <option value="REVIEW">REVISÃO</option>
             <option value="DONE">CONCLUÍDA</option>
           </select>
         </div>
@@ -173,6 +175,11 @@ export function ProjectActivitiesPage() {
                     </Button>
                   ) : null}
                   {task.status === 'IN_PROGRESS' ? (
+                    <Button type="button" variant="ghost" className="inline-flex h-9 w-9 items-center justify-center p-0" onClick={() => void setStatus(task.id, 'REVIEW')} title="Enviar para revisão">
+                      <CircleDashed size={16} />
+                    </Button>
+                  ) : null}
+                  {task.status === 'REVIEW' ? (
                     <Button type="button" variant="ghost" className="inline-flex h-9 w-9 items-center justify-center p-0" onClick={() => void setStatus(task.id, 'DONE')} title="Concluir">
                       <CheckCircle2 size={16} />
                     </Button>

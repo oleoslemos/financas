@@ -1,12 +1,12 @@
 import { useUser } from '@clerk/clerk-react'
-import { CalendarDays, LoaderCircle, MoveRight } from 'lucide-react'
+import { CalendarDays, Eye, EyeOff, LoaderCircle, MoveRight } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 
-type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'DONE'
+type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'REVIEW' | 'DONE'
 type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH'
 
 type TaskRow = {
@@ -26,6 +26,7 @@ type TaskRowRaw = Omit<TaskRow, 'project_client'> & {
 const statusColumns: Array<{ key: TaskStatus; title: string }> = [
   { key: 'TODO', title: 'A Fazer' },
   { key: 'IN_PROGRESS', title: 'Em andamento' },
+  { key: 'REVIEW', title: 'Revisão' },
   { key: 'DONE', title: 'Concluído' },
 ]
 
@@ -41,12 +42,13 @@ export function ProjectKanbanPage() {
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const [rows, setRows] = useState<TaskRow[]>([])
   const [loading, setLoading] = useState(false)
+  const [hideDoneColumn, setHideDoneColumn] = useState(true)
 
   const loadTasks = useCallback(async () => {
     if (!supabase || !ownerUserId) return
     setLoading(true)
     const { data, error } = await supabase
-      .from('lsh_tasks')
+      .from('project_tasks')
       .select('id, title, details, status, priority, due_date, created_at, project_client:project_client_id(name, project_code)')
       .eq('user_id', ownerUserId)
       .order('created_at', { ascending: false })
@@ -65,7 +67,7 @@ export function ProjectKanbanPage() {
 
   async function moveTask(id: string, status: TaskStatus) {
     if (!supabase) return
-    const { error } = await supabase.from('lsh_tasks').update({ status }).eq('id', id)
+    const { error } = await supabase.from('project_tasks').update({ status }).eq('id', id)
     if (error) alert(error.message)
     else await loadTasks()
   }
@@ -74,9 +76,15 @@ export function ProjectKanbanPage() {
     () => ({
       TODO: rows.filter((r) => r.status === 'TODO'),
       IN_PROGRESS: rows.filter((r) => r.status === 'IN_PROGRESS'),
+      REVIEW: rows.filter((r) => r.status === 'REVIEW'),
       DONE: rows.filter((r) => r.status === 'DONE'),
     }),
     [rows],
+  )
+
+  const visibleColumns = useMemo(
+    () => statusColumns.filter((column) => !(hideDoneColumn && column.key === 'DONE')),
+    [hideDoneColumn],
   )
 
   if (!supabase) return <p className="text-slate-600">CONECTANDO AO BANCO…</p>
@@ -86,6 +94,12 @@ export function ProjectKanbanPage() {
       <header>
         <h2 className="text-2xl font-semibold text-slate-900">Quadro Kanban</h2>
         <p className="text-sm text-slate-600">Fluxo visual de tarefas e atividades em colunas.</p>
+        <div className="mt-3">
+          <Button type="button" variant="ghost" className="inline-flex items-center gap-2" onClick={() => setHideDoneColumn((current) => !current)}>
+            {hideDoneColumn ? <Eye size={15} /> : <EyeOff size={15} />}
+            {hideDoneColumn ? 'Mostrar coluna Concluído' : 'Ocultar coluna Concluído'}
+          </Button>
+        </div>
       </header>
 
       {loading ? (
@@ -96,8 +110,8 @@ export function ProjectKanbanPage() {
           </p>
         </section>
       ) : (
-        <section className="grid gap-4 lg:grid-cols-3">
-          {statusColumns.map((column) => (
+        <section className={`grid gap-4 ${hideDoneColumn ? 'lg:grid-cols-3' : 'lg:grid-cols-4'}`}>
+          {visibleColumns.map((column) => (
             <article key={column.key} className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-slate-800">{column.title}</h3>
@@ -137,6 +151,12 @@ export function ProjectKanbanPage() {
                           <Button type="button" variant="ghost" className="h-8 px-2 text-xs" onClick={() => void moveTask(task.id, 'IN_PROGRESS')}>
                             <MoveRight size={13} />
                             Em andamento
+                          </Button>
+                        ) : null}
+                        {task.status !== 'REVIEW' ? (
+                          <Button type="button" variant="ghost" className="h-8 px-2 text-xs" onClick={() => void moveTask(task.id, 'REVIEW')}>
+                            <MoveRight size={13} />
+                            Revisão
                           </Button>
                         ) : null}
                         {task.status !== 'DONE' ? (
