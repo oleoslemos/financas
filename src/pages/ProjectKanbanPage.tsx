@@ -340,6 +340,24 @@ export function ProjectKanbanPage() {
     return `${hh}:${mm}`
   }
 
+  function durationToMinutes(hhmm: string | null | undefined) {
+    if (!hhmm || !/^\d{2}:[0-5]\d$/.test(hhmm)) return 0
+    const [h, m] = hhmm.split(':').map((value) => Number(value))
+    return h * 60 + m
+  }
+
+  function getTaskTrafficLight(task: TaskRow) {
+    if (!task.due_date || task.status === 'DONE') return null
+    const today = new Date()
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    const [year, month, day] = task.due_date.split('-').map(Number)
+    const dueDate = new Date(year, month - 1, day)
+    const diffDays = Math.ceil((dueDate.getTime() - todayStart.getTime()) / (1000 * 60 * 60 * 24))
+    if (diffDays < 0) return 'overdue'
+    if (diffDays <= 2) return 'warning'
+    return null
+  }
+
   async function addWorklog(e: React.FormEvent) {
     e.preventDefault()
     if (!supabase || !ownerUserId || !worklogTaskId) return
@@ -542,10 +560,25 @@ export function ProjectKanbanPage() {
                   <p className="rounded-lg border border-dashed border-slate-300 p-3 text-xs text-slate-500">Sem itens nesta coluna.</p>
                 ) : (
                   grouped[column.key].map((task) => (
+                    (() => {
+                      const taskWorklogs = worklogsByTask[task.id] ?? []
+                      const executedTime = sumDurations(taskWorklogs)
+                      const estimatedMinutes = durationToMinutes(task.estimated_time_hhmm)
+                      const executedMinutes = durationToMinutes(executedTime)
+                      const completionPercent =
+                        estimatedMinutes > 0 ? Math.round((executedMinutes / estimatedMinutes) * 100) : null
+                      const trafficLight = getTaskTrafficLight(task)
+                      return (
                     <div
                       key={task.id}
                       className={`rounded-xl border p-3 ${
                         dragTaskId === task.id ? 'cursor-grabbing border-emerald-400 bg-emerald-50/50' : 'cursor-grab border-slate-200'
+                      } ${
+                        trafficLight === 'overdue'
+                          ? 'border-red-200 bg-red-50/60'
+                          : trafficLight === 'warning'
+                            ? 'border-amber-200 bg-amber-50/60'
+                            : ''
                       }`}
                       draggable
                       onDragStart={() => {
@@ -569,7 +602,14 @@ export function ProjectKanbanPage() {
                       ) : null}
                       <p className="text-sm font-semibold text-slate-900">{task.title}</p>
                       {task.details ? <p className="mt-1 line-clamp-2 text-xs text-slate-500">{task.details}</p> : null}
-                      {task.estimated_time_hhmm ? <p className="mt-1 text-xs text-slate-600">Tempo estimado: {task.estimated_time_hhmm}</p> : null}
+                      {task.estimated_time_hhmm ? (
+                        <p className="mt-1 text-xs text-slate-600">
+                          Tempo estimado: {task.estimated_time_hhmm}
+                          {' • '}
+                          Executado: {executedTime}
+                          {completionPercent !== null ? ` • ${completionPercent}%` : ''}
+                        </p>
+                      ) : null}
                       {task.assignee?.name ? <p className="mt-1 text-xs text-slate-600">Responsável: {task.assignee.name}</p> : null}
                       {worklogsByTask[task.id]?.length ? (
                         <button type="button" className="mt-1 text-left text-xs text-indigo-700 hover:underline" onClick={() => setWorklogTaskId(task.id)}>
@@ -622,6 +662,8 @@ export function ProjectKanbanPage() {
                         </Button>
                       </div>
                     </div>
+                      )
+                    })()
                   ))
                 )}
               </div>
