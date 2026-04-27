@@ -305,7 +305,7 @@ export function BemAvivFollowupPage() {
         </div>
         <div className="flex items-center gap-2">
           <Link to="/bem-aviv/follow-up/produtividade">
-            <Button variant="ghost">Atalho produtividade</Button>
+            <Button variant="ghost">Visão geral</Button>
           </Link>
           <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">TOTAL: {filteredRows.length}</p>
         </div>

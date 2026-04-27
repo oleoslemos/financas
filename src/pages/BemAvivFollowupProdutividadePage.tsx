@@ -31,6 +31,13 @@ type ClientHistoryTarget = {
   full_name: string
 }
 
+type HistoryFormState = {
+  contacted_at: string
+  channel: 'WHATSAPP' | 'LIGACAO' | 'EMAIL' | 'OUTRO'
+  result: string
+  notes: string
+}
+
 function formatDateTime(value?: string | null) {
   if (!value) return '—'
   const dt = new Date(value)
@@ -44,23 +51,59 @@ function startOfToday() {
   return d
 }
 
+function toInputDateTimeLocal(value?: string | null) {
+  if (!value) return ''
+  const dt = new Date(value)
+  if (Number.isNaN(dt.getTime())) return ''
+  const tz = dt.getTimezoneOffset() * 60_000
+  const local = new Date(dt.getTime() - tz)
+  return local.toISOString().slice(0, 16)
+}
+
 export function BemAvivFollowupProdutividadePage() {
   const { user } = useUser()
   const supabase = useSupabase()
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
-  const [periodDays, setPeriodDays] = useState<7 | 30 | 90>(30)
+  const [periodFilter, setPeriodFilter] = useState<'ULTIMOS_7_DIAS' | 'ULTIMOS_30_DIAS' | 'ULTIMOS_90_DIAS' | 'MES_ATUAL' | 'MES_PASSADO' | 'MES_PROXIMO'>(
+    'ULTIMOS_30_DIAS',
+  )
   const [clients, setClients] = useState<ClienteRow[]>([])
   const [followups, setFollowups] = useState<FollowupRow[]>([])
   const [historyRows, setHistoryRows] = useState<FollowupRow[]>([])
   const [historyTarget, setHistoryTarget] = useState<ClientHistoryTarget | null>(null)
+  const [historyFormOpen, setHistoryFormOpen] = useState(false)
+  const [historyForm, setHistoryForm] = useState<HistoryFormState>({
+    contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+    channel: 'WHATSAPP',
+    result: '',
+    notes: '',
+  })
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
     if (!supabase || !ownerUserId) return
     setLoading(true)
-    const since = new Date()
-    since.setDate(since.getDate() - periodDays)
+    const now = new Date()
+    let periodStart = new Date(now)
+    let periodEnd = new Date(now)
+
+    if (periodFilter === 'ULTIMOS_7_DIAS') {
+      periodStart.setDate(periodStart.getDate() - 7)
+    } else if (periodFilter === 'ULTIMOS_30_DIAS') {
+      periodStart.setDate(periodStart.getDate() - 30)
+    } else if (periodFilter === 'ULTIMOS_90_DIAS') {
+      periodStart.setDate(periodStart.getDate() - 90)
+    } else if (periodFilter === 'MES_ATUAL') {
+      periodStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0)
+      periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
+    } else if (periodFilter === 'MES_PASSADO') {
+      periodStart = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0)
+      periodEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999)
+    } else if (periodFilter === 'MES_PROXIMO') {
+      periodStart = new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0, 0)
+      periodEnd = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59, 999)
+    }
 
     const [clientsRes, followupsRes] = await Promise.all([
       supabase
@@ -71,7 +114,8 @@ export function BemAvivFollowupProdutividadePage() {
         .from('bem_aviv_client_followups')
         .select('id, client_id, contacted_at, channel, result, notes')
         .eq('user_id', ownerUserId)
-        .gte('contacted_at', since.toISOString()),
+        .gte('contacted_at', periodStart.toISOString())
+        .lte('contacted_at', periodEnd.toISOString()),
     ])
 
     if (clientsRes.error) alert(clientsRes.error.message)
@@ -79,7 +123,7 @@ export function BemAvivFollowupProdutividadePage() {
     setClients((clientsRes.data as ClienteRow[]) ?? [])
     setFollowups((followupsRes.data as FollowupRow[]) ?? [])
     setLoading(false)
-  }, [ownerUserId, periodDays, supabase])
+  }, [ownerUserId, periodFilter, supabase])
 
   useEffect(() => {
     void load()
@@ -106,6 +150,49 @@ export function BemAvivFollowupProdutividadePage() {
     setLoadingHistory(false)
   }
 
+  async function submitHistoryEntry(e: React.FormEvent) {
+    e.preventDefault()
+    if (!supabase || !ownerUserId || !historyTarget) return
+    if (!historyForm.contacted_at) {
+      alert('INFORME A DATA/HORA DO CONTATO.')
+      return
+    }
+
+    const contactedAtIso = new Date(historyForm.contacted_at).toISOString()
+    const { error } = await supabase.from('bem_aviv_client_followups').insert({
+      user_id: ownerUserId,
+      client_id: historyTarget.id,
+      contacted_at: contactedAtIso,
+      channel: historyForm.channel,
+      result: historyForm.result || null,
+      notes: historyForm.notes || null,
+    })
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    const { error: clientError } = await supabase
+      .from('bem_aviv_clients')
+      .update({
+        last_contact_at: contactedAtIso,
+      })
+      .eq('id', historyTarget.id)
+    if (clientError) {
+      alert(clientError.message)
+      return
+    }
+
+    setHistoryForm({
+      contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+      channel: 'WHATSAPP',
+      result: '',
+      notes: '',
+    })
+    await openClientHistory(historyTarget)
+    await load()
+  }
+
   const metrics = useMemo(() => {
     const now = new Date()
     const today = startOfToday()
@@ -118,19 +205,9 @@ export function BemAvivFollowupProdutividadePage() {
     const vencidos = clients.filter((c) => c.next_followup_at && new Date(c.next_followup_at) < now && (c.next_followup_status ?? 'PENDENTE') === 'PENDENTE').length
     const hoje = clients.filter((c) => c.next_followup_at && new Date(c.next_followup_at) >= today && new Date(c.next_followup_at) < tomorrow).length
     const proximos7 = clients.filter((c) => c.next_followup_at && new Date(c.next_followup_at) >= today && new Date(c.next_followup_at) <= weekEnd).length
-    const semAgendamento = clients.filter((c) => !c.next_followup_at).length
-    const concluidos = clients.filter((c) => (c.next_followup_status ?? 'PENDENTE') === 'CONCLUIDO').length
-    const pendentes = clients.filter((c) => (c.next_followup_status ?? 'PENDENTE') === 'PENDENTE').length
-    const taxaConclusao = pendentes + concluidos > 0 ? Math.round((concluidos / (pendentes + concluidos)) * 100) : 0
-
     const statusCounts = BEM_AVIV_CLIENT_COMMERCIAL_STAGE_OPTIONS.map((stage) => ({
       stage,
       count: clients.filter((c) => (c.commercial_stage ?? 'CONTATO') === stage).length,
-    }))
-
-    const byChannel = ['WHATSAPP', 'LIGACAO', 'EMAIL', 'OUTRO'].map((channel) => ({
-      channel,
-      count: followups.filter((f) => (f.channel ?? 'OUTRO') === channel).length,
     }))
 
     const priority = clients
@@ -138,7 +215,7 @@ export function BemAvivFollowupProdutividadePage() {
       .sort((a, b) => new Date(a.next_followup_at ?? '').getTime() - new Date(b.next_followup_at ?? '').getTime())
       .slice(0, 10)
 
-    return { vencidos, hoje, proximos7, semAgendamento, taxaConclusao, statusCounts, byChannel, priority }
+    return { vencidos, hoje, proximos7, statusCounts, priority }
   }, [clients, followups])
 
   if (!supabase) return <p className="text-slate-600">CONECTANDO...</p>
@@ -153,10 +230,13 @@ export function BemAvivFollowupProdutividadePage() {
         <div className="flex items-end gap-2">
           <div>
             <label>PERÍODO</label>
-            <select value={periodDays} onChange={(e) => setPeriodDays(Number(e.target.value) as 7 | 30 | 90)}>
-              <option value={7}>ÚLTIMOS 7 DIAS</option>
-              <option value={30}>ÚLTIMOS 30 DIAS</option>
-              <option value={90}>ÚLTIMOS 90 DIAS</option>
+            <select value={periodFilter} onChange={(e) => setPeriodFilter(e.target.value as typeof periodFilter)}>
+              <option value="MES_ATUAL">MÊS ATUAL</option>
+              <option value="MES_PASSADO">MÊS PASSADO</option>
+              <option value="MES_PROXIMO">MÊS PRÓXIMO</option>
+              <option value="ULTIMOS_7_DIAS">ÚLTIMOS 7 DIAS</option>
+              <option value="ULTIMOS_30_DIAS">ÚLTIMOS 30 DIAS</option>
+              <option value="ULTIMOS_90_DIAS">ÚLTIMOS 90 DIAS</option>
             </select>
           </div>
           <Button variant="secondary" onClick={() => void load()}>
@@ -169,33 +249,17 @@ export function BemAvivFollowupProdutividadePage() {
         <div className="rounded-xl border border-rose-200 bg-rose-50 p-4"><p className="text-xs text-rose-700">VENCIDOS</p><p className="text-2xl font-semibold text-rose-900">{metrics.vencidos}</p></div>
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-xs text-amber-700">HOJE</p><p className="text-2xl font-semibold text-amber-900">{metrics.hoje}</p></div>
         <div className="rounded-xl border border-sky-200 bg-sky-50 p-4"><p className="text-xs text-sky-700">PRÓXIMOS 7 DIAS</p><p className="text-2xl font-semibold text-sky-900">{metrics.proximos7}</p></div>
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs text-slate-600">SEM AGENDAMENTO</p><p className="text-2xl font-semibold text-slate-900">{metrics.semAgendamento}</p></div>
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><p className="text-xs text-emerald-700">TAXA DE CONCLUSÃO</p><p className="text-2xl font-semibold text-emerald-900">{metrics.taxaConclusao}%</p></div>
-        <div className="rounded-xl border border-violet-200 bg-violet-50 p-4"><p className="text-xs text-violet-700">CONTATOS NO PERÍODO</p><p className="text-2xl font-semibold text-violet-900">{followups.length}</p></div>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-2">
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h3 className="mb-3 text-sm font-semibold text-slate-700">ETAPAS COMERCIAIS DOS CLIENTES</h3>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {metrics.statusCounts.map((item) => (
-              <div key={item.stage} className="rounded-md border border-slate-200 px-3 py-2">
-                <p className="text-xs text-slate-500">{item.stage}</p>
-                <p className="text-lg font-semibold text-slate-900">{item.count}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h3 className="mb-3 text-sm font-semibold text-slate-700">CONTATOS POR CANAL (PERÍODO)</h3>
-          <div className="space-y-2">
-            {metrics.byChannel.map((item) => (
-              <div key={item.channel} className="flex items-center justify-between rounded-md border border-slate-200 px-3 py-2">
-                <span className="text-sm text-slate-600">{item.channel}</span>
-                <span className="text-lg font-semibold text-slate-900">{item.count}</span>
-              </div>
-            ))}
-          </div>
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <h3 className="mb-3 text-sm font-semibold text-slate-700">ETAPAS COMERCIAIS DOS CLIENTES</h3>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          {metrics.statusCounts.map((item) => (
+            <div key={item.stage} className="rounded-md border border-slate-200 px-3 py-2">
+              <p className="text-xs text-slate-500">{item.stage}</p>
+              <p className="text-lg font-semibold text-slate-900">{item.count}</p>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -254,6 +318,47 @@ export function BemAvivFollowupProdutividadePage() {
             </div>
 
             <div className="max-h-80 space-y-2 overflow-y-auto rounded-lg border border-slate-200 p-3">
+              <div className="mb-2 flex justify-end">
+                <Button variant="ghost" onClick={() => setHistoryFormOpen((v) => !v)}>
+                  {historyFormOpen ? 'Cancelar inclusão' : 'Incluir histórico'}
+                </Button>
+              </div>
+              {historyFormOpen ? (
+                <form onSubmit={submitHistoryEntry} className="mb-3 grid gap-2 rounded-md border border-slate-200 p-3">
+                  <div>
+                    <label>DATA/HORA DO CONTATO</label>
+                    <input
+                      type="datetime-local"
+                      required
+                      value={historyForm.contacted_at}
+                      onChange={(e) => setHistoryForm((prev) => ({ ...prev, contacted_at: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label>CANAL</label>
+                    <select
+                      value={historyForm.channel}
+                      onChange={(e) => setHistoryForm((prev) => ({ ...prev, channel: e.target.value as HistoryFormState['channel'] }))}
+                    >
+                      <option value="WHATSAPP">WHATSAPP</option>
+                      <option value="LIGACAO">LIGAÇÃO</option>
+                      <option value="EMAIL">E-MAIL</option>
+                      <option value="OUTRO">OUTRO</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label>RESULTADO</label>
+                    <input value={historyForm.result} onChange={(e) => setHistoryForm((prev) => ({ ...prev, result: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label>OBSERVAÇÕES</label>
+                    <textarea rows={2} value={historyForm.notes} onChange={(e) => setHistoryForm((prev) => ({ ...prev, notes: e.target.value }))} />
+                  </div>
+                  <div className="flex justify-end">
+                    <Button type="submit">Salvar histórico</Button>
+                  </div>
+                </form>
+              ) : null}
               {loadingHistory ? <p className="text-slate-500">CARREGANDO...</p> : null}
               {!loadingHistory && historyRows.length === 0 ? <p className="text-slate-500">SEM HISTÓRICO PARA ESTE CLIENTE.</p> : null}
               {!loadingHistory
