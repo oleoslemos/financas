@@ -19,6 +19,9 @@ type TaskRow = {
   project_client?: { name: string | null; project_code: string | null } | null
   created_at: string
 }
+type TaskRowRaw = Omit<TaskRow, 'project_client'> & {
+  project_client?: { name: string | null; project_code: string | null } | Array<{ name: string | null; project_code: string | null }> | null
+}
 
 const statusColumns: Array<{ key: TaskStatus; title: string }> = [
   { key: 'TODO', title: 'A Fazer' },
@@ -48,7 +51,11 @@ export function ProjectKanbanPage() {
       .eq('user_id', ownerUserId)
       .order('created_at', { ascending: false })
     if (error) alert(error.message)
-    setRows((data as TaskRow[]) ?? [])
+    const mapped = ((data as TaskRowRaw[]) ?? []).map((row) => ({
+      ...row,
+      project_client: Array.isArray(row.project_client) ? (row.project_client[0] ?? null) : (row.project_client ?? null),
+    }))
+    setRows(mapped)
     setLoading(false)
   }, [ownerUserId, supabase])
 
