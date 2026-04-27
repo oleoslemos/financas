@@ -17,6 +17,8 @@ type TaskRow = {
   priority: TaskPriority
   due_date: string | null
   panel: string | null
+  project_client_id: string | null
+  estimated_time_hhmm: string | null
   assignee_id: string | null
   assignee?: { name: string | null } | null
   project_client?: { name: string | null; project_code: string | null } | null
@@ -75,9 +77,11 @@ export function ProjectKanbanPage() {
   const [details, setDetails] = useState('')
   const [priority, setPriority] = useState<TaskPriority>('MEDIUM')
   const [dueDate, setDueDate] = useState('')
+  const [estimatedTime, setEstimatedTime] = useState('01:00')
   const [projectClientId, setProjectClientId] = useState('')
   const [panel, setPanel] = useState('')
   const [assigneeId, setAssigneeId] = useState('')
+  const [editTaskId, setEditTaskId] = useState<string | null>(null)
   const [projectClients, setProjectClients] = useState<ProjectClientOption[]>([])
   const [assignees, setAssignees] = useState<AssigneeOption[]>([])
   const [worklogsByTask, setWorklogsByTask] = useState<Record<string, WorklogRow[]>>({})
@@ -90,7 +94,7 @@ export function ProjectKanbanPage() {
     setLoading(true)
     const { data, error } = await supabase
       .from('project_tasks')
-      .select('id, title, details, status, priority, due_date, panel, assignee_id, created_at, project_client:project_client_id(name, project_code), assignee:assignee_id(name)')
+      .select('id, title, details, status, priority, due_date, panel, project_client_id, estimated_time_hhmm, assignee_id, created_at, project_client:project_client_id(name, project_code), assignee:assignee_id(name)')
       .eq('user_id', ownerUserId)
       .order('created_at', { ascending: false })
     if (error) alert(error.message)
@@ -194,6 +198,10 @@ export function ProjectKanbanPage() {
     if (!supabase || !ownerUserId) return
     const safeTitle = title.trim().toUpperCase()
     if (!safeTitle) return
+    if (estimatedTime && !/^\d{2}:[0-5]\d$/.test(estimatedTime)) {
+      alert('Tempo estimado inválido. Use hh:mm (ex.: 01:30).')
+      return
+    }
     const { error } = await supabase.from('project_tasks').insert({
       user_id: ownerUserId,
       title: safeTitle,
@@ -201,6 +209,7 @@ export function ProjectKanbanPage() {
       priority,
       due_date: dueDate || null,
       panel: panel || null,
+      estimated_time_hhmm: estimatedTime || null,
       status: 'TODO',
       project_client_id: projectClientId || null,
       assignee_id: assigneeId || null,
@@ -213,6 +222,7 @@ export function ProjectKanbanPage() {
     setDetails('')
     setPriority('MEDIUM')
     setDueDate('')
+    setEstimatedTime('01:00')
     setProjectClientId('')
     setPanel('')
     setAssigneeId('')
@@ -238,6 +248,54 @@ export function ProjectKanbanPage() {
       grouped[row.task_id].push(row)
     })
     setWorklogsByTask(grouped)
+  }
+
+  function startEditTask(task: TaskRow) {
+    setEditTaskId(task.id)
+    setTitle(task.title ?? '')
+    setDetails(task.details ?? '')
+    setPriority(task.priority)
+    setDueDate(task.due_date ?? '')
+    setEstimatedTime(task.estimated_time_hhmm ?? '01:00')
+    setProjectClientId(task.project_client_id ?? '')
+    setPanel(task.panel ?? '')
+    setAssigneeId(task.assignee_id ?? '')
+  }
+
+  async function saveTaskEdits(e: React.FormEvent) {
+    e.preventDefault()
+    if (!supabase || !editTaskId) return
+    const safeTitle = title.trim().toUpperCase()
+    if (!safeTitle) return
+    if (estimatedTime && !/^\d{2}:[0-5]\d$/.test(estimatedTime)) {
+      alert('Tempo estimado inválido. Use hh:mm (ex.: 01:30).')
+      return
+    }
+    const { error } = await supabase
+      .from('project_tasks')
+      .update({
+        title: safeTitle,
+        details: details.trim().toUpperCase() || null,
+        priority,
+        due_date: dueDate || null,
+        panel: panel || null,
+        estimated_time_hhmm: estimatedTime || null,
+        project_client_id: projectClientId || null,
+        assignee_id: assigneeId || null,
+      })
+      .eq('id', editTaskId)
+    if (error) {
+      alert(error.message)
+      return
+    }
+    setEditTaskId(null)
+    await loadTasks()
+  }
+
+  async function concludeEditingTask() {
+    if (!editTaskId) return
+    await moveTask(editTaskId, 'DONE')
+    setEditTaskId(null)
   }
 
   function sumDurations(logs: WorklogRow[]) {
@@ -354,13 +412,16 @@ export function ProjectKanbanPage() {
                       <p className="text-sm font-semibold text-slate-900">{task.title}</p>
                       {task.details ? <p className="mt-1 line-clamp-2 text-xs text-slate-500">{task.details}</p> : null}
                       {task.panel ? <p className="mt-1 text-xs text-slate-600">Painel: {task.panel}</p> : null}
+                      {task.estimated_time_hhmm ? <p className="mt-1 text-xs text-slate-600">Tempo estimado: {task.estimated_time_hhmm}</p> : null}
                       {task.assignee?.name ? <p className="mt-1 text-xs text-slate-600">Responsável: {task.assignee.name}</p> : null}
                       {worklogsByTask[task.id]?.length ? (
-                        <p className="mt-1 text-xs text-indigo-700">
+                        <button type="button" className="mt-1 text-left text-xs text-indigo-700 hover:underline" onClick={() => setWorklogTaskId(task.id)}>
                           Registros: {worklogsByTask[task.id].length} • Tempo total: {sumDurations(worklogsByTask[task.id])}
-                        </p>
+                        </button>
                       ) : (
-                        <p className="mt-1 text-xs text-slate-400">Sem registros de execução</p>
+                        <button type="button" className="mt-1 text-left text-xs text-slate-400 hover:text-slate-600 hover:underline" onClick={() => setWorklogTaskId(task.id)}>
+                          Sem registros de execução
+                        </button>
                       )}
                       {task.project_client?.name ? (
                         <p className="mt-1 text-xs text-emerald-700">
@@ -385,6 +446,9 @@ export function ProjectKanbanPage() {
                           onClick={() => setWorklogTaskId(task.id)}
                         >
                           Registrar atividade
+                        </Button>
+                        <Button type="button" variant="ghost" className="h-8 px-2 text-xs" onClick={() => startEditTask(task)}>
+                          Editar tarefa
                         </Button>
                         {task.status !== 'TODO' ? (
                           <Button type="button" variant="ghost" className="h-8 px-2 text-xs" onClick={() => void moveTask(task.id, 'TODO')}>
@@ -471,6 +535,10 @@ export function ProjectKanbanPage() {
                   <option value="LOW">BAIXA</option>
                 </select>
               </div>
+              <div>
+                <label>Tempo estimado (hh:mm)</label>
+                <input value={estimatedTime} onChange={(e) => setEstimatedTime(e.target.value)} placeholder="01:30" />
+              </div>
               <div className="sm:col-span-2">
                 <label>Título</label>
                 <input value={title} onChange={(e) => setTitle(e.target.value)} required />
@@ -524,6 +592,79 @@ export function ProjectKanbanPage() {
                 ))
               )}
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {editTaskId ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-base font-semibold text-slate-900">Editar tarefa</h3>
+              <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-100" onClick={() => setEditTaskId(null)}>
+                <X size={14} />
+              </button>
+            </div>
+            <form onSubmit={saveTaskEdits} className="grid gap-3 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label>Projeto</label>
+                <select value={projectClientId} onChange={(e) => { setProjectClientId(e.target.value); setPanel('') }}>
+                  <option value="">SELECIONE</option>
+                  {projectClients.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.project_code ? `${item.project_code} - ` : ''}{item.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label>Painel</label>
+                <select value={panel} onChange={(e) => setPanel(e.target.value)}>
+                  <option value="">SELECIONE</option>
+                  {availablePanels.map((item) => (
+                    <option key={item} value={item}>{item}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label>Responsável</label>
+                <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
+                  <option value="">SELECIONE</option>
+                  {assignees.map((item) => (
+                    <option key={item.id} value={item.id}>{item.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label>Prazo</label>
+                <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+              </div>
+              <div>
+                <label>Prioridade</label>
+                <select value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)}>
+                  <option value="HIGH">ALTA</option>
+                  <option value="MEDIUM">MÉDIA</option>
+                  <option value="LOW">BAIXA</option>
+                </select>
+              </div>
+              <div>
+                <label>Tempo estimado (hh:mm)</label>
+                <input value={estimatedTime} onChange={(e) => setEstimatedTime(e.target.value)} placeholder="01:30" />
+              </div>
+              <div className="sm:col-span-2">
+                <label>Título</label>
+                <input value={title} onChange={(e) => setTitle(e.target.value)} required />
+              </div>
+              <div className="sm:col-span-2">
+                <label>Descrição</label>
+                <textarea rows={3} value={details} onChange={(e) => setDetails(e.target.value)} />
+              </div>
+              <div className="sm:col-span-2 flex items-center gap-2 pt-1">
+                <Button type="submit" variant="primary">Salvar edição</Button>
+                <Button type="button" variant="secondary" onClick={() => void concludeEditingTask()}>Concluir</Button>
+                <Button type="button" variant="ghost" onClick={() => setEditTaskId(null)}>Cancelar</Button>
+              </div>
+            </form>
           </div>
         </div>
       ) : null}
