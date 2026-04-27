@@ -79,6 +79,7 @@ export function AppLayout() {
   const closeTimerRef = useRef<number | null>(null)
 
   const emails = clerkEmailCandidates(user)
+  const bemAvivOnlyUser = emails.includes('suelenjalves@gmail.com')
   const hideAgendaTasks = emails.includes('suelenjalves@gmail.com')
   const tasksHomologEnabled = !hideAgendaTasks && canAccessTasksHomolog(user?.primaryEmailAddress?.emailAddress)
 
@@ -175,16 +176,18 @@ export function AppLayout() {
                   onNavigate={() => setOpenMenu(null)}
                 />
               ) : null}
-              <TreeDropdown
-                title="Gestão LSH"
-                items={lshItems}
-                open={openMenu === 'lsh'}
-                onOpen={() => openMenuNow('lsh')}
-                onToggleClick={() => setOpenMenu((current) => (current === 'lsh' ? null : 'lsh'))}
-                onClose={() => scheduleClose('lsh')}
-                onCancelClose={cancelClose}
-                onNavigate={() => setOpenMenu(null)}
-              />
+              {!bemAvivOnlyUser ? (
+                <TreeDropdown
+                  title="Gestão LSH"
+                  items={lshItems}
+                  open={openMenu === 'lsh'}
+                  onOpen={() => openMenuNow('lsh')}
+                  onToggleClick={() => setOpenMenu((current) => (current === 'lsh' ? null : 'lsh'))}
+                  onClose={() => scheduleClose('lsh')}
+                  onCancelClose={cancelClose}
+                  onNavigate={() => setOpenMenu(null)}
+                />
+              ) : null}
               <TreeDropdown
                 title="Bem Aviv"
                 items={bemAvivItems}
