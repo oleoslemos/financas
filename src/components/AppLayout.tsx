@@ -213,7 +213,7 @@ export function AppLayout() {
               ) : null}
               {!bemAvivOnlyUser ? (
                 <TreeDropdown
-                  title="Gestão LSH"
+                  title="Sistema Gestão"
                   items={lshItems}
                   open={openMenu === 'lsh'}
                   onOpen={() => openMenuNow('lsh')}
