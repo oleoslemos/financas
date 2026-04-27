@@ -82,6 +82,7 @@ export function BemAvivFollowupPage() {
   const { user } = useUser()
   const supabase = useSupabase()
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
+  const followupUserId = ownerUserId ? ownerUserId.toUpperCase() : null
 
   const [rows, setRows] = useState<Cliente[]>([])
   const [loading, setLoading] = useState(true)
@@ -130,12 +131,12 @@ export function BemAvivFollowupPage() {
   }, [load])
 
   async function loadHistory(clientId: string) {
-    if (!supabase || !ownerUserId) return
+    if (!supabase || !followupUserId) return
     setLoadingHistory(true)
     const { data, error } = await supabase
       .from('bem_aviv_client_followups')
       .select('id, contacted_at, channel, result, notes')
-      .eq('user_id', ownerUserId)
+      .eq('user_id', followupUserId)
       .eq('client_id', clientId)
       .order('contacted_at', { ascending: false })
       .limit(8)
@@ -189,7 +190,7 @@ export function BemAvivFollowupPage() {
 
   async function submitRegisterContact(e: React.FormEvent) {
     e.preventDefault()
-    if (!supabase || !ownerUserId || !registeringClient) return
+    if (!supabase || !followupUserId || !registeringClient) return
     if (!registerForm.contacted_at) {
       alert('INFORME A DATA/HORA DO CONTATO.')
       return
@@ -197,7 +198,7 @@ export function BemAvivFollowupPage() {
 
     const contactedAtIso = new Date(registerForm.contacted_at).toISOString()
     const { error: insertError } = await supabase.from('bem_aviv_client_followups').insert({
-      user_id: ownerUserId,
+      user_id: followupUserId,
       client_id: registeringClient.id,
       contacted_at: contactedAtIso,
       channel: registerForm.channel,
