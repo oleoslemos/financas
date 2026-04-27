@@ -1,6 +1,10 @@
-import { Check, ListTodo, Plus, StickyNote, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useUser } from '@clerk/clerk-react'
+import { Check, ListTodo, LoaderCircle, Plus, StickyNote, Trash2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '../components/ui/Button'
+import { useSupabase } from '../hooks/useSupabase'
+import { clerkEmailCandidates } from '../lib/clerkEmails'
+import { resolveDataOwnerId } from '../lib/dataOwner'
 
 type ViewMode = 'LIST' | 'POSTITS'
 
@@ -11,8 +15,13 @@ type NoteItem = {
   color: 'yellow' | 'blue' | 'green' | 'pink'
   createdAt: string
 }
-
-const STORAGE_KEY = 'projects-notes-board-v1'
+type NoteRow = {
+  id: string
+  title: string
+  done: boolean
+  color: NoteItem['color']
+  created_at: string
+}
 
 const postitStyleByColor: Record<NoteItem['color'], string> = {
   yellow: 'border-amber-200 bg-amber-50 text-amber-900',
@@ -27,24 +36,62 @@ function nextColor(index: number): NoteItem['color'] {
 }
 
 export function ProjectNotesPage() {
+  const { user } = useUser()
+  const supabase = useSupabase()
+  const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
+
   const [mode, setMode] = useState<ViewMode>('LIST')
   const [items, setItems] = useState<NoteItem[]>([])
   const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    const saved = window.localStorage.getItem(STORAGE_KEY)
-    if (!saved) return
-    try {
-      const parsed = JSON.parse(saved) as NoteItem[]
-      if (Array.isArray(parsed)) setItems(parsed)
-    } catch {
-      window.localStorage.removeItem(STORAGE_KEY)
+  const loadNotes = useCallback(async () => {
+    if (!supabase || !ownerUserId) return
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('project_notes')
+      .select('id, title, done, color, created_at')
+      .eq('user_id', ownerUserId)
+      .order('created_at', { ascending: false })
+    if (error) {
+      alert(error.message)
+      setLoading(false)
+      return
     }
-  }, [])
+    const mapped = ((data as NoteRow[]) ?? []).map((row) => ({
+      id: row.id,
+      title: row.title,
+      done: row.done,
+      color: row.color,
+      createdAt: row.created_at,
+    }))
+    setItems(mapped)
+    setLoading(false)
+  }, [ownerUserId, supabase])
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
-  }, [items])
+    void loadNotes()
+  }, [loadNotes])
+
+  useEffect(() => {
+    if (!supabase || !ownerUserId) return
+    const channel = supabase
+      .channel(`project-notes-${ownerUserId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'project_notes',
+          filter: `user_id=eq.${ownerUserId}`,
+        },
+        () => void loadNotes(),
+      )
+      .subscribe()
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [loadNotes, ownerUserId, supabase])
 
   const stats = useMemo(() => {
     const total = items.length
@@ -52,34 +99,56 @@ export function ProjectNotesPage() {
     return { total, done, pending: total - done }
   }, [items])
 
-  function addItem(e: React.FormEvent) {
+  async function addItem(e: React.FormEvent) {
     e.preventDefault()
+    if (!supabase || !ownerUserId) return
     const title = input.trim()
     if (!title) return
-    setItems((current) => [
-      {
-        id: window.crypto.randomUUID(),
-        title,
-        done: false,
-        color: nextColor(current.length),
-        createdAt: new Date().toISOString(),
-      },
-      ...current,
-    ])
+    const { error } = await supabase.from('project_notes').insert({
+      user_id: ownerUserId,
+      title,
+      done: false,
+      color: nextColor(items.length),
+    })
+    if (error) {
+      alert(error.message)
+      return
+    }
     setInput('')
+    await loadNotes()
   }
 
-  function toggleDone(id: string) {
-    setItems((current) => current.map((item) => (item.id === id ? { ...item, done: !item.done } : item)))
+  async function toggleDone(id: string, done: boolean) {
+    if (!supabase) return
+    const { error } = await supabase.from('project_notes').update({ done: !done }).eq('id', id)
+    if (error) {
+      alert(error.message)
+      return
+    }
+    await loadNotes()
   }
 
-  function removeItem(id: string) {
-    setItems((current) => current.filter((item) => item.id !== id))
+  async function removeItem(id: string) {
+    if (!supabase) return
+    const { error } = await supabase.from('project_notes').delete().eq('id', id)
+    if (error) {
+      alert(error.message)
+      return
+    }
+    await loadNotes()
   }
 
-  function clearDone() {
-    setItems((current) => current.filter((item) => !item.done))
+  async function clearDone() {
+    if (!supabase || !ownerUserId) return
+    const { error } = await supabase.from('project_notes').delete().eq('user_id', ownerUserId).eq('done', true)
+    if (error) {
+      alert(error.message)
+      return
+    }
+    await loadNotes()
   }
+
+  if (!supabase) return <p className="text-slate-600">CONECTANDO AO BANCO…</p>
 
   return (
     <div className="space-y-6">
@@ -144,7 +213,14 @@ export function ProjectNotesPage() {
         </div>
       </section>
 
-      {items.length === 0 ? (
+      {loading ? (
+        <section className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
+          <p className="inline-flex items-center gap-2">
+            <LoaderCircle size={14} className="animate-spin" />
+            Carregando anotações...
+          </p>
+        </section>
+      ) : items.length === 0 ? (
         <section className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
           Nenhuma anotação ainda. Adicione sua primeira tarefa para começar.
         </section>
@@ -157,7 +233,7 @@ export function ProjectNotesPage() {
                 className={`inline-flex h-6 w-6 items-center justify-center rounded-full border ${
                   item.done ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300 text-transparent'
                 }`}
-                onClick={() => toggleDone(item.id)}
+                onClick={() => void toggleDone(item.id, item.done)}
                 aria-label={item.done ? 'Marcar como pendente' : 'Marcar como concluída'}
                 title={item.done ? 'Marcar como pendente' : 'Marcar como concluída'}
               >
@@ -168,7 +244,7 @@ export function ProjectNotesPage() {
                 type="button"
                 variant="ghost"
                 className="inline-flex h-8 w-8 items-center justify-center p-0 text-red-600"
-                onClick={() => removeItem(item.id)}
+                onClick={() => void removeItem(item.id)}
                 aria-label="Excluir anotação"
                 title="Excluir anotação"
               >
@@ -187,7 +263,7 @@ export function ProjectNotesPage() {
                   className={`inline-flex h-6 w-6 items-center justify-center rounded-full border ${
                     item.done ? 'border-emerald-700 bg-emerald-700 text-white' : 'border-current/40 text-transparent'
                   }`}
-                  onClick={() => toggleDone(item.id)}
+                  onClick={() => void toggleDone(item.id, item.done)}
                   aria-label={item.done ? 'Marcar como pendente' : 'Marcar como concluída'}
                   title={item.done ? 'Marcar como pendente' : 'Marcar como concluída'}
                 >
@@ -197,7 +273,7 @@ export function ProjectNotesPage() {
                   type="button"
                   variant="ghost"
                   className="inline-flex h-8 w-8 items-center justify-center p-0 text-current/80"
-                  onClick={() => removeItem(item.id)}
+                  onClick={() => void removeItem(item.id)}
                   aria-label="Excluir anotação"
                   title="Excluir anotação"
                 >

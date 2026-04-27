@@ -1,4 +1,4 @@
-import { ArrowRight, CalendarDays, CheckSquare, FolderKanban, Gauge, KanbanSquare, Layers3, Workflow } from 'lucide-react'
+import { ArrowRight, BriefcaseBusiness, CalendarDays, CheckSquare, FolderKanban, Gauge, KanbanSquare, Layers3, Workflow } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 
 type ModuleCard = {
@@ -30,6 +30,13 @@ const moduleCards: ModuleCard[] = [
     to: '/projetos/backlog',
     icon: FolderKanban,
     chip: 'Planejamento',
+  },
+  {
+    title: 'Projetos / Clientes',
+    description: 'Cadastro específico para vincular tarefas sem usar os clientes da Bem Aviv.',
+    to: '/projetos/clientes',
+    icon: BriefcaseBusiness,
+    chip: 'Cadastro',
   },
   {
     title: 'Sprints e execução',

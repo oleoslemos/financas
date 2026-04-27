@@ -41,6 +41,11 @@ const TasksPage = lazy(() => import('./pages/TasksPage').then((m) => ({ default:
 const LshStartPage = lazy(() => import('./pages/LshStartPage').then((m) => ({ default: m.LshStartPage })))
 const ProjectsHubPage = lazy(() => import('./pages/ProjectsHubPage').then((m) => ({ default: m.ProjectsHubPage })))
 const ProjectNotesPage = lazy(() => import('./pages/ProjectNotesPage').then((m) => ({ default: m.ProjectNotesPage })))
+const ProjectKanbanPage = lazy(() => import('./pages/ProjectKanbanPage').then((m) => ({ default: m.ProjectKanbanPage })))
+const ProjectBacklogPage = lazy(() => import('./pages/ProjectBacklogPage').then((m) => ({ default: m.ProjectBacklogPage })))
+const ProjectSprintsPage = lazy(() => import('./pages/ProjectSprintsPage').then((m) => ({ default: m.ProjectSprintsPage })))
+const ProjectActivitiesPage = lazy(() => import('./pages/ProjectActivitiesPage').then((m) => ({ default: m.ProjectActivitiesPage })))
+const ProjectClientsPage = lazy(() => import('./pages/ProjectClientsPage').then((m) => ({ default: m.ProjectClientsPage })))
 
 function HomeRedirect() {
   const { user } = useUser()
@@ -63,10 +68,11 @@ export default function App() {
               <Route path="/lsh/inicio" element={<LshStartPage />} />
               <Route element={<RequireProjectsAccess />}>
                 <Route path="/projetos" element={<ProjectsHubPage />} />
-                <Route path="/projetos/kanban" element={<ProjectsHubPage />} />
-                <Route path="/projetos/backlog" element={<ProjectsHubPage />} />
-                <Route path="/projetos/sprints" element={<ProjectsHubPage />} />
-                <Route path="/projetos/atividades" element={<ProjectsHubPage />} />
+                <Route path="/projetos/kanban" element={<ProjectKanbanPage />} />
+                <Route path="/projetos/backlog" element={<ProjectBacklogPage />} />
+                <Route path="/projetos/clientes" element={<ProjectClientsPage />} />
+                <Route path="/projetos/sprints" element={<ProjectSprintsPage />} />
+                <Route path="/projetos/atividades" element={<ProjectActivitiesPage />} />
                 <Route path="/projetos/anotacoes" element={<ProjectNotesPage />} />
               </Route>
               <Route path="/lsh/resumo" element={<Dashboard />} />
