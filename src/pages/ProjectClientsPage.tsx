@@ -1,5 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
-import { LoaderCircle, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { LoaderCircle, Pencil, Plus, Power, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
@@ -23,6 +23,7 @@ export function ProjectClientsPage() {
 
   const [rows, setRows] = useState<ProjectClientRow[]>([])
   const [loading, setLoading] = useState(false)
+  const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [projectCode, setProjectCode] = useState('')
@@ -50,6 +51,7 @@ export function ProjectClientsPage() {
 
   function resetForm() {
     setEditingId(null)
+    setModalOpen(false)
     setName('')
     setProjectCode('')
     setProjectDescription('')
@@ -112,6 +114,7 @@ export function ProjectClientsPage() {
   }
 
   function startEdit(row: ProjectClientRow) {
+    setModalOpen(true)
     setEditingId(row.id)
     setName(row.name ?? '')
     setProjectCode(row.project_code ?? '')
@@ -127,67 +130,87 @@ export function ProjectClientsPage() {
       <header>
         <h2 className="text-2xl font-semibold text-slate-900">Cadastro de Projetos/Clientes</h2>
         <p className="text-sm text-slate-600">Cadastro específico do módulo de projetos (independente da Bem Aviv).</p>
+        <div className="mt-3">
+          <Button type="button" variant="primary" className="inline-flex items-center gap-2" onClick={() => setModalOpen(true)}>
+            <Plus size={16} />
+            Novo cadastro
+          </Button>
+        </div>
       </header>
 
-      <form onSubmit={saveProjectClient} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h3 className="text-sm font-semibold text-slate-800">{editingId ? 'Editar cadastro' : 'Novo projeto/cliente'}</h3>
-        <div className="grid gap-3 sm:grid-cols-12">
-          <div className="sm:col-span-3">
-            <label>Código</label>
-            <input value={projectCode} onChange={(e) => setProjectCode(e.target.value)} placeholder="EX: PRJ-001" />
-          </div>
-          <div className="sm:col-span-9">
-            <label>Nome cliente</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} required />
-          </div>
-          <div className="sm:col-span-12">
-            <label>Painel (pode incluir mais de 1)</label>
-            <div className="flex gap-2">
-              <input
-                value={panelInput}
-                onChange={(e) => setPanelInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    addPanelFromInput()
-                  }
-                }}
-                placeholder="Digite o painel e pressione Enter"
-              />
-              <Button type="button" variant="ghost" onClick={addPanelFromInput}>
-                Adicionar painel
-              </Button>
+      {modalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4">
+          <div className="w-full max-w-4xl rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-base font-semibold text-slate-900">{editingId ? 'Editar cadastro' : 'Novo projeto/cliente'}</h3>
+              <button
+                type="button"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-100"
+                onClick={resetForm}
+                aria-label="Fechar modal"
+              >
+                <X size={14} />
+              </button>
             </div>
-            {panels.length > 0 ? (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {panels.map((panel) => (
-                  <span key={panel} className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2 py-1 text-xs text-slate-700">
-                    {panel}
-                    <button type="button" className="inline-flex h-4 w-4 items-center justify-center rounded-full text-slate-500 hover:bg-slate-200 hover:text-slate-700" onClick={() => removePanel(panel)}>
-                      <X size={12} />
-                    </button>
-                  </span>
-                ))}
+            <form onSubmit={saveProjectClient} className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-12">
+                <div className="sm:col-span-3">
+                  <label>Código</label>
+                  <input value={projectCode} onChange={(e) => setProjectCode(e.target.value)} placeholder="EX: PRJ-001" />
+                </div>
+                <div className="sm:col-span-9">
+                  <label>Nome cliente</label>
+                  <input value={name} onChange={(e) => setName(e.target.value)} required />
+                </div>
+                <div className="sm:col-span-12">
+                  <label>Painel (pode incluir mais de 1)</label>
+                  <div className="flex gap-2">
+                    <input
+                      value={panelInput}
+                      onChange={(e) => setPanelInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          addPanelFromInput()
+                        }
+                      }}
+                      placeholder="Digite o painel e pressione Enter"
+                    />
+                    <Button type="button" variant="ghost" onClick={addPanelFromInput}>
+                      Adicionar painel
+                    </Button>
+                  </div>
+                  {panels.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {panels.map((panel) => (
+                        <span key={panel} className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2 py-1 text-xs text-slate-700">
+                          {panel}
+                          <button type="button" className="inline-flex h-4 w-4 items-center justify-center rounded-full text-slate-500 hover:bg-slate-200 hover:text-slate-700" onClick={() => removePanel(panel)}>
+                            <X size={12} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+                <div className="sm:col-span-12">
+                  <label>Descrição projeto</label>
+                  <textarea rows={2} value={projectDescription} onChange={(e) => setProjectDescription(e.target.value)} />
+                </div>
               </div>
-            ) : null}
-          </div>
-          <div className="sm:col-span-12">
-            <label>Descrição projeto</label>
-            <textarea rows={2} value={projectDescription} onChange={(e) => setProjectDescription(e.target.value)} />
+              <div className="flex items-center gap-2 pt-1">
+                <Button type="submit" variant="primary" className="inline-flex items-center gap-2">
+                  <Plus size={16} />
+                  {editingId ? 'Salvar alterações' : 'Cadastrar'}
+                </Button>
+                <Button type="button" variant="ghost" onClick={resetForm}>
+                  Cancelar
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button type="submit" variant="primary" className="inline-flex items-center gap-2">
-            <Plus size={16} />
-            {editingId ? 'Salvar alterações' : 'Cadastrar'}
-          </Button>
-          {editingId ? (
-            <Button type="button" variant="ghost" onClick={resetForm}>
-              Cancelar edição
-            </Button>
-          ) : null}
-        </div>
-      </form>
+      ) : null}
 
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         {loading ? (
@@ -216,13 +239,21 @@ export function ProjectClientsPage() {
                   ) : null}
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button type="button" variant="ghost" className="inline-flex h-8 w-8 items-center justify-center p-0" onClick={() => startEdit(row)} title="Editar" aria-label="Editar">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white p-0 text-slate-700 hover:bg-slate-100"
+                    onClick={() => startEdit(row)}
+                    title="Editar"
+                    aria-label="Editar"
+                  >
                     <Pencil size={14} />
                   </Button>
-                  <Button type="button" variant="ghost" className="h-8 px-2 text-xs" onClick={() => void setActive(row.id, !row.active)}>
+                  <Button type="button" variant="ghost" className="inline-flex h-8 items-center gap-1 border border-slate-300 bg-white px-2 text-xs text-slate-700 hover:bg-slate-100" onClick={() => void setActive(row.id, !row.active)}>
+                    <Power size={13} />
                     {row.active ? 'Inativar' : 'Reativar'}
                   </Button>
-                  <Button type="button" variant="ghost" className="inline-flex h-8 w-8 items-center justify-center p-0 text-red-600" onClick={() => void removeRow(row.id)}>
+                  <Button type="button" variant="ghost" className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-300 bg-white p-0 text-red-600 hover:bg-red-50" onClick={() => void removeRow(row.id)}>
                     <Trash2 size={14} />
                   </Button>
                 </div>

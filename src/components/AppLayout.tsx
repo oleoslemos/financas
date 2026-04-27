@@ -1,5 +1,5 @@
 import { useUser, UserButton } from '@clerk/clerk-react'
-import { BarChart3, BriefcaseBusiness, CalendarDays, ChevronDown, CircleDollarSign, CreditCard, FolderKanban, Gauge, KanbanSquare, LayoutDashboard, Landmark, ListTodo, MessageCircleMore, NotebookText, Package, ShoppingCart, StickyNote, Table2, Tags, UserCircle, Workflow } from 'lucide-react'
+import { BarChart3, BriefcaseBusiness, CalendarDays, ChevronDown, CircleDollarSign, CreditCard, FolderKanban, Gauge, KanbanSquare, LayoutDashboard, Landmark, ListTodo, MessageCircleMore, NotebookText, Package, ShoppingCart, StickyNote, Table2, Tags, UserCircle, Users, Workflow } from 'lucide-react'
 import { type ComponentType, useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { canAccessTasksHomolog } from '../lib/tasksHomologAccess'
@@ -170,6 +170,7 @@ export function AppLayout() {
         label: 'Execução',
         children: [
           { label: 'Projetos / Clientes', to: '/projetos/clientes', icon: BriefcaseBusiness },
+          { label: 'Responsáveis', to: '/projetos/responsaveis', icon: Users },
           { label: 'Sprints', to: '/projetos/sprints', icon: Workflow },
           { label: 'Tarefas e atividades', to: '/projetos/atividades', icon: ListTodo },
           { label: 'Lista de tarefas', to: '/projetos/anotacoes', icon: NotebookText },

@@ -7,7 +7,7 @@ import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { toISODate } from '../lib/dates'
 
-type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'REVIEW' | 'DONE'
+type TaskStatus = 'BACKLOG' | 'TODO' | 'IN_PROGRESS' | 'REVIEW' | 'DONE'
 type TaskRow = {
   id: string
   title: string

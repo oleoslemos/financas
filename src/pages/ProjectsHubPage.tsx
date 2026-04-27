@@ -1,4 +1,4 @@
-import { ArrowRight, BriefcaseBusiness, CheckSquare, FolderKanban, Gauge, KanbanSquare, Layers3, Workflow } from 'lucide-react'
+import { ArrowRight, BriefcaseBusiness, CheckSquare, FolderKanban, Gauge, KanbanSquare, Layers3, Users, Workflow } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 
 type ModuleCard = {
@@ -36,6 +36,13 @@ const moduleCards: ModuleCard[] = [
     description: 'Cadastro específico para vincular tarefas sem usar os clientes da Bem Aviv.',
     to: '/projetos/clientes',
     icon: BriefcaseBusiness,
+    chip: 'Cadastro',
+  },
+  {
+    title: 'Responsáveis',
+    description: 'Cadastro de responsáveis para vincular a execução das tarefas.',
+    to: '/projetos/responsaveis',
+    icon: Users,
     chip: 'Cadastro',
   },
   {

@@ -6,7 +6,7 @@ import { useSupabase } from '../hooks/useSupabase'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 
-type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'REVIEW' | 'DONE'
+type TaskStatus = 'BACKLOG' | 'TODO' | 'IN_PROGRESS' | 'REVIEW' | 'DONE'
 type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH'
 type TaskRow = {
   id: string
@@ -17,10 +17,12 @@ type TaskRow = {
   due_date: string | null
   project_client_id: string | null
   project_client?: { name: string | null; project_code: string | null } | null
+  assignee?: { name: string | null } | null
   created_at: string
 }
-type TaskRowRaw = Omit<TaskRow, 'project_client'> & {
+type TaskRowRaw = Omit<TaskRow, 'project_client' | 'assignee'> & {
   project_client?: { name: string | null; project_code: string | null } | Array<{ name: string | null; project_code: string | null }> | null
+  assignee?: { name: string | null } | Array<{ name: string | null }> | null
 }
 type ProjectClientOption = {
   id: string
@@ -30,6 +32,7 @@ type ProjectClientOption = {
 }
 
 const statusLabel: Record<TaskStatus, string> = {
+  BACKLOG: 'BACKLOG',
   TODO: 'PENDENTE',
   IN_PROGRESS: 'EM ANDAMENTO',
   REVIEW: 'REVISÃO',
@@ -52,13 +55,14 @@ export function ProjectActivitiesPage() {
     setLoading(true)
     const { data, error } = await supabase
       .from('project_tasks')
-      .select('id, title, details, status, priority, due_date, project_client_id, created_at, project_client:project_client_id(name, project_code)')
+      .select('id, title, details, status, priority, due_date, project_client_id, created_at, project_client:project_client_id(name, project_code), assignee:assignee_id(name)')
       .eq('user_id', ownerUserId)
       .order('created_at', { ascending: false })
     if (error) alert(error.message)
     const mapped = ((data as TaskRowRaw[]) ?? []).map((row) => ({
       ...row,
       project_client: Array.isArray(row.project_client) ? (row.project_client[0] ?? null) : (row.project_client ?? null),
+      assignee: Array.isArray(row.assignee) ? (row.assignee[0] ?? null) : (row.assignee ?? null),
     }))
     setRows(mapped)
     setLoading(false)
@@ -129,6 +133,7 @@ export function ProjectActivitiesPage() {
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as 'ALL' | TaskStatus)}>
             <option value="ALL">TODOS OS STATUS</option>
             <option value="TODO">PENDENTE</option>
+            <option value="BACKLOG">BACKLOG</option>
             <option value="IN_PROGRESS">EM ANDAMENTO</option>
             <option value="REVIEW">REVISÃO</option>
             <option value="DONE">CONCLUÍDA</option>
@@ -159,8 +164,14 @@ export function ProjectActivitiesPage() {
                       {task.project_client.project_code ? ` (${task.project_client.project_code})` : ''}
                     </p>
                   ) : null}
+                  {task.assignee?.name ? <p className="text-xs text-slate-600">Responsável: {task.assignee.name}</p> : null}
                 </div>
                 <div className="flex items-center gap-2">
+                  {task.status === 'BACKLOG' ? (
+                    <Button type="button" variant="ghost" className="inline-flex h-9 w-9 items-center justify-center p-0" onClick={() => void setStatus(task.id, 'TODO')} title="Enviar para A Fazer">
+                      <CircleDashed size={16} />
+                    </Button>
+                  ) : null}
                   <select value={task.project_client_id ?? ''} onChange={(e) => void setProjectClient(task.id, e.target.value)} className="h-9 text-xs">
                     <option value="">SEM VÍNCULO</option>
                     {projectClients.map((item) => (

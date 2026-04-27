@@ -9,19 +9,24 @@ import { toISODate } from '../lib/dates'
 import { toUpperTrim } from '../lib/text'
 
 type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH'
+type TaskStatus = 'BACKLOG' | 'TODO' | 'IN_PROGRESS' | 'REVIEW' | 'DONE'
 type TaskRow = {
   id: string
   title: string
   details: string | null
+  status: TaskStatus
   priority: TaskPriority
   due_date: string | null
   panel: string | null
   project_client_id: string | null
   project_client?: { name: string | null; project_code: string | null } | null
+  assignee_id: string | null
+  assignee?: { name: string | null } | null
   created_at: string
 }
-type TaskRowRaw = Omit<TaskRow, 'project_client'> & {
+type TaskRowRaw = Omit<TaskRow, 'project_client' | 'assignee'> & {
   project_client?: { name: string | null; project_code: string | null } | Array<{ name: string | null; project_code: string | null }> | null
+  assignee?: { name: string | null } | Array<{ name: string | null }> | null
 }
 
 type ProjectClientOption = {
@@ -30,6 +35,11 @@ type ProjectClientOption = {
   project_code: string | null
   active: boolean
   panels: string[] | null
+}
+type AssigneeOption = {
+  id: string
+  name: string
+  active: boolean
 }
 
 const priorityRank: Record<TaskPriority, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 }
@@ -47,8 +57,11 @@ export function ProjectBacklogPage() {
   const [priority, setPriority] = useState<TaskPriority>('MEDIUM')
   const [dueDate, setDueDate] = useState(toISODate(new Date()))
   const [projectClientId, setProjectClientId] = useState('')
+  const [assigneeId, setAssigneeId] = useState('')
+  const [projectSearch, setProjectSearch] = useState('')
   const [panel, setPanel] = useState('')
   const [projectClients, setProjectClients] = useState<ProjectClientOption[]>([])
+  const [assignees, setAssignees] = useState<AssigneeOption[]>([])
   const [query, setQuery] = useState('')
   const [projectFilter, setProjectFilter] = useState('')
   const [panelFilter, setPanelFilter] = useState('')
@@ -59,14 +72,15 @@ export function ProjectBacklogPage() {
     setLoading(true)
     const { data, error } = await supabase
       .from('project_tasks')
-      .select('id, title, details, priority, due_date, panel, project_client_id, created_at, project_client:project_client_id(name, project_code)')
+      .select('id, title, details, status, priority, due_date, panel, project_client_id, assignee_id, created_at, project_client:project_client_id(name, project_code), assignee:assignee_id(name)')
       .eq('user_id', ownerUserId)
-      .eq('status', 'TODO')
+      .eq('status', 'BACKLOG')
       .order('created_at', { ascending: false })
     if (error) alert(error.message)
     const mapped = ((data as TaskRowRaw[]) ?? []).map((row) => ({
       ...row,
       project_client: Array.isArray(row.project_client) ? (row.project_client[0] ?? null) : (row.project_client ?? null),
+      assignee: Array.isArray(row.assignee) ? (row.assignee[0] ?? null) : (row.assignee ?? null),
     }))
     setRows(mapped)
     setLoading(false)
@@ -95,10 +109,38 @@ export function ProjectBacklogPage() {
     void loadProjectClients()
   }, [loadProjectClients])
 
+  const loadAssignees = useCallback(async () => {
+    if (!supabase || !ownerUserId) return
+    const { data, error } = await supabase
+      .from('project_assignees')
+      .select('id, name, active')
+      .eq('user_id', ownerUserId)
+      .eq('active', true)
+      .order('name', { ascending: true })
+    if (error) {
+      alert(error.message)
+      return
+    }
+    setAssignees((data as AssigneeOption[]) ?? [])
+  }, [ownerUserId, supabase])
+
+  useEffect(() => {
+    void loadAssignees()
+  }, [loadAssignees])
+
   const availablePanels = useMemo(() => {
     const selected = projectClients.find((item) => item.id === projectClientId)
     return selected?.panels ?? []
   }, [projectClientId, projectClients])
+
+  const projectOptions = useMemo(() => {
+    const q = projectSearch.trim().toUpperCase()
+    if (!q) return projectClients
+    return projectClients.filter((item) => {
+      const text = `${item.project_code ?? ''} ${item.name}`.toUpperCase()
+      return text.includes(q)
+    })
+  }, [projectClients, projectSearch])
 
   const panelFilters = useMemo(() => {
     const all = new Set<string>()
@@ -136,8 +178,9 @@ export function ProjectBacklogPage() {
       priority,
       due_date: dueDate || null,
       panel: toUpperTrim(panel) || null,
-      status: 'TODO',
+      status: 'BACKLOG',
       project_client_id: projectClientId || null,
+      assignee_id: assigneeId || null,
     })
     if (error) {
       alert(error.message)
@@ -148,6 +191,8 @@ export function ProjectBacklogPage() {
     setPriority('MEDIUM')
     setDueDate(toISODate(new Date()))
     setProjectClientId('')
+    setAssigneeId('')
+    setProjectSearch('')
     setPanel('')
     setModalOpen(false)
     await loadBacklog()
@@ -155,7 +200,7 @@ export function ProjectBacklogPage() {
 
   async function sendToExecution(id: string) {
     if (!supabase) return
-    const { error } = await supabase.from('project_tasks').update({ status: 'IN_PROGRESS' }).eq('id', id)
+    const { error } = await supabase.from('project_tasks').update({ status: 'TODO' }).eq('id', id)
     if (error) alert(error.message)
     else await loadBacklog()
   }
@@ -235,6 +280,7 @@ export function ProjectBacklogPage() {
                     Prioridade: {task.priority} {task.due_date ? `• Prazo: ${task.due_date}` : ''}
                   </p>
                   {task.panel ? <p className="text-xs text-slate-600">Painel: {task.panel}</p> : null}
+                  {task.assignee?.name ? <p className="text-xs text-slate-600">Responsável: {task.assignee.name}</p> : null}
                   {task.project_client?.name ? (
                     <p className="text-xs text-emerald-700">
                       Projeto/Cliente: {task.project_client.name}
@@ -243,7 +289,7 @@ export function ProjectBacklogPage() {
                   ) : null}
                 </div>
                 <Button type="button" variant="ghost" className="h-8 px-2 text-xs" onClick={() => void sendToExecution(task.id)}>
-                  Enviar para execução
+                  Enviar para A Fazer
                 </Button>
               </div>
             ))}
@@ -264,6 +310,12 @@ export function ProjectBacklogPage() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="sm:col-span-2">
                   <label>Projeto</label>
+                  <input
+                    value={projectSearch}
+                    onChange={(e) => setProjectSearch(e.target.value)}
+                    placeholder="Pesquisar projeto por código ou nome"
+                    className="mb-2"
+                  />
                   <select
                     value={projectClientId}
                     onChange={(e) => {
@@ -273,7 +325,7 @@ export function ProjectBacklogPage() {
                     required
                   >
                     <option value="">SELECIONE</option>
-                    {projectClients.map((item) => (
+                    {projectOptions.map((item) => (
                       <option key={item.id} value={item.id}>
                         {item.project_code ? `${item.project_code} - ` : ''}
                         {item.name}
@@ -288,6 +340,17 @@ export function ProjectBacklogPage() {
                     {availablePanels.map((item) => (
                       <option key={item} value={item}>
                         {item}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label>Responsável</label>
+                  <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
+                    <option value="">SELECIONE</option>
+                    {assignees.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
                       </option>
                     ))}
                   </select>

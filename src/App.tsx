@@ -46,6 +46,7 @@ const ProjectBacklogPage = lazy(() => import('./pages/ProjectBacklogPage').then(
 const ProjectSprintsPage = lazy(() => import('./pages/ProjectSprintsPage').then((m) => ({ default: m.ProjectSprintsPage })))
 const ProjectActivitiesPage = lazy(() => import('./pages/ProjectActivitiesPage').then((m) => ({ default: m.ProjectActivitiesPage })))
 const ProjectClientsPage = lazy(() => import('./pages/ProjectClientsPage').then((m) => ({ default: m.ProjectClientsPage })))
+const ProjectAssigneesPage = lazy(() => import('./pages/ProjectAssigneesPage').then((m) => ({ default: m.ProjectAssigneesPage })))
 
 function HomeRedirect() {
   const { user } = useUser()
@@ -71,6 +72,7 @@ export default function App() {
                 <Route path="/projetos/kanban" element={<ProjectKanbanPage />} />
                 <Route path="/projetos/backlog" element={<ProjectBacklogPage />} />
                 <Route path="/projetos/clientes" element={<ProjectClientsPage />} />
+                <Route path="/projetos/responsaveis" element={<ProjectAssigneesPage />} />
                 <Route path="/projetos/sprints" element={<ProjectSprintsPage />} />
                 <Route path="/projetos/atividades" element={<ProjectActivitiesPage />} />
                 <Route path="/projetos/anotacoes" element={<ProjectNotesPage />} />
