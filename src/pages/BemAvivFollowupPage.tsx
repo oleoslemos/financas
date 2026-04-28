@@ -1,5 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
-import { CalendarPlus, MessageCircle, Pencil, PhoneForwarded, Search, Trash2 } from 'lucide-react'
+import { CalendarPlus, MessageCircle, Pencil, PhoneForwarded, PlusCircle, Search, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
@@ -31,6 +31,11 @@ type FollowupHistoryRow = {
   channel: string
   result: string | null
   notes: string | null
+}
+
+type StartFollowupForm = {
+  clientId: string
+  onlyWithoutSchedule: boolean
 }
 
 function onlyDigits(v: string) {
@@ -94,6 +99,11 @@ export function BemAvivFollowupPage() {
   const [historyRows, setHistoryRows] = useState<FollowupHistoryRow[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null)
+  const [startFollowupOpen, setStartFollowupOpen] = useState(false)
+  const [startFollowupForm, setStartFollowupForm] = useState<StartFollowupForm>({
+    clientId: '',
+    onlyWithoutSchedule: true,
+  })
 
   const [registerForm, setRegisterForm] = useState({
     contacted_at: toInputDateTimeLocal(new Date().toISOString()),
@@ -212,6 +222,31 @@ export function BemAvivFollowupPage() {
       return true
     })
   }, [rows, search, dateFilter, statusFilter])
+
+  const productivityMetrics = useMemo(() => {
+    const now = new Date()
+    const todayStart = startOfToday()
+    const tomorrow = new Date(todayStart)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    const weekEnd = new Date(todayStart)
+    weekEnd.setDate(weekEnd.getDate() + 7)
+    weekEnd.setHours(23, 59, 59, 999)
+
+    const pendingRows = rows.filter((c) => (c.next_followup_status ?? 'PENDENTE') === 'PENDENTE')
+    const vencidos = pendingRows.filter((c) => c.next_followup_at && new Date(c.next_followup_at) < now).length
+    const hoje = pendingRows.filter((c) => c.next_followup_at && new Date(c.next_followup_at) >= todayStart && new Date(c.next_followup_at) < tomorrow).length
+    const proximos7 = pendingRows.filter((c) => c.next_followup_at && new Date(c.next_followup_at) >= todayStart && new Date(c.next_followup_at) <= weekEnd).length
+    const statusCounts = BEM_AVIV_CLIENT_COMMERCIAL_STAGE_OPTIONS.map((stage) => ({
+      stage,
+      count: rows.filter((c) => (c.commercial_stage ?? 'CONTATO') === stage).length,
+    }))
+    return { vencidos, hoje, proximos7, statusCounts }
+  }, [rows])
+
+  const startFollowupClientOptions = useMemo(() => {
+    const source = startFollowupForm.onlyWithoutSchedule ? rows.filter((r) => !r.next_followup_at) : rows
+    return source.sort((a, b) => a.full_name.localeCompare(b.full_name, 'pt-BR')).map((r) => ({ id: r.id, full_name: r.full_name }))
+  }, [rows, startFollowupForm.onlyWithoutSchedule])
 
   async function submitRegisterContact(e: React.FormEvent) {
     e.preventDefault()
@@ -348,10 +383,29 @@ export function BemAvivFollowupPage() {
           <p className="text-sm text-slate-500">Registre contatos e organize os próximos retornos por data.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Link to="/bem-aviv/follow-up/produtividade">
-            <Button variant="ghost">Visão geral</Button>
-          </Link>
+          <Button variant="secondary" onClick={() => setStartFollowupOpen(true)}>
+            <PlusCircle size={15} className="mr-1" />
+            Iniciar novo follow-up
+          </Button>
           <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">TOTAL: {filteredRows.length}</p>
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4"><p className="text-xs text-rose-700">VENCIDOS</p><p className="text-2xl font-semibold text-rose-900">{productivityMetrics.vencidos}</p></div>
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-xs text-amber-700">HOJE</p><p className="text-2xl font-semibold text-amber-900">{productivityMetrics.hoje}</p></div>
+        <div className="rounded-xl border border-sky-200 bg-sky-50 p-4"><p className="text-xs text-sky-700">PRÓXIMOS 7 DIAS</p><p className="text-2xl font-semibold text-sky-900">{productivityMetrics.proximos7}</p></div>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <h3 className="mb-3 text-sm font-semibold text-slate-700">ETAPAS COMERCIAIS DOS CLIENTES</h3>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          {productivityMetrics.statusCounts.map((item) => (
+            <div key={item.stage} className="rounded-md border border-slate-200 px-3 py-2">
+              <p className="text-xs text-slate-500">{item.stage}</p>
+              <p className="text-lg font-semibold text-slate-900">{item.count}</p>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -637,6 +691,84 @@ export function BemAvivFollowupPage() {
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {startFollowupOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/35 p-3">
+          <div className="w-full max-w-xl rounded-xl border border-slate-200 bg-white p-4 shadow-xl sm:p-5">
+            <h3 className="text-lg font-semibold">INICIAR NOVO FOLLOW-UP</h3>
+            <p className="mb-4 text-sm text-slate-500">Selecione um cliente sem follow-up (ou todos) para registrar contato ou agendar retorno.</p>
+            <div className="space-y-3">
+              <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={startFollowupForm.onlyWithoutSchedule}
+                  onChange={(e) =>
+                    setStartFollowupForm((prev) => ({
+                      ...prev,
+                      onlyWithoutSchedule: e.target.checked,
+                      clientId: '',
+                    }))
+                  }
+                />
+                Mostrar apenas clientes sem follow-up agendado
+              </label>
+              <div>
+                <label>CLIENTE</label>
+                <select
+                  value={startFollowupForm.clientId}
+                  onChange={(e) => setStartFollowupForm((prev) => ({ ...prev, clientId: e.target.value }))}
+                >
+                  <option value="">— SELECIONE —</option>
+                  {startFollowupClientOptions.map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      {opt.full_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="mt-4 flex gap-2">
+              <Button
+                onClick={async () => {
+                  const client = rows.find((r) => r.id === startFollowupForm.clientId)
+                  if (!client) {
+                    alert('SELECIONE UM CLIENTE.')
+                    return
+                  }
+                  setStartFollowupOpen(false)
+                  setRegisteringClient(client)
+                  await loadHistory(client.id)
+                }}
+              >
+                Registrar contato
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  const client = rows.find((r) => r.id === startFollowupForm.clientId)
+                  if (!client) {
+                    alert('SELECIONE UM CLIENTE.')
+                    return
+                  }
+                  setStartFollowupOpen(false)
+                  setSchedulingClient(client)
+                  setScheduleForm({
+                    next_followup_at: toInputDateTimeLocal(client.next_followup_at) || toInputDateTimeLocal(new Date().toISOString()),
+                    next_followup_note: client.next_followup_note ?? '',
+                    next_followup_status: (client.next_followup_status ?? 'PENDENTE') as FollowupStatus,
+                    commercial_stage: client.commercial_stage ?? 'CONTATO',
+                  })
+                }}
+              >
+                Agendar follow-up
+              </Button>
+              <Button variant="ghost" onClick={() => setStartFollowupOpen(false)}>
+                Fechar
+              </Button>
+            </div>
           </div>
         </div>
       ) : null}
