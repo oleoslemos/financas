@@ -1,6 +1,7 @@
 import { useUser } from '@clerk/clerk-react'
 import { History } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
 import { BEM_AVIV_CLIENT_COMMERCIAL_STAGE_OPTIONS } from '../lib/bemAvivClientStatus'
@@ -69,16 +70,59 @@ function isSameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
 }
 
+function getPeriodRange(
+  periodFilter:
+    | 'ULTIMOS_7_DIAS'
+    | 'ULTIMOS_30_DIAS'
+    | 'ULTIMOS_90_DIAS'
+    | 'PROXIMOS_7_DIAS'
+    | 'MES_ATUAL'
+    | 'MES_PASSADO'
+    | 'MES_PROXIMO',
+) {
+  const now = new Date()
+  let periodStart = new Date(now)
+  let periodEnd = new Date(now)
+
+  if (periodFilter === 'ULTIMOS_7_DIAS') {
+    periodStart.setDate(periodStart.getDate() - 7)
+    periodStart.setHours(0, 0, 0, 0)
+    periodEnd.setHours(23, 59, 59, 999)
+  } else if (periodFilter === 'ULTIMOS_30_DIAS') {
+    periodStart.setDate(periodStart.getDate() - 30)
+    periodStart.setHours(0, 0, 0, 0)
+    periodEnd.setHours(23, 59, 59, 999)
+  } else if (periodFilter === 'ULTIMOS_90_DIAS') {
+    periodStart.setDate(periodStart.getDate() - 90)
+    periodStart.setHours(0, 0, 0, 0)
+    periodEnd.setHours(23, 59, 59, 999)
+  } else if (periodFilter === 'PROXIMOS_7_DIAS') {
+    periodStart.setHours(0, 0, 0, 0)
+    periodEnd.setDate(periodEnd.getDate() + 7)
+    periodEnd.setHours(23, 59, 59, 999)
+  } else if (periodFilter === 'MES_ATUAL') {
+    periodStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0)
+    periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
+  } else if (periodFilter === 'MES_PASSADO') {
+    periodStart = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0)
+    periodEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999)
+  } else if (periodFilter === 'MES_PROXIMO') {
+    periodStart = new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0, 0)
+    periodEnd = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59, 999)
+  }
+
+  return { periodStart, periodEnd }
+}
+
 export function BemAvivFollowupProdutividadePage() {
   const { user } = useUser()
   const supabase = useSupabase()
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const followupUserId = ownerUserId ? ownerUserId.toUpperCase() : null
-  const [periodFilter, setPeriodFilter] = useState<'ULTIMOS_7_DIAS' | 'ULTIMOS_30_DIAS' | 'ULTIMOS_90_DIAS' | 'MES_ATUAL' | 'MES_PASSADO' | 'MES_PROXIMO'>(
-    'MES_ATUAL',
-  )
+  const [periodFilter, setPeriodFilter] = useState<
+    'ULTIMOS_7_DIAS' | 'ULTIMOS_30_DIAS' | 'ULTIMOS_90_DIAS' | 'PROXIMOS_7_DIAS' | 'MES_ATUAL' | 'MES_PASSADO' | 'MES_PROXIMO'
+  >('MES_ATUAL')
   const [clients, setClients] = useState<ClienteRow[]>([])
-  const [followups, setFollowups] = useState<FollowupRow[]>([])
   const [historyRows, setHistoryRows] = useState<FollowupRow[]>([])
   const [historyTarget, setHistoryTarget] = useState<ClientHistoryTarget | null>(null)
   const [historyFormOpen, setHistoryFormOpen] = useState(false)
@@ -90,53 +134,21 @@ export function BemAvivFollowupProdutividadePage() {
   })
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [followupDateFilter, setFollowupDateFilter] = useState('')
   const [commercialStageFilter, setCommercialStageFilter] = useState('TODOS')
   const [followupStatusFilter, setFollowupStatusFilter] = useState<'TODOS' | 'PENDENTE' | 'CONCLUIDO' | 'CANCELADO'>('TODOS')
 
   const load = useCallback(async () => {
     if (!supabase || !ownerUserId || !followupUserId) return
     setLoading(true)
-    const now = new Date()
-    let periodStart = new Date(now)
-    let periodEnd = new Date(now)
+    const { data, error } = await supabase
+      .from('bem_aviv_clients')
+      .select('id, full_name, phone_1, phone_2, client_status, commercial_stage, last_contact_at, next_followup_at, next_followup_status')
+      .eq('user_id', ownerUserId)
 
-    if (periodFilter === 'ULTIMOS_7_DIAS') {
-      periodStart.setDate(periodStart.getDate() - 7)
-    } else if (periodFilter === 'ULTIMOS_30_DIAS') {
-      periodStart.setDate(periodStart.getDate() - 30)
-    } else if (periodFilter === 'ULTIMOS_90_DIAS') {
-      periodStart.setDate(periodStart.getDate() - 90)
-    } else if (periodFilter === 'MES_ATUAL') {
-      periodStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0)
-      periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
-    } else if (periodFilter === 'MES_PASSADO') {
-      periodStart = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0)
-      periodEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999)
-    } else if (periodFilter === 'MES_PROXIMO') {
-      periodStart = new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0, 0)
-      periodEnd = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59, 999)
-    }
-
-    const [clientsRes, followupsRes] = await Promise.all([
-      supabase
-        .from('bem_aviv_clients')
-        .select('id, full_name, phone_1, phone_2, client_status, commercial_stage, last_contact_at, next_followup_at, next_followup_status')
-        .eq('user_id', ownerUserId),
-      supabase
-        .from('bem_aviv_client_followups')
-        .select('id, client_id, contacted_at, channel, result, notes')
-        .eq('user_id', followupUserId)
-        .gte('contacted_at', periodStart.toISOString())
-        .lte('contacted_at', periodEnd.toISOString()),
-    ])
-
-    if (clientsRes.error) alert(clientsRes.error.message)
-    if (followupsRes.error) alert(followupsRes.error.message)
-    setClients((clientsRes.data as ClienteRow[]) ?? [])
-    setFollowups((followupsRes.data as FollowupRow[]) ?? [])
+    if (error) alert(error.message)
+    setClients((data as ClienteRow[]) ?? [])
     setLoading(false)
-  }, [ownerUserId, followupUserId, periodFilter, supabase])
+  }, [ownerUserId, followupUserId, supabase])
 
   useEffect(() => {
     void load()
@@ -223,6 +235,13 @@ export function BemAvivFollowupProdutividadePage() {
     const weekEnd = new Date(today)
     weekEnd.setDate(weekEnd.getDate() + 7)
     weekEnd.setHours(23, 59, 59, 999)
+    const { periodStart, periodEnd } = getPeriodRange(periodFilter)
+    const inPeriod = (value?: string | null) => {
+      if (!value) return false
+      const dt = new Date(value)
+      if (Number.isNaN(dt.getTime())) return false
+      return dt >= periodStart && dt <= periodEnd
+    }
 
     const vencidos = clients.filter((c) => c.next_followup_at && new Date(c.next_followup_at) < now && (c.next_followup_status ?? 'PENDENTE') === 'PENDENTE').length
     const hoje = clients.filter((c) => c.next_followup_at && new Date(c.next_followup_at) >= today && new Date(c.next_followup_at) < tomorrow).length
@@ -234,23 +253,17 @@ export function BemAvivFollowupProdutividadePage() {
 
     const priorityBase = clients
       .filter((c) => c.next_followup_at && (c.next_followup_status ?? 'PENDENTE') === 'PENDENTE')
+      .filter((c) => inPeriod(c.next_followup_at))
       .sort((a, b) => new Date(a.next_followup_at ?? '').getTime() - new Date(b.next_followup_at ?? '').getTime())
-    const dateFilter = followupDateFilter ? new Date(`${followupDateFilter}T00:00:00`) : null
     const priority = priorityBase.filter((c) => {
       const stageOk = commercialStageFilter === 'TODOS' ? true : (c.commercial_stage ?? 'CONTATO') === commercialStageFilter
       const status = c.next_followup_status ?? 'PENDENTE'
       const statusOk = followupStatusFilter === 'TODOS' ? true : status === followupStatusFilter
-
-      if (!dateFilter || !c.next_followup_at) {
-        return stageOk && statusOk
-      }
-      const nextDate = new Date(c.next_followup_at)
-      if (Number.isNaN(nextDate.getTime())) return false
-      return stageOk && statusOk && isSameDay(nextDate, dateFilter)
+      return stageOk && statusOk
     })
 
     return { vencidos, hoje, proximos7, statusCounts, priority }
-  }, [clients, followups, commercialStageFilter, followupDateFilter, followupStatusFilter])
+  }, [clients, commercialStageFilter, followupStatusFilter, periodFilter])
 
   if (!supabase) return <p className="text-slate-600">CONECTANDO...</p>
 
@@ -264,31 +277,23 @@ export function BemAvivFollowupProdutividadePage() {
         <div className="flex items-end gap-2">
           <div>
             <label>PERÍODO</label>
-            <select value={periodFilter} onChange={(e) => setPeriodFilter(e.target.value as typeof periodFilter)}>
+            <select
+              className="min-w-[14rem]"
+              value={periodFilter}
+              onChange={(e) => setPeriodFilter(e.target.value as typeof periodFilter)}
+            >
               <option value="MES_ATUAL">MÊS ATUAL</option>
               <option value="MES_PASSADO">MÊS PASSADO</option>
               <option value="MES_PROXIMO">MÊS PRÓXIMO</option>
               <option value="ULTIMOS_7_DIAS">ÚLTIMOS 7 DIAS</option>
+              <option value="PROXIMOS_7_DIAS">PRÓXIMOS 7 DIAS</option>
               <option value="ULTIMOS_30_DIAS">ÚLTIMOS 30 DIAS</option>
               <option value="ULTIMOS_90_DIAS">ÚLTIMOS 90 DIAS</option>
             </select>
           </div>
-          <Button variant="secondary" onClick={() => void load()}>
-            Atualizar
-          </Button>
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h3 className="mb-3 text-sm font-semibold text-slate-700">FILTROS DOS REGISTROS</h3>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <div>
-            <label>DATA DO FOLLOW-UP</label>
-            <input type="date" value={followupDateFilter} onChange={(e) => setFollowupDateFilter(e.target.value)} />
-          </div>
           <div>
             <label>ETAPA COMERCIAL</label>
-            <select value={commercialStageFilter} onChange={(e) => setCommercialStageFilter(e.target.value)}>
+            <select className="min-w-[14rem]" value={commercialStageFilter} onChange={(e) => setCommercialStageFilter(e.target.value)}>
               <option value="TODOS">TODAS</option>
               {BEM_AVIV_CLIENT_COMMERCIAL_STAGE_OPTIONS.map((stage) => (
                 <option key={stage} value={stage}>
@@ -300,6 +305,7 @@ export function BemAvivFollowupProdutividadePage() {
           <div>
             <label>STATUS FOLLOW-UP</label>
             <select
+              className="min-w-[14rem]"
               value={followupStatusFilter}
               onChange={(e) => setFollowupStatusFilter(e.target.value as 'TODOS' | 'PENDENTE' | 'CONCLUIDO' | 'CANCELADO')}
             >
@@ -309,6 +315,12 @@ export function BemAvivFollowupProdutividadePage() {
               <option value="CANCELADO">CANCELADO</option>
             </select>
           </div>
+          <Button asChild variant="secondary">
+            <Link to="/bem-aviv/followup">Ir para Follow-up</Link>
+          </Button>
+          <Button variant="secondary" onClick={() => void load()}>
+            Atualizar
+          </Button>
         </div>
       </div>
 
