@@ -1,5 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
-import { CheckCircle2, CircleDollarSign, PackageCheck, Pencil, Plus, Trash2, X, XCircle } from 'lucide-react'
+import { CheckCircle2, CircleDollarSign, PackageCheck, Pencil, Plus, RotateCcw, Trash2, X, XCircle } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
@@ -171,6 +171,10 @@ function isPendingDelivery(r: Pedido) {
 }
 
 function canConfirmDelivery(r: Pedido) {
+  return r.document_type === 'PEDIDO' && r.status === 'FINALIZADO'
+}
+
+function canReopenPedido(r: Pedido) {
   return r.document_type === 'PEDIDO' && r.status === 'FINALIZADO'
 }
 
@@ -404,7 +408,7 @@ export function BemAvivPedidosPage() {
   }
 
   async function openModalEdit(quote: Pedido) {
-    if (!supabase || !canEditOrcamento(quote)) return
+    if (!supabase || !(canEditOrcamento(quote) || canEditPedido(quote))) return
     const { data: its, error } = await supabase
       .from('bem_aviv_sales_order_items')
       .select(
@@ -999,6 +1003,23 @@ export function BemAvivPedidosPage() {
                             }
                           >
                             <PackageCheck size={16} aria-hidden />
+                          </button>
+                        ) : null}
+                        {canReopenPedido(r) ? (
+                          <button
+                            type="button"
+                            className={`${iconBtn} border-amber-200 text-amber-700 hover:bg-amber-50`}
+                            title="Reabrir pedido"
+                            aria-label="Reabrir pedido"
+                            onClick={() =>
+                              void updateOrderStatus(
+                                r,
+                                'ABERTO',
+                                `REABRIR O PEDIDO ${r.document_number ?? ''}? O STATUS VOLTARÁ PARA ABERTO.`,
+                              )
+                            }
+                          >
+                            <RotateCcw size={16} aria-hidden />
                           </button>
                         ) : null}
                       </div>

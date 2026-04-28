@@ -65,6 +65,10 @@ function toInputDateTimeLocal(value?: string | null) {
   return local.toISOString().slice(0, 16)
 }
 
+function isSameDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+}
+
 export function BemAvivFollowupProdutividadePage() {
   const { user } = useUser()
   const supabase = useSupabase()
@@ -86,6 +90,9 @@ export function BemAvivFollowupProdutividadePage() {
   })
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [followupDateFilter, setFollowupDateFilter] = useState('')
+  const [commercialStageFilter, setCommercialStageFilter] = useState('TODOS')
+  const [followupStatusFilter, setFollowupStatusFilter] = useState<'TODOS' | 'PENDENTE' | 'CONCLUIDO' | 'CANCELADO'>('TODOS')
 
   const load = useCallback(async () => {
     if (!supabase || !ownerUserId || !followupUserId) return
@@ -225,13 +232,25 @@ export function BemAvivFollowupProdutividadePage() {
       count: clients.filter((c) => (c.commercial_stage ?? 'CONTATO') === stage).length,
     }))
 
-    const priority = clients
+    const priorityBase = clients
       .filter((c) => c.next_followup_at && (c.next_followup_status ?? 'PENDENTE') === 'PENDENTE')
       .sort((a, b) => new Date(a.next_followup_at ?? '').getTime() - new Date(b.next_followup_at ?? '').getTime())
-      .slice(0, 10)
+    const dateFilter = followupDateFilter ? new Date(`${followupDateFilter}T00:00:00`) : null
+    const priority = priorityBase.filter((c) => {
+      const stageOk = commercialStageFilter === 'TODOS' ? true : (c.commercial_stage ?? 'CONTATO') === commercialStageFilter
+      const status = c.next_followup_status ?? 'PENDENTE'
+      const statusOk = followupStatusFilter === 'TODOS' ? true : status === followupStatusFilter
+
+      if (!dateFilter || !c.next_followup_at) {
+        return stageOk && statusOk
+      }
+      const nextDate = new Date(c.next_followup_at)
+      if (Number.isNaN(nextDate.getTime())) return false
+      return stageOk && statusOk && isSameDay(nextDate, dateFilter)
+    })
 
     return { vencidos, hoje, proximos7, statusCounts, priority }
-  }, [clients, followups])
+  }, [clients, followups, commercialStageFilter, followupDateFilter, followupStatusFilter])
 
   if (!supabase) return <p className="text-slate-600">CONECTANDO...</p>
 
@@ -257,6 +276,39 @@ export function BemAvivFollowupProdutividadePage() {
           <Button variant="secondary" onClick={() => void load()}>
             Atualizar
           </Button>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <h3 className="mb-3 text-sm font-semibold text-slate-700">FILTROS DOS REGISTROS</h3>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div>
+            <label>DATA DO FOLLOW-UP</label>
+            <input type="date" value={followupDateFilter} onChange={(e) => setFollowupDateFilter(e.target.value)} />
+          </div>
+          <div>
+            <label>ETAPA COMERCIAL</label>
+            <select value={commercialStageFilter} onChange={(e) => setCommercialStageFilter(e.target.value)}>
+              <option value="TODOS">TODAS</option>
+              {BEM_AVIV_CLIENT_COMMERCIAL_STAGE_OPTIONS.map((stage) => (
+                <option key={stage} value={stage}>
+                  {stage}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label>STATUS FOLLOW-UP</label>
+            <select
+              value={followupStatusFilter}
+              onChange={(e) => setFollowupStatusFilter(e.target.value as 'TODOS' | 'PENDENTE' | 'CONCLUIDO' | 'CANCELADO')}
+            >
+              <option value="TODOS">TODOS</option>
+              <option value="PENDENTE">PENDENTE</option>
+              <option value="CONCLUIDO">CONCLUÍDO</option>
+              <option value="CANCELADO">CANCELADO</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -301,7 +353,21 @@ export function BemAvivFollowupProdutividadePage() {
               </tr>
             ) : (
               metrics.priority.map((item) => (
-                <tr key={item.id}>
+                <tr
+                  key={item.id}
+                  className={
+                    item.next_followup_at && (item.next_followup_status ?? 'PENDENTE') === 'PENDENTE'
+                      ? (() => {
+                          const followupDate = new Date(item.next_followup_at as string)
+                          const today = startOfToday()
+                          if (Number.isNaN(followupDate.getTime())) return ''
+                          if (followupDate < today) return 'bg-rose-50'
+                          if (isSameDay(followupDate, new Date())) return 'bg-amber-50'
+                          return ''
+                        })()
+                      : ''
+                  }
+                >
                   <td>{item.full_name}</td>
                   <td>{item.client_status || 'PROSPECÇÃO'}</td>
                   <td>{item.commercial_stage || 'CONTATO'}</td>
