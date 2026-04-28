@@ -1,5 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
-import { CheckCircle2, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { CheckCircle2, CircleDollarSign, PackageCheck, Pencil, Plus, Trash2, X, XCircle } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
@@ -152,6 +152,26 @@ function canEditOrcamento(r: Pedido) {
 
 function canFecharGerarPedido(r: Pedido) {
   return r.document_type === 'ORCAMENTO' && !r.converted_order_id && r.status === 'ABERTO'
+}
+
+function canEditPedido(r: Pedido) {
+  return r.document_type === 'PEDIDO' && r.status === 'ABERTO'
+}
+
+function canCancelPedido(r: Pedido) {
+  return r.document_type === 'PEDIDO' && r.status !== 'CANCELADO' && r.status !== 'ENTREGUE'
+}
+
+function canConfirmPayment(r: Pedido) {
+  return r.document_type === 'PEDIDO' && r.status === 'ABERTO'
+}
+
+function isPendingDelivery(r: Pedido) {
+  return r.document_type === 'PEDIDO' && r.status === 'FINALIZADO'
+}
+
+function canConfirmDelivery(r: Pedido) {
+  return r.document_type === 'PEDIDO' && r.status === 'FINALIZADO'
 }
 
 const iconBtn =
@@ -815,6 +835,24 @@ export function BemAvivPedidosPage() {
     await load()
   }
 
+  async function updateOrderStatus(order: Pedido, nextStatus: string, confirmMessage: string) {
+    if (!supabase || !ownerUserId) return
+    if (!confirm(confirmMessage)) return
+
+    const { error } = await supabase
+      .from('bem_aviv_sales_orders')
+      .update({ status: nextStatus })
+      .eq('id', order.id)
+      .eq('user_id', ownerUserId)
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    await load()
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -844,6 +882,7 @@ export function BemAvivPedidosPage() {
                 <th>TIPO</th>
                 <th>DATA</th>
                 <th>STATUS</th>
+                <th>PENDENTE DE ENTREGA</th>
                 <th className="text-right">À VISTA (C/ DESC.)</th>
                 <th className="text-right">À PRAZO</th>
                 <th className="text-right">ENTRADA</th>
@@ -861,6 +900,7 @@ export function BemAvivPedidosPage() {
                     <td>{r.document_type}</td>
                     <td className="whitespace-nowrap">{r.order_date}</td>
                     <td>{r.status}</td>
+                    <td>{isPendingDelivery(r) ? 'SIM' : '—'}</td>
                     <td className="text-right whitespace-nowrap">{formatBRL(displayValorAvista(r))}</td>
                     <td className="text-right whitespace-nowrap">{prazo != null ? formatBRL(prazo) : '—'}</td>
                     <td className="text-right whitespace-nowrap">
@@ -897,6 +937,68 @@ export function BemAvivPedidosPage() {
                             onClick={() => void closeQuoteAndCreateOrder(r)}
                           >
                             <CheckCircle2 size={16} aria-hidden />
+                          </button>
+                        ) : null}
+                        {canEditPedido(r) ? (
+                          <button
+                            type="button"
+                            className={iconBtn}
+                            title="Alterar pedido"
+                            aria-label="Alterar pedido"
+                            onClick={() => void openModalEdit(r)}
+                          >
+                            <Pencil size={16} aria-hidden />
+                          </button>
+                        ) : null}
+                        {canCancelPedido(r) ? (
+                          <button
+                            type="button"
+                            className={`${iconBtn} border-red-200 text-red-700 hover:bg-red-50`}
+                            title="Cancelar pedido"
+                            aria-label="Cancelar pedido"
+                            onClick={() =>
+                              void updateOrderStatus(
+                                r,
+                                'CANCELADO',
+                                `CONFIRMAR CANCELAMENTO DO PEDIDO ${r.document_number ?? ''}?`,
+                              )
+                            }
+                          >
+                            <XCircle size={16} aria-hidden />
+                          </button>
+                        ) : null}
+                        {canConfirmPayment(r) ? (
+                          <button
+                            type="button"
+                            className={`${iconBtn} border-emerald-200 text-emerald-800 hover:bg-emerald-50`}
+                            title="Confirmar pagamento"
+                            aria-label="Confirmar pagamento"
+                            onClick={() =>
+                              void updateOrderStatus(
+                                r,
+                                'FINALIZADO',
+                                `CONFIRMAR PAGAMENTO DO PEDIDO ${r.document_number ?? ''}? O STATUS SERÁ FINALIZADO.`,
+                              )
+                            }
+                          >
+                            <CircleDollarSign size={16} aria-hidden />
+                          </button>
+                        ) : null}
+                        {canConfirmDelivery(r) ? (
+                          <button
+                            type="button"
+                            className={`${iconBtn} border-blue-200 text-blue-700 hover:bg-blue-50`}
+                            title="Confirmar entrega"
+                            aria-label="Confirmar entrega"
+                            onClick={() =>
+                              void updateOrderStatus(
+                                r,
+                                'ENTREGUE',
+                                `CONFIRMAR ENTREGA DO PEDIDO ${r.document_number ?? ''}?`,
+                              )
+                            }
+                          >
+                            <PackageCheck size={16} aria-hidden />
                           </button>
                         ) : null}
                       </div>
