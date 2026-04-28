@@ -1,7 +1,7 @@
 import { useUser, UserButton } from '@clerk/clerk-react'
 import { BarChart3, BriefcaseBusiness, CalendarDays, ChevronDown, CircleDollarSign, CreditCard, FolderKanban, Gauge, KanbanSquare, LayoutDashboard, Landmark, ListTodo, MessageCircleMore, NotebookText, Package, ShoppingCart, StickyNote, Table2, Tags, UserCircle, Users, Workflow } from 'lucide-react'
 import { type ComponentType, useEffect, useMemo, useRef, useState } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { canAccessTasksHomolog } from '../lib/tasksHomologAccess'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { canAccessProjects } from '../lib/projectsAccess'
@@ -85,7 +85,7 @@ export function AppLayout() {
   const hideAgendaTasks = emails.includes('suelenjalves@gmail.com')
   const tasksHomologEnabled = !hideAgendaTasks && canAccessTasksHomolog(user?.primaryEmailAddress?.emailAddress)
   const projectsEnabled = emails.some((email) => canAccessProjects(email))
-  const inProjectsModule = location.pathname.startsWith('/projetos')
+  const navigate = useNavigate()
 
   useEffect(() => {
     return () => {
@@ -181,56 +181,78 @@ export function AppLayout() {
     [],
   )
 
+  const activeSystem = useMemo<'agenda' | 'projects' | 'lsh' | 'bem-aviv'>(() => {
+    if (location.pathname.startsWith('/bem-aviv')) return 'bem-aviv'
+    if (location.pathname.startsWith('/projetos')) return 'projects'
+    if (location.pathname.startsWith('/lsh/agenda') || location.pathname.startsWith('/lsh/tarefas')) return 'agenda'
+    if (location.pathname.startsWith('/lsh')) return 'lsh'
+    return 'bem-aviv'
+  }, [location.pathname])
+
+  const selectedTreeMenu = useMemo(() => {
+    if (activeSystem === 'agenda' && tasksHomologEnabled) return { key: 'agenda', title: 'Menu Agenda e Tarefas', items: agendaItems, to: '/lsh/agenda' }
+    if (activeSystem === 'projects' && projectsEnabled) return { key: 'projects', title: 'Menu Projetos', items: projectItems, to: '/projetos' }
+    if (activeSystem === 'lsh' && !bemAvivOnlyUser) return { key: 'lsh', title: 'Menu Sistema Gestão', items: lshItems, to: '/lsh/inicio' }
+    return { key: 'bem-aviv', title: 'Menu Bem Aviv', items: bemAvivItems, to: '/bem-aviv' }
+  }, [activeSystem, tasksHomologEnabled, projectsEnabled, bemAvivOnlyUser, agendaItems, projectItems, lshItems, bemAvivItems])
+
   return (
     <div className="min-h-screen bg-white">
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 sm:px-4 lg:px-6">
           <h1 className="text-sm font-semibold tracking-tight text-emerald-800">Sistema de gestão</h1>
           <div className="flex items-center gap-2">
-            <nav className="flex items-center gap-1" aria-label="Navegação principal">
-              {tasksHomologEnabled && !inProjectsModule ? (
-                <TreeDropdown
-                  title="Agenda e Tarefas"
-                  items={agendaItems}
-                  open={openMenu === 'agenda'}
-                  onOpen={() => openMenuNow('agenda')}
-                  onToggleClick={() => setOpenMenu((current) => (current === 'agenda' ? null : 'agenda'))}
-                  onClose={() => scheduleClose('agenda')}
-                  onCancelClose={cancelClose}
-                  onNavigate={() => setOpenMenu(null)}
-                />
-              ) : null}
-              {projectsEnabled ? (
-                <TreeDropdown
-                  title="Projetos"
-                  items={projectItems}
-                  open={openMenu === 'projects'}
-                  onOpen={() => openMenuNow('projects')}
-                  onToggleClick={() => setOpenMenu((current) => (current === 'projects' ? null : 'projects'))}
-                  onClose={() => scheduleClose('projects')}
-                  onCancelClose={cancelClose}
-                  onNavigate={() => setOpenMenu(null)}
-                />
-              ) : null}
-              {!bemAvivOnlyUser ? (
-                <TreeDropdown
-                  title="Sistema Gestão"
-                  items={lshItems}
-                  open={openMenu === 'lsh'}
-                  onOpen={() => openMenuNow('lsh')}
-                  onToggleClick={() => setOpenMenu((current) => (current === 'lsh' ? null : 'lsh'))}
-                  onClose={() => scheduleClose('lsh')}
-                  onCancelClose={cancelClose}
-                  onNavigate={() => setOpenMenu(null)}
-                />
-              ) : null}
+            <nav className="flex flex-col items-end gap-1" aria-label="Navegação principal">
+              <div className="flex items-center gap-1">
+                {tasksHomologEnabled ? (
+                  <NavLink
+                    to="/lsh/agenda"
+                    className={({ isActive }) =>
+                      `${topTriggerBase} ${isActive || activeSystem === 'agenda' ? 'bg-slate-100 text-slate-900' : ''}`
+                    }
+                  >
+                    Agenda e Tarefas
+                  </NavLink>
+                ) : null}
+                {projectsEnabled ? (
+                  <NavLink
+                    to="/projetos"
+                    className={({ isActive }) =>
+                      `${topTriggerBase} ${isActive || activeSystem === 'projects' ? 'bg-slate-100 text-slate-900' : ''}`
+                    }
+                  >
+                    Projetos
+                  </NavLink>
+                ) : null}
+                {!bemAvivOnlyUser ? (
+                  <NavLink
+                    to="/lsh/inicio"
+                    className={({ isActive }) =>
+                      `${topTriggerBase} ${isActive || activeSystem === 'lsh' ? 'bg-slate-100 text-slate-900' : ''}`
+                    }
+                  >
+                    Sistema Gestão
+                  </NavLink>
+                ) : null}
+                <NavLink
+                  to="/bem-aviv"
+                  className={({ isActive }) =>
+                    `${topTriggerBase} ${isActive || activeSystem === 'bem-aviv' ? 'bg-slate-100 text-slate-900' : ''}`
+                  }
+                >
+                  Bem Aviv
+                </NavLink>
+              </div>
               <TreeDropdown
-                title="Bem Aviv"
-                items={bemAvivItems}
-                open={openMenu === 'bem-aviv'}
-                onOpen={() => openMenuNow('bem-aviv')}
-                onToggleClick={() => setOpenMenu((current) => (current === 'bem-aviv' ? null : 'bem-aviv'))}
-                onClose={() => scheduleClose('bem-aviv')}
+                title={selectedTreeMenu.title}
+                items={selectedTreeMenu.items}
+                open={openMenu === selectedTreeMenu.key}
+                onOpen={() => openMenuNow(selectedTreeMenu.key)}
+                onToggleClick={() => {
+                  navigate(selectedTreeMenu.to)
+                  setOpenMenu((current) => (current === selectedTreeMenu.key ? null : selectedTreeMenu.key))
+                }}
+                onClose={() => scheduleClose(selectedTreeMenu.key)}
                 onCancelClose={cancelClose}
                 onNavigate={() => setOpenMenu(null)}
               />

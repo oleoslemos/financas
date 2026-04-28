@@ -315,9 +315,9 @@ export function BemAvivFollowupProdutividadePage() {
               <option value="CANCELADO">CANCELADO</option>
             </select>
           </div>
-          <Button asChild variant="secondary">
-            <Link to="/bem-aviv/followup">Ir para Follow-up</Link>
-          </Button>
+          <Link to="/bem-aviv/followup" className="btn btn-secondary">
+            Ir para Follow-up
+          </Link>
           <Button variant="secondary" onClick={() => void load()}>
             Atualizar
           </Button>
