@@ -283,6 +283,12 @@ export function BemAvivPedidosPage() {
     }
   }, [variationOptions])
 
+  const clientNameById = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const c of clients) m.set(c.id, c.full_name)
+    return m
+  }, [clients])
+
   const load = useCallback(async () => {
     if (!supabase || !ownerUserId) return
     setLoading(true)
@@ -885,6 +891,7 @@ export function BemAvivPedidosPage() {
                 <th>Nº DOCUMENTO</th>
                 <th>TIPO</th>
                 <th>DATA</th>
+                <th>CLIENTE</th>
                 <th>STATUS</th>
                 <th>PENDENTE DE ENTREGA</th>
                 <th className="text-right">À VISTA (C/ DESC.)</th>
@@ -903,6 +910,9 @@ export function BemAvivPedidosPage() {
                     <td className="whitespace-nowrap font-medium">{r.document_number || '—'}</td>
                     <td>{r.document_type}</td>
                     <td className="whitespace-nowrap">{r.order_date}</td>
+                    <td className="max-w-[14rem] truncate" title={r.client_id ? clientNameById.get(r.client_id) : undefined}>
+                      {r.client_id ? clientNameById.get(r.client_id) ?? '—' : '—'}
+                    </td>
                     <td>{r.status}</td>
                     <td>{isPendingDelivery(r) ? 'SIM' : '—'}</td>
                     <td className="text-right whitespace-nowrap">{formatBRL(displayValorAvista(r))}</td>
@@ -1036,13 +1046,11 @@ export function BemAvivPedidosPage() {
         <div
           className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-2 py-6 sm:p-4 sm:py-8"
           role="presentation"
-          onClick={closeModal}
         >
           <div
             role="dialog"
             aria-labelledby="pedido-modal-title"
             className="relative w-full max-w-6xl rounded-xl border border-slate-200 bg-white p-3 shadow-xl sm:p-5"
-            onClick={(e) => e.stopPropagation()}
           >
             <button
               type="button"
