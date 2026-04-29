@@ -1,6 +1,6 @@
 import { useUser } from '@clerk/clerk-react'
 import { CheckCircle2, CircleDollarSign, PackageCheck, Pencil, Plus, RotateCcw, Trash2, X, XCircle } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
 import { SearchableSelect } from '../components/ui/SearchableSelect'
@@ -213,7 +213,8 @@ export function BemAvivPedidosPage() {
   const [draftQty, setDraftQty] = useState('1')
   const [lineItems, setLineItems] = useState<LinhaItem[]>([])
   const [liquidTotalDraft, setLiquidTotalDraft] = useState('')
-  const [typeTab, setTypeTab] = useState<'ORCAMENTO' | 'PEDIDO'>('ORCAMENTO')
+  const [typeTab, setTypeTab] = useState<'ORCAMENTO' | 'PEDIDO'>('PEDIDO')
+  const submitLockRef = useRef(false)
 
   const uniqueProductNames = useMemo(() => {
     const byKey = new Map<string, string>()
@@ -390,7 +391,7 @@ export function BemAvivPedidosPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lineItems.length, sumLinesNet, freightAmountNum, form.payment_option, downPaymentNum])
 
-  function resetFormForNew(docType: 'ORCAMENTO' | 'PEDIDO' = 'ORCAMENTO') {
+  function resetFormForNew(docType: 'ORCAMENTO' | 'PEDIDO' = 'PEDIDO') {
     setForm({
       client_id: '',
       order_date: new Date().toISOString().slice(0, 10),
@@ -571,17 +572,18 @@ export function BemAvivPedidosPage() {
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!supabase || !ownerUserId) return
+    if (submitLockRef.current) return
+    submitLockRef.current = true
+    try {
 
     const hasLines = lineItems.length > 0
     const manualGross = parseMoney(form.total_amount || '0')
     const entrada = form.payment_option === 'A_PRAZO' ? downPaymentNum : 0
     let discOrder = orderDiscount
     if (hasLines && sumLinesNet > 0) {
-      const pctStr = formatPercentInput(percentFromTargetLiquid(sumLinesNet, freightAmountNum, parseMoney(liquidTotalDraft), entrada))
+      const targetLiquid = parseMoney(liquidTotalDraft || '0')
+      const pctStr = formatPercentInput(percentFromTargetLiquid(sumLinesNet, freightAmountNum, targetLiquid, entrada))
       discOrder = clampMoney((sumLinesNet * parsePercent(pctStr)) / 100)
-      const netCanon = clampMoney(sumLinesNet - discOrder + freightAmountNum - entrada)
-      setForm((f) => ({ ...f, discount_percent: pctStr }))
-      setLiquidTotalDraft(formatMoneyInput(netCanon))
     }
     const inst = installmentsNum
     const totalBruto = (hasLines ? linesGrossTotal : manualGross) + freightAmountNum
@@ -646,6 +648,7 @@ export function BemAvivPedidosPage() {
         payment_option: headerPayload.payment_option,
         payment_method: headerPayload.payment_method,
         down_payment_amount: headerPayload.down_payment_amount,
+        down_payment_method: headerPayload.down_payment_method,
         freight_amount: headerPayload.freight_amount,
       }
 
@@ -747,6 +750,9 @@ export function BemAvivPedidosPage() {
 
     closeModal()
     await load()
+    } finally {
+      submitLockRef.current = false
+    }
   }
 
   async function closeQuoteAndCreateOrder(quote: Pedido) {
@@ -1205,7 +1211,8 @@ export function BemAvivPedidosPage() {
                     setForm({ ...form, discount_percent: v })
                     if (lineItems.length > 0) {
                       const p = parsePercent(v)
-                      const net = clampMoney(sumLinesNet - (sumLinesNet * p) / 100 + freightAmountNum)
+                      const entrada = form.payment_option === 'A_PRAZO' ? downPaymentNum : 0
+                      const net = clampMoney(sumLinesNet - (sumLinesNet * p) / 100 + freightAmountNum - entrada)
                       setLiquidTotalDraft(formatMoneyInput(net))
                     }
                   }}
