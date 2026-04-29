@@ -213,6 +213,7 @@ export function BemAvivPedidosPage() {
   const [draftQty, setDraftQty] = useState('1')
   const [lineItems, setLineItems] = useState<LinhaItem[]>([])
   const [liquidTotalDraft, setLiquidTotalDraft] = useState('')
+  const [typeTab, setTypeTab] = useState<'ORCAMENTO' | 'PEDIDO'>('ORCAMENTO')
 
   const uniqueProductNames = useMemo(() => {
     const byKey = new Map<string, string>()
@@ -288,6 +289,17 @@ export function BemAvivPedidosPage() {
     for (const c of clients) m.set(c.id, c.full_name)
     return m
   }, [clients])
+
+  const { filteredRows, countOrcamento, countPedido } = useMemo(() => {
+    let o = 0
+    let p = 0
+    for (const r of rows) {
+      if (r.document_type === 'ORCAMENTO') o += 1
+      else if (r.document_type === 'PEDIDO') p += 1
+    }
+    const filteredRows = rows.filter((r) => r.document_type === typeTab)
+    return { filteredRows, countOrcamento: o, countPedido: p }
+  }, [rows, typeTab])
 
   const load = useCallback(async () => {
     if (!supabase || !ownerUserId) return
@@ -378,11 +390,11 @@ export function BemAvivPedidosPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lineItems.length, sumLinesNet, freightAmountNum, form.payment_option, downPaymentNum])
 
-  function resetFormForNew() {
+  function resetFormForNew(docType: 'ORCAMENTO' | 'PEDIDO' = 'ORCAMENTO') {
     setForm({
       client_id: '',
       order_date: new Date().toISOString().slice(0, 10),
-      document_type: 'ORCAMENTO',
+      document_type: docType,
       status: 'ABERTO',
       total_amount: '',
       discount_percent: '',
@@ -404,13 +416,13 @@ export function BemAvivPedidosPage() {
   }
 
   function openModalNew() {
-    resetFormForNew()
+    resetFormForNew(typeTab)
     setModalOpen(true)
   }
 
   function closeModal() {
     setModalOpen(false)
-    resetFormForNew()
+    resetFormForNew(typeTab)
   }
 
   async function openModalEdit(quote: Pedido) {
@@ -877,8 +889,39 @@ export function BemAvivPedidosPage() {
         </div>
         <Button type="button" variant="primary" className="inline-flex items-center gap-2" onClick={openModalNew}>
           <Plus size={18} aria-hidden />
-          ADICIONAR PEDIDO
+          {typeTab === 'PEDIDO' ? 'ADICIONAR PEDIDO' : 'ADICIONAR ORÇAMENTO'}
         </Button>
+      </div>
+
+      <div className="flex flex-wrap gap-1 border-b border-slate-200" role="tablist" aria-label="Filtrar por tipo de documento">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={typeTab === 'ORCAMENTO'}
+          className={`rounded-t-md border border-b-0 px-4 py-2 text-sm font-medium transition-colors ${
+            typeTab === 'ORCAMENTO'
+              ? 'border-slate-200 bg-white text-emerald-900 shadow-[0_-1px_0_0_white]'
+              : 'border-transparent bg-slate-50 text-slate-600 hover:bg-slate-100'
+          }`}
+          onClick={() => setTypeTab('ORCAMENTO')}
+        >
+          Orçamentos
+          <span className="ml-1.5 rounded-full bg-slate-200/80 px-2 py-0.5 text-xs font-semibold text-slate-700">{countOrcamento}</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={typeTab === 'PEDIDO'}
+          className={`rounded-t-md border border-b-0 px-4 py-2 text-sm font-medium transition-colors ${
+            typeTab === 'PEDIDO'
+              ? 'border-slate-200 bg-white text-emerald-900 shadow-[0_-1px_0_0_white]'
+              : 'border-transparent bg-slate-50 text-slate-600 hover:bg-slate-100'
+          }`}
+          onClick={() => setTypeTab('PEDIDO')}
+        >
+          Pedidos
+          <span className="ml-1.5 rounded-full bg-slate-200/80 px-2 py-0.5 text-xs font-semibold text-slate-700">{countPedido}</span>
+        </button>
       </div>
 
       <div className="table-wrap">
@@ -889,7 +932,6 @@ export function BemAvivPedidosPage() {
             <thead>
               <tr>
                 <th>Nº DOCUMENTO</th>
-                <th>TIPO</th>
                 <th>DATA</th>
                 <th>CLIENTE</th>
                 <th>STATUS</th>
@@ -902,13 +944,12 @@ export function BemAvivPedidosPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => {
+              {filteredRows.map((r) => {
                 const prazo = displayValorPrazo(r)
                 const downMethod = parsePaymentMethod(r.down_payment_method ?? r.payment_method)
                 return (
                   <tr key={r.id}>
                     <td className="whitespace-nowrap font-medium">{r.document_number || '—'}</td>
-                    <td>{r.document_type}</td>
                     <td className="whitespace-nowrap">{r.order_date}</td>
                     <td className="max-w-[14rem] truncate" title={r.client_id ? clientNameById.get(r.client_id) : undefined}>
                       {r.client_id ? clientNameById.get(r.client_id) ?? '—' : '—'}
@@ -1037,6 +1078,15 @@ export function BemAvivPedidosPage() {
                   </tr>
                 )
               })}
+              {!loading && filteredRows.length === 0 ? (
+                <tr>
+                  <td colSpan={10} className="py-8 text-center text-slate-500">
+                    {typeTab === 'ORCAMENTO'
+                      ? 'Nenhum orçamento nesta lista.'
+                      : 'Nenhum pedido nesta lista.'}
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         )}
