@@ -62,9 +62,10 @@ function clampMoney(n: number) {
   return Math.max(0, Math.round(n * 100) / 100)
 }
 
+/** Precisão alta evita 429,98 quando o usuário informa líquido 430,00 (arredondamento em %). */
 function clampPercent(n: number) {
   if (!Number.isFinite(n)) return 0
-  return Math.max(0, Math.min(100, Math.round(n * 100) / 100))
+  return Math.max(0, Math.min(100, Math.round(n * 1e6) / 1e6))
 }
 
 function parsePercent(raw: string) {
@@ -75,16 +76,8 @@ function formatMoneyInput(n: number) {
   return clampMoney(n).toFixed(2).replace('.', ',')
 }
 
-/** % sobre o bruto para atingir líquido com frete: bruto × (1 − p/100) + frete = líquido */
-function percentFromTargetLiquid(gross: number, freight: number, targetLiquid: number, entrada: number) {
-  if (gross <= 0) return 0
-  const afterDiscount = clampMoney(targetLiquid + entrada - freight)
-  const p = (1 - afterDiscount / gross) * 100
-  return clampPercent(p)
-}
-
 function formatPercentInput(n: number) {
-  return clampPercent(n).toFixed(2).replace('.', ',')
+  return clampPercent(n).toFixed(6).replace('.', ',')
 }
 
 function normalizeTextKey(v: string) {
@@ -175,11 +168,16 @@ function canConfirmDelivery(r: Pedido) {
 }
 
 function canReopenPedido(r: Pedido) {
-  return r.document_type === 'PEDIDO' && r.status === 'FINALIZADO'
+  return r.document_type === 'PEDIDO' && (r.status === 'FINALIZADO' || r.status === 'ENTREGUE')
+}
+
+/** Exclusão definitiva somente após cancelamento explícito. */
+function canExcluirDocumento(r: Pedido) {
+  return r.status === 'CANCELADO'
 }
 
 const iconBtn =
-  'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-40'
+  'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-40'
 
 export function BemAvivPedidosPage() {
   const { user } = useUser()
@@ -342,9 +340,25 @@ export function BemAvivPedidosPage() {
   const linesGrossTotal = useMemo(() => lineItems.reduce((acc, l) => acc + l.quantity * l.unit_price, 0), [lineItems])
 
   const orderDiscount = useMemo(() => {
+    if (lineItems.length > 0 && liquidTotalDraft.trim() !== '') {
+      const entrada = form.payment_option === 'A_PRAZO' ? downPaymentNum : 0
+      const tl = clampMoney(parseMoney(liquidTotalDraft || '0'))
+      const disc = clampMoney(sumLinesNet + freightAmountNum - entrada - tl)
+      if (disc >= 0 && disc <= sumLinesNet + 0.000_001) return disc
+    }
     const base = lineItems.length > 0 ? linesGrossTotal : parseMoney(form.total_amount || '0')
     return clampMoney((base * orderDiscountPercent) / 100)
-  }, [lineItems.length, linesGrossTotal, form.total_amount, orderDiscountPercent])
+  }, [
+    lineItems.length,
+    linesGrossTotal,
+    form.total_amount,
+    orderDiscountPercent,
+    liquidTotalDraft,
+    sumLinesNet,
+    freightAmountNum,
+    form.payment_option,
+    downPaymentNum,
+  ])
 
   const previewOrderTotal = useMemo(() => {
     if (lineItems.length === 0) return null
@@ -366,13 +380,22 @@ export function BemAvivPedidosPage() {
   const applyLiquidRawToDiscount = useCallback(
     (raw: string) => {
       if (lineItems.length === 0 || sumLinesNet <= 0) return
-      const target = parseMoney(raw)
+      const targetLiquid = clampMoney(parseMoney(raw))
       const entrada = form.payment_option === 'A_PRAZO' ? downPaymentNum : 0
-      const pct = percentFromTargetLiquid(sumLinesNet, freightAmountNum, target, entrada)
-      const pctStr = formatPercentInput(pct)
-      const net = clampMoney(sumLinesNet - (sumLinesNet * parsePercent(pctStr)) / 100 + freightAmountNum - entrada)
+      const maxNet = clampMoney(sumLinesNet + freightAmountNum - entrada)
+      if (targetLiquid < 0 || targetLiquid > maxNet) {
+        alert('VALOR LÍQUIDO INVÁLIDO PARA OS ITENS, FRETE E ENTRADA.')
+        return
+      }
+      const discOrderExact = clampMoney(sumLinesNet + freightAmountNum - entrada - targetLiquid)
+      if (discOrderExact > sumLinesNet + 0.000_001) {
+        alert('DESCONTO NÃO PODE ULTRAPASSAR O VALOR BRUTO DOS ITENS.')
+        return
+      }
+      const p = sumLinesNet > 0 ? (discOrderExact / sumLinesNet) * 100 : 0
+      const pctStr = formatPercentInput(p)
       setForm((f) => ({ ...f, discount_percent: pctStr }))
-      setLiquidTotalDraft(formatMoneyInput(net))
+      setLiquidTotalDraft(formatMoneyInput(targetLiquid))
     },
     [lineItems.length, sumLinesNet, freightAmountNum, form.payment_option, downPaymentNum],
   )
@@ -579,12 +602,7 @@ export function BemAvivPedidosPage() {
     const hasLines = lineItems.length > 0
     const manualGross = parseMoney(form.total_amount || '0')
     const entrada = form.payment_option === 'A_PRAZO' ? downPaymentNum : 0
-    let discOrder = orderDiscount
-    if (hasLines && sumLinesNet > 0) {
-      const targetLiquid = parseMoney(liquidTotalDraft || '0')
-      const pctStr = formatPercentInput(percentFromTargetLiquid(sumLinesNet, freightAmountNum, targetLiquid, entrada))
-      discOrder = clampMoney((sumLinesNet * parsePercent(pctStr)) / 100)
-    }
+    const discOrder = orderDiscount
     const inst = installmentsNum
     const totalBruto = (hasLines ? linesGrossTotal : manualGross) + freightAmountNum
 
@@ -594,7 +612,7 @@ export function BemAvivPedidosPage() {
     }
 
     if (hasLines) {
-      const net = clampMoney(sumLinesNet - discOrder + freightAmountNum)
+      const net = clampMoney(sumLinesNet - discOrder + freightAmountNum - entrada)
       if (net < 0) {
         alert('DESCONTO NO PEDIDO É MAIOR QUE A SOMA DOS ITENS + FRETE.')
         return
@@ -881,6 +899,24 @@ export function BemAvivPedidosPage() {
     await load()
   }
 
+  async function deleteDocumento(order: Pedido) {
+    if (!supabase || !ownerUserId) return
+    if (!canExcluirDocumento(order)) return
+    if (
+      !confirm(
+        `EXCLUIR DEFINITIVAMENTE ${order.document_number ?? 'ESTE DOCUMENTO'}?\n\nOs itens ligados também serão removidos. Esta ação não pode ser desfeita.`,
+      )
+    ) {
+      return
+    }
+    const { error } = await supabase.from('bem_aviv_sales_orders').delete().eq('id', order.id).eq('user_id', ownerUserId)
+    if (error) {
+      alert(error.message)
+      return
+    }
+    await load()
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -985,7 +1021,7 @@ export function BemAvivPedidosPage() {
                             aria-label="Editar orçamento"
                             onClick={() => void openModalEdit(r)}
                           >
-                            <Pencil size={16} aria-hidden />
+                            <Pencil size={18} aria-hidden />
                           </button>
                         ) : null}
                         {canFecharGerarPedido(r) ? (
@@ -997,7 +1033,7 @@ export function BemAvivPedidosPage() {
                             disabled={!!r.converted_order_id}
                             onClick={() => void closeQuoteAndCreateOrder(r)}
                           >
-                            <CheckCircle2 size={16} aria-hidden />
+                            <CheckCircle2 size={18} aria-hidden />
                           </button>
                         ) : null}
                         {canEditPedido(r) ? (
@@ -1008,7 +1044,7 @@ export function BemAvivPedidosPage() {
                             aria-label="Alterar pedido"
                             onClick={() => void openModalEdit(r)}
                           >
-                            <Pencil size={16} aria-hidden />
+                            <Pencil size={18} aria-hidden />
                           </button>
                         ) : null}
                         {canCancelPedido(r) ? (
@@ -1025,7 +1061,7 @@ export function BemAvivPedidosPage() {
                               )
                             }
                           >
-                            <XCircle size={16} aria-hidden />
+                            <XCircle size={18} aria-hidden />
                           </button>
                         ) : null}
                         {canConfirmPayment(r) ? (
@@ -1042,7 +1078,7 @@ export function BemAvivPedidosPage() {
                               )
                             }
                           >
-                            <CircleDollarSign size={16} aria-hidden />
+                            <CircleDollarSign size={18} aria-hidden />
                           </button>
                         ) : null}
                         {canConfirmDelivery(r) ? (
@@ -1059,7 +1095,7 @@ export function BemAvivPedidosPage() {
                               )
                             }
                           >
-                            <PackageCheck size={16} aria-hidden />
+                            <PackageCheck size={18} aria-hidden />
                           </button>
                         ) : null}
                         {canReopenPedido(r) ? (
@@ -1076,7 +1112,18 @@ export function BemAvivPedidosPage() {
                               )
                             }
                           >
-                            <RotateCcw size={16} aria-hidden />
+                            <RotateCcw size={18} aria-hidden />
+                          </button>
+                        ) : null}
+                        {canExcluirDocumento(r) ? (
+                          <button
+                            type="button"
+                            className={`${iconBtn} border-red-200 text-red-700 hover:bg-red-50`}
+                            title="Excluir documento"
+                            aria-label="Excluir documento"
+                            onClick={() => void deleteDocumento(r)}
+                          >
+                            <Trash2 size={18} aria-hidden />
                           </button>
                         ) : null}
                       </div>
@@ -1340,7 +1387,12 @@ export function BemAvivPedidosPage() {
                     <input inputMode="numeric" value={draftQty} onChange={(e) => setDraftQty(e.target.value)} />
                   </div>
                   <div className="flex items-end sm:col-span-2">
-                    <Button type="button" variant="secondary" onClick={addLineFromDraft}>
+                    <Button
+                      type="button"
+                      variant="primary"
+                      className="!border-emerald-600 !bg-emerald-600 hover:!border-emerald-700 hover:!bg-emerald-700 focus-visible:!ring-emerald-500/40"
+                      onClick={addLineFromDraft}
+                    >
                       ADICIONAR ITEM
                     </Button>
                   </div>
