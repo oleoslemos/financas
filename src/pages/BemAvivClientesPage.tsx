@@ -1,11 +1,12 @@
 import { useUser } from '@clerk/clerk-react'
-import { ArrowDown, ArrowUp, ArrowUpDown, CalendarPlus, MessageCircle, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, ArrowUpDown, CalendarPlus, MessageCircle, Pencil, Search, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
+import { cn } from '../lib/cn'
 import { toUpperTrim } from '../lib/text'
 import { buildWhatsappUrl } from '../lib/whatsapp'
 
@@ -56,6 +57,45 @@ function formatCep(v?: string | null) {
   return `${d.slice(0, 5)}-${d.slice(5)}`
 }
 
+const AVATAR_PALETTE = [
+  { bg: '#E6F1FB', fg: '#185FA5' },
+  { bg: '#EAF3DE', fg: '#3B6D11' },
+  { bg: '#FAEEDA', fg: '#854F0B' },
+  { bg: '#EEEDFE', fg: '#3C3489' },
+  { bg: '#FAECE7', fg: '#993C1D' },
+  { bg: '#FBEAF0', fg: '#993556' },
+  { bg: '#E1F5EE', fg: '#085041' },
+  { bg: '#F1EFE8', fg: '#5F5E5A' },
+]
+
+function avatarPalette(name: string) {
+  let h = 0
+  for (const c of name) h = (h * 31 + c.charCodeAt(0)) % AVATAR_PALETTE.length
+  return AVATAR_PALETTE[h]!
+}
+
+function initialsFromName(name: string) {
+  const p = name.trim().split(/\s+/).filter(Boolean)
+  if (p.length === 0) return '??'
+  if (p.length === 1) return p[0]!.slice(0, 2).toUpperCase()
+  return `${p[0]![0]}${p[p.length - 1]![0]}`.toUpperCase()
+}
+
+function completenessPct(r: Cliente) {
+  let n = 0
+  if (toUpperTrim(r.full_name)) n += 25
+  if (onlyDigits(r.cpf).length >= 11) n += 25
+  if (onlyDigits(r.phone_1 ?? '').length >= 10 || onlyDigits(r.phone_2 ?? '').length >= 10) n += 25
+  if (toUpperTrim(r.email ?? '')) n += 25
+  return n
+}
+
+function completenessBarColor(pct: number) {
+  if (pct === 100) return '#639922'
+  if (pct >= 50) return '#378ADD'
+  return '#EF9F27'
+}
+
 function phonesSortValue(r: Cliente) {
   return `${onlyDigits(r.phone_1 ?? '')}${onlyDigits(r.phone_2 ?? '')}`
 }
@@ -104,7 +144,7 @@ export function BemAvivClientesPage() {
   const [clientModalOpen, setClientModalOpen] = useState(false)
   const [cepLoading, setCepLoading] = useState(false)
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'TODOS' | string>('TODOS')
+  const [statusFilter, setStatusFilter] = useState<'TODOS' | 'CLIENTE' | 'PROSPECÇÃO'>('TODOS')
   const [sortKey, setSortKey] = useState<SortKey>('full_name')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [form, setForm] = useState(emptyForm)
@@ -121,20 +161,21 @@ export function BemAvivClientesPage() {
     void load()
   }, [load])
 
-  const statusFilterOptions = useMemo(() => {
-    const unique = new Set<string>()
-    for (const r of rows) {
-      unique.add((r.client_status || 'PROSPECÇÃO').trim() || 'PROSPECÇÃO')
-    }
-    return Array.from(unique).sort((a, b) => a.localeCompare(b, 'pt-BR'))
+  const stats = useMemo(() => {
+    const total = rows.length
+    const clientes = rows.filter((r) => (r.client_status ?? '').trim() === 'CLIENTE').length
+    const prospec = rows.filter((r) => (r.client_status ?? '').trim() !== 'CLIENTE').length
+    const comEmail = rows.filter((r) => toUpperTrim(r.email ?? '').length > 0).length
+    return { total, clientes, prospec, comEmail }
   }, [rows])
 
   const displayedRows = useMemo(() => {
     const filtered = rows.filter((r) => {
       if (!clientMatchesSearch(r, search)) return false
       if (statusFilter === 'TODOS') return true
-      const st = (r.client_status || 'PROSPECÇÃO').trim() || 'PROSPECÇÃO'
-      return st === statusFilter
+      const st = (r.client_status ?? '').trim()
+      if (statusFilter === 'CLIENTE') return st === 'CLIENTE'
+      return st !== 'CLIENTE'
     })
     const mul = sortDir === 'asc' ? 1 : -1
     return [...filtered].sort((a, b) => {
@@ -313,9 +354,9 @@ export function BemAvivClientesPage() {
           {label}
           {active ? (
             sortDir === 'asc' ? (
-              <ArrowUp size={14} className="shrink-0 text-emerald-700" aria-hidden />
+              <ArrowUp size={14} className="shrink-0 text-[#185FA5]" aria-hidden />
             ) : (
-              <ArrowDown size={14} className="shrink-0 text-emerald-700" aria-hidden />
+              <ArrowDown size={14} className="shrink-0 text-[#185FA5]" aria-hidden />
             )
           ) : (
             <ArrowUpDown size={14} className="shrink-0 text-slate-400" aria-hidden />
@@ -327,56 +368,93 @@ export function BemAvivClientesPage() {
 
   if (!supabase) return <p className="text-slate-600">CONECTANDO...</p>
 
-  return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-semibold">CADASTRO DE CLIENTES</h2>
+  const pillBase =
+    'rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline focus-visible:ring-2 focus-visible:ring-[#185FA5]/30'
+  const pillActive = 'border-[#B5D4F4] bg-[#E6F1FB] text-[#185FA5]'
+  const pillIdle = 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
 
-      <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end">
-        <Button type="button" variant="primary" className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2" onClick={openNewClientModal}>
-          <Plus size={18} aria-hidden />
-          Cadastrar cliente
-        </Button>
-        <div className="min-w-0 flex-1 lg:max-w-md">
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Pesquisa</label>
-          <div className="relative">
-            <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden />
-            <input
-              className="w-full pl-10"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Nome, telefone, CPF ou e-mail"
-              aria-label="Pesquisar clientes"
-            />
-          </div>
+  return (
+    <div className="mx-auto max-w-[1100px] space-y-5">
+      <header>
+        <h2 className="font-hub text-xl font-bold tracking-tight text-slate-900">Clientes</h2>
+        <p className="mt-0.5 text-sm text-slate-500">Base completa de clientes e prospects</p>
+      </header>
+
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Total</p>
+          <p className="font-hub mt-1 text-[22px] font-bold text-slate-900">{stats.total}</p>
+          <span className="mt-1 inline-block rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">Cadastros</span>
         </div>
-        <div className="w-full min-w-0 sm:w-auto sm:min-w-[11rem]">
-          <label htmlFor="client-status-filter" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Status
-          </label>
-          <select
-            id="client-status-filter"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            aria-label="Filtrar por status do cliente"
-          >
-            <option value="TODOS">Todos</option>
-            {statusFilterOptions.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Clientes</p>
+          <p className="font-hub mt-1 text-[22px] font-bold text-slate-900">{stats.clientes}</p>
+          <span className="mt-1 inline-block rounded-full bg-[#EAF3DE] px-2 py-0.5 text-[10px] font-medium text-[#3B6D11]">Ativos</span>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Prospecção</p>
+          <p className="font-hub mt-1 text-[22px] font-bold text-slate-900">{stats.prospec}</p>
+          <span className="mt-1 inline-block rounded-full bg-[#FAEEDA] px-2 py-0.5 text-[10px] font-medium text-[#854F0B]">Prospects</span>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Cadastro completo</p>
+          <p className="font-hub mt-1 text-[22px] font-bold text-slate-900">{stats.comEmail}</p>
+          <span className="mt-1 inline-block rounded-full bg-[#E6F1FB] px-2 py-0.5 text-[10px] font-medium text-[#185FA5]">Com e-mail</span>
         </div>
       </div>
 
-      <div className="table-wrap">
+      <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="relative min-w-0 flex-1">
+          <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" strokeWidth={2} aria-hidden />
+          <input
+            className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-8 pr-3 text-sm normal-case placeholder:normal-case"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por nome, CPF ou e-mail..."
+            aria-label="Pesquisar clientes"
+          />
+        </div>
+        <div className="flex flex-wrap gap-1">
+          <button
+            type="button"
+            className={cn(pillBase, statusFilter === 'TODOS' ? pillActive : pillIdle)}
+            onClick={() => setStatusFilter('TODOS')}
+          >
+            Todos
+          </button>
+          <button
+            type="button"
+            className={cn(pillBase, statusFilter === 'CLIENTE' ? pillActive : pillIdle)}
+            onClick={() => setStatusFilter('CLIENTE')}
+          >
+            Clientes
+          </button>
+          <button
+            type="button"
+            className={cn(pillBase, statusFilter === 'PROSPECÇÃO' ? pillActive : pillIdle)}
+            onClick={() => setStatusFilter('PROSPECÇÃO')}
+          >
+            Prospecção
+          </button>
+        </div>
+        <button
+          type="button"
+          className="whitespace-nowrap rounded-lg bg-[#185FA5] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#144a87]"
+          onClick={openNewClientModal}
+        >
+          + Novo cliente
+        </button>
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="table-wrap border-0">
         {loading ? (
           <p className="p-4 text-slate-500">CARREGANDO...</p>
         ) : (
           <table>
             <thead>
               <tr>
-                <SortHeader label="NOME" column="full_name" />
+                <SortHeader label="Nome / Completude" column="full_name" />
                 <SortHeader label="CPF" column="cpf" />
                 <SortHeader label="TELEFONES" column="phones" />
                 <SortHeader label="E-MAIL" column="email" />
@@ -385,13 +463,55 @@ export function BemAvivClientesPage() {
               </tr>
             </thead>
             <tbody>
-              {displayedRows.map((r) => (
+              {displayedRows.map((r) => {
+                const pct = completenessPct(r)
+                const pal = avatarPalette(r.full_name || '?')
+                return (
                 <tr key={r.id}>
-                  <td>{r.full_name}</td>
-                  <td>{formatCpf(r.cpf)}</td>
-                  <td>{[formatPhone(r.phone_1), formatPhone(r.phone_2)].filter(Boolean).join(' / ') || '—'}</td>
-                  <td>{r.email || '—'}</td>
-                  <td>{r.client_status || 'PROSPECÇÃO'}</td>
+                  <td>
+                    <div className="flex max-w-[280px] items-start gap-2.5">
+                      <div
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
+                        style={{ backgroundColor: pal.bg, color: pal.fg }}
+                      >
+                        {initialsFromName(r.full_name)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium normal-case text-slate-900">{r.full_name}</p>
+                        <div className="mt-1 flex items-center gap-1.5">
+                          <div className="h-1 flex-1 rounded-full bg-slate-200">
+                            <div
+                              className="h-1 rounded-full transition-[width]"
+                              style={{ width: `${pct}%`, backgroundColor: completenessBarColor(pct) }}
+                            />
+                          </div>
+                          <span className="text-[9px] tabular-nums text-slate-500">{pct}%</span>
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="text-xs normal-case text-slate-600">{formatCpf(r.cpf)}</td>
+                  <td className="text-xs normal-case text-slate-600">{[formatPhone(r.phone_1), formatPhone(r.phone_2)].filter(Boolean).join(' / ') || '—'}</td>
+                  <td className="text-xs normal-case">
+                    {r.email ? (
+                      <span className="text-[#185FA5]">{r.email}</span>
+                    ) : (
+                      <span className="text-slate-400">—</span>
+                    )}
+                  </td>
+                  <td>
+                    {(r.client_status ?? '').trim() === 'CLIENTE' ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-[#EAF3DE] px-2 py-0.5 text-[10px] font-medium text-[#3B6D11]">
+                        <span className="h-1 w-1 rounded-full bg-[#639922]" aria-hidden />
+                        Cliente
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-[#FAEEDA] px-2 py-0.5 text-[10px] font-medium text-[#854F0B]">
+                        <span className="h-1 w-1 rounded-full bg-[#EF9F27]" aria-hidden />
+                        Prospecção
+                      </span>
+                    )}
+                  </td>
                   <td className="whitespace-nowrap">
                     <div className="flex items-center justify-end gap-1.5 sm:gap-2">
                       <button
@@ -433,7 +553,8 @@ export function BemAvivClientesPage() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                )
+              })}
               {displayedRows.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-8 text-center text-slate-500">
@@ -446,6 +567,14 @@ export function BemAvivClientesPage() {
             </tbody>
           </table>
         )}
+        {!loading ? (
+          <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-2.5">
+            <span className="text-[11px] text-slate-500">
+              {displayedRows.length} registro{displayedRows.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+        ) : null}
+      </div>
       </div>
 
       {clientModalOpen ? (

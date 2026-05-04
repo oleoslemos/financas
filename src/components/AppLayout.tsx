@@ -3,16 +3,20 @@ import {
   BarChart3,
   BriefcaseBusiness,
   CalendarDays,
+  ChevronLeft,
   CircleDollarSign,
   CreditCard,
   FolderKanban,
+  Home,
   KanbanSquare,
   Landmark,
+  LayoutDashboard,
   LayoutGrid,
   ListTodo,
   MessageCircleMore,
   NotebookText,
   Package,
+  PieChart,
   ShoppingCart,
   StickyNote,
   Table2,
@@ -21,8 +25,10 @@ import {
   Users,
   Workflow,
 } from 'lucide-react'
-import { type ComponentType, useMemo } from 'react'
+import { type ComponentType, useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { cn } from '../lib/cn'
+import { getHubBreadcrumb } from '../lib/hubBreadcrumb'
 import { canAccessTasksHomolog } from '../lib/tasksHomologAccess'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { canAccessProjects } from '../lib/projectsAccess'
@@ -40,10 +46,6 @@ type NavLinkEntry = {
   icon?: ComponentType<{ size?: number; className?: string; 'aria-hidden'?: boolean }>
 }
 
-type SecondaryNav =
-  | { kind: 'flat'; links: NavLinkEntry[] }
-  | { kind: 'grouped'; groups: Array<{ title: string; links: NavLinkEntry[] }> }
-
 function flattenMenuItems(items: MenuItem[]): NavLinkEntry[] {
   return items.flatMap((item) => {
     const parent = item.to ? [{ label: item.label, to: item.to, icon: item.icon }] : []
@@ -52,29 +54,20 @@ function flattenMenuItems(items: MenuItem[]): NavLinkEntry[] {
   })
 }
 
-const topTriggerBase =
-  'inline-flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900'
-
-const moduleLinkBase =
-  'inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-900'
+const hubBrand = {
+  primary: '#185FA5',
+}
 
 export function AppLayout() {
   const { user } = useUser()
   const location = useLocation()
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   const emails = clerkEmailCandidates(user)
   const bemAvivOnlyUser = emails.includes('suelenjalves@gmail.com')
   const hideAgendaTasks = emails.includes('suelenjalves@gmail.com')
   const tasksHomologEnabled = !hideAgendaTasks && canAccessTasksHomolog(user?.primaryEmailAddress?.emailAddress)
   const projectsEnabled = emails.some((email) => canAccessProjects(email))
-
-  const agendaItems = useMemo<MenuItem[]>(
-    () => [
-      { label: 'Agenda', to: '/lsh/agenda', icon: CalendarDays },
-      { label: 'Tarefas', to: '/lsh/tarefas', icon: ListTodo },
-    ],
-    [],
-  )
 
   const lshItems = useMemo<MenuItem[]>(
     () => [
@@ -88,33 +81,6 @@ export function AppLayout() {
         ],
       },
     ],
-    [],
-  )
-
-  const bemAvivNavGroups = useMemo(
-    () =>
-      [
-        {
-          title: 'Fluxo atual',
-          links: [
-            { label: 'Clientes', to: '/bem-aviv/clientes', icon: UserCircle },
-            { label: 'Follow-up', to: '/bem-aviv/follow-up', icon: MessageCircleMore },
-            { label: 'Produtividade', to: '/bem-aviv/follow-up/produtividade', icon: BarChart3 },
-            { label: 'Pedidos e orçamentos', to: '/bem-aviv/pedidos', icon: ShoppingCart },
-            { label: 'Produtos (catálogo)', to: '/bem-aviv/produtos-catalogo', icon: Package },
-            { label: 'Categorias', to: '/bem-aviv/categorias', icon: Tags },
-            { label: 'Tabela de preço (catálogo)', to: '/bem-aviv/tabela-preco-catalogo', icon: Table2 },
-            { label: 'Catálogos em grade', to: '/bem-aviv/catalogos-preco', icon: LayoutGrid },
-          ],
-        },
-        {
-          title: 'Legado',
-          links: [
-            { label: 'Produtos (legado)', to: '/bem-aviv/produtos', icon: Package },
-            { label: 'Tabela de preço Gold', to: '/bem-aviv/tabela-preco', icon: Table2 },
-          ],
-        },
-      ] satisfies Array<{ title: string; links: NavLinkEntry[] }>,
     [],
   )
 
@@ -137,115 +103,207 @@ export function AppLayout() {
     [],
   )
 
-  const activeSystem = useMemo<'agenda' | 'projects' | 'lsh' | 'bem-aviv'>(() => {
-    if (location.pathname.startsWith('/bem-aviv')) return 'bem-aviv'
-    if (location.pathname.startsWith('/projetos')) return 'projects'
-    if (location.pathname.startsWith('/lsh/agenda') || location.pathname.startsWith('/lsh/tarefas')) return 'agenda'
-    if (location.pathname.startsWith('/lsh')) return 'lsh'
-    return 'bem-aviv'
-  }, [location.pathname])
+  const sidebarSections = useMemo(() => {
+    const sections: Array<{ title: string; items: NavLinkEntry[] }> = []
 
-  const secondaryNav = useMemo<SecondaryNav>(() => {
-    if (activeSystem === 'agenda' && tasksHomologEnabled) {
-      return { kind: 'flat', links: flattenMenuItems(agendaItems) }
+    const principal: NavLinkEntry[] = [{ label: 'Visão geral', to: '/bem-aviv', icon: LayoutDashboard }]
+    if (tasksHomologEnabled) {
+      principal.push(
+        { label: 'Agenda', to: '/lsh/agenda', icon: CalendarDays },
+        { label: 'Tarefas', to: '/lsh/tarefas', icon: ListTodo },
+      )
     }
-    if (activeSystem === 'projects' && projectsEnabled) {
-      return { kind: 'flat', links: flattenMenuItems(projectItems) }
+    sections.push({ title: 'Principal', items: principal })
+
+    if (!bemAvivOnlyUser) {
+      sections.push({
+        title: 'Financeiro',
+        items: flattenMenuItems([
+          { label: 'Início', to: '/lsh/inicio', icon: Home },
+          { label: 'Resumo', to: '/lsh/resumo', icon: PieChart },
+          ...lshItems,
+        ]),
+      })
     }
-    if (activeSystem === 'lsh' && !bemAvivOnlyUser) {
-      return { kind: 'flat', links: flattenMenuItems(lshItems) }
+
+    sections.push({
+      title: 'Comercial',
+      items: [
+        { label: 'Clientes', to: '/bem-aviv/clientes', icon: UserCircle },
+        { label: 'Follow-up', to: '/bem-aviv/follow-up', icon: MessageCircleMore },
+        { label: 'Pedidos e orçamentos', to: '/bem-aviv/pedidos', icon: ShoppingCart },
+      ],
+    })
+
+    sections.push({
+      title: 'Catálogo',
+      items: [
+        { label: 'Produtos', to: '/bem-aviv/produtos-catalogo', icon: Package },
+        { label: 'Categorias', to: '/bem-aviv/categorias', icon: Tags },
+        { label: 'Tabela de preço', to: '/bem-aviv/tabela-preco-catalogo', icon: Table2 },
+        { label: 'Catálogos em grade', to: '/bem-aviv/catalogos-preco', icon: LayoutGrid },
+      ],
+    })
+
+    sections.push({
+      title: 'Gestão',
+      items: [{ label: 'Produtividade', to: '/bem-aviv/follow-up/produtividade', icon: BarChart3 }],
+    })
+
+    sections.push({
+      title: 'Legado',
+      items: [
+        { label: 'Produtos (legado)', to: '/bem-aviv/produtos', icon: Package },
+        { label: 'Tabela Gold', to: '/bem-aviv/tabela-preco', icon: Table2 },
+      ],
+    })
+
+    if (projectsEnabled) {
+      sections.push({
+        title: 'Projetos',
+        items: flattenMenuItems([{ label: 'Visão geral', to: '/projetos', icon: FolderKanban }, ...projectItems]),
+      })
     }
-    return { kind: 'grouped', groups: bemAvivNavGroups }
-  }, [activeSystem, tasksHomologEnabled, projectsEnabled, bemAvivOnlyUser, agendaItems, projectItems, lshItems, bemAvivNavGroups])
+
+    return sections
+  }, [bemAvivOnlyUser, lshItems, projectItems, projectsEnabled, tasksHomologEnabled])
+
+  const breadcrumb = useMemo(() => getHubBreadcrumb(location.pathname), [location.pathname])
+
+  const userInitials = useMemo(() => {
+    const fn = user?.firstName?.trim()
+    const ln = user?.lastName?.trim()
+    if (fn && ln) return `${fn[0]}${ln[0]}`.toUpperCase()
+    const mail = user?.primaryEmailAddress?.emailAddress
+    if (mail) return mail.slice(0, 2).toUpperCase()
+    return 'BA'
+  }, [user?.firstName, user?.lastName, user?.primaryEmailAddress?.emailAddress])
 
   return (
-    <div className="min-h-screen bg-white">
-      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 sm:px-4 lg:px-6">
-          <h1 className="text-sm font-semibold tracking-tight text-emerald-800">Sistema de gestão</h1>
-          <div className="flex items-center gap-2">
-            <nav className="flex flex-col items-end gap-1" aria-label="Navegação principal">
-              <div className="flex items-center gap-1">
-                {tasksHomologEnabled ? (
-                  <NavLink
-                    to="/lsh/agenda"
-                    className={({ isActive }) =>
-                      `${topTriggerBase} ${isActive || activeSystem === 'agenda' ? 'bg-slate-100 text-slate-900' : ''}`
-                    }
-                  >
-                    Agenda e Tarefas
-                  </NavLink>
-                ) : null}
-                {projectsEnabled ? (
-                  <NavLink
-                    to="/projetos"
-                    className={({ isActive }) =>
-                      `${topTriggerBase} ${isActive || activeSystem === 'projects' ? 'bg-slate-100 text-slate-900' : ''}`
-                    }
-                  >
-                    Projetos
-                  </NavLink>
-                ) : null}
-                {!bemAvivOnlyUser ? (
-                  <NavLink
-                    to="/lsh/inicio"
-                    className={({ isActive }) =>
-                      `${topTriggerBase} ${isActive || activeSystem === 'lsh' ? 'bg-slate-100 text-slate-900' : ''}`
-                    }
-                  >
-                    Sistema Gestão
-                  </NavLink>
-                ) : null}
-                <NavLink
-                  to="/bem-aviv"
-                  className={({ isActive }) =>
-                    `${topTriggerBase} ${isActive || activeSystem === 'bem-aviv' ? 'bg-slate-100 text-slate-900' : ''}`
-                  }
-                >
-                  Bem Aviv
-                </NavLink>
-              </div>
-              <div className="flex max-w-[min(100vw-1.5rem,56rem)] flex-col items-end gap-2 sm:max-w-[74vw] sm:flex-row sm:flex-wrap sm:justify-end">
-                {secondaryNav.kind === 'flat'
-                  ? secondaryNav.links.map((item) => (
-                      <NavLink
-                        key={`${item.to}-${item.label}`}
-                        to={item.to}
-                        className={({ isActive }) => `${moduleLinkBase} ${isActive ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : ''}`}
-                      >
-                        {item.icon ? <item.icon size={13} className="opacity-80" aria-hidden /> : null}
-                        {item.label}
-                      </NavLink>
-                    ))
-                  : secondaryNav.groups.map((group) => (
-                      <div key={group.title} className="flex flex-col items-end gap-1">
-                        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{group.title}</span>
-                        <div className="flex flex-wrap justify-end gap-1">
-                          {group.links.map((item) => (
-                            <NavLink
-                              key={`${item.to}-${item.label}`}
-                              to={item.to}
-                              className={({ isActive }) => `${moduleLinkBase} ${isActive ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : ''}`}
-                            >
-                              {item.icon ? <item.icon size={13} className="opacity-80" aria-hidden /> : null}
-                              {item.label}
-                            </NavLink>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-              </div>
-            </nav>
+    <div className="hub-layout flex min-h-screen bg-slate-100 font-sans text-slate-900">
+      <aside
+        className={cn(
+          'flex shrink-0 flex-col border-r border-slate-200 bg-white transition-[width] duration-200 ease-out',
+          sidebarCollapsed ? 'w-[56px]' : 'w-[220px]',
+        )}
+        aria-label="Menu lateral"
+      >
+        <div className="flex min-h-[52px] items-center gap-2 border-b border-slate-200 px-3 py-2">
+          <div
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md"
+            style={{ backgroundColor: hubBrand.primary }}
+            aria-hidden
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="text-white">
+              <rect x="1" y="1" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
+              <rect x="8" y="1" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
+              <rect x="1" y="8" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
+              <rect x="8" y="8" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
+            </svg>
           </div>
-          <div className="flex items-center gap-2">
-            <UserButton afterSignOutUrl="/sign-in" />
+          {!sidebarCollapsed ? (
+            <span className="truncate font-hub text-[13px] font-bold tracking-tight" style={{ color: hubBrand.primary }}>
+              Sistema de Gestão
+            </span>
+          ) : null}
+          <button
+            type="button"
+            className="ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+            onClick={() => setSidebarCollapsed((v) => !v)}
+            aria-label={sidebarCollapsed ? 'Expandir menu' : 'Recolher menu'}
+          >
+            <ChevronLeft size={16} className={cn('transition-transform', sidebarCollapsed && 'rotate-180')} />
+          </button>
+        </div>
+
+        <nav className="flex flex-1 flex-col gap-0 overflow-y-auto overscroll-contain px-2 py-2 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {sidebarSections.map((section) => (
+            <div key={section.title} className="mb-2">
+              {!sidebarCollapsed ? (
+                <div className="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">{section.title}</div>
+              ) : null}
+              <ul className="space-y-px">
+                {section.items.map((item) => (
+                  <li key={`${section.title}-${item.to}-${item.label}`}>
+                    <NavLink
+                      to={item.to}
+                      end={item.to === '/bem-aviv' || item.to === '/projetos'}
+                      title={sidebarCollapsed ? item.label : undefined}
+                      className={({ isActive }) =>
+                        cn(
+                          'flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] font-medium transition-colors',
+                          isActive
+                            ? 'bg-[#E6F1FB] font-semibold text-[#185FA5] [&>.sb-ico]:bg-[#185FA5] [&>.sb-ico]:text-white'
+                            : 'text-slate-600 hover:bg-slate-50',
+                        )
+                      }
+                    >
+                      {item.icon ? (
+                        <span className="sb-ico flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md text-slate-600 transition-colors [&_svg]:stroke-[2]">
+                          <item.icon size={14} aria-hidden />
+                        </span>
+                      ) : null}
+                      {!sidebarCollapsed ? <span className="truncate">{item.label}</span> : null}
+                    </NavLink>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </nav>
+
+        <div className="mt-auto border-t border-slate-200 p-2">
+          <div className="flex items-center gap-2 rounded-lg px-2 py-1.5">
+            <div
+              className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+              style={{ backgroundColor: hubBrand.primary }}
+            >
+              {userInitials}
+            </div>
+            {!sidebarCollapsed ? (
+              <div className="min-w-0 flex-1 overflow-hidden">
+                <p className="truncate text-xs font-medium text-slate-800">{user?.fullName || user?.primaryEmailAddress?.emailAddress || 'Conta'}</p>
+                <p className="truncate text-[10px] text-slate-500">Perfil</p>
+              </div>
+            ) : null}
+            {!sidebarCollapsed ? (
+              <div className="shrink-0 [&_.cl-userButtonBox]:scale-90">
+                <UserButton afterSignOutUrl="/sign-in" />
+              </div>
+            ) : (
+              <div className="flex justify-center [&_.cl-userButtonBox]:scale-90">
+                <UserButton afterSignOutUrl="/sign-in" />
+              </div>
+            )}
           </div>
         </div>
-      </header>
+      </aside>
 
-      <main className="w-full min-w-0 bg-white p-3 sm:p-4 lg:p-6 xl:px-10 xl:py-8 2xl:px-12">
-        <Outlet />
-      </main>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex h-[52px] shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 lg:px-5">
+          <p className="text-xs text-slate-500">
+            {breadcrumb.segment} / <span className="font-medium text-slate-900">{breadcrumb.current}</span>
+          </p>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              className="relative flex h-[30px] w-[30px] items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+              aria-label="Notificações (em breve)"
+              disabled
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+                <path d="M7 1a4 4 0 014 4v2.5l1 2H2l1-2V5a4 4 0 014-4z" />
+                <path d="M5.5 11.5a1.5 1.5 0 003 0" />
+              </svg>
+              <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-red-500" aria-hidden />
+            </button>
+          </div>
+        </header>
+
+        <main className="hub-content min-h-0 flex-1 overflow-y-auto bg-slate-100 p-4 normal-case lg:p-5">
+          <Outlet />
+        </main>
+      </div>
     </div>
   )
 }
