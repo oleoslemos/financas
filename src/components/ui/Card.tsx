@@ -14,3 +14,9 @@ export function CardHeader({ className, ...props }: CardSectionProps) {
 export function CardContent({ className, ...props }: CardSectionProps) {
   return <div className={cn('p-4', className)} {...props} />
 }
+
+type CardTitleProps = React.HTMLAttributes<HTMLHeadingElement>
+
+export function CardTitle({ className, ...props }: CardTitleProps) {
+  return <h3 className={cn('text-sm font-medium leading-none tracking-tight', className)} {...props} />
+}
