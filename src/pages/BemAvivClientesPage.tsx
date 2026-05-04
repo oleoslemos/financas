@@ -1,5 +1,17 @@
 import { useUser } from '@clerk/clerk-react'
-import { ArrowDown, ArrowUp, ArrowUpDown, CalendarPlus, MessageCircle, Pencil, Search, Trash2, X } from 'lucide-react'
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  CalendarPlus,
+  ClipboardList,
+  History,
+  MessageCircle,
+  Pencil,
+  Search,
+  Trash2,
+  X,
+} from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
@@ -28,7 +40,7 @@ type Cliente = {
   client_status: string | null
 }
 
-type SortKey = 'full_name' | 'cpf' | 'phones' | 'email' | 'client_status'
+type SortKey = 'full_name' | 'phones' | 'client_status'
 
 function onlyDigits(v: string) {
   return v.replace(/\D/g, '')
@@ -184,14 +196,8 @@ export function BemAvivClientesPage() {
         case 'full_name':
           cmp = (a.full_name ?? '').localeCompare(b.full_name ?? '', 'pt-BR')
           break
-        case 'cpf':
-          cmp = onlyDigits(a.cpf).localeCompare(onlyDigits(b.cpf), 'pt-BR', { numeric: true })
-          break
         case 'phones':
           cmp = phonesSortValue(a).localeCompare(phonesSortValue(b), 'pt-BR', { numeric: true })
-          break
-        case 'email':
-          cmp = (a.email ?? '').toLowerCase().localeCompare((b.email ?? '').toLowerCase(), 'pt-BR')
           break
         case 'client_status':
           cmp = (a.client_status ?? '').localeCompare(b.client_status ?? '', 'pt-BR')
@@ -247,6 +253,14 @@ export function BemAvivClientesPage() {
 
   function goToFollowupSchedule(client: Cliente) {
     navigate('/bem-aviv/follow-up', { state: { bemAvivClientFocus: { id: client.id, mode: 'schedule' as const } } })
+  }
+
+  function goToFollowupHistory(client: Cliente) {
+    navigate('/bem-aviv/follow-up', { state: { bemAvivClientFocus: { id: client.id, mode: 'history' as const } } })
+  }
+
+  function goToPedidosHistorico(client: Cliente) {
+    navigate('/bem-aviv/pedidos', { state: { bemAvivPedidosClient: { id: client.id } } })
   }
 
   function openWhatsapp(client: Cliente) {
@@ -374,7 +388,7 @@ export function BemAvivClientesPage() {
   const pillIdle = 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
 
   return (
-    <div className="mx-auto max-w-[1100px] space-y-5">
+    <div className="mx-auto max-w-[min(1400px,100%)] space-y-5">
       <header>
         <h2 className="font-hub text-xl font-bold tracking-tight text-slate-900">Clientes</h2>
         <p className="mt-0.5 text-sm text-slate-500">Base completa de clientes e prospects</p>
@@ -410,7 +424,7 @@ export function BemAvivClientesPage() {
             className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-8 pr-3 text-sm normal-case placeholder:normal-case"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por nome, CPF ou e-mail..."
+            placeholder="Buscar por nome ou telefone..."
             aria-label="Pesquisar clientes"
           />
         </div>
@@ -455,9 +469,7 @@ export function BemAvivClientesPage() {
             <thead>
               <tr>
                 <SortHeader label="Nome / Completude" column="full_name" />
-                <SortHeader label="CPF" column="cpf" />
-                <SortHeader label="TELEFONES" column="phones" />
-                <SortHeader label="E-MAIL" column="email" />
+                <SortHeader label="Telefones" column="phones" />
                 <SortHeader label="STATUS" column="client_status" />
                 <th className="text-right">Ações</th>
               </tr>
@@ -469,7 +481,7 @@ export function BemAvivClientesPage() {
                 return (
                 <tr key={r.id}>
                   <td>
-                    <div className="flex max-w-[280px] items-start gap-2.5">
+                    <div className="flex min-w-0 max-w-[min(520px,42vw)] items-start gap-2.5">
                       <div
                         className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
                         style={{ backgroundColor: pal.bg, color: pal.fg }}
@@ -490,14 +502,8 @@ export function BemAvivClientesPage() {
                       </div>
                     </div>
                   </td>
-                  <td className="text-xs normal-case text-slate-600">{formatCpf(r.cpf)}</td>
-                  <td className="text-xs normal-case text-slate-600">{[formatPhone(r.phone_1), formatPhone(r.phone_2)].filter(Boolean).join(' / ') || '—'}</td>
-                  <td className="text-xs normal-case">
-                    {r.email ? (
-                      <span className="text-[#185FA5]">{r.email}</span>
-                    ) : (
-                      <span className="text-slate-400">—</span>
-                    )}
+                  <td className="min-w-[9rem] text-xs normal-case text-slate-600">
+                    {[formatPhone(r.phone_1), formatPhone(r.phone_2)].filter(Boolean).join(' / ') || '—'}
                   </td>
                   <td>
                     {(r.client_status ?? '').trim() === 'CLIENTE' ? (
@@ -513,10 +519,10 @@ export function BemAvivClientesPage() {
                     )}
                   </td>
                   <td className="whitespace-nowrap">
-                    <div className="flex items-center justify-end gap-1.5 sm:gap-2">
+                    <div className="flex max-w-[280px] flex-wrap items-center justify-end gap-1 sm:max-w-none sm:gap-1.5">
                       <button
                         type="button"
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-emerald-500 bg-emerald-600 text-white shadow-sm hover:bg-emerald-700"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-emerald-500 bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 sm:h-10 sm:w-10"
                         onClick={() => openWhatsapp(r)}
                         title="Enviar mensagem via WhatsApp"
                         aria-label="Enviar mensagem via WhatsApp"
@@ -525,7 +531,25 @@ export function BemAvivClientesPage() {
                       </button>
                       <button
                         type="button"
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-sky-300 bg-white text-sky-700 shadow-sm hover:bg-sky-50"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-violet-300 bg-white text-violet-800 shadow-sm hover:bg-violet-50 sm:h-10 sm:w-10"
+                        onClick={() => goToFollowupHistory(r)}
+                        title="Histórico de follow-up"
+                        aria-label="Histórico de follow-up"
+                      >
+                        <History size={16} strokeWidth={2.2} />
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-amber-300 bg-white text-amber-900 shadow-sm hover:bg-amber-50 sm:h-10 sm:w-10"
+                        onClick={() => goToPedidosHistorico(r)}
+                        title="Orçamentos e pedidos deste cliente"
+                        aria-label="Orçamentos e pedidos deste cliente"
+                      >
+                        <ClipboardList size={16} strokeWidth={2.2} />
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-sky-300 bg-white text-sky-700 shadow-sm hover:bg-sky-50 sm:h-10 sm:w-10"
                         onClick={() => goToFollowupSchedule(r)}
                         title="Agendar follow-up"
                         aria-label="Agendar follow-up"
@@ -534,7 +558,7 @@ export function BemAvivClientesPage() {
                       </button>
                       <button
                         type="button"
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100 sm:h-10 sm:w-10"
                         onClick={() => openEditClientModal(r)}
                         title="Editar cliente"
                         aria-label="Editar cliente"
@@ -543,7 +567,7 @@ export function BemAvivClientesPage() {
                       </button>
                       <button
                         type="button"
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-red-300 bg-white text-red-700 shadow-sm hover:bg-red-50"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-red-300 bg-white text-red-700 shadow-sm hover:bg-red-50 sm:h-10 sm:w-10"
                         onClick={() => remove(r.id)}
                         title="Excluir cliente"
                         aria-label="Excluir cliente"
@@ -557,7 +581,7 @@ export function BemAvivClientesPage() {
               })}
               {displayedRows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-slate-500">
+                  <td colSpan={4} className="py-8 text-center text-slate-500">
                     {rows.length === 0
                       ? 'Nenhum cliente cadastrado.'
                       : 'Nenhum resultado para a pesquisa ou o filtro de status atual.'}

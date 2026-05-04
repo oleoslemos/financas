@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   LayoutGrid,
   ListTodo,
+  SlidersHorizontal,
   MessageCircleMore,
   NotebookText,
   Package,
@@ -32,6 +33,7 @@ import { getHubBreadcrumb } from '../lib/hubBreadcrumb'
 import { canAccessTasksHomolog } from '../lib/tasksHomologAccess'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { canAccessProjects } from '../lib/projectsAccess'
+import { isBemAvivOnlyUser, isMultiSystemUser } from '../lib/userAccess'
 
 type MenuItem = {
   label: string
@@ -64,8 +66,8 @@ export function AppLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   const emails = clerkEmailCandidates(user)
-  const bemAvivOnlyUser = emails.includes('suelenjalves@gmail.com')
-  const hideAgendaTasks = emails.includes('suelenjalves@gmail.com')
+  const bemAvivOnlyUser = isBemAvivOnlyUser(emails)
+  const hideAgendaTasks = bemAvivOnlyUser
   const tasksHomologEnabled = !hideAgendaTasks && canAccessTasksHomolog(user?.primaryEmailAddress?.emailAddress)
   const projectsEnabled = emails.some((email) => canAccessProjects(email))
 
@@ -158,7 +160,7 @@ export function AppLayout() {
       ],
     })
 
-    if (projectsEnabled) {
+    if (projectsEnabled && !bemAvivOnlyUser) {
       sections.push({
         title: 'Projetos',
         items: flattenMenuItems([{ label: 'Visão geral', to: '/projetos', icon: FolderKanban }, ...projectItems]),
@@ -167,6 +169,8 @@ export function AppLayout() {
 
     return sections
   }, [bemAvivOnlyUser, lshItems, projectItems, projectsEnabled, tasksHomologEnabled])
+
+  const multiSystemUser = isMultiSystemUser(emails)
 
   const breadcrumb = useMemo(() => getHubBreadcrumb(location.pathname), [location.pathname])
 
@@ -251,6 +255,28 @@ export function AppLayout() {
             </div>
           ))}
         </nav>
+
+        {multiSystemUser ? (
+          <div className="shrink-0 border-t border-slate-200 px-2 py-1.5">
+            <NavLink
+              to="/escolher-sistema"
+              title={sidebarCollapsed ? 'Trocar sistema' : undefined}
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] font-medium transition-colors',
+                  isActive
+                    ? 'bg-[#E6F1FB] font-semibold text-[#185FA5] [&>.sb-ico]:bg-[#185FA5] [&>.sb-ico]:text-white'
+                    : 'text-slate-600 hover:bg-slate-50',
+                )
+              }
+            >
+              <span className="sb-ico flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md text-slate-600 transition-colors [&_svg]:stroke-[2]">
+                <SlidersHorizontal size={14} aria-hidden />
+              </span>
+              {!sidebarCollapsed ? <span className="truncate">Trocar sistema</span> : null}
+            </NavLink>
+          </div>
+        ) : null}
 
         <div className="mt-auto border-t border-slate-200 p-2">
           <div className="flex items-center gap-2 rounded-lg px-2 py-1.5">

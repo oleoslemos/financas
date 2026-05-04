@@ -1,7 +1,7 @@
 import { useUser } from '@clerk/clerk-react'
 import { CheckCircle2, CircleDollarSign, PackageCheck, Pencil, Plus, RotateCcw, Trash2, X, XCircle } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
 import { SearchableSelect } from '../components/ui/SearchableSelect'
 import { useSupabase } from '../hooks/useSupabase'
@@ -62,22 +62,31 @@ function clampMoney(n: number) {
   return Math.max(0, Math.round(n * 100) / 100)
 }
 
-/** Precisão alta evita 429,98 quando o usuário informa líquido 430,00 (arredondamento em %). */
-function clampPercent(n: number) {
+/** Arredonda valor monetário mantendo sinal (ex.: desconto negativo = acréscimo no pedido). */
+function roundMoneySigned(n: number) {
   if (!Number.isFinite(n)) return 0
-  return Math.max(0, Math.min(100, Math.round(n * 1e6) / 1e6))
+  return Math.round(n * 100) / 100
 }
 
-function parsePercent(raw: string) {
-  return clampPercent(parseMoney(raw || '0'))
+/** % do pedido: permite negativo (acréscimo sobre o bruto dos itens). */
+const ORDER_DISCOUNT_PCT_MIN = -999
+const ORDER_DISCOUNT_PCT_MAX = 100
+
+function clampOrderDiscountPercent(n: number) {
+  if (!Number.isFinite(n)) return 0
+  return Math.max(ORDER_DISCOUNT_PCT_MIN, Math.min(ORDER_DISCOUNT_PCT_MAX, Math.round(n * 1e6) / 1e6))
+}
+
+function parseOrderDiscountPercent(raw: string) {
+  return clampOrderDiscountPercent(parseMoney(raw || '0'))
 }
 
 function formatMoneyInput(n: number) {
   return clampMoney(n).toFixed(2).replace('.', ',')
 }
 
-function formatPercentInput(n: number) {
-  return clampPercent(n).toFixed(6).replace('.', ',')
+function formatOrderDiscountPercentInput(n: number) {
+  return clampOrderDiscountPercent(n).toFixed(6).replace('.', ',')
 }
 
 function normalizeTextKey(v: string) {
@@ -179,9 +188,15 @@ function canExcluirDocumento(r: Pedido) {
 const iconBtn =
   'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-40'
 
+type PedidosLocationState = {
+  bemAvivPedidosClient?: { id: string }
+}
+
 export function BemAvivPedidosPage() {
   const { user } = useUser()
   const supabase = useSupabase()
+  const location = useLocation()
+  const navigate = useNavigate()
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const [rows, setRows] = useState<Pedido[]>([])
   const [clients, setClients] = useState<ClienteOpt[]>([])
@@ -212,6 +227,7 @@ export function BemAvivPedidosPage() {
   const [lineItems, setLineItems] = useState<LinhaItem[]>([])
   const [liquidTotalDraft, setLiquidTotalDraft] = useState('')
   const [typeTab, setTypeTab] = useState<'ORCAMENTO' | 'PEDIDO'>('PEDIDO')
+  const [clientTableFilterId, setClientTableFilterId] = useState<string | null>(null)
   const submitLockRef = useRef(false)
 
   const uniqueProductNames = useMemo(() => {
@@ -296,9 +312,12 @@ export function BemAvivPedidosPage() {
       if (r.document_type === 'ORCAMENTO') o += 1
       else if (r.document_type === 'PEDIDO') p += 1
     }
-    const filteredRows = rows.filter((r) => r.document_type === typeTab)
-    return { filteredRows, countOrcamento: o, countPedido: p }
-  }, [rows, typeTab])
+    let list = rows.filter((r) => r.document_type === typeTab)
+    if (clientTableFilterId) {
+      list = list.filter((r) => r.client_id === clientTableFilterId)
+    }
+    return { filteredRows: list, countOrcamento: o, countPedido: p }
+  }, [rows, typeTab, clientTableFilterId])
 
   const load = useCallback(async () => {
     if (!supabase || !ownerUserId) return
@@ -322,12 +341,18 @@ export function BemAvivPedidosPage() {
     void load()
   }, [load])
 
+  useEffect(() => {
+    const st = location.state as PedidosLocationState | null
+    const id = st?.bemAvivPedidosClient?.id
+    if (!id) return
+    setClientTableFilterId(id)
+    navigate('.', { replace: true, state: {} })
+  }, [location.state, navigate])
+
   const sumLinesNet = useMemo(
     () => lineItems.reduce((acc, l) => acc + l.quantity * l.unit_price, 0),
     [lineItems],
   )
-
-  const orderDiscountPercent = useMemo(() => parsePercent(form.discount_percent), [form.discount_percent])
 
   const installmentsNum = useMemo(
     () => Math.min(120, Math.max(1, parseInt(form.installments_count.replace(/\D/g, ''), 10) || 1)),
@@ -343,16 +368,17 @@ export function BemAvivPedidosPage() {
     if (lineItems.length > 0 && liquidTotalDraft.trim() !== '') {
       const entrada = form.payment_option === 'A_PRAZO' ? downPaymentNum : 0
       const tl = clampMoney(parseMoney(liquidTotalDraft || '0'))
-      const disc = clampMoney(sumLinesNet + freightAmountNum - entrada - tl)
-      if (disc >= 0 && disc <= sumLinesNet + 0.000_001) return disc
+      const disc = roundMoneySigned(sumLinesNet + freightAmountNum - entrada - tl)
+      if (disc <= sumLinesNet + 0.000_001) return disc
     }
     const base = lineItems.length > 0 ? linesGrossTotal : parseMoney(form.total_amount || '0')
-    return clampMoney((base * orderDiscountPercent) / 100)
+    const p = parseOrderDiscountPercent(form.discount_percent)
+    return roundMoneySigned((base * p) / 100)
   }, [
     lineItems.length,
     linesGrossTotal,
+    form.discount_percent,
     form.total_amount,
-    orderDiscountPercent,
     liquidTotalDraft,
     sumLinesNet,
     freightAmountNum,
@@ -381,19 +407,18 @@ export function BemAvivPedidosPage() {
     (raw: string) => {
       if (lineItems.length === 0 || sumLinesNet <= 0) return
       const targetLiquid = clampMoney(parseMoney(raw))
-      const entrada = form.payment_option === 'A_PRAZO' ? downPaymentNum : 0
-      const maxNet = clampMoney(sumLinesNet + freightAmountNum - entrada)
-      if (targetLiquid < 0 || targetLiquid > maxNet) {
-        alert('VALOR LÍQUIDO INVÁLIDO PARA OS ITENS, FRETE E ENTRADA.')
+      if (targetLiquid < 0) {
+        alert('VALOR LÍQUIDO NÃO PODE SER NEGATIVO.')
         return
       }
-      const discOrderExact = clampMoney(sumLinesNet + freightAmountNum - entrada - targetLiquid)
+      const entrada = form.payment_option === 'A_PRAZO' ? downPaymentNum : 0
+      const discOrderExact = roundMoneySigned(sumLinesNet + freightAmountNum - entrada - targetLiquid)
       if (discOrderExact > sumLinesNet + 0.000_001) {
         alert('DESCONTO NÃO PODE ULTRAPASSAR O VALOR BRUTO DOS ITENS.')
         return
       }
       const p = sumLinesNet > 0 ? (discOrderExact / sumLinesNet) * 100 : 0
-      const pctStr = formatPercentInput(p)
+      const pctStr = formatOrderDiscountPercentInput(p)
       setForm((f) => ({ ...f, discount_percent: pctStr }))
       setLiquidTotalDraft(formatMoneyInput(targetLiquid))
     },
@@ -406,7 +431,7 @@ export function BemAvivPedidosPage() {
       setLiquidTotalDraft('')
       return
     }
-    const p = parsePercent(form.discount_percent)
+    const p = parseOrderDiscountPercent(form.discount_percent)
     const entrada = form.payment_option === 'A_PRAZO' ? downPaymentNum : 0
     const net = clampMoney(sumLinesNet - (sumLinesNet * p) / 100 + freightAmountNum - entrada)
     setLiquidTotalDraft(formatMoneyInput(net))
@@ -495,7 +520,8 @@ export function BemAvivPedidosPage() {
     const quoteDiscountAmount = Number(quote.discount_total ?? 0)
     const manualGross = mapped.length === 0 ? clampMoney(Number(quote.total_amount) + quoteDiscountAmount) : 0
     const discountBase = mapped.length > 0 ? totalGrossFromItems : manualGross
-    const discountPercent = discountBase > 0 ? clampPercent((quoteDiscountAmount / discountBase) * 100) : 0
+    const discountPercent =
+      discountBase > 0 ? clampOrderDiscountPercent((quoteDiscountAmount / discountBase) * 100) : 0
 
     setEditingOrderId(quote.id)
     setForm({
@@ -504,7 +530,7 @@ export function BemAvivPedidosPage() {
       document_type: quote.document_type,
       status: quote.status,
       total_amount: mapped.length === 0 ? String(Number(quote.total_amount)).replace('.', ',') : '',
-      discount_percent: discountPercent > 0 ? String(discountPercent).replace('.', ',') : '',
+      discount_percent: discountPercent !== 0 ? String(discountPercent).replace('.', ',') : '',
       installments_count: String(quote.installments_count ?? 1),
       notes: quote.notes ?? '',
       payment_option: parsePaymentOption(quote.payment_option),
@@ -602,7 +628,7 @@ export function BemAvivPedidosPage() {
     const hasLines = lineItems.length > 0
     const manualGross = parseMoney(form.total_amount || '0')
     const entrada = form.payment_option === 'A_PRAZO' ? downPaymentNum : 0
-    const discOrder = orderDiscount
+    const discOrder = roundMoneySigned(orderDiscount)
     const inst = installmentsNum
     const totalBruto = (hasLines ? linesGrossTotal : manualGross) + freightAmountNum
 
@@ -612,8 +638,8 @@ export function BemAvivPedidosPage() {
     }
 
     if (hasLines) {
-      const net = clampMoney(sumLinesNet - discOrder + freightAmountNum - entrada)
-      if (net < 0) {
+      const netCheck = roundMoneySigned(sumLinesNet - discOrder + freightAmountNum - entrada)
+      if (netCheck < -0.005) {
         alert('DESCONTO NO PEDIDO É MAIOR QUE A SOMA DOS ITENS + FRETE.')
         return
       }
@@ -966,6 +992,28 @@ export function BemAvivPedidosPage() {
         </button>
       </div>
 
+      {clientTableFilterId ? (
+        <div
+          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2.5 text-sm text-slate-800"
+          role="status"
+        >
+          <span>
+            Exibindo apenas orçamentos e pedidos de{' '}
+            <strong className="font-semibold text-slate-900">
+              {clientNameById.get(clientTableFilterId) ?? 'este cliente'}
+            </strong>
+            .
+          </span>
+          <button
+            type="button"
+            className="shrink-0 font-medium text-[#185FA5] underline-offset-2 hover:underline"
+            onClick={() => setClientTableFilterId(null)}
+          >
+            Mostrar todos
+          </button>
+        </div>
+      ) : null}
+
       <div className="table-wrap">
         {loading ? (
           <p className="p-4 text-slate-500">CARREGANDO...</p>
@@ -1257,7 +1305,7 @@ export function BemAvivPedidosPage() {
                     const v = e.target.value
                     setForm({ ...form, discount_percent: v })
                     if (lineItems.length > 0) {
-                      const p = parsePercent(v)
+                      const p = parseOrderDiscountPercent(v)
                       const entrada = form.payment_option === 'A_PRAZO' ? downPaymentNum : 0
                       const net = clampMoney(sumLinesNet - (sumLinesNet * p) / 100 + freightAmountNum - entrada)
                       setLiquidTotalDraft(formatMoneyInput(net))
@@ -1267,10 +1315,10 @@ export function BemAvivPedidosPage() {
                   inputMode="decimal"
                 />
                 <p className="mt-1 text-xs font-normal normal-case text-slate-600">
-                  Valor do desconto (sobre o bruto): {formatBRL(orderDiscount)}
+                  Desconto (—) ou acréscimo (+) em valor sobre o bruto dos itens: {formatBRL(orderDiscount)}
                   {lineItems.length > 0 ? (
                     <span className="block text-slate-500">
-                      No campo líquido, use Enter ou clique fora para recalcular este % (duas casas decimais).
+                      Percentual pode ficar negativo (acréscimo). No campo líquido, use Enter ou clique fora para recalcular o %.
                     </span>
                   ) : null}
                 </p>
@@ -1326,9 +1374,8 @@ export function BemAvivPedidosPage() {
                       inputMode="decimal"
                     />
                     <p className="mt-1 text-xs font-normal normal-case text-slate-600">
-                      Total líquido (bruto com desconto + frete{form.payment_option === 'A_PRAZO' ? ' − entrada' : ''}). Digite o valor e pressione <strong>Enter</strong> ou
-                      clique fora do campo para recalcular o desconto (%) com duas casas decimais — evita recalcular a
-                      cada tecla (ex.: 130,00).
+                      Pode ser <strong>maior</strong> que o bruto + frete (acréscimo no pedido; % negativo). Valor após desconto/acréscimo no bruto
+                      {form.payment_option === 'A_PRAZO' ? ', frete e entrada' : ' e frete'}. Enter ou clique fora para aplicar ao %.
                     </p>
                   </div>
                 </>
@@ -1424,7 +1471,26 @@ export function BemAvivPedidosPage() {
                           return (
                             <tr key={l.key}>
                               <td className="max-w-[18rem] whitespace-normal">{l.name}</td>
-                              <td className="text-right">{formatBRL(l.unit_price)}</td>
+                              <td className="text-right">
+                                <input
+                                  className="w-[7rem] rounded border border-slate-200 px-1.5 py-1 text-right text-xs font-normal normal-case tabular-nums"
+                                  inputMode="decimal"
+                                  title="Preço só neste pedido/orçamento — não altera o catálogo"
+                                  aria-label="Preço unitário neste documento"
+                                  defaultValue={formatMoneyInput(l.unit_price)}
+                                  key={`${l.key}-u-${l.unit_price}`}
+                                  onBlur={(e) => {
+                                    const u = clampMoney(parseMoney(e.target.value))
+                                    if (!Number.isFinite(u) || u <= 0) {
+                                      alert('INFORME UM PREÇO UNITÁRIO VÁLIDO (> 0).')
+                                      return
+                                    }
+                                    setLineItems((prev) =>
+                                      prev.map((x) => (x.key === l.key ? { ...x, unit_price: u } : x)),
+                                    )
+                                  }}
+                                />
+                              </td>
                               <td className="text-right">
                                 <input
                                   className="w-16 text-right"

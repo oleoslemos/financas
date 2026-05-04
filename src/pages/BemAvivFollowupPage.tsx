@@ -84,7 +84,7 @@ function endOfToday() {
 }
 
 type FollowupLocationState = {
-  bemAvivClientFocus?: { id: string; mode: 'schedule' }
+  bemAvivClientFocus?: { id: string; mode: 'schedule' | 'history' }
 }
 
 export function BemAvivFollowupPage() {
@@ -147,42 +147,56 @@ export function BemAvivFollowupPage() {
     void load()
   }, [load])
 
+  const loadHistory = useCallback(
+    async (clientId: string) => {
+      if (!supabase || !followupUserId) return
+      setLoadingHistory(true)
+      const { data, error } = await supabase
+        .from('bem_aviv_client_followups')
+        .select('id, contacted_at, channel, result, notes')
+        .eq('user_id', followupUserId)
+        .eq('client_id', clientId)
+        .order('contacted_at', { ascending: false })
+        .limit(8)
+      if (error) {
+        alert(error.message)
+        setHistoryRows([])
+      } else {
+        setHistoryRows((data as FollowupHistoryRow[]) ?? [])
+      }
+      setLoadingHistory(false)
+    },
+    [followupUserId, supabase],
+  )
+
   useEffect(() => {
     const focus = (location.state as FollowupLocationState | null)?.bemAvivClientFocus
-    if (!focus || focus.mode !== 'schedule') return
-    if (rows.length === 0) return
+    if (!focus || rows.length === 0) return
 
     const client = rows.find((r) => r.id === focus.id)
     navigate('.', { replace: true, state: {} })
     if (!client) return
 
-    setSchedulingClient(client)
-    setScheduleForm({
-      next_followup_at: toInputDateTimeLocal(client.next_followup_at),
-      next_followup_note: client.next_followup_note ?? '',
-      next_followup_status: (client.next_followup_status ?? 'PENDENTE') as FollowupStatus,
-      commercial_stage: client.commercial_stage ?? 'CONTATO',
-    })
-  }, [location.state, rows, navigate])
-
-  async function loadHistory(clientId: string) {
-    if (!supabase || !followupUserId) return
-    setLoadingHistory(true)
-    const { data, error } = await supabase
-      .from('bem_aviv_client_followups')
-      .select('id, contacted_at, channel, result, notes')
-      .eq('user_id', followupUserId)
-      .eq('client_id', clientId)
-      .order('contacted_at', { ascending: false })
-      .limit(8)
-    if (error) {
-      alert(error.message)
-      setHistoryRows([])
-    } else {
-      setHistoryRows((data as FollowupHistoryRow[]) ?? [])
+    if (focus.mode === 'schedule') {
+      setSchedulingClient(client)
+      setScheduleForm({
+        next_followup_at: toInputDateTimeLocal(client.next_followup_at),
+        next_followup_note: client.next_followup_note ?? '',
+        next_followup_status: (client.next_followup_status ?? 'PENDENTE') as FollowupStatus,
+        commercial_stage: client.commercial_stage ?? 'CONTATO',
+      })
+    } else if (focus.mode === 'history') {
+      setRegisteringClient(client)
+      setRegisterForm({
+        contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+        channel: 'WHATSAPP',
+        result: '',
+        notes: '',
+      })
+      setEditingHistoryId(null)
+      void loadHistory(client.id)
     }
-    setLoadingHistory(false)
-  }
+  }, [location.state, rows, navigate, loadHistory])
 
   async function removeHistoryEntry(entryId: string) {
     if (!supabase || !registeringClient) return

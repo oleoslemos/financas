@@ -4,9 +4,15 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { AllowedEmailGuard } from './components/AllowedEmailGuard'
 import { AppLayout } from './components/AppLayout'
 import { RequireAuth } from './components/RequireAuth'
+import { RequireFullHubAccess } from './components/RequireFullHubAccess'
 import { RequireProjectsAccess } from './components/RequireProjectsAccess'
 import { RequireTasksHomologAccess } from './components/RequireTasksHomologAccess'
 import { clerkEmailCandidates } from './lib/clerkEmails'
+import {
+  getStoredHubChoice,
+  isBemAvivOnlyUser,
+  isMultiSystemUser,
+} from './lib/userAccess'
 
 const SignInPage = lazy(() => import('./pages/SignInPage').then((m) => ({ default: m.SignInPage })))
 const SignUpPage = lazy(() => import('./pages/SignUpPage').then((m) => ({ default: m.SignUpPage })))
@@ -39,6 +45,9 @@ const BemAvivHomePage = lazy(() => import('./pages/BemAvivHomePage').then((m) =>
 const AgendaPage = lazy(() => import('./pages/AgendaPage').then((m) => ({ default: m.AgendaPage })))
 const TasksPage = lazy(() => import('./pages/TasksPage').then((m) => ({ default: m.TasksPage })))
 const LshStartPage = lazy(() => import('./pages/LshStartPage').then((m) => ({ default: m.LshStartPage })))
+const SystemChooserPage = lazy(() =>
+  import('./pages/SystemChooserPage').then((m) => ({ default: m.SystemChooserPage })),
+)
 const ProjectsHubPage = lazy(() => import('./pages/ProjectsHubPage').then((m) => ({ default: m.ProjectsHubPage })))
 const ProjectNotesPage = lazy(() => import('./pages/ProjectNotesPage').then((m) => ({ default: m.ProjectNotesPage })))
 const ProjectKanbanPage = lazy(() => import('./pages/ProjectKanbanPage').then((m) => ({ default: m.ProjectKanbanPage })))
@@ -51,8 +60,17 @@ const ProjectAssigneesPage = lazy(() => import('./pages/ProjectAssigneesPage').t
 function HomeRedirect() {
   const { user } = useUser()
   const emails = clerkEmailCandidates(user)
-  const bemAvivOnlyUser = emails.includes('suelenjalves@gmail.com')
-  return <Navigate to={bemAvivOnlyUser ? '/bem-aviv/follow-up/produtividade' : '/lsh/inicio'} replace />
+  if (isBemAvivOnlyUser(emails)) {
+    return <Navigate to="/bem-aviv" replace />
+  }
+  if (isMultiSystemUser(emails)) {
+    const choice = getStoredHubChoice()
+    if (choice === 'lsh') return <Navigate to="/lsh/inicio" replace />
+    if (choice === 'bem-aviv') return <Navigate to="/bem-aviv" replace />
+    if (choice === 'projetos') return <Navigate to="/projetos" replace />
+    return <Navigate to="/escolher-sistema" replace />
+  }
+  return <Navigate to="/lsh/inicio" replace />
 }
 
 export default function App() {
@@ -66,39 +84,7 @@ export default function App() {
             <Route element={<AppLayout />}>
               <Route path="/" element={<HomeRedirect />} />
               <Route path="/inicio" element={<HomeRedirect />} />
-              <Route path="/lsh/inicio" element={<LshStartPage />} />
-              <Route element={<RequireProjectsAccess />}>
-                <Route path="/projetos" element={<ProjectsHubPage />} />
-                <Route path="/projetos/kanban" element={<ProjectKanbanPage />} />
-                <Route path="/projetos/backlog" element={<ProjectBacklogPage />} />
-                <Route path="/projetos/clientes" element={<ProjectClientsPage />} />
-                <Route path="/projetos/responsaveis" element={<ProjectAssigneesPage />} />
-                <Route path="/projetos/sprints" element={<ProjectSprintsPage />} />
-                <Route path="/projetos/atividades" element={<ProjectActivitiesPage />} />
-                <Route path="/projetos/anotacoes" element={<ProjectNotesPage />} />
-              </Route>
-              <Route path="/lsh/resumo" element={<Dashboard />} />
-              <Route path="/lsh/contas-bancarias" element={<BankAccounts />} />
-              <Route path="/lsh/categorias" element={<Categories />} />
-              <Route path="/lsh/fluxo" element={<CashflowPage />} />
-              <Route path="/lsh/cartoes" element={<CreditCardsPage />} />
-              <Route path="/lsh/cartoes/:cardId" element={<CardInvoicesPage />} />
-              <Route path="/lsh/cartoes/:cardId/faturas/:invoiceId" element={<InvoiceDetailPage />} />
-              <Route element={<RequireTasksHomologAccess />}>
-                <Route path="/lsh/agenda" element={<AgendaPage />} />
-                <Route path="/lsh/tarefas" element={<TasksPage />} />
-              </Route>
-
-              <Route path="/contas-bancarias" element={<Navigate to="/lsh/contas-bancarias" replace />} />
-              <Route path="/categorias" element={<Navigate to="/lsh/categorias" replace />} />
-              <Route path="/fluxo" element={<Navigate to="/lsh/fluxo" replace />} />
-              <Route path="/cartoes" element={<Navigate to="/lsh/cartoes" replace />} />
-              <Route element={<RequireTasksHomologAccess />}>
-                <Route path="/agenda" element={<Navigate to="/lsh/agenda" replace />} />
-                <Route path="/tarefas" element={<Navigate to="/lsh/tarefas" replace />} />
-              </Route>
-              <Route path="/cartoes/:cardId" element={<CardInvoicesPage />} />
-              <Route path="/cartoes/:cardId/faturas/:invoiceId" element={<InvoiceDetailPage />} />
+              <Route path="/escolher-sistema" element={<SystemChooserPage />} />
               <Route path="/bem-aviv" element={<BemAvivHomePage />} />
               <Route path="/bem-aviv/clientes" element={<BemAvivClientesPage />} />
               <Route path="/bem-aviv/follow-up" element={<BemAvivFollowupPage />} />
@@ -116,6 +102,42 @@ export default function App() {
               <Route path="/bem-aviv/catalogos-preco" element={<BemAvivCatalogosPrecoPage />} />
               <Route path="/bem-aviv/catalogos-preco/:catalogId" element={<BemAvivCatalogoPrecoDetailPage />} />
               <Route path="/bem-aviv/catalogos-preco/:catalogId/bloco/:blockId" element={<BemAvivCatalogoMatrizBlocoPage />} />
+
+              <Route element={<RequireFullHubAccess />}>
+                <Route path="/lsh/inicio" element={<LshStartPage />} />
+                <Route element={<RequireProjectsAccess />}>
+                  <Route path="/projetos" element={<ProjectsHubPage />} />
+                  <Route path="/projetos/kanban" element={<ProjectKanbanPage />} />
+                  <Route path="/projetos/backlog" element={<ProjectBacklogPage />} />
+                  <Route path="/projetos/clientes" element={<ProjectClientsPage />} />
+                  <Route path="/projetos/responsaveis" element={<ProjectAssigneesPage />} />
+                  <Route path="/projetos/sprints" element={<ProjectSprintsPage />} />
+                  <Route path="/projetos/atividades" element={<ProjectActivitiesPage />} />
+                  <Route path="/projetos/anotacoes" element={<ProjectNotesPage />} />
+                </Route>
+                <Route path="/lsh/resumo" element={<Dashboard />} />
+                <Route path="/lsh/contas-bancarias" element={<BankAccounts />} />
+                <Route path="/lsh/categorias" element={<Categories />} />
+                <Route path="/lsh/fluxo" element={<CashflowPage />} />
+                <Route path="/lsh/cartoes" element={<CreditCardsPage />} />
+                <Route path="/lsh/cartoes/:cardId" element={<CardInvoicesPage />} />
+                <Route path="/lsh/cartoes/:cardId/faturas/:invoiceId" element={<InvoiceDetailPage />} />
+                <Route element={<RequireTasksHomologAccess />}>
+                  <Route path="/lsh/agenda" element={<AgendaPage />} />
+                  <Route path="/lsh/tarefas" element={<TasksPage />} />
+                </Route>
+
+                <Route path="/contas-bancarias" element={<Navigate to="/lsh/contas-bancarias" replace />} />
+                <Route path="/categorias" element={<Navigate to="/lsh/categorias" replace />} />
+                <Route path="/fluxo" element={<Navigate to="/lsh/fluxo" replace />} />
+                <Route path="/cartoes" element={<Navigate to="/lsh/cartoes" replace />} />
+                <Route element={<RequireTasksHomologAccess />}>
+                  <Route path="/agenda" element={<Navigate to="/lsh/agenda" replace />} />
+                  <Route path="/tarefas" element={<Navigate to="/lsh/tarefas" replace />} />
+                </Route>
+                <Route path="/cartoes/:cardId" element={<CardInvoicesPage />} />
+                <Route path="/cartoes/:cardId/faturas/:invoiceId" element={<InvoiceDetailPage />} />
+              </Route>
             </Route>
           </Route>
         </Route>

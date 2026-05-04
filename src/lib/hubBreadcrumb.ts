@@ -3,6 +3,7 @@
 export type HubBreadcrumb = { segment: string; current: string }
 
 const ROUTES: Array<{ prefix: string; segment: string; current: string }> = [
+  { prefix: '/escolher-sistema', segment: 'Sistema', current: 'Escolher sistema' },
   { prefix: '/bem-aviv/follow-up/produtividade', segment: 'Hub', current: 'Produtividade' },
   { prefix: '/bem-aviv/follow-up', segment: 'Hub', current: 'Follow-up' },
   { prefix: '/bem-aviv/clientes', segment: 'Hub', current: 'Clientes' },
