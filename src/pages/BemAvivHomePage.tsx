@@ -14,12 +14,14 @@ import { formatBRL } from '../lib/format'
 const DISTRIBUTION_GOAL_BRL = 100_000
 const NO_CONTACT_ALERT_DAYS = 30
 const EXCLUDED_FROM_CRITICAL_TIMELINE = new Set(['LEONARDO SILVA LEMOS', 'SUELEN JOAO ALVES'])
+const EXCLUDED_FROM_FOLLOWUP_BY_CPF = new Set(['22112195867', '00742215903'])
 
-const WEEKDAYS_SHORT = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
+const WEEKDAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 
 type ClientRow = {
   id: string
   full_name: string
+  cpf?: string | null
   last_contact_at?: string | null
   next_followup_at: string | null
   next_followup_status: string | null
@@ -39,6 +41,8 @@ type FollowupHistoryRow = {
 
 /** Timeline e calendário da home: só pendente com data agendada; exclui cancelado e concluído. */
 function includeInFollowupTimeline(c: ClientRow): boolean {
+  const cpf = (c.cpf ?? '').replace(/\D/g, '')
+  if (cpf && EXCLUDED_FROM_FOLLOWUP_BY_CPF.has(cpf)) return false
   if (!c.next_followup_at) return false
   const st = (c.next_followup_status ?? 'PENDENTE').toUpperCase()
   if (st === 'CANCELADO' || st === 'CONCLUIDO') return false
@@ -116,11 +120,11 @@ function parseYmd(s: string): Date {
   return new Date(y!, m! - 1, d!, 12, 0, 0, 0)
 }
 
-/** Dias do mês para grade (semana começa na segunda). */
+/** Dias do mês para grade (semana começa no domingo). */
 function calendarCells(viewMonth: Date) {
   const first = startOfMonth(viewMonth)
   const last = endOfMonth(viewMonth)
-  const lead = (first.getDay() + 6) % 7
+  const lead = first.getDay()
   const daysInMonth = last.getDate()
   const cells: Array<{ date: Date | null; inMonth: boolean }> = []
   for (let i = 0; i < lead; i++) cells.push({ date: null, inMonth: false })
@@ -235,7 +239,7 @@ export function BemAvivHomePage() {
         .neq('status', 'CANCELADO'),
       supabase
         .from('bem_aviv_clients')
-        .select('id, full_name, last_contact_at, next_followup_at, next_followup_status, phone_1, phone_2, next_followup_note')
+        .select('id, full_name, cpf, last_contact_at, next_followup_at, next_followup_status, phone_1, phone_2, next_followup_note')
         .eq('user_id', ownerUserId),
     ])
 
@@ -330,6 +334,10 @@ export function BemAvivHomePage() {
     const staleMs = NO_CONTACT_ALERT_DAYS * 86_400_000
     return clients
       .filter((c) => !EXCLUDED_FROM_CRITICAL_TIMELINE.has(c.full_name.trim().toUpperCase()))
+      .filter((c) => {
+        const cpf = (c.cpf ?? '').replace(/\D/g, '')
+        return !cpf || !EXCLUDED_FROM_FOLLOWUP_BY_CPF.has(cpf)
+      })
       .map((c) => {
         const latestHistory = latestHistoryByClient[c.id]
         const lastTouchIso = latestHistory?.contacted_at ?? c.last_contact_at ?? null
@@ -337,8 +345,13 @@ export function BemAvivHomePage() {
         const isNoContact = !lastTouchMs
         const isNoContact30 = !!lastTouchMs && now - lastTouchMs >= staleMs
         const followupStatus = (c.next_followup_status ?? 'PENDENTE').toUpperCase()
+        const nextFollowupMs = c.next_followup_at ? new Date(c.next_followup_at).getTime() : 0
+        // Só é "atrasado" se a data já venceu e não houve contato após aquele agendamento.
         const isOverdue =
-          !!c.next_followup_at && new Date(c.next_followup_at).getTime() < now && followupStatus !== 'CANCELADO'
+          !!nextFollowupMs &&
+          nextFollowupMs < now &&
+          followupStatus !== 'CANCELADO' &&
+          (lastTouchMs === 0 || lastTouchMs <= nextFollowupMs)
         const reason = isOverdue
           ? 'Atrasado'
           : isNoContact
@@ -506,7 +519,7 @@ export function BemAvivHomePage() {
 
   function agendaResumo(clientId: string) {
     const h = latestHistoryByClient[clientId]
-    return truncateText(h?.result, 80)
+    return truncateText(h?.result || h?.notes, 80)
   }
 
   async function submitInlineFollowup(e: React.FormEvent) {
@@ -638,7 +651,7 @@ export function BemAvivHomePage() {
             <CardContent className="pt-0">
               <div className="h-[min(280px,42vh)] min-h-[200px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} margin={{ top: 12, right: 8, left: 4, bottom: 4 }} barCategoryGap="18%">
+                  <BarChart data={chartData} margin={{ top: 30, right: 8, left: 4, bottom: 4 }} barCategoryGap="18%">
                     <XAxis
                       dataKey="label"
                       tick={{ fontSize: 12, fill: '#64748b' }}
@@ -647,7 +660,7 @@ export function BemAvivHomePage() {
                       interval={0}
                       height={36}
                     />
-                    <YAxis hide domain={[0, 'dataMax']} />
+                    <YAxis hide domain={[0, (dataMax: number) => Math.max(1, dataMax * 1.18)]} />
                     <Tooltip content={<MonthlyBarTooltip />} cursor={{ fill: 'rgba(24, 95, 165, 0.06)' }} />
                     <Bar dataKey="total" fill="#185FA5" radius={8} maxBarSize={56} activeBar={{ fill: '#144f8f', radius: 8 }}>
                       <LabelList
@@ -727,7 +740,7 @@ export function BemAvivHomePage() {
                           className={cn(
                             'relative flex aspect-square min-h-[2.15rem] flex-col items-center justify-center rounded-md border text-xs font-medium transition-colors sm:min-h-[2.3rem]',
                             isSel
-                              ? 'border-[#185FA5] bg-[#E6F1FB] text-[#185FA5]'
+                            ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
                               : 'border-slate-200 bg-slate-50/80 text-slate-800 hover:border-slate-300 hover:bg-white',
                             isToday && !isSel && 'ring-1 ring-[#185FA5]/40',
                           )}
@@ -745,17 +758,6 @@ export function BemAvivHomePage() {
                 </div>
 
                 <div className="min-w-0 flex-1 rounded-lg border border-slate-100 bg-slate-50/80 p-3 sm:p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    {selectedDay ? 'Dia selecionado — ' : 'Mês selecionado — '}
-                    {selectedDay
-                      ? new Intl.DateTimeFormat('pt-BR', {
-                          weekday: 'long',
-                          day: 'numeric',
-                          month: 'long',
-                          year: 'numeric',
-                        }).format(parseYmd(selectedDay))
-                      : calendarTitle}
-                  </p>
                   {agendaRows.length === 0 ? (
                     <p className="mt-3 text-sm text-slate-600">
                       {selectedDay
