@@ -1,6 +1,7 @@
 import { useUser } from '@clerk/clerk-react'
 import { CalendarPlus, MessageCircle, Pencil, PhoneForwarded, PlusCircle, Search, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
 import { BEM_AVIV_CLIENT_COMMERCIAL_STAGE_OPTIONS } from '../lib/bemAvivClientStatus'
@@ -82,9 +83,15 @@ function endOfToday() {
   return d
 }
 
+type FollowupLocationState = {
+  bemAvivClientFocus?: { id: string; mode: 'schedule' }
+}
+
 export function BemAvivFollowupPage() {
   const { user } = useUser()
   const supabase = useSupabase()
+  const location = useLocation()
+  const navigate = useNavigate()
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const followupUserId = ownerUserId ? ownerUserId.toUpperCase() : null
 
@@ -139,6 +146,24 @@ export function BemAvivFollowupPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    const focus = (location.state as FollowupLocationState | null)?.bemAvivClientFocus
+    if (!focus || focus.mode !== 'schedule') return
+    if (rows.length === 0) return
+
+    const client = rows.find((r) => r.id === focus.id)
+    navigate('.', { replace: true, state: {} })
+    if (!client) return
+
+    setSchedulingClient(client)
+    setScheduleForm({
+      next_followup_at: toInputDateTimeLocal(client.next_followup_at),
+      next_followup_note: client.next_followup_note ?? '',
+      next_followup_status: (client.next_followup_status ?? 'PENDENTE') as FollowupStatus,
+      commercial_stage: client.commercial_stage ?? 'CONTATO',
+    })
+  }, [location.state, rows, navigate])
 
   async function loadHistory(clientId: string) {
     if (!supabase || !followupUserId) return
