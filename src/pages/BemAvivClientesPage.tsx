@@ -266,7 +266,7 @@ export function BemAvivClientesPage() {
   }
 
   function goToFollowupSchedule(client: Cliente) {
-    navigate('/bem-aviv/follow-up', { state: { bemAvivClientFocus: { id: client.id, mode: 'schedule' as const } } })
+    navigate(`/bem-aviv/follow-up/agendar/${client.id}`)
   }
 
   function goToFollowupHistory(client: Cliente) {

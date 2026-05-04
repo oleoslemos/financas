@@ -1,19 +1,13 @@
 import { useUser } from '@clerk/clerk-react'
 import {
   AlertTriangle,
-  BarChart3,
   Building2,
   CalendarClock,
   CalendarDays,
-  LayoutGrid,
-  MessageCircleMore,
-  Package,
-  ShoppingCart,
-  Table2,
-  Tags,
+  ChevronLeft,
+  ChevronRight,
   Target,
   TrendingUp,
-  UserCircle,
   UserX,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -21,101 +15,12 @@ import { Link } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { resolveDataOwnerId } from '../lib/dataOwner'
+import { cn } from '../lib/cn'
 import { formatBRL } from '../lib/format'
-
-type Card = {
-  to: string
-  title: string
-  desc: string
-  icon: typeof UserCircle
-  tone: 'sky' | 'slate' | 'emerald' | 'amber' | 'violet' | 'cyan'
-}
 
 const DISTRIBUTION_GOAL_BRL = 100_000
 
-const toneRing: Record<Card['tone'], string> = {
-  sky: 'ring-sky-100 hover:border-sky-200/80 hover:ring-sky-100',
-  slate: 'ring-slate-100 hover:border-slate-200 hover:ring-slate-100',
-  emerald: 'ring-emerald-100 hover:border-emerald-200/80 hover:ring-emerald-100',
-  amber: 'ring-amber-100 hover:border-amber-200/80 hover:ring-amber-100',
-  violet: 'ring-violet-100 hover:border-violet-200/80 hover:ring-violet-100',
-  cyan: 'ring-cyan-100 hover:border-cyan-200/80 hover:ring-cyan-100',
-}
-
-const cardsFluxoAtual: Card[] = [
-  { to: '/bem-aviv/clientes', title: 'Clientes', desc: 'Cadastro e gestão de clientes', icon: UserCircle, tone: 'sky' },
-  {
-    to: '/bem-aviv/follow-up',
-    title: 'Follow-up',
-    desc: 'Retornos por data e registro de contatos',
-    icon: MessageCircleMore,
-    tone: 'emerald',
-  },
-  {
-    to: '/bem-aviv/follow-up/produtividade',
-    title: 'Produtividade',
-    desc: 'Indicadores e prioridades de follow-up',
-    icon: BarChart3,
-    tone: 'violet',
-  },
-  { to: '/bem-aviv/pedidos', title: 'Pedidos e orçamentos', desc: 'Documentos comerciais e itens do catálogo', icon: ShoppingCart, tone: 'emerald' },
-  {
-    to: '/bem-aviv/produtos-catalogo',
-    title: 'Produtos (catálogo)',
-    desc: 'Cadastro atual com variações e preço por item',
-    icon: Package,
-    tone: 'slate',
-  },
-  { to: '/bem-aviv/categorias', title: 'Categorias', desc: 'Classificação de itens', icon: Tags, tone: 'amber' },
-  {
-    to: '/bem-aviv/tabela-preco-catalogo',
-    title: 'Tabela de preço (catálogo)',
-    desc: 'Preços vinculados aos produtos do catálogo',
-    icon: Table2,
-    tone: 'violet',
-  },
-  {
-    to: '/bem-aviv/catalogos-preco',
-    title: 'Catálogos em grade',
-    desc: 'Matrizes de preço (linha × coluna)',
-    icon: LayoutGrid,
-    tone: 'cyan',
-  },
-]
-
-const cardsLegado: Card[] = [
-  {
-    to: '/bem-aviv/produtos',
-    title: 'Produtos (legado)',
-    desc: 'Cadastro por linha (plataforma, cabeceiras, bases, acessórios)',
-    icon: Package,
-    tone: 'slate',
-  },
-  { to: '/bem-aviv/tabela-preco', title: 'Tabela de preço Gold', desc: 'Estrutura e tabelas legadas', icon: Table2, tone: 'violet' },
-]
-
-function CardGrid({ cards }: { cards: Card[] }) {
-  return (
-    <ul className="grid gap-3 sm:grid-cols-2">
-      {cards.map(({ to, title, desc, icon: Icon, tone }) => (
-        <li key={to}>
-          <Link
-            to={to}
-            className={`flex gap-4 rounded-xl border border-slate-200/90 bg-white p-4 shadow-sm ring-1 ring-slate-900/[0.04] transition hover:shadow-md ${toneRing[tone]}`}
-          >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-slate-50 text-slate-600 ring-1 ring-slate-200/80">
-              <Icon size={20} aria-hidden />
-            </span>
-            <span className="min-w-0">
-              <span className="block font-semibold text-slate-900">{title}</span>
-              <span className="mt-0.5 block text-sm text-slate-500">{desc}</span>
-            </span>
-          </Link>
-        </li>
-      ))}
-    </ul>
-  )
-}
+const WEEKDAYS_SHORT = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 
 type ClientRow = {
   id: string
@@ -134,14 +39,50 @@ function formatShortDateTime(iso: string | null) {
   }).format(dt)
 }
 
-function addDays(base: Date, days: number) {
-  const d = new Date(base)
-  d.setDate(d.getDate() + days)
-  return d
+/** Chave local YYYY-MM-DD para comparar com dia do calendário. */
+function toLocalDateKey(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function startOfMonth(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0)
+}
+
+function endOfMonth(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999)
 }
 
 function monthKeyFromOrderDate(orderDate: string) {
   return orderDate.slice(0, 7)
+}
+
+function formatYmd(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function parseYmd(s: string): Date {
+  const [y, m, d] = s.split('-').map(Number)
+  return new Date(y!, m! - 1, d!, 12, 0, 0, 0)
+}
+
+/** Dias do mês para grade (semana começa na segunda). */
+function calendarCells(viewMonth: Date) {
+  const first = startOfMonth(viewMonth)
+  const last = endOfMonth(viewMonth)
+  const lead = (first.getDay() + 6) % 7
+  const daysInMonth = last.getDate()
+  const cells: Array<{ date: Date | null; inMonth: boolean }> = []
+  for (let i = 0; i < lead; i++) cells.push({ date: null, inMonth: false })
+  for (let day = 1; day <= daysInMonth; day++) {
+    cells.push({ date: new Date(viewMonth.getFullYear(), viewMonth.getMonth(), day, 12, 0, 0, 0), inMonth: true })
+  }
+  while (cells.length % 7 !== 0) cells.push({ date: null, inMonth: false })
+  return cells
 }
 
 function FollowListCard({
@@ -190,8 +131,7 @@ function FollowListCard({
               <span className="min-w-0 font-medium text-slate-900">{c.full_name}</span>
               <span className="text-xs text-slate-500">{formatShortDateTime(c.next_followup_at)}</span>
               <Link
-                to="/bem-aviv/follow-up"
-                state={{ bemAvivClientFocus: { id: c.id, mode: 'schedule' as const } }}
+                to={`/bem-aviv/follow-up/agendar/${c.id}`}
                 className="text-xs font-semibold text-[#185FA5] hover:underline"
               >
                 Abrir
@@ -212,6 +152,54 @@ function FollowListCard({
   )
 }
 
+/** Mês atual: lista agrupada por dia (calendário civil local). */
+function MesAtualPorDiaCard({
+  itemsByDay,
+  emptyText,
+}: {
+  itemsByDay: Array<{ dayKey: string; label: string; items: ClientRow[] }>
+  emptyText: string
+}) {
+  const total = itemsByDay.reduce((n, g) => n + g.items.length, 0)
+  return (
+    <section className="rounded-xl border border-sky-200 bg-sky-50/40 p-4 shadow-sm">
+      <div className="mb-3 flex items-center gap-2">
+        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
+          <CalendarClock size={18} aria-hidden />
+        </span>
+        <h3 className="font-hub text-sm font-semibold text-slate-900">Mês atual</h3>
+        <span className="ml-auto rounded-full bg-white/80 px-2 py-0.5 text-xs font-medium text-slate-600">{total}</span>
+      </div>
+      <p className="mb-3 text-xs text-slate-600">Follow-ups agendados no mês civil corrente, por dia.</p>
+      {itemsByDay.length === 0 ? (
+        <p className="text-sm text-slate-600">{emptyText}</p>
+      ) : (
+        <div className="max-h-[min(360px,50vh)] space-y-4 overflow-y-auto pr-1">
+          {itemsByDay.map(({ dayKey, label, items }) => (
+            <div key={dayKey}>
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-sky-800">{label}</p>
+              <ul className="divide-y divide-slate-200/80 rounded-lg border border-slate-200/60 bg-white">
+                {items.map((c) => (
+                  <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
+                    <span className="min-w-0 font-medium text-slate-900">{c.full_name}</span>
+                    <span className="text-xs text-slate-500">{formatShortDateTime(c.next_followup_at)}</span>
+                    <Link
+                      to={`/bem-aviv/follow-up/agendar/${c.id}`}
+                      className="text-xs font-semibold text-[#185FA5] hover:underline"
+                    >
+                      Abrir
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
 export function BemAvivHomePage() {
   const { user } = useUser()
   const supabase = useSupabase()
@@ -223,6 +211,9 @@ export function BemAvivHomePage() {
   const [monthlyTotals, setMonthlyTotals] = useState<Record<string, number>>({})
   const [clients, setClients] = useState<ClientRow[]>([])
   const [clientIdsWithFollowupHistory, setClientIdsWithFollowupHistory] = useState<Set<string>>(new Set())
+
+  const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()))
+  const [selectedDay, setSelectedDay] = useState(() => formatYmd(new Date()))
 
   const load = useCallback(async () => {
     if (!supabase || !ownerUserId || !followupUserId) {
@@ -287,32 +278,53 @@ export function BemAvivHomePage() {
 
   const followBuckets = useMemo(() => {
     const pending = (c: ClientRow) => (c.next_followup_status ?? 'PENDENTE') === 'PENDENTE'
-
     const withDate = clients.filter((c) => c.next_followup_at && pending(c))
     const tNow = Date.now()
     const today = new Date()
-    const end7 = addDays(today, 7)
-    const end30 = addDays(today, 30)
 
     const overdue = withDate
       .filter((c) => new Date(c.next_followup_at!).getTime() < tNow)
       .sort((a, b) => new Date(a.next_followup_at!).getTime() - new Date(b.next_followup_at!).getTime())
 
-    const next7 = withDate
+    const sm = startOfMonth(today)
+    const em = endOfMonth(today)
+    const mesAtualRaw = withDate.filter((c) => {
+      const t = new Date(c.next_followup_at!)
+      return t >= sm && t <= em
+    })
+    const byDayMap = new Map<string, ClientRow[]>()
+    for (const c of mesAtualRaw) {
+      const key = toLocalDateKey(c.next_followup_at!)
+      if (!key) continue
+      const arr = byDayMap.get(key) ?? []
+      arr.push(c)
+      byDayMap.set(key, arr)
+    }
+    const mesAtualByDay = [...byDayMap.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([dayKey, items]) => {
+        const sorted = [...items].sort(
+          (x, y) => new Date(x.next_followup_at!).getTime() - new Date(y.next_followup_at!).getTime(),
+        )
+        const d = parseYmd(dayKey)
+        const label = new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' }).format(d)
+        return { dayKey, label: label.charAt(0).toUpperCase() + label.slice(1), items: sorted }
+      })
+
+    const cy = today.getFullYear()
+    const cm = today.getMonth()
+    const abrilMaioJunho = withDate
       .filter((c) => {
-        const t = new Date(c.next_followup_at!).getTime()
-        return t >= tNow && t <= end7.getTime()
+        const t = new Date(c.next_followup_at!)
+        if (t.getFullYear() !== cy) return false
+        const tm = t.getMonth()
+        const inQ2 = tm >= 3 && tm <= 5
+        const sameAsCurrentMonth = tm === cm
+        return inQ2 && !sameAsCurrentMonth
       })
       .sort((a, b) => new Date(a.next_followup_at!).getTime() - new Date(b.next_followup_at!).getTime())
 
-    const day8to30 = withDate
-      .filter((c) => {
-        const t = new Date(c.next_followup_at!).getTime()
-        return t > end7.getTime() && t <= end30.getTime()
-      })
-      .sort((a, b) => new Date(a.next_followup_at!).getTime() - new Date(b.next_followup_at!).getTime())
-
-    return { overdue, next7, day8to30 }
+    return { overdue, mesAtualByDay, abrilMaioJunho }
   }, [clients])
 
   const clientsSemFollowupRegistrado = useMemo(() => {
@@ -320,6 +332,30 @@ export function BemAvivHomePage() {
       .filter((c) => !clientIdsWithFollowupHistory.has(c.id))
       .sort((a, b) => a.full_name.localeCompare(b.full_name, 'pt-BR'))
   }, [clients, clientIdsWithFollowupHistory])
+
+  const pendingWithDate = useMemo(
+    () => clients.filter((c) => c.next_followup_at && (c.next_followup_status ?? 'PENDENTE') === 'PENDENTE'),
+    [clients],
+  )
+
+  const tasksForSelectedDay = useMemo(() => {
+    return pendingWithDate
+      .filter((c) => toLocalDateKey(c.next_followup_at!) === selectedDay)
+      .sort((a, b) => new Date(a.next_followup_at!).getTime() - new Date(b.next_followup_at!).getTime())
+  }, [pendingWithDate, selectedDay])
+
+  const countByDayInViewMonth = useMemo(() => {
+    const y = calendarMonth.getFullYear()
+    const m = calendarMonth.getMonth()
+    const counts = new Map<string, number>()
+    for (const c of pendingWithDate) {
+      const t = new Date(c.next_followup_at!)
+      if (t.getFullYear() !== y || t.getMonth() !== m) continue
+      const key = toLocalDateKey(c.next_followup_at!)
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    }
+    return counts
+  }, [pendingWithDate, calendarMonth])
 
   const chartMonths = useMemo(() => {
     const keys = Object.keys(monthlyTotals).sort()
@@ -356,8 +392,21 @@ export function BemAvivHomePage() {
 
   const progressPct = Math.min(100, DISTRIBUTION_GOAL_BRL > 0 ? (totalSold / DISTRIBUTION_GOAL_BRL) * 100 : 0)
 
+  const calendarTitle = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(calendarMonth)
+  const cells = useMemo(() => calendarCells(calendarMonth), [calendarMonth])
+
+  function shiftCalendarMonth(delta: number) {
+    setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + delta, 1, 12, 0, 0, 0))
+  }
+
+  function goToCurrentMonth() {
+    const now = new Date()
+    setCalendarMonth(startOfMonth(now))
+    setSelectedDay(formatYmd(now))
+  }
+
   return (
-    <div className="mx-auto max-w-5xl space-y-10 normal-case">
+    <div className="w-full min-w-0 max-w-none space-y-10 normal-case">
       <header className="flex flex-wrap items-start gap-4">
         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-700 ring-1 ring-sky-200/60">
           <Building2 size={26} strokeWidth={1.75} aria-hidden />
@@ -365,8 +414,7 @@ export function BemAvivHomePage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Bem Aviv — Dashboard</h1>
           <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-600">
-            Meta de distribuição, vendas e follow-up. Abaixo, atalhos do <strong className="font-medium text-slate-700">fluxo atual</strong> e{' '}
-            <strong className="font-medium text-slate-700">legado</strong>.
+            Meta de distribuição, vendas e prioridades de follow-up.
           </p>
         </div>
       </header>
@@ -446,30 +494,6 @@ export function BemAvivHomePage() {
             </div>
           </section>
 
-          <section className="grid gap-4 lg:grid-cols-3">
-            <FollowListCard
-              title="Follow-up atrasados"
-              icon={AlertTriangle}
-              tone="rose"
-              items={followBuckets.overdue}
-              emptyText="Nenhum follow-up pendente com data anterior a agora."
-            />
-            <FollowListCard
-              title="Próximos 7 dias"
-              icon={CalendarClock}
-              tone="sky"
-              items={followBuckets.next7}
-              emptyText="Nenhum agendamento entre agora e sete dias."
-            />
-            <FollowListCard
-              title="De 8 a 30 dias"
-              icon={CalendarDays}
-              tone="indigo"
-              items={followBuckets.day8to30}
-              emptyText="Nenhum agendamento entre o 8º e o 30º dia."
-            />
-          </section>
-
           {clientsSemFollowupRegistrado.length > 0 ? (
             <section className="rounded-xl border border-amber-200 bg-amber-50/40 p-4 shadow-sm">
               <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -490,8 +514,7 @@ export function BemAvivHomePage() {
                 {clientsSemFollowupRegistrado.slice(0, 24).map((c) => (
                   <li key={c.id}>
                     <Link
-                      to="/bem-aviv/follow-up"
-                      state={{ bemAvivClientFocus: { id: c.id, mode: 'schedule' as const } }}
+                      to={`/bem-aviv/follow-up/agendar/${c.id}`}
                       className="inline-flex items-center rounded-full border border-amber-200/80 bg-white px-3 py-1 text-xs font-medium text-slate-800 hover:bg-amber-50"
                     >
                       {c.full_name}
@@ -509,19 +532,133 @@ export function BemAvivHomePage() {
               ) : null}
             </section>
           ) : null}
+
+          <section className="grid gap-4 lg:grid-cols-3">
+            <FollowListCard
+              title="Follow-up atrasados"
+              icon={AlertTriangle}
+              tone="rose"
+              items={followBuckets.overdue}
+              emptyText="Nenhum follow-up pendente com data anterior a agora."
+            />
+            <MesAtualPorDiaCard
+              itemsByDay={followBuckets.mesAtualByDay}
+              emptyText="Nenhum follow-up agendado para o mês atual."
+            />
+            <FollowListCard
+              title="Abril / Maio / Junho"
+              icon={CalendarDays}
+              tone="indigo"
+              items={followBuckets.abrilMaioJunho}
+              emptyText="Nenhum agendamento neste trimestre (exceto o mês atual, já listado em «Mês atual»)."
+            />
+          </section>
+
+          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+              <h2 className="font-hub text-sm font-semibold text-slate-900">Agenda por dia</h2>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => shiftCalendarMonth(-1)}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  aria-label="Mês anterior"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <span className="min-w-[10rem] text-center text-sm font-medium capitalize text-slate-800">{calendarTitle}</span>
+                <button
+                  type="button"
+                  onClick={() => shiftCalendarMonth(1)}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  aria-label="Próximo mês"
+                >
+                  <ChevronRight size={18} />
+                </button>
+                <button
+                  type="button"
+                  onClick={goToCurrentMonth}
+                  className="rounded-lg border border-[#185FA5]/40 bg-[#E6F1FB] px-3 py-1.5 text-xs font-semibold text-[#185FA5] hover:bg-[#d4e8f8]"
+                >
+                  Mês atual
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-7 gap-1 text-center text-[11px] font-semibold text-slate-500">
+              {WEEKDAYS_SHORT.map((w) => (
+                <div key={w} className="py-1">
+                  {w}
+                </div>
+              ))}
+            </div>
+            <div className="mt-1 grid grid-cols-7 gap-1">
+              {cells.map((cell, idx) => {
+                if (!cell.date) {
+                  return <div key={`e-${idx}`} className="aspect-square min-h-[2.5rem]" />
+                }
+                const key = formatYmd(cell.date)
+                const n = countByDayInViewMonth.get(key) ?? 0
+                const isSel = selectedDay === key
+                const isToday = formatYmd(new Date()) === key
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setSelectedDay(key)}
+                    className={cn(
+                      'relative flex aspect-square min-h-[2.5rem] flex-col items-center justify-center rounded-lg border text-sm font-medium transition-colors',
+                      isSel
+                        ? 'border-[#185FA5] bg-[#E6F1FB] text-[#185FA5]'
+                        : 'border-slate-200 bg-slate-50/80 text-slate-800 hover:border-slate-300 hover:bg-white',
+                      isToday && !isSel && 'ring-1 ring-[#185FA5]/40',
+                    )}
+                  >
+                    <span>{cell.date.getDate()}</span>
+                    {n > 0 ? (
+                      <span className="absolute bottom-1 right-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-[#185FA5] px-1 text-[10px] font-bold text-white">
+                        {n}
+                      </span>
+                    ) : null}
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="mt-6 rounded-lg border border-slate-100 bg-slate-50/80 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Dia selecionado —{' '}
+                {selectedDay
+                  ? new Intl.DateTimeFormat('pt-BR', {
+                      weekday: 'long',
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric',
+                    }).format(parseYmd(selectedDay))
+                  : '—'}
+              </p>
+              {tasksForSelectedDay.length === 0 ? (
+                <p className="mt-3 text-sm text-slate-600">Nenhum follow-up pendente agendado para este dia.</p>
+              ) : (
+                <ul className="mt-3 divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
+                  {tasksForSelectedDay.map((c) => (
+                    <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-sm">
+                      <span className="font-medium text-slate-900">{c.full_name}</span>
+                      <span className="text-xs text-slate-500">{formatShortDateTime(c.next_followup_at)}</span>
+                      <Link
+                        to={`/bem-aviv/follow-up/agendar/${c.id}`}
+                        className="text-xs font-semibold text-[#185FA5] hover:underline"
+                      >
+                        Abrir
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </section>
         </>
       )}
-
-      <section className="space-y-3 border-t border-slate-200 pt-8">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Fluxo atual</h2>
-        <CardGrid cards={cardsFluxoAtual} />
-      </section>
-
-      <section className="space-y-3 border-t border-slate-200 pt-8">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Legado</h2>
-        <p className="text-sm text-slate-500">Mantenha apenas o necessário até migração completa para o catálogo.</p>
-        <CardGrid cards={cardsLegado} />
-      </section>
     </div>
   )
 }

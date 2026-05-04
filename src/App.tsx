@@ -25,6 +25,9 @@ const CardInvoicesPage = lazy(() => import('./pages/CardInvoicesPage').then((m) 
 const InvoiceDetailPage = lazy(() => import('./pages/InvoiceDetailPage').then((m) => ({ default: m.InvoiceDetailPage })))
 const BemAvivClientesPage = lazy(() => import('./pages/BemAvivClientesPage').then((m) => ({ default: m.BemAvivClientesPage })))
 const BemAvivFollowupPage = lazy(() => import('./pages/BemAvivFollowupPage').then((m) => ({ default: m.BemAvivFollowupPage })))
+const BemAvivFollowupSchedulePage = lazy(() =>
+  import('./pages/BemAvivFollowupSchedulePage').then((m) => ({ default: m.BemAvivFollowupSchedulePage })),
+)
 const BemAvivFollowupProdutividadePage = lazy(() =>
   import('./pages/BemAvivFollowupProdutividadePage').then((m) => ({ default: m.BemAvivFollowupProdutividadePage })),
 )
@@ -87,6 +90,7 @@ export default function App() {
               <Route path="/escolher-sistema" element={<SystemChooserPage />} />
               <Route path="/bem-aviv" element={<BemAvivHomePage />} />
               <Route path="/bem-aviv/clientes" element={<BemAvivClientesPage />} />
+              <Route path="/bem-aviv/follow-up/agendar/:clientId" element={<BemAvivFollowupSchedulePage />} />
               <Route path="/bem-aviv/follow-up" element={<BemAvivFollowupPage />} />
               <Route path="/bem-aviv/follow-up/produtividade" element={<BemAvivFollowupProdutividadePage />} />
               <Route path="/bem-aviv/produtos-catalogo" element={<BemAvivProdutosCatalogoPage />} />

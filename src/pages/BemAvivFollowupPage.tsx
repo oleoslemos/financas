@@ -84,7 +84,7 @@ function endOfToday() {
 }
 
 type FollowupLocationState = {
-  bemAvivClientFocus?: { id: string; mode: 'schedule' | 'history' }
+  bemAvivClientFocus?: { id: string; mode: 'history' }
 }
 
 export function BemAvivFollowupPage() {
@@ -101,7 +101,6 @@ export function BemAvivFollowupPage() {
   const [dateFilter, setDateFilter] = useState<DateFilter>('TODOS')
   const [statusFilter, setStatusFilter] = useState<'TODOS' | FollowupStatus>('TODOS')
   const [registeringClient, setRegisteringClient] = useState<Cliente | null>(null)
-  const [schedulingClient, setSchedulingClient] = useState<Cliente | null>(null)
   const [historyRows, setHistoryRows] = useState<FollowupHistoryRow[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null)
@@ -116,13 +115,6 @@ export function BemAvivFollowupPage() {
     channel: 'WHATSAPP',
     result: '',
     notes: '',
-  })
-
-  const [scheduleForm, setScheduleForm] = useState({
-    next_followup_at: '',
-    next_followup_note: '',
-    next_followup_status: 'PENDENTE' as FollowupStatus,
-    commercial_stage: 'CONTATO',
   })
 
   const load = useCallback(async () => {
@@ -171,31 +163,21 @@ export function BemAvivFollowupPage() {
 
   useEffect(() => {
     const focus = (location.state as FollowupLocationState | null)?.bemAvivClientFocus
-    if (!focus || rows.length === 0) return
+    if (!focus || focus.mode !== 'history' || rows.length === 0) return
 
     const client = rows.find((r) => r.id === focus.id)
     navigate('.', { replace: true, state: {} })
     if (!client) return
 
-    if (focus.mode === 'schedule') {
-      setSchedulingClient(client)
-      setScheduleForm({
-        next_followup_at: toInputDateTimeLocal(client.next_followup_at),
-        next_followup_note: client.next_followup_note ?? '',
-        next_followup_status: (client.next_followup_status ?? 'PENDENTE') as FollowupStatus,
-        commercial_stage: client.commercial_stage ?? 'CONTATO',
-      })
-    } else if (focus.mode === 'history') {
-      setRegisteringClient(client)
-      setRegisterForm({
-        contacted_at: toInputDateTimeLocal(new Date().toISOString()),
-        channel: 'WHATSAPP',
-        result: '',
-        notes: '',
-      })
-      setEditingHistoryId(null)
-      void loadHistory(client.id)
-    }
+    setRegisteringClient(client)
+    setRegisterForm({
+      contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+      channel: 'WHATSAPP',
+      result: '',
+      notes: '',
+    })
+    setEditingHistoryId(null)
+    void loadHistory(client.id)
   }, [location.state, rows, navigate, loadHistory])
 
   async function removeHistoryEntry(entryId: string) {
@@ -350,58 +332,6 @@ export function BemAvivFollowupPage() {
     await load()
   }
 
-  async function submitScheduleFollowup(e: React.FormEvent) {
-    e.preventDefault()
-    if (!supabase || !schedulingClient) return
-    if (!scheduleForm.next_followup_at) {
-      alert('INFORME A DATA/HORA DO PRÓXIMO FOLLOW-UP.')
-      return
-    }
-
-    const clientStatus = scheduleForm.commercial_stage === 'FECHADO PLATAFORMA CONFORTO' ? 'CLIENTE' : 'PROSPECÇÃO'
-
-    const { error } = await supabase
-      .from('bem_aviv_clients')
-      .update({
-        next_followup_at: new Date(scheduleForm.next_followup_at).toISOString(),
-        next_followup_note: scheduleForm.next_followup_note || null,
-        next_followup_status: scheduleForm.next_followup_status,
-        commercial_stage: scheduleForm.commercial_stage,
-        client_status: clientStatus,
-      })
-      .eq('id', schedulingClient.id)
-
-    if (error) {
-      alert(error.message)
-      return
-    }
-
-    setSchedulingClient(null)
-    await load()
-  }
-
-  async function clearScheduledFollowup() {
-    if (!supabase || !schedulingClient) return
-    if (!confirm('EXCLUIR O AGENDAMENTO DESTE CLIENTE?')) return
-
-    const { error } = await supabase
-      .from('bem_aviv_clients')
-      .update({
-        next_followup_at: null,
-        next_followup_note: null,
-        next_followup_status: 'PENDENTE',
-      })
-      .eq('id', schedulingClient.id)
-
-    if (error) {
-      alert(error.message)
-      return
-    }
-
-    setSchedulingClient(null)
-    await load()
-  }
-
   function openWhatsapp(client: Cliente) {
     const url = buildWhatsappUrl(client.phone_1 || client.phone_2)
     if (!url) {
@@ -541,15 +471,7 @@ export function BemAvivFollowupPage() {
                       variant="ghost"
                       className="min-h-11 justify-center border border-slate-200 px-2 text-xs sm:text-sm"
                       aria-label="Agendar follow-up"
-                      onClick={() => {
-                        setSchedulingClient(row)
-                        setScheduleForm({
-                          next_followup_at: toInputDateTimeLocal(row.next_followup_at),
-                          next_followup_note: row.next_followup_note ?? '',
-                          next_followup_status: (row.next_followup_status ?? 'PENDENTE') as FollowupStatus,
-                          commercial_stage: row.commercial_stage ?? 'CONTATO',
-                        })
-                      }}
+                      onClick={() => navigate(`/bem-aviv/follow-up/agendar/${row.id}`)}
                     >
                       <CalendarPlus size={16} className="sm:mr-1" aria-hidden />
                       <span className="hidden sm:inline">Agendar</span>
@@ -609,15 +531,7 @@ export function BemAvivFollowupPage() {
                         <Button
                           variant="ghost"
                           className="px-2.5"
-                          onClick={() => {
-                            setSchedulingClient(row)
-                            setScheduleForm({
-                              next_followup_at: toInputDateTimeLocal(row.next_followup_at),
-                              next_followup_note: row.next_followup_note ?? '',
-                              next_followup_status: (row.next_followup_status ?? 'PENDENTE') as FollowupStatus,
-                              commercial_stage: row.commercial_stage ?? 'CONTATO',
-                            })
-                          }}
+                          onClick={() => navigate(`/bem-aviv/follow-up/agendar/${row.id}`)}
                           title="Agendar próximo follow-up"
                         >
                           <CalendarPlus size={15} />
@@ -760,67 +674,6 @@ export function BemAvivFollowupPage() {
         </div>
       ) : null}
 
-      {schedulingClient ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/35 p-3">
-          <div className="w-full max-w-xl rounded-xl border border-slate-200 bg-white p-4 shadow-xl sm:p-5">
-            <h3 className="text-lg font-semibold">AGENDAR PRÓXIMO FOLLOW-UP</h3>
-            <p className="mb-4 text-sm text-slate-500">{schedulingClient.full_name}</p>
-            <form onSubmit={submitScheduleFollowup} className="grid gap-3">
-              <div>
-                <label>PRÓXIMO FOLLOW-UP</label>
-                <input
-                  type="datetime-local"
-                  required
-                  value={scheduleForm.next_followup_at}
-                  onChange={(e) => setScheduleForm((prev) => ({ ...prev, next_followup_at: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label>STATUS</label>
-                <select
-                  value={scheduleForm.next_followup_status}
-                  onChange={(e) => setScheduleForm((prev) => ({ ...prev, next_followup_status: e.target.value as FollowupStatus }))}
-                >
-                  <option value="PENDENTE">PENDENTE</option>
-                  <option value="CONCLUIDO">CONCLUIDO</option>
-                  <option value="CANCELADO">CANCELADO</option>
-                </select>
-              </div>
-              <div>
-                <label>STATUS COMERCIAL</label>
-                <select
-                  value={scheduleForm.commercial_stage}
-                  onChange={(e) => setScheduleForm((prev) => ({ ...prev, commercial_stage: e.target.value }))}
-                >
-                  {BEM_AVIV_CLIENT_COMMERCIAL_STAGE_OPTIONS.map((stage) => (
-                    <option key={stage} value={stage}>
-                      {stage}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label>OBSERVAÇÃO DO PRÓXIMO CONTATO</label>
-                <textarea
-                  rows={3}
-                  value={scheduleForm.next_followup_note}
-                  onChange={(e) => setScheduleForm((prev) => ({ ...prev, next_followup_note: e.target.value }))}
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button type="submit">Salvar agendamento</Button>
-                <Button variant="danger" onClick={() => void clearScheduledFollowup()}>
-                  Excluir agendamento
-                </Button>
-                <Button variant="secondary" onClick={() => setSchedulingClient(null)}>
-                  Fechar
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      ) : null}
-
       {startFollowupOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/35 p-3">
           <div className="w-full max-w-xl rounded-xl border border-slate-200 bg-white p-4 shadow-xl sm:p-5">
@@ -880,13 +733,7 @@ export function BemAvivFollowupPage() {
                     return
                   }
                   setStartFollowupOpen(false)
-                  setSchedulingClient(client)
-                  setScheduleForm({
-                    next_followup_at: toInputDateTimeLocal(client.next_followup_at) || toInputDateTimeLocal(new Date().toISOString()),
-                    next_followup_note: client.next_followup_note ?? '',
-                    next_followup_status: (client.next_followup_status ?? 'PENDENTE') as FollowupStatus,
-                    commercial_stage: client.commercial_stage ?? 'CONTATO',
-                  })
+                  navigate(`/bem-aviv/follow-up/agendar/${client.id}`)
                 }}
               >
                 Agendar follow-up

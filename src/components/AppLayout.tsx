@@ -1,6 +1,5 @@
 import { useUser, UserButton } from '@clerk/clerk-react'
 import {
-  BarChart3,
   BriefcaseBusiness,
   CalendarDays,
   ChevronLeft,
@@ -144,19 +143,6 @@ export function AppLayout() {
         { label: 'Categorias', to: '/bem-aviv/categorias', icon: Tags },
         { label: 'Tabela de preço', to: '/bem-aviv/tabela-preco-catalogo', icon: Table2 },
         { label: 'Catálogos em grade', to: '/bem-aviv/catalogos-preco', icon: LayoutGrid },
-      ],
-    })
-
-    sections.push({
-      title: 'Gestão',
-      items: [{ label: 'Produtividade', to: '/bem-aviv/follow-up/produtividade', icon: BarChart3 }],
-    })
-
-    sections.push({
-      title: 'Legado',
-      items: [
-        { label: 'Produtos (legado)', to: '/bem-aviv/produtos', icon: Package },
-        { label: 'Tabela Gold', to: '/bem-aviv/tabela-preco', icon: Table2 },
       ],
     })
 
