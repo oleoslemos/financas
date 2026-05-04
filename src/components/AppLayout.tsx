@@ -119,15 +119,6 @@ export function AppLayout() {
   const sidebarSections = useMemo(() => {
     const sections: SidebarSection[] = []
 
-    const principal: NavLinkEntry[] = [{ label: 'Visão geral', to: '/bem-aviv', icon: LayoutDashboard }]
-    if (tasksHomologEnabled) {
-      principal.push(
-        { label: 'Agenda', to: '/lsh/agenda', icon: CalendarDays },
-        { label: 'Tarefas', to: '/lsh/tarefas', icon: ListTodo },
-      )
-    }
-    sections.push({ key: 'principal', title: 'Principal', system: 'global', items: principal })
-
     if (!bemAvivOnlyUser) {
       sections.push({
         key: 'financeiro',
@@ -143,7 +134,7 @@ export function AppLayout() {
 
     sections.push({
       key: 'comercial',
-      title: 'Comercial',
+      title: 'BEM-AVIV',
       system: 'bem-aviv',
       items: [
         { label: 'Clientes', to: '/bem-aviv/clientes', icon: UserCircle },
@@ -170,7 +161,7 @@ export function AppLayout() {
         key: 'projetos',
         title: 'Projetos',
         system: 'projetos',
-        items: flattenMenuItems([{ label: 'Visão geral', to: '/projetos', icon: FolderKanban }, ...projectItems]),
+        items: flattenMenuItems(projectItems),
       })
     }
 
@@ -236,6 +227,32 @@ export function AppLayout() {
           >
             <ChevronLeft size={16} className={cn('transition-transform', sidebarCollapsed && 'rotate-180')} />
           </button>
+        </div>
+
+        <div className="border-b border-slate-200 p-2">
+          <div className="flex items-center gap-2 rounded-lg px-2 py-1.5">
+            <div
+              className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+              style={{ backgroundColor: hubBrand.primary }}
+            >
+              {userInitials}
+            </div>
+            {!sidebarCollapsed ? (
+              <div className="min-w-0 flex-1 overflow-hidden">
+                <p className="truncate text-xs font-medium text-slate-800">{user?.fullName || user?.primaryEmailAddress?.emailAddress || 'Conta'}</p>
+                <p className="truncate text-[10px] text-slate-500">Perfil</p>
+              </div>
+            ) : null}
+            {!sidebarCollapsed ? (
+              <div className="shrink-0 [&_.cl-userButtonBox]:scale-90">
+                <UserButton afterSignOutUrl="/sign-in" />
+              </div>
+            ) : (
+              <div className="flex justify-center [&_.cl-userButtonBox]:scale-90">
+                <UserButton afterSignOutUrl="/sign-in" />
+              </div>
+            )}
+          </div>
         </div>
 
         <nav className="flex flex-1 flex-col gap-0 overflow-y-auto overscroll-contain px-2 py-2 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -310,32 +327,6 @@ export function AppLayout() {
             </NavLink>
           </div>
         ) : null}
-
-        <div className="mt-auto border-t border-slate-200 p-2">
-          <div className="flex items-center gap-2 rounded-lg px-2 py-1.5">
-            <div
-              className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
-              style={{ backgroundColor: hubBrand.primary }}
-            >
-              {userInitials}
-            </div>
-            {!sidebarCollapsed ? (
-              <div className="min-w-0 flex-1 overflow-hidden">
-                <p className="truncate text-xs font-medium text-slate-800">{user?.fullName || user?.primaryEmailAddress?.emailAddress || 'Conta'}</p>
-                <p className="truncate text-[10px] text-slate-500">Perfil</p>
-              </div>
-            ) : null}
-            {!sidebarCollapsed ? (
-              <div className="shrink-0 [&_.cl-userButtonBox]:scale-90">
-                <UserButton afterSignOutUrl="/sign-in" />
-              </div>
-            ) : (
-              <div className="flex justify-center [&_.cl-userButtonBox]:scale-90">
-                <UserButton afterSignOutUrl="/sign-in" />
-              </div>
-            )}
-          </div>
-        </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
