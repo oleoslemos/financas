@@ -1,5 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
-import { CalendarPlus, MessageCircle, Pencil, PhoneForwarded, PlusCircle, Search, Trash2 } from 'lucide-react'
+import { CalendarPlus, History, MessageCircle, Pencil, PhoneForwarded, PlusCircle, Search, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
@@ -83,6 +83,28 @@ function endOfToday() {
   return d
 }
 
+/** Follow-ups marcados como concluídos mas sem toque recente no cadastro. */
+const STALE_CONCLUIDO_DAYS = 30
+
+function lastContactIsStale(iso: string | null, days: number): boolean {
+  if (!iso) return true
+  return Date.now() - new Date(iso).getTime() > days * 86_400_000
+}
+
+function formatDaysAgoLabel(iso: string | null): string {
+  if (!iso) return 'sem data no cadastro'
+  const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000)
+  if (d <= 0) return 'hoje'
+  return `há ${d} dias`
+}
+
+function truncateText(s: string | null, max: number) {
+  if (!s) return '—'
+  const t = s.trim()
+  if (t.length <= max) return t
+  return `${t.slice(0, max)}…`
+}
+
 type FollowupLocationState = {
   bemAvivClientFocus?: { id: string; mode: 'history' }
   openStartFollowup?: boolean
@@ -119,6 +141,8 @@ export function BemAvivFollowupPage() {
     result: '',
     notes: '',
   })
+
+  const [staleLastHistory, setStaleLastHistory] = useState<Record<string, FollowupHistoryRow>>({})
 
   const load = useCallback(async () => {
     if (!supabase || !ownerUserId) return
@@ -294,6 +318,61 @@ export function BemAvivFollowupPage() {
     return { vencidos, hoje, proximos7, statusCounts }
   }, [rows])
 
+  const staleConcluidoClients = useMemo(() => {
+    return rows
+      .filter(
+        (r) =>
+          (r.next_followup_status ?? 'PENDENTE') === 'CONCLUIDO' && lastContactIsStale(r.last_contact_at, STALE_CONCLUIDO_DAYS),
+      )
+      .sort((a, b) => {
+        const ta = a.last_contact_at ? new Date(a.last_contact_at).getTime() : 0
+        const tb = b.last_contact_at ? new Date(b.last_contact_at).getTime() : 0
+        return ta - tb
+      })
+  }, [rows])
+
+  useEffect(() => {
+    if (!supabase || !followupUserId) {
+      setStaleLastHistory({})
+      return
+    }
+    const ids = staleConcluidoClients.map((c) => c.id)
+    if (ids.length === 0) {
+      setStaleLastHistory({})
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      const { data, error } = await supabase
+        .from('bem_aviv_client_followups')
+        .select('id, client_id, contacted_at, channel, result, notes')
+        .eq('user_id', followupUserId)
+        .in('client_id', ids)
+        .order('contacted_at', { ascending: false })
+      if (cancelled) return
+      if (error) {
+        setStaleLastHistory({})
+        return
+      }
+      const list = (data ?? []) as Array<FollowupHistoryRow & { client_id: string }>
+      const map: Record<string, FollowupHistoryRow> = {}
+      for (const row of list) {
+        if (map[row.client_id]) continue
+        map[row.client_id] = {
+          id: row.id,
+          contacted_at: row.contacted_at,
+          channel: row.channel,
+          result: row.result,
+          notes: row.notes,
+        }
+      }
+      setStaleLastHistory(map)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [supabase, followupUserId, staleConcluidoClients])
+
   const startFollowupClientOptions = useMemo(() => {
     const source = startFollowupForm.onlyWithoutSchedule ? rows.filter((r) => !r.next_followup_at) : rows
     return source.sort((a, b) => a.full_name.localeCompare(b.full_name, 'pt-BR')).map((r) => ({ id: r.id, full_name: r.full_name }))
@@ -395,6 +474,146 @@ export function BemAvivFollowupPage() {
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-xs text-amber-700">HOJE</p><p className="text-2xl font-semibold text-amber-900">{productivityMetrics.hoje}</p></div>
         <div className="rounded-xl border border-sky-200 bg-sky-50 p-4"><p className="text-xs text-sky-700">PRÓXIMOS 7 DIAS</p><p className="text-2xl font-semibold text-sky-900">{productivityMetrics.proximos7}</p></div>
       </div>
+
+      {!loading && staleConcluidoClients.length > 0 ? (
+        <div className="rounded-xl border border-violet-200 bg-violet-50/50 p-4 shadow-sm">
+          <div className="mb-3 flex flex-wrap items-start gap-2">
+            <History className="mt-0.5 h-5 w-5 shrink-0 text-violet-700" aria-hidden />
+            <div>
+              <h3 className="text-sm font-semibold text-violet-950">Concluídos — retomar contato ({STALE_CONCLUIDO_DAYS}+ dias)</h3>
+              <p className="mt-1 text-sm text-violet-900/85">
+                Follow-up com status concluído e último contato no cadastro há mais de {STALE_CONCLUIDO_DAYS} dias (ou sem data).
+                Ordenado do mais antigo para o mais recente. A coluna de histórico mostra o último registro salvo no histórico de
+                contatos.
+              </p>
+            </div>
+            <span className="ml-auto rounded-full bg-violet-200/80 px-2.5 py-0.5 text-xs font-semibold text-violet-900">
+              {staleConcluidoClients.length} cliente{staleConcluidoClients.length === 1 ? '' : 's'}
+            </span>
+          </div>
+
+          <ul className="space-y-3 md:hidden" aria-label="Concluídos sem contato recente">
+            {staleConcluidoClients.map((row) => {
+              const lastHist = staleLastHistory[row.id]
+              return (
+                <li key={row.id} className="rounded-xl border border-violet-200/80 bg-white p-4 shadow-sm">
+                  <p className="font-semibold text-slate-900">{row.full_name}</p>
+                  <p className="mt-1 text-xs text-slate-600">
+                    Último contato (cadastro): {formatDateTime(row.last_contact_at)} · {formatDaysAgoLabel(row.last_contact_at)}
+                  </p>
+                  <div className="mt-2 rounded-md border border-slate-100 bg-slate-50/80 p-2 text-xs text-slate-700">
+                    <p className="font-medium text-slate-600">Último registro no histórico</p>
+                    {lastHist ? (
+                      <>
+                        <p>
+                          {formatDateTime(lastHist.contacted_at)} · {lastHist.channel}
+                        </p>
+                        <p className="mt-0.5">{truncateText(lastHist.result, 120)}</p>
+                        {lastHist.notes ? (
+                          <p className="mt-0.5 text-slate-500">{truncateText(lastHist.notes, 100)}</p>
+                        ) : null}
+                      </>
+                    ) : (
+                      <p className="text-slate-500">Nenhum registro no histórico.</p>
+                    )}
+                  </div>
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    <Button
+                      variant="secondary"
+                      className="min-h-11 justify-center px-2 text-xs sm:text-sm"
+                      onClick={async () => {
+                        setRegisteringClient(row)
+                        await loadHistory(row.id)
+                      }}
+                    >
+                      <PhoneForwarded size={16} className="sm:mr-1" aria-hidden />
+                      <span className="hidden sm:inline">Contato</span>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="min-h-11 justify-center border border-slate-200 px-2 text-xs sm:text-sm"
+                      onClick={() => navigate(`/bem-aviv/follow-up/agendar/${row.id}`)}
+                    >
+                      <CalendarPlus size={16} className="sm:mr-1" aria-hidden />
+                      <span className="hidden sm:inline">Agendar</span>
+                    </Button>
+                    <Button variant="primary" className="min-h-11 justify-center px-2 text-xs sm:text-sm" onClick={() => openWhatsapp(row)}>
+                      <MessageCircle size={16} className="sm:mr-1" aria-hidden />
+                      <span className="hidden sm:inline">WhatsApp</span>
+                    </Button>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+
+          <div className="table-wrap hidden md:block">
+            <table>
+              <thead>
+                <tr>
+                  <th>CLIENTE</th>
+                  <th>ÚLTIMO CONTATO (CADASTRO)</th>
+                  <th>ÚLTIMO REGISTRO (HISTÓRICO)</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {staleConcluidoClients.map((row) => {
+                  const lastHist = staleLastHistory[row.id]
+                  return (
+                    <tr key={row.id}>
+                      <td className="font-medium">{row.full_name}</td>
+                      <td>
+                        <span className="text-slate-800">{formatDateTime(row.last_contact_at)}</span>
+                        <span className="ml-1 text-xs text-slate-500">({formatDaysAgoLabel(row.last_contact_at)})</span>
+                      </td>
+                      <td className="max-w-md text-sm">
+                        {lastHist ? (
+                          <div>
+                            <span className="text-slate-800">
+                              {formatDateTime(lastHist.contacted_at)} · {lastHist.channel}
+                            </span>
+                            <p className="mt-0.5 text-slate-600">{truncateText(lastHist.result, 90)}</p>
+                            {lastHist.notes ? <p className="text-xs text-slate-500">{truncateText(lastHist.notes, 70)}</p> : null}
+                          </div>
+                        ) : (
+                          <span className="text-slate-500">Nenhum registro no histórico.</span>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="secondary"
+                            className="px-2.5"
+                            onClick={async () => {
+                              setRegisteringClient(row)
+                              await loadHistory(row.id)
+                            }}
+                            title="Registrar contato"
+                          >
+                            <PhoneForwarded size={15} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            className="px-2.5"
+                            onClick={() => navigate(`/bem-aviv/follow-up/agendar/${row.id}`)}
+                            title="Agendar próximo follow-up"
+                          >
+                            <CalendarPlus size={15} />
+                          </Button>
+                          <Button variant="primary" className="px-2.5" onClick={() => openWhatsapp(row)} title="Abrir WhatsApp">
+                            <MessageCircle size={15} />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <h3 className="mb-3 text-sm font-semibold text-slate-700">ETAPAS COMERCIAIS DOS CLIENTES</h3>
