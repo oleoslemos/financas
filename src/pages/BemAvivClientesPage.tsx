@@ -774,17 +774,27 @@ export function BemAvivClientesPage() {
           }}
         >
           <div
-            className="flex max-h-[min(92dvh,900px)] w-full max-w-5xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl"
+            className="flex max-h-[min(92dvh,900px)] w-full max-w-7xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl"
             onMouseDown={(e) => e.stopPropagation()}
           >
-            <div className="flex shrink-0 flex-wrap items-start justify-between gap-3 border-b border-slate-100 bg-slate-50/90 px-4 py-3 sm:px-5">
+            <div className="flex shrink-0 flex-wrap items-start gap-3 border-b border-slate-100 bg-slate-50/90 px-4 py-3 sm:px-5">
               <div className="min-w-0 flex-1">
-                <h3 id="pedidos-modal-title" className="truncate font-hub text-lg font-semibold text-slate-900 normal-case">
-                  {pedidosModalClient.full_name}
-                </h3>
+                <div className="flex items-start justify-between gap-2">
+                  <h3 id="pedidos-modal-title" className="truncate font-hub text-lg font-semibold text-slate-900 normal-case">
+                    {pedidosModalClient.full_name}
+                  </h3>
+                  <button
+                    type="button"
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 sm:hidden"
+                    onClick={closePedidosModal}
+                    aria-label="Fechar"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
                 <p className="mt-1 text-xs text-slate-500">Orçamentos e pedidos vinculados a este cliente</p>
               </div>
-              <div className="flex flex-wrap gap-2 sm:justify-end">
+              <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
                 <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-center">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Total comprado</p>
                   <p className="font-hub text-sm font-bold tabular-nums text-slate-900">{formatBRL(pedidosModalStats.total)}</p>
@@ -806,7 +816,7 @@ export function BemAvivClientesPage() {
               </div>
               <button
                 type="button"
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
+                className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 sm:inline-flex"
                 onClick={closePedidosModal}
                 aria-label="Fechar"
               >
