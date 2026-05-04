@@ -356,7 +356,17 @@ export function BemAvivHomePage() {
               : 'Atenção'
         return { client: c, isNoContact, isNoContact30, isOverdue, reason, lastTouchIso }
       })
-      .filter((x) => x.isNoContact || x.isNoContact30 || x.isOverdue)
+      .filter((x) => {
+        if (!x.isNoContact && !x.isNoContact30 && !x.isOverdue) return false
+        const st = (x.client.next_followup_status ?? 'PENDENTE').toUpperCase()
+        const nf = x.client.next_followup_at
+        // Já há follow-up agendado no futuro: não entra na timeline crítica (aparece no calendário).
+        if (nf && st !== 'CANCELADO' && st !== 'CONCLUIDO') {
+          const nfMs = new Date(nf).getTime()
+          if (nfMs >= now) return false
+        }
+        return true
+      })
       .sort((a, b) => {
         const ta = a.client.next_followup_at ? new Date(a.client.next_followup_at).getTime() : Number.MAX_SAFE_INTEGER
         const tb = b.client.next_followup_at ? new Date(b.client.next_followup_at).getTime() : Number.MAX_SAFE_INTEGER
