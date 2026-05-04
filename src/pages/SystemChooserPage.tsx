@@ -24,13 +24,13 @@ export function SystemChooserPage() {
       return
     }
     if (!isMultiSystemUser(emails)) {
-      navigate('/lsh/inicio', { replace: true })
+      navigate('/lsh/resumo', { replace: true })
     }
   }, [emails, navigate])
 
   function choose(choice: StoredHubChoice) {
     setStoredHubChoice(choice)
-    if (choice === 'lsh') navigate('/lsh/inicio', { replace: true })
+    if (choice === 'lsh') navigate('/lsh/resumo', { replace: true })
     else if (choice === 'bem-aviv') navigate('/bem-aviv', { replace: true })
     else navigate('/projetos', { replace: true })
   }

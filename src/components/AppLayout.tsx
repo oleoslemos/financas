@@ -6,12 +6,10 @@ import {
   CircleDollarSign,
   CreditCard,
   FolderKanban,
-  Home,
   KanbanSquare,
   Landmark,
   LayoutGrid,
   ListTodo,
-  SlidersHorizontal,
   MessageCircleMore,
   NotebookText,
   Package,
@@ -26,13 +24,13 @@ import {
   Workflow,
 } from 'lucide-react'
 import { type ComponentType, useEffect, useMemo, useState } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { cn } from '../lib/cn'
 import { getHubBreadcrumb } from '../lib/hubBreadcrumb'
 import { canAccessTasksHomolog } from '../lib/tasksHomologAccess'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { canAccessProjects } from '../lib/projectsAccess'
-import { isBemAvivOnlyUser, isMultiSystemUser } from '../lib/userAccess'
+import { isBemAvivOnlyUser } from '../lib/userAccess'
 
 type MenuItem = {
   label: string
@@ -83,6 +81,7 @@ const hubBrand = {
 export function AppLayout() {
   const { user } = useUser()
   const location = useLocation()
+  const navigate = useNavigate()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [openSectionKey, setOpenSectionKey] = useState<string | null>(null)
   const [openTreeGroupKeys, setOpenTreeGroupKeys] = useState<string[]>([])
@@ -136,8 +135,7 @@ export function AppLayout() {
         title: 'Financeiro',
         system: 'financeiro',
         items: [
-          { kind: 'link', key: '/lsh/inicio', label: 'Início', to: '/lsh/inicio', icon: Home },
-          { kind: 'link', key: '/lsh/resumo', label: 'Resumo', to: '/lsh/resumo', icon: PieChart },
+          { kind: 'link', key: '/lsh/resumo', label: 'Visão Geral', to: '/lsh/resumo', icon: PieChart },
           ...flattenMenuItems(lshItems),
         ],
       })
@@ -148,6 +146,7 @@ export function AppLayout() {
       title: 'BEM-AVIV',
       system: 'bem-aviv',
       items: [
+        { kind: 'link', key: '/bem-aviv', label: 'Visão geral', to: '/bem-aviv', icon: LayoutGrid },
         { kind: 'link', key: '/bem-aviv/clientes', label: 'Clientes', to: '/bem-aviv/clientes', icon: UserCircle },
         { kind: 'link', key: '/bem-aviv/follow-up', label: 'Follow-up', to: '/bem-aviv/follow-up', icon: MessageCircleMore },
         { kind: 'link', key: '/bem-aviv/pedidos/novo', label: 'Novo pedido', to: '/bem-aviv/pedidos/novo', icon: PlusCircle },
@@ -179,7 +178,6 @@ export function AppLayout() {
     return sections
   }, [bemAvivOnlyUser, lshItems, projectItems, projectsEnabled, tasksHomologEnabled])
 
-  const multiSystemUser = isMultiSystemUser(emails)
   const currentSystem = useMemo<SidebarSystem>(() => {
     if (location.pathname.startsWith('/lsh')) return 'financeiro'
     if (location.pathname.startsWith('/bem-aviv')) return 'bem-aviv'
@@ -226,11 +224,6 @@ export function AppLayout() {
               <rect x="8" y="8" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
             </svg>
           </div>
-          {!sidebarCollapsed ? (
-            <span className="truncate font-hub text-[13px] font-bold tracking-tight" style={{ color: hubBrand.primary }}>
-              Sistema de Gestão
-            </span>
-          ) : null}
           <button
             type="button"
             className="ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800"
@@ -241,32 +234,6 @@ export function AppLayout() {
           </button>
         </div>
 
-        <div className="border-b border-slate-200 p-2">
-          <div className="flex items-center gap-2 rounded-lg px-2 py-1.5">
-            <div
-              className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
-              style={{ backgroundColor: hubBrand.primary }}
-            >
-              {userInitials}
-            </div>
-            {!sidebarCollapsed ? (
-              <div className="min-w-0 flex-1 overflow-hidden">
-                <p className="truncate text-xs font-medium text-slate-800">{user?.fullName || user?.primaryEmailAddress?.emailAddress || 'Conta'}</p>
-                <p className="truncate text-[10px] text-slate-500">Perfil</p>
-              </div>
-            ) : null}
-            {!sidebarCollapsed ? (
-              <div className="shrink-0 [&_.cl-userButtonBox]:scale-90">
-                <UserButton afterSignOutUrl="/sign-in" />
-              </div>
-            ) : (
-              <div className="flex justify-center [&_.cl-userButtonBox]:scale-90">
-                <UserButton afterSignOutUrl="/sign-in" />
-              </div>
-            )}
-          </div>
-        </div>
-
         <nav className="flex flex-1 flex-col gap-0 overflow-y-auto overscroll-contain px-2 py-2 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {sidebarSections.map((section) => (
             <div key={section.title} className="mb-2">
@@ -274,7 +241,12 @@ export function AppLayout() {
                 <button
                   type="button"
                   className="flex w-full items-center gap-1 rounded-md px-2 pb-1 pt-2 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500 hover:bg-slate-50"
-                  onClick={() => setOpenSectionKey((prev) => (prev === section.key ? null : section.key))}
+                  onClick={() => {
+                    setOpenSectionKey((prev) => (prev === section.key ? null : section.key))
+                    if (section.system === 'bem-aviv') {
+                      navigate('/bem-aviv')
+                    }
+                  }}
                   aria-expanded={openSectionKey === section.key}
                   aria-controls={`sidebar-section-${section.key}`}
                 >
@@ -378,27 +350,6 @@ export function AppLayout() {
           ))}
         </nav>
 
-        {multiSystemUser ? (
-          <div className="shrink-0 border-t border-slate-200 px-2 py-1.5">
-            <NavLink
-              to="/escolher-sistema"
-              title={sidebarCollapsed ? 'Trocar sistema' : undefined}
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] font-medium transition-colors',
-                  isActive
-                    ? 'bg-[#E6F1FB] font-semibold text-[#185FA5] [&>.sb-ico]:bg-[#185FA5] [&>.sb-ico]:text-white'
-                    : 'text-slate-600 hover:bg-slate-50',
-                )
-              }
-            >
-              <span className="sb-ico flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md text-slate-600 transition-colors [&_svg]:stroke-[2]">
-                <SlidersHorizontal size={14} aria-hidden />
-              </span>
-              {!sidebarCollapsed ? <span className="truncate">Trocar sistema</span> : null}
-            </NavLink>
-          </div>
-        ) : null}
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -407,6 +358,22 @@ export function AppLayout() {
             {breadcrumb.segment} / <span className="font-medium text-slate-900">{breadcrumb.current}</span>
           </p>
           <div className="ml-auto flex items-center gap-2">
+            <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1">
+              <div
+                className="flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+                style={{ backgroundColor: hubBrand.primary }}
+              >
+                {userInitials}
+              </div>
+              <div className="hidden min-w-0 sm:block">
+                <p className="max-w-[170px] truncate text-xs font-medium text-slate-800">
+                  {user?.fullName || user?.primaryEmailAddress?.emailAddress || 'Conta'}
+                </p>
+              </div>
+              <div className="shrink-0 [&_.cl-userButtonBox]:scale-90">
+                <UserButton afterSignOutUrl="/sign-in" />
+              </div>
+            </div>
             <button
               type="button"
               className="relative flex h-[30px] w-[30px] items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"

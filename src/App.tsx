@@ -48,7 +48,6 @@ const BemAvivCatalogoMatrizBlocoPage = lazy(() => import('./pages/BemAvivCatalog
 const BemAvivHomePage = lazy(() => import('./pages/BemAvivHomePage').then((m) => ({ default: m.BemAvivHomePage })))
 const AgendaPage = lazy(() => import('./pages/AgendaPage').then((m) => ({ default: m.AgendaPage })))
 const TasksPage = lazy(() => import('./pages/TasksPage').then((m) => ({ default: m.TasksPage })))
-const LshStartPage = lazy(() => import('./pages/LshStartPage').then((m) => ({ default: m.LshStartPage })))
 const SystemChooserPage = lazy(() =>
   import('./pages/SystemChooserPage').then((m) => ({ default: m.SystemChooserPage })),
 )
@@ -69,12 +68,12 @@ function HomeRedirect() {
   }
   if (isMultiSystemUser(emails)) {
     const choice = getStoredHubChoice()
-    if (choice === 'lsh') return <Navigate to="/lsh/inicio" replace />
+    if (choice === 'lsh') return <Navigate to="/lsh/resumo" replace />
     if (choice === 'bem-aviv') return <Navigate to="/bem-aviv" replace />
     if (choice === 'projetos') return <Navigate to="/projetos" replace />
     return <Navigate to="/escolher-sistema" replace />
   }
-  return <Navigate to="/lsh/inicio" replace />
+  return <Navigate to="/lsh/resumo" replace />
 }
 
 export default function App() {
@@ -110,7 +109,7 @@ export default function App() {
               <Route path="/bem-aviv/catalogos-preco/:catalogId/bloco/:blockId" element={<BemAvivCatalogoMatrizBlocoPage />} />
 
               <Route element={<RequireFullHubAccess />}>
-                <Route path="/lsh/inicio" element={<LshStartPage />} />
+                <Route path="/lsh/inicio" element={<Navigate to="/lsh/resumo" replace />} />
                 <Route element={<RequireProjectsAccess />}>
                   <Route path="/projetos" element={<ProjectsHubPage />} />
                   <Route path="/projetos/kanban" element={<ProjectKanbanPage />} />
