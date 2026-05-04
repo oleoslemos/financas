@@ -85,6 +85,7 @@ function endOfToday() {
 
 type FollowupLocationState = {
   bemAvivClientFocus?: { id: string; mode: 'history' }
+  openStartFollowup?: boolean
 }
 
 export function BemAvivFollowupPage() {
@@ -179,6 +180,13 @@ export function BemAvivFollowupPage() {
     setEditingHistoryId(null)
     void loadHistory(client.id)
   }, [location.state, rows, navigate, loadHistory])
+
+  useEffect(() => {
+    const st = location.state as FollowupLocationState | null
+    if (!st?.openStartFollowup) return
+    setStartFollowupOpen(true)
+    navigate('.', { replace: true, state: {} })
+  }, [location.state, navigate])
 
   async function removeHistoryEntry(entryId: string) {
     if (!supabase || !registeringClient) return

@@ -1,5 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useCallback, useEffect, useState } from 'react'
 import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
@@ -135,19 +135,25 @@ export function BemAvivFollowupSchedulePage() {
     return (
       <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <p className="text-slate-700">Cliente não encontrado ou sem permissão.</p>
-        <Link to="/bem-aviv/follow-up" className="text-sm font-semibold text-[#185FA5] hover:underline">
-          Voltar ao follow-up
-        </Link>
+        <Button variant="secondary" type="button" onClick={() => navigate('/bem-aviv')}>
+          VOLTAR AO DASHBOARD
+        </Button>
       </div>
     )
   }
 
   return (
     <div className="mx-auto max-w-xl space-y-4 pb-8 normal-case">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Link to="/bem-aviv/follow-up" className="text-sm font-semibold text-[#185FA5] hover:underline">
-          ← Voltar ao follow-up
-        </Link>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="secondary" type="button" onClick={() => navigate('/bem-aviv')}>
+          VOLTAR AO DASHBOARD
+        </Button>
+        <Button
+          type="button"
+          onClick={() => navigate('/bem-aviv/follow-up', { state: { openStartFollowup: true } })}
+        >
+          INCLUIR NOVO FOLLOW-UP
+        </Button>
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">

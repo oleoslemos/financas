@@ -433,6 +433,29 @@ export function BemAvivHomePage() {
               </div>
               <p className="font-hub mt-2 text-2xl font-bold text-slate-900">{formatBRL(DISTRIBUTION_GOAL_BRL)}</p>
               <p className="mt-1 text-xs text-slate-500">Referência para o período comercial.</p>
+
+              <div className="mt-4 border-t border-slate-100 pt-4">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Progresso da meta</span>
+                  <span className="text-sm font-semibold text-[#185FA5]">{progressPct.toFixed(1)}%</span>
+                </div>
+                <div className="h-3 overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-[#185FA5] to-sky-400 transition-[width]"
+                    style={{ width: `${progressPct}%` }}
+                  />
+                </div>
+                <p className="mt-2 text-xs text-slate-500">
+                  {totalSold >= DISTRIBUTION_GOAL_BRL ? (
+                    <span className="font-medium text-emerald-700">Meta atingida.</span>
+                  ) : (
+                    <>
+                      Faltam <strong className="font-semibold text-slate-700">{formatBRL(Math.max(0, DISTRIBUTION_GOAL_BRL - totalSold))}</strong> para a
+                      meta.
+                    </>
+                  )}
+                </p>
+              </div>
             </div>
             <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-center gap-2 text-slate-500">
@@ -441,28 +464,6 @@ export function BemAvivHomePage() {
               </div>
               <p className="font-hub mt-2 text-2xl font-bold text-slate-900">{formatBRL(totalSold)}</p>
               <p className="mt-1 text-xs text-slate-500">Soma dos pedidos não cancelados (valor líquido do documento).</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:col-span-2">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Progresso da meta</span>
-                <span className="text-sm font-semibold text-[#185FA5]">{progressPct.toFixed(1)}%</span>
-              </div>
-              <div className="h-3 overflow-hidden rounded-full bg-slate-100">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-[#185FA5] to-sky-400 transition-[width]"
-                  style={{ width: `${progressPct}%` }}
-                />
-              </div>
-              <p className="mt-2 text-xs text-slate-500">
-                {totalSold >= DISTRIBUTION_GOAL_BRL ? (
-                  <span className="font-medium text-emerald-700">Meta atingida.</span>
-                ) : (
-                  <>
-                    Faltam <strong className="font-semibold text-slate-700">{formatBRL(Math.max(0, DISTRIBUTION_GOAL_BRL - totalSold))}</strong> para a
-                    meta.
-                  </>
-                )}
-              </p>
             </div>
           </section>
 
@@ -561,100 +562,106 @@ export function BemAvivHomePage() {
                 <button
                   type="button"
                   onClick={() => shiftCalendarMonth(-1)}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                   aria-label="Mês anterior"
                 >
-                  <ChevronLeft size={18} />
+                  <ChevronLeft size={16} />
                 </button>
-                <span className="min-w-[10rem] text-center text-sm font-medium capitalize text-slate-800">{calendarTitle}</span>
+                <span className="min-w-[8.5rem] text-center text-xs font-medium capitalize text-slate-800 sm:min-w-[9.5rem] sm:text-sm">
+                  {calendarTitle}
+                </span>
                 <button
                   type="button"
                   onClick={() => shiftCalendarMonth(1)}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                   aria-label="Próximo mês"
                 >
-                  <ChevronRight size={18} />
+                  <ChevronRight size={16} />
                 </button>
                 <button
                   type="button"
                   onClick={goToCurrentMonth}
-                  className="rounded-lg border border-[#185FA5]/40 bg-[#E6F1FB] px-3 py-1.5 text-xs font-semibold text-[#185FA5] hover:bg-[#d4e8f8]"
+                  className="rounded-md border border-[#185FA5]/40 bg-[#E6F1FB] px-2.5 py-1 text-[11px] font-semibold text-[#185FA5] hover:bg-[#d4e8f8] sm:px-3 sm:py-1.5 sm:text-xs"
                 >
                   Mês atual
                 </button>
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-7 gap-1 text-center text-[11px] font-semibold text-slate-500">
-              {WEEKDAYS_SHORT.map((w) => (
-                <div key={w} className="py-1">
-                  {w}
-                </div>
-              ))}
-            </div>
-            <div className="mt-1 grid grid-cols-7 gap-1">
-              {cells.map((cell, idx) => {
-                if (!cell.date) {
-                  return <div key={`e-${idx}`} className="aspect-square min-h-[2.5rem]" />
-                }
-                const key = formatYmd(cell.date)
-                const n = countByDayInViewMonth.get(key) ?? 0
-                const isSel = selectedDay === key
-                const isToday = formatYmd(new Date()) === key
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setSelectedDay(key)}
-                    className={cn(
-                      'relative flex aspect-square min-h-[2.5rem] flex-col items-center justify-center rounded-lg border text-sm font-medium transition-colors',
-                      isSel
-                        ? 'border-[#185FA5] bg-[#E6F1FB] text-[#185FA5]'
-                        : 'border-slate-200 bg-slate-50/80 text-slate-800 hover:border-slate-300 hover:bg-white',
-                      isToday && !isSel && 'ring-1 ring-[#185FA5]/40',
-                    )}
-                  >
-                    <span>{cell.date.getDate()}</span>
-                    {n > 0 ? (
-                      <span className="absolute bottom-1 right-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-[#185FA5] px-1 text-[10px] font-bold text-white">
-                        {n}
-                      </span>
-                    ) : null}
-                  </button>
-                )
-              })}
-            </div>
-
-            <div className="mt-6 rounded-lg border border-slate-100 bg-slate-50/80 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Dia selecionado —{' '}
-                {selectedDay
-                  ? new Intl.DateTimeFormat('pt-BR', {
-                      weekday: 'long',
-                      day: 'numeric',
-                      month: 'long',
-                      year: 'numeric',
-                    }).format(parseYmd(selectedDay))
-                  : '—'}
-              </p>
-              {tasksForSelectedDay.length === 0 ? (
-                <p className="mt-3 text-sm text-slate-600">Nenhum follow-up pendente agendado para este dia.</p>
-              ) : (
-                <ul className="mt-3 divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
-                  {tasksForSelectedDay.map((c) => (
-                    <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-sm">
-                      <span className="font-medium text-slate-900">{c.full_name}</span>
-                      <span className="text-xs text-slate-500">{formatShortDateTime(c.next_followup_at)}</span>
-                      <Link
-                        to={`/bem-aviv/follow-up/agendar/${c.id}`}
-                        className="text-xs font-semibold text-[#185FA5] hover:underline"
-                      >
-                        Abrir
-                      </Link>
-                    </li>
+            <div className="mt-4 flex flex-col gap-5 lg:flex-row lg:items-start lg:gap-6">
+              <div className="mx-auto w-full max-w-[260px] shrink-0 sm:max-w-[280px] lg:mx-0">
+                <div className="grid grid-cols-7 gap-0.5 text-center text-[10px] font-semibold text-slate-500">
+                  {WEEKDAYS_SHORT.map((w) => (
+                    <div key={w} className="py-0.5">
+                      {w}
+                    </div>
                   ))}
-                </ul>
-              )}
+                </div>
+                <div className="mt-0.5 grid grid-cols-7 gap-0.5">
+                  {cells.map((cell, idx) => {
+                    if (!cell.date) {
+                      return <div key={`e-${idx}`} className="aspect-square min-h-[1.85rem]" />
+                    }
+                    const key = formatYmd(cell.date)
+                    const n = countByDayInViewMonth.get(key) ?? 0
+                    const isSel = selectedDay === key
+                    const isToday = formatYmd(new Date()) === key
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setSelectedDay(key)}
+                        className={cn(
+                          'relative flex aspect-square min-h-[1.85rem] flex-col items-center justify-center rounded-md border text-xs font-medium transition-colors sm:min-h-[2rem]',
+                          isSel
+                            ? 'border-[#185FA5] bg-[#E6F1FB] text-[#185FA5]'
+                            : 'border-slate-200 bg-slate-50/80 text-slate-800 hover:border-slate-300 hover:bg-white',
+                          isToday && !isSel && 'ring-1 ring-[#185FA5]/40',
+                        )}
+                      >
+                        <span>{cell.date.getDate()}</span>
+                        {n > 0 ? (
+                          <span className="absolute bottom-0.5 right-0.5 flex h-3 min-w-[0.65rem] items-center justify-center rounded-full bg-[#185FA5] px-0.5 text-[8px] font-bold leading-none text-white sm:h-3.5 sm:text-[9px]">
+                            {n}
+                          </span>
+                        ) : null}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="min-w-0 flex-1 rounded-lg border border-slate-100 bg-slate-50/80 p-3 sm:p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Dia selecionado —{' '}
+                  {selectedDay
+                    ? new Intl.DateTimeFormat('pt-BR', {
+                        weekday: 'long',
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric',
+                      }).format(parseYmd(selectedDay))
+                    : '—'}
+                </p>
+                {tasksForSelectedDay.length === 0 ? (
+                  <p className="mt-3 text-sm text-slate-600">Nenhum follow-up pendente agendado para este dia.</p>
+                ) : (
+                  <ul className="mt-3 max-h-[min(420px,55vh)] divide-y divide-slate-200 overflow-y-auto rounded-lg border border-slate-200 bg-white">
+                    {tasksForSelectedDay.map((c) => (
+                      <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-sm">
+                        <span className="font-medium text-slate-900">{c.full_name}</span>
+                        <span className="text-xs text-slate-500">{formatShortDateTime(c.next_followup_at)}</span>
+                        <Link
+                          to={`/bem-aviv/follow-up/agendar/${c.id}`}
+                          className="text-xs font-semibold text-[#185FA5] hover:underline"
+                        >
+                          Abrir
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
           </section>
         </>
