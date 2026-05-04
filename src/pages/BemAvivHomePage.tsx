@@ -1,5 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
-import { Building2, ChevronLeft, ChevronRight, Target, TrendingUp } from 'lucide-react'
+import { Building2, ChevronLeft, ChevronRight, History, Target, TrendingUp } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Bar, BarChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
@@ -62,6 +62,12 @@ function toInputDateTimeLocal(value?: string | null) {
   const tz = dt.getTimezoneOffset() * 60_000
   const local = new Date(dt.getTime() - tz)
   return local.toISOString().slice(0, 16)
+}
+
+function truncateText(value: string | null | undefined, max = 80) {
+  const t = (value ?? '').trim()
+  if (!t) return ''
+  return t.length <= max ? t : `${t.slice(0, max)}…`
 }
 
 /** Chave local YYYY-MM-DD para comparar com dia do calendário. */
@@ -330,11 +336,16 @@ export function BemAvivHomePage() {
         const lastTouchMs = lastTouchIso ? new Date(lastTouchIso).getTime() : 0
         const isNoContact = !lastTouchMs
         const isNoContact30 = !!lastTouchMs && now - lastTouchMs >= staleMs
+        const followupStatus = (c.next_followup_status ?? 'PENDENTE').toUpperCase()
         const isOverdue =
-          !!c.next_followup_at &&
-          new Date(c.next_followup_at).getTime() < now &&
-          (c.next_followup_status ?? 'PENDENTE').toUpperCase() === 'PENDENTE'
-        const reason = isNoContact ? 'Sem contato' : isNoContact30 ? `Sem contato há ${NO_CONTACT_ALERT_DAYS}+ dias` : 'Atrasado'
+          !!c.next_followup_at && new Date(c.next_followup_at).getTime() < now && followupStatus !== 'CANCELADO'
+        const reason = isOverdue
+          ? 'Atrasado'
+          : isNoContact
+            ? 'Sem contato'
+            : isNoContact30
+              ? `Sem contato há ${NO_CONTACT_ALERT_DAYS}+ dias`
+              : 'Atenção'
         return { client: c, isNoContact, isNoContact30, isOverdue, reason, lastTouchIso }
       })
       .filter((x) => x.isNoContact || x.isNoContact30 || x.isOverdue)
@@ -491,6 +502,11 @@ export function BemAvivHomePage() {
       date: 'Sem contato registrado',
       observation: 'Sem observação registrada.',
     }
+  }
+
+  function agendaResumo(clientId: string) {
+    const h = latestHistoryByClient[clientId]
+    return truncateText(h?.result, 80)
   }
 
   async function submitInlineFollowup(e: React.FormEvent) {
@@ -753,12 +769,15 @@ export function BemAvivHomePage() {
                         {(() => {
                           const tip = tooltipLastContact(c)
                           return (
-                            <span className="group relative min-w-0">
-                              <span className="min-w-0 truncate font-medium text-slate-900">{c.full_name}</span>
-                              <span className="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden w-[min(90vw,340px)] rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg ring-1 ring-slate-900/5 group-hover:block">
+                          <span className="group relative min-w-0">
+                            <span className="min-w-0 truncate font-medium text-slate-900">{c.full_name}</span>
+                            {agendaResumo(c.id) ? (
+                              <span className="mt-0.5 block min-w-0 truncate text-xs text-slate-500">{agendaResumo(c.id)}</span>
+                            ) : null}
+                              <span className="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden w-[min(90vw,340px)] overflow-hidden rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg ring-1 ring-slate-900/5 group-hover:block">
                                 <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Último contato</span>
                                 <span className="mt-0.5 block text-sm font-bold tabular-nums text-slate-900">{tip.date}</span>
-                                <span className="mt-2 block border-t border-slate-100 pt-2 text-xs leading-snug text-slate-700">
+                                <span className="mt-2 block whitespace-normal break-words border-t border-slate-100 pt-2 text-xs leading-snug text-slate-700">
                                   <span className="font-semibold text-slate-600">Observação:</span> {tip.observation}
                                 </span>
                               </span>
@@ -769,9 +788,11 @@ export function BemAvivHomePage() {
                           <button
                             type="button"
                             onClick={() => void openHistoryModal(c)}
-                            className="text-sm font-semibold text-[#185FA5] hover:underline"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-[#185FA5] hover:bg-sky-50"
+                            title={`Visualizar histórico — ${c.full_name}`}
+                            aria-label={`Visualizar histórico — ${c.full_name}`}
                           >
-                            Visualizar histórico
+                            <History size={16} />
                           </button>
                         </li>
                       ))}
@@ -808,9 +829,11 @@ export function BemAvivHomePage() {
                         <button
                           type="button"
                           onClick={() => void openHistoryModal(client)}
-                          className="text-sm font-semibold text-[#185FA5] hover:underline"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-[#185FA5] hover:bg-sky-50"
+                          title={`Visualizar histórico — ${client.full_name}`}
+                          aria-label={`Visualizar histórico — ${client.full_name}`}
                         >
-                          Visualizar histórico
+                          <History size={16} />
                         </button>
                       </li>
                     ))}
@@ -876,7 +899,7 @@ export function BemAvivHomePage() {
                     </select>
                   </label>
                   <label className="text-xs text-slate-600 sm:col-span-2">
-                    Resultado
+                    Resumo
                     <input
                       value={registerInlineForm.result}
                       onChange={(e) => setRegisterInlineForm((prev) => ({ ...prev, result: e.target.value }))}
@@ -884,7 +907,7 @@ export function BemAvivHomePage() {
                     />
                   </label>
                   <label className="text-xs text-slate-600 sm:col-span-2">
-                    Observações
+                    Detalhe
                     <textarea
                       rows={2}
                       value={registerInlineForm.notes}
@@ -916,8 +939,8 @@ export function BemAvivHomePage() {
                     <tr>
                       <th className="px-3 py-2 text-left">Data/Hora</th>
                       <th className="px-3 py-2 text-left">Canal</th>
-                      <th className="px-3 py-2 text-left">Resultado</th>
-                      <th className="px-3 py-2 text-left">Observações</th>
+                      <th className="px-3 py-2 text-left">Resumo</th>
+                      <th className="px-3 py-2 text-left">Detalhe</th>
                       <th className="px-3 py-2 text-right">Ação</th>
                     </tr>
                   </thead>
