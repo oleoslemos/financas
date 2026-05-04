@@ -13,14 +13,24 @@ import {
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { cn } from '../lib/cn'
+import { formatBRL } from '../lib/format'
 import { toUpperTrim } from '../lib/text'
 import { buildWhatsappUrl } from '../lib/whatsapp'
+
+type OrderRow = {
+  id: string
+  order_date: string
+  document_type: 'ORCAMENTO' | 'PEDIDO'
+  document_number: string | null
+  status: string
+  total_amount: number
+}
 
 type Cliente = {
   id: string
@@ -161,6 +171,10 @@ export function BemAvivClientesPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [form, setForm] = useState(emptyForm)
 
+  const [pedidosModalClient, setPedidosModalClient] = useState<Cliente | null>(null)
+  const [pedidosModalLoading, setPedidosModalLoading] = useState(false)
+  const [pedidosModalRows, setPedidosModalRows] = useState<OrderRow[]>([])
+
   const load = useCallback(async () => {
     if (!supabase || !ownerUserId) return
     setLoading(true)
@@ -259,9 +273,44 @@ export function BemAvivClientesPage() {
     navigate('/bem-aviv/follow-up', { state: { bemAvivClientFocus: { id: client.id, mode: 'history' as const } } })
   }
 
-  function goToPedidosHistorico(client: Cliente) {
-    navigate('/bem-aviv/pedidos', { state: { bemAvivPedidosClient: { id: client.id } } })
+  async function openPedidosModal(client: Cliente) {
+    setPedidosModalClient(client)
+    setPedidosModalRows([])
+    if (!supabase || !ownerUserId) return
+    setPedidosModalLoading(true)
+    const { data, error } = await supabase
+      .from('bem_aviv_sales_orders')
+      .select('id, order_date, document_type, document_number, status, total_amount')
+      .eq('user_id', ownerUserId)
+      .eq('client_id', client.id)
+      .order('order_date', { ascending: false })
+      .order('document_number', { ascending: false })
+    if (error) {
+      alert(error.message)
+      setPedidosModalRows([])
+    } else {
+      setPedidosModalRows((data as OrderRow[]) ?? [])
+    }
+    setPedidosModalLoading(false)
   }
+
+  function closePedidosModal() {
+    setPedidosModalClient(null)
+    setPedidosModalRows([])
+    setPedidosModalLoading(false)
+  }
+
+  const pedidosModalStats = useMemo(() => {
+    const pedidosValidos = pedidosModalRows.filter((o) => o.document_type === 'PEDIDO' && o.status !== 'CANCELADO')
+    const total = pedidosValidos.reduce((s, o) => s + Number(o.total_amount ?? 0), 0)
+    const n = pedidosValidos.length
+    const media = n > 0 ? total / n : null
+    let ultima: string | null = null
+    if (pedidosValidos.length > 0) {
+      ultima = pedidosValidos.reduce((best, o) => (o.order_date > best ? o.order_date : best), pedidosValidos[0]!.order_date)
+    }
+    return { total, media, ultima, nPedidos: n }
+  }, [pedidosModalRows])
 
   function openWhatsapp(client: Cliente) {
     const url = buildWhatsappUrl(client.phone_1) ?? buildWhatsappUrl(client.phone_2)
@@ -388,7 +437,7 @@ export function BemAvivClientesPage() {
   const pillIdle = 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
 
   return (
-    <div className="mx-auto max-w-[min(1400px,100%)] space-y-5">
+    <div className="w-full min-w-0 max-w-none space-y-5">
       <header>
         <h2 className="font-hub text-xl font-bold tracking-tight text-slate-900">Clientes</h2>
         <p className="mt-0.5 text-sm text-slate-500">Base completa de clientes e prospects</p>
@@ -481,7 +530,7 @@ export function BemAvivClientesPage() {
                 return (
                 <tr key={r.id}>
                   <td>
-                    <div className="flex min-w-0 max-w-[min(520px,42vw)] items-start gap-2.5">
+                    <div className="flex min-w-0 max-w-[min(720px,55vw)] items-start gap-2.5 xl:max-w-none">
                       <div
                         className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
                         style={{ backgroundColor: pal.bg, color: pal.fg }}
@@ -541,7 +590,7 @@ export function BemAvivClientesPage() {
                       <button
                         type="button"
                         className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-amber-300 bg-white text-amber-900 shadow-sm hover:bg-amber-50 sm:h-10 sm:w-10"
-                        onClick={() => goToPedidosHistorico(r)}
+                        onClick={() => void openPedidosModal(r)}
                         title="Orçamentos e pedidos deste cliente"
                         aria-label="Orçamentos e pedidos deste cliente"
                       >
@@ -710,6 +759,111 @@ export function BemAvivClientesPage() {
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {pedidosModalClient ? (
+        <div
+          className="fixed inset-0 z-[60] flex items-end justify-center bg-slate-900/45 p-0 sm:items-center sm:p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pedidos-modal-title"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) closePedidosModal()
+          }}
+        >
+          <div
+            className="flex max-h-[min(92dvh,900px)] w-full max-w-5xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="flex shrink-0 flex-wrap items-start justify-between gap-3 border-b border-slate-100 bg-slate-50/90 px-4 py-3 sm:px-5">
+              <div className="min-w-0 flex-1">
+                <h3 id="pedidos-modal-title" className="truncate font-hub text-lg font-semibold text-slate-900 normal-case">
+                  {pedidosModalClient.full_name}
+                </h3>
+                <p className="mt-1 text-xs text-slate-500">Orçamentos e pedidos vinculados a este cliente</p>
+              </div>
+              <div className="flex flex-wrap gap-2 sm:justify-end">
+                <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-center">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Total comprado</p>
+                  <p className="font-hub text-sm font-bold tabular-nums text-slate-900">{formatBRL(pedidosModalStats.total)}</p>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-center">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Média</p>
+                  <p className="font-hub text-sm font-bold tabular-nums text-slate-900">
+                    {pedidosModalStats.media != null ? formatBRL(pedidosModalStats.media) : '—'}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-center">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Última compra</p>
+                  <p className="text-sm font-semibold tabular-nums text-slate-900">
+                    {pedidosModalStats.ultima
+                      ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(pedidosModalStats.ultima + 'T12:00:00'))
+                      : '—'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
+                onClick={closePedidosModal}
+                aria-label="Fechar"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-5">
+              {pedidosModalLoading ? (
+                <p className="py-8 text-center text-sm text-slate-500">Carregando documentos…</p>
+              ) : pedidosModalRows.length === 0 ? (
+                <p className="py-8 text-center text-sm text-slate-500">Nenhum orçamento ou pedido para este cliente.</p>
+              ) : (
+                <div className="overflow-x-auto rounded-lg border border-slate-200">
+                  <table className="w-full min-w-[640px] text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
+                        <th className="px-3 py-2">Data</th>
+                        <th className="px-3 py-2">Tipo</th>
+                        <th className="px-3 py-2">Nº documento</th>
+                        <th className="px-3 py-2">Status</th>
+                        <th className="px-3 py-2 text-right">Valor</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pedidosModalRows.map((o) => (
+                        <tr key={o.id} className="border-b border-slate-100 last:border-0">
+                          <td className="whitespace-nowrap px-3 py-2.5 text-slate-800">{o.order_date}</td>
+                          <td className="px-3 py-2.5">
+                            {o.document_type === 'PEDIDO' ? (
+                              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-900">Pedido</span>
+                            ) : (
+                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">Orçamento</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2.5 font-medium text-slate-900">{o.document_number ?? '—'}</td>
+                          <td className="px-3 py-2.5 text-slate-600">{o.status}</td>
+                          <td className="whitespace-nowrap px-3 py-2.5 text-right font-medium tabular-nums text-slate-900">
+                            {formatBRL(Number(o.total_amount ?? 0))}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <p className="mt-3 text-center text-xs text-slate-500">
+                <Link
+                  to="/bem-aviv/pedidos"
+                  state={{ bemAvivPedidosClient: { id: pedidosModalClient.id } }}
+                  className="font-medium text-[#185FA5] hover:underline"
+                  onClick={closePedidosModal}
+                >
+                  Abrir em Pedidos e orçamentos
+                </Link>
+              </p>
+            </div>
           </div>
         </div>
       ) : null}
