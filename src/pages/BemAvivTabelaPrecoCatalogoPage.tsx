@@ -2,6 +2,7 @@ import { useUser } from '@clerk/clerk-react'
 import { Copy, Eye, Pencil, RefreshCw, Star, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '../components/ui/Button'
+import { FormDialog } from '../components/ui/FormDialog'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
@@ -48,6 +49,11 @@ export function BemAvivTabelaPrecoCatalogoPage() {
   const [isDefault, setIsDefault] = useState(false)
   const [gradeModal, setGradeModal] = useState<GradeModalState>(null)
   const [gradePriceDraft, setGradePriceDraft] = useState<Record<string, string>>({})
+  const [tableEdit, setTableEdit] = useState<PriceTable | null>(null)
+  const [tableEditName, setTableEditName] = useState('')
+  const [tableEditDesc, setTableEditDesc] = useState('')
+  const [singlePriceEdit, setSinglePriceEdit] = useState<PriceTableItem | null>(null)
+  const [singlePriceDraft, setSinglePriceDraft] = useState('')
 
   const itemsByTableId = useMemo(() => {
     const m = new Map<string, PriceTableItem[]>()
@@ -128,20 +134,28 @@ export function BemAvivTabelaPrecoCatalogoPage() {
     else await load()
   }
 
-  async function editTable(row: PriceTable) {
-    if (!supabase) return
-    const newName = prompt('NOVO NOME:', row.name)
-    if (newName == null) return
-    const normalized = toUpperTrim(newName)
+  function openTableEdit(row: PriceTable) {
+    setTableEdit(row)
+    setTableEditName(row.name)
+    setTableEditDesc(row.description ?? '')
+  }
+
+  async function saveTableEdit() {
+    if (!supabase || !tableEdit) return
+    const normalized = toUpperTrim(tableEditName)
     if (!normalized) {
       alert('NOME INVÁLIDO.')
       return
     }
-    const newDesc = prompt('NOVA DESCRIÇÃO:', row.description ?? '')
-    if (newDesc == null) return
-    const { error } = await supabase.from('bem_aviv_offer_price_tables').update({ name: normalized, description: toUpperTrim(newDesc) || null }).eq('id', row.id)
+    const { error } = await supabase
+      .from('bem_aviv_offer_price_tables')
+      .update({ name: normalized, description: toUpperTrim(tableEditDesc) || null })
+      .eq('id', tableEdit.id)
     if (error) alert(error.message)
-    else await load()
+    else {
+      setTableEdit(null)
+      await load()
+    }
   }
 
   async function duplicateTable(tableId: string) {
@@ -189,15 +203,19 @@ export function BemAvivTabelaPrecoCatalogoPage() {
     else await load()
   }
 
-  async function editItemPrice(it: PriceTableItem) {
-    if (!supabase) return
-    const typed = prompt('NOVO VALOR (EX: 11741,31):', String(Number(it.price).toFixed(2)).replace('.', ','))
-    if (typed == null) return
-    const parsed = parseMoney(typed)
+  function openSinglePriceEdit(it: PriceTableItem) {
+    setSinglePriceEdit(it)
+    setSinglePriceDraft(String(Number(it.price).toFixed(2)).replace('.', ','))
+  }
+
+  async function saveSinglePriceEdit() {
+    if (!supabase || !singlePriceEdit) return
+    const parsed = parseMoney(singlePriceDraft)
     if (!Number.isFinite(parsed) || parsed <= 0) {
       alert('VALOR INVÁLIDO.')
       return
     }
+    const it = singlePriceEdit
     const { error } = await supabase.from('bem_aviv_offer_price_table_items').update({ price: parsed }).eq('id', it.id)
     if (error) {
       alert(error.message)
@@ -218,6 +236,7 @@ export function BemAvivTabelaPrecoCatalogoPage() {
         return
       }
     }
+    setSinglePriceEdit(null)
     await load()
   }
 
@@ -379,7 +398,7 @@ export function BemAvivTabelaPrecoCatalogoPage() {
                   <button
                     type="button"
                     className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
-                    onClick={() => editTable(r)}
+                    onClick={() => openTableEdit(r)}
                     title="EDITAR TABELA"
                     aria-label="Editar tabela"
                   >
@@ -458,7 +477,7 @@ export function BemAvivTabelaPrecoCatalogoPage() {
                                   className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
                                   title="EDITAR VALOR"
                                   aria-label="Editar valor"
-                                  onClick={() => editItemPrice(row.items[0])}
+                                  onClick={() => openSinglePriceEdit(row.items[0])}
                                 >
                                   <Pencil size={14} strokeWidth={2.2} />
                                 </button>
@@ -475,6 +494,65 @@ export function BemAvivTabelaPrecoCatalogoPage() {
           )
         })}
       </div>
+
+      <FormDialog
+        open={Boolean(tableEdit)}
+        title="Editar tabela de preço"
+        description="Nome e descrição ficam em maiúsculas ao salvar (regra do cadastro)."
+        onClose={() => setTableEdit(null)}
+        actions={
+          <>
+            <Button type="button" variant="secondary" onClick={() => setTableEdit(null)}>
+              Cancelar
+            </Button>
+            <Button type="button" variant="primary" onClick={() => void saveTableEdit()}>
+              Salvar
+            </Button>
+          </>
+        }
+      >
+        <div>
+          <label htmlFor="catalog-table-name">Nome</label>
+          <input
+            id="catalog-table-name"
+            value={tableEditName}
+            onChange={(e) => setTableEditName(e.target.value)}
+            autoComplete="off"
+          />
+        </div>
+        <div>
+          <label htmlFor="catalog-table-desc">Descrição</label>
+          <input id="catalog-table-desc" value={tableEditDesc} onChange={(e) => setTableEditDesc(e.target.value)} autoComplete="off" />
+        </div>
+      </FormDialog>
+
+      <FormDialog
+        open={Boolean(singlePriceEdit)}
+        title="Editar valor"
+        description={singlePriceEdit ? `${singlePriceEdit.line_description} (${singlePriceEdit.variation_code})` : undefined}
+        onClose={() => setSinglePriceEdit(null)}
+        actions={
+          <>
+            <Button type="button" variant="secondary" onClick={() => setSinglePriceEdit(null)}>
+              Cancelar
+            </Button>
+            <Button type="button" variant="primary" onClick={() => void saveSinglePriceEdit()}>
+              Salvar
+            </Button>
+          </>
+        }
+      >
+        <div>
+          <label htmlFor="catalog-item-price">Valor (use vírgula para centavos, ex.: 11741,31)</label>
+          <input
+            id="catalog-item-price"
+            inputMode="decimal"
+            value={singlePriceDraft}
+            onChange={(e) => setSinglePriceDraft(e.target.value)}
+            autoComplete="off"
+          />
+        </div>
+      </FormDialog>
 
       {gradeModal ? (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/45 p-4 sm:items-center">

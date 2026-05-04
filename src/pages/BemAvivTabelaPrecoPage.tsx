@@ -2,6 +2,7 @@ import { useUser } from '@clerk/clerk-react'
 import { BarChart3, Copy, Pencil, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '../components/ui/Button'
+import { FormDialog } from '../components/ui/FormDialog'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
@@ -38,6 +39,8 @@ export function BemAvivTabelaPrecoPage() {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [productCompare, setProductCompare] = useState<ProductCompareState>(null)
+  const [singlePriceEdit, setSinglePriceEdit] = useState<PriceTableItem | null>(null)
+  const [singlePriceDraft, setSinglePriceDraft] = useState('')
 
   const itemsByTableId = useMemo(() => {
     const m = new Map<string, PriceTableItem[]>()
@@ -160,23 +163,25 @@ export function BemAvivTabelaPrecoPage() {
     await load()
   }
 
-  async function editItemPrice(it: PriceTableItem) {
-    if (!supabase) return
-    const typed = prompt('NOVO VALOR (EX: 11741,31):', String(Number(it.price).toFixed(2)).replace('.', ','))
-    if (typed == null) return
-    const parsed = parseMoney(typed)
+  function openSinglePriceEdit(it: PriceTableItem) {
+    setSinglePriceEdit(it)
+    setSinglePriceDraft(String(Number(it.price).toFixed(2)).replace('.', ','))
+  }
+
+  async function saveSinglePriceEdit() {
+    if (!supabase || !singlePriceEdit) return
+    const parsed = parseMoney(singlePriceDraft)
     if (!Number.isFinite(parsed) || parsed <= 0) {
       alert('VALOR INVÁLIDO.')
       return
     }
-
+    const it = singlePriceEdit
     const { error } = await supabase.from('bem_aviv_price_table_items').update({ price: parsed }).eq('id', it.id)
     if (error) {
       alert(error.message)
       return
     }
 
-    // Reflete no cadastro do produto quando o produto está vinculado a esta tabela.
     const { error: productErr } = await supabase
       .from('bem_aviv_products')
       .update({ price: parsed })
@@ -187,6 +192,7 @@ export function BemAvivTabelaPrecoPage() {
       return
     }
 
+    setSinglePriceEdit(null)
     await load()
   }
 
@@ -274,7 +280,7 @@ export function BemAvivTabelaPrecoPage() {
                               <button
                                 type="button"
                                 className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
-                                onClick={() => editItemPrice(it)}
+                                onClick={() => openSinglePriceEdit(it)}
                                 title="EDITAR PREÇO"
                                 aria-label="Editar preço"
                               >
@@ -303,6 +309,34 @@ export function BemAvivTabelaPrecoPage() {
           )
         })}
       </div>
+
+      <FormDialog
+        open={Boolean(singlePriceEdit)}
+        title="Editar valor (Gold)"
+        description={singlePriceEdit?.line_description}
+        onClose={() => setSinglePriceEdit(null)}
+        actions={
+          <>
+            <Button type="button" variant="secondary" onClick={() => setSinglePriceEdit(null)}>
+              Cancelar
+            </Button>
+            <Button type="button" variant="primary" onClick={() => void saveSinglePriceEdit()}>
+              Salvar
+            </Button>
+          </>
+        }
+      >
+        <div>
+          <label htmlFor="gold-item-price">Valor (ex.: 11741,31)</label>
+          <input
+            id="gold-item-price"
+            inputMode="decimal"
+            value={singlePriceDraft}
+            onChange={(e) => setSinglePriceDraft(e.target.value)}
+            autoComplete="off"
+          />
+        </div>
+      </FormDialog>
 
       {productCompare && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4">

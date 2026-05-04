@@ -375,7 +375,7 @@ export function BemAvivFollowupPage() {
   if (!supabase) return <p className="text-slate-600">CONECTANDO...</p>
 
   return (
-    <div className="space-y-6 normal-case">
+    <div className="space-y-6 normal-case pb-24 md:pb-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-2xl font-semibold">FOLLOW-UP DE CLIENTES</h2>
@@ -450,79 +450,167 @@ export function BemAvivFollowupPage() {
         </div>
       </div>
 
-      <div className="table-wrap">
-        {loading ? (
-          <p className="p-4 text-slate-500">CARREGANDO...</p>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>CLIENTE</th>
-                <th>TELEFONE</th>
-                <th>STATUS CLIENTE</th>
-                <th>ETAPA COMERCIAL</th>
-                <th>ÚLTIMO CONTATO</th>
-                <th>PRÓXIMO FOLLOW-UP</th>
-                <th>STATUS FOLLOW-UP</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRows.map((row) => (
-                <tr key={row.id}>
-                  <td>{row.full_name}</td>
-                  <td>{formatPhone(row.phone_1) || formatPhone(row.phone_2) || '—'}</td>
-                  <td>{row.client_status || '—'}</td>
-                  <td>{row.commercial_stage || 'CONTATO'}</td>
-                  <td>{formatDateTime(row.last_contact_at)}</td>
-                  <td>{formatDateTime(row.next_followup_at)}</td>
-                  <td>{row.next_followup_status || 'PENDENTE'}</td>
-                  <td className="whitespace-nowrap">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="secondary"
-                        className="px-2.5"
-                        onClick={async () => {
-                          setRegisteringClient(row)
-                          await loadHistory(row.id)
-                        }}
-                        title="Registrar contato"
-                      >
-                        <PhoneForwarded size={15} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        className="px-2.5"
-                        onClick={() => {
-                          setSchedulingClient(row)
-                          setScheduleForm({
-                            next_followup_at: toInputDateTimeLocal(row.next_followup_at),
-                            next_followup_note: row.next_followup_note ?? '',
-                            next_followup_status: (row.next_followup_status ?? 'PENDENTE') as FollowupStatus,
-                            commercial_stage: row.commercial_stage ?? 'CONTATO',
-                          })
-                        }}
-                        title="Agendar próximo follow-up"
-                      >
-                        <CalendarPlus size={15} />
-                      </Button>
-                      <Button variant="primary" className="px-2.5" onClick={() => openWhatsapp(row)} title="Abrir WhatsApp">
-                        <MessageCircle size={15} />
-                      </Button>
+      {loading ? (
+        <p className="rounded-xl border border-slate-200 bg-white p-4 text-slate-500">CARREGANDO...</p>
+      ) : (
+        <>
+          <ul className="space-y-3 md:hidden" aria-label="Lista de clientes">
+            {filteredRows.length === 0 ? (
+              <li className="rounded-xl border border-slate-200 bg-slate-50/80 p-6 text-center text-sm text-slate-600">
+                Nenhum cliente encontrado com os filtros atuais.
+              </li>
+            ) : (
+              filteredRows.map((row) => (
+                <li key={row.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-900">{row.full_name}</p>
+                      <p className="mt-0.5 text-sm text-slate-600">{formatPhone(row.phone_1) || formatPhone(row.phone_2) || '—'}</p>
                     </div>
-                  </td>
-                </tr>
-              ))}
-              {filteredRows.length === 0 ? (
+                    <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                      {row.next_followup_status || 'PENDENTE'}
+                    </span>
+                  </div>
+                  <dl className="mt-3 grid gap-1.5 text-xs text-slate-600">
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-slate-500">Etapa</dt>
+                      <dd className="text-right font-medium text-slate-800">{row.commercial_stage || 'CONTATO'}</dd>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-slate-500">Próximo</dt>
+                      <dd className="text-right">{formatDateTime(row.next_followup_at)}</dd>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-slate-500">Último contato</dt>
+                      <dd className="text-right">{formatDateTime(row.last_contact_at)}</dd>
+                    </div>
+                  </dl>
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    <Button
+                      variant="secondary"
+                      className="min-h-11 justify-center px-2 text-xs sm:text-sm"
+                      aria-label="Registrar contato"
+                      onClick={async () => {
+                        setRegisteringClient(row)
+                        await loadHistory(row.id)
+                      }}
+                    >
+                      <PhoneForwarded size={16} className="sm:mr-1" aria-hidden />
+                      <span className="hidden sm:inline">Contato</span>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="min-h-11 justify-center border border-slate-200 px-2 text-xs sm:text-sm"
+                      aria-label="Agendar follow-up"
+                      onClick={() => {
+                        setSchedulingClient(row)
+                        setScheduleForm({
+                          next_followup_at: toInputDateTimeLocal(row.next_followup_at),
+                          next_followup_note: row.next_followup_note ?? '',
+                          next_followup_status: (row.next_followup_status ?? 'PENDENTE') as FollowupStatus,
+                          commercial_stage: row.commercial_stage ?? 'CONTATO',
+                        })
+                      }}
+                    >
+                      <CalendarPlus size={16} className="sm:mr-1" aria-hidden />
+                      <span className="hidden sm:inline">Agendar</span>
+                    </Button>
+                    <Button
+                      variant="primary"
+                      className="min-h-11 justify-center px-2 text-xs sm:text-sm"
+                      aria-label="Abrir WhatsApp"
+                      onClick={() => openWhatsapp(row)}
+                    >
+                      <MessageCircle size={16} className="sm:mr-1" aria-hidden />
+                      <span className="hidden sm:inline">WhatsApp</span>
+                    </Button>
+                  </div>
+                </li>
+              ))
+            )}
+          </ul>
+
+          <div className="table-wrap hidden md:block">
+            <table>
+              <thead>
                 <tr>
-                  <td colSpan={8} className="py-6 text-center text-slate-500">
-                    Nenhum cliente encontrado com os filtros atuais.
-                  </td>
+                  <th>CLIENTE</th>
+                  <th>TELEFONE</th>
+                  <th>STATUS CLIENTE</th>
+                  <th>ETAPA COMERCIAL</th>
+                  <th>ÚLTIMO CONTATO</th>
+                  <th>PRÓXIMO FOLLOW-UP</th>
+                  <th>STATUS FOLLOW-UP</th>
+                  <th></th>
                 </tr>
-              ) : null}
-            </tbody>
-          </table>
-        )}
+              </thead>
+              <tbody>
+                {filteredRows.map((row) => (
+                  <tr key={row.id}>
+                    <td>{row.full_name}</td>
+                    <td>{formatPhone(row.phone_1) || formatPhone(row.phone_2) || '—'}</td>
+                    <td>{row.client_status || '—'}</td>
+                    <td>{row.commercial_stage || 'CONTATO'}</td>
+                    <td>{formatDateTime(row.last_contact_at)}</td>
+                    <td>{formatDateTime(row.next_followup_at)}</td>
+                    <td>{row.next_followup_status || 'PENDENTE'}</td>
+                    <td className="whitespace-nowrap">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="secondary"
+                          className="px-2.5"
+                          onClick={async () => {
+                            setRegisteringClient(row)
+                            await loadHistory(row.id)
+                          }}
+                          title="Registrar contato"
+                        >
+                          <PhoneForwarded size={15} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          className="px-2.5"
+                          onClick={() => {
+                            setSchedulingClient(row)
+                            setScheduleForm({
+                              next_followup_at: toInputDateTimeLocal(row.next_followup_at),
+                              next_followup_note: row.next_followup_note ?? '',
+                              next_followup_status: (row.next_followup_status ?? 'PENDENTE') as FollowupStatus,
+                              commercial_stage: row.commercial_stage ?? 'CONTATO',
+                            })
+                          }}
+                          title="Agendar próximo follow-up"
+                        >
+                          <CalendarPlus size={15} />
+                        </Button>
+                        <Button variant="primary" className="px-2.5" onClick={() => openWhatsapp(row)} title="Abrir WhatsApp">
+                          <MessageCircle size={15} />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {filteredRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-6 text-center text-slate-500">
+                      Nenhum cliente encontrado com os filtros atuais.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      <div
+        className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 p-3 shadow-[0_-4px_20px_rgba(15,23,42,0.06)] backdrop-blur-md md:hidden"
+        style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+      >
+        <Button className="min-h-12 w-full text-base" onClick={() => setStartFollowupOpen(true)}>
+          <PlusCircle size={18} className="mr-2 shrink-0" aria-hidden />
+          Iniciar novo follow-up
+        </Button>
       </div>
 
       {registeringClient ? (

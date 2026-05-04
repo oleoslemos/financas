@@ -1,5 +1,26 @@
 import { useUser, UserButton } from '@clerk/clerk-react'
-import { BriefcaseBusiness, CalendarDays, CircleDollarSign, CreditCard, FolderKanban, KanbanSquare, Landmark, ListTodo, MessageCircleMore, NotebookText, Package, ShoppingCart, StickyNote, Table2, Tags, UserCircle, Users, Workflow } from 'lucide-react'
+import {
+  BarChart3,
+  BriefcaseBusiness,
+  CalendarDays,
+  CircleDollarSign,
+  CreditCard,
+  FolderKanban,
+  KanbanSquare,
+  Landmark,
+  LayoutGrid,
+  ListTodo,
+  MessageCircleMore,
+  NotebookText,
+  Package,
+  ShoppingCart,
+  StickyNote,
+  Table2,
+  Tags,
+  UserCircle,
+  Users,
+  Workflow,
+} from 'lucide-react'
 import { type ComponentType, useMemo } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { canAccessTasksHomolog } from '../lib/tasksHomologAccess'
@@ -11,6 +32,24 @@ type MenuItem = {
   to?: string
   icon?: ComponentType<{ size?: number; className?: string; 'aria-hidden'?: boolean }>
   children?: Array<{ label: string; to: string; icon?: ComponentType<{ size?: number; className?: string; 'aria-hidden'?: boolean }> }>
+}
+
+type NavLinkEntry = {
+  label: string
+  to: string
+  icon?: ComponentType<{ size?: number; className?: string; 'aria-hidden'?: boolean }>
+}
+
+type SecondaryNav =
+  | { kind: 'flat'; links: NavLinkEntry[] }
+  | { kind: 'grouped'; groups: Array<{ title: string; links: NavLinkEntry[] }> }
+
+function flattenMenuItems(items: MenuItem[]): NavLinkEntry[] {
+  return items.flatMap((item) => {
+    const parent = item.to ? [{ label: item.label, to: item.to, icon: item.icon }] : []
+    const children = (item.children ?? []).map((c) => ({ label: c.label, to: c.to, icon: c.icon }))
+    return [...parent, ...children]
+  })
 }
 
 const topTriggerBase =
@@ -52,22 +91,30 @@ export function AppLayout() {
     [],
   )
 
-  const bemAvivItems = useMemo<MenuItem[]>(
-    () => [
-      { label: 'Clientes', to: '/bem-aviv/clientes', icon: UserCircle },
-      { label: 'Follow-up', to: '/bem-aviv/follow-up', icon: MessageCircleMore },
-      { label: 'Pedidos de vendas / orçamento', to: '/bem-aviv/pedidos', icon: ShoppingCart },
-      { label: 'Produtos', to: '/bem-aviv/produtos-catalogo', icon: Package },
-      { label: 'Produtos old (todos)', to: '/bem-aviv/produtos', icon: Package },
-      {
-        label: 'Cadastros',
-        children: [
-          { label: 'Categorias', to: '/bem-aviv/categorias', icon: Tags },
-          { label: 'Tabela de preço', to: '/bem-aviv/tabela-preco-catalogo', icon: Table2 },
-          { label: 'Catálogos em grade', to: '/bem-aviv/catalogos-preco', icon: Table2 },
-        ],
-      },
-    ],
+  const bemAvivNavGroups = useMemo(
+    () =>
+      [
+        {
+          title: 'Fluxo atual',
+          links: [
+            { label: 'Clientes', to: '/bem-aviv/clientes', icon: UserCircle },
+            { label: 'Follow-up', to: '/bem-aviv/follow-up', icon: MessageCircleMore },
+            { label: 'Produtividade', to: '/bem-aviv/follow-up/produtividade', icon: BarChart3 },
+            { label: 'Pedidos e orçamentos', to: '/bem-aviv/pedidos', icon: ShoppingCart },
+            { label: 'Produtos (catálogo)', to: '/bem-aviv/produtos-catalogo', icon: Package },
+            { label: 'Categorias', to: '/bem-aviv/categorias', icon: Tags },
+            { label: 'Tabela de preço (catálogo)', to: '/bem-aviv/tabela-preco-catalogo', icon: Table2 },
+            { label: 'Catálogos em grade', to: '/bem-aviv/catalogos-preco', icon: LayoutGrid },
+          ],
+        },
+        {
+          title: 'Legado',
+          links: [
+            { label: 'Produtos (legado)', to: '/bem-aviv/produtos', icon: Package },
+            { label: 'Tabela de preço Gold', to: '/bem-aviv/tabela-preco', icon: Table2 },
+          ],
+        },
+      ] satisfies Array<{ title: string; links: NavLinkEntry[] }>,
     [],
   )
 
@@ -98,22 +145,18 @@ export function AppLayout() {
     return 'bem-aviv'
   }, [location.pathname])
 
-  const selectedLinks = useMemo(() => {
-    const source =
-      activeSystem === 'agenda' && tasksHomologEnabled
-        ? agendaItems
-        : activeSystem === 'projects' && projectsEnabled
-          ? projectItems
-          : activeSystem === 'lsh' && !bemAvivOnlyUser
-            ? lshItems
-            : bemAvivItems
-
-    return source.flatMap((item) => {
-      const parent = item.to ? [{ label: item.label, to: item.to, icon: item.icon }] : []
-      const children = (item.children ?? []).map((c) => ({ label: c.label, to: c.to, icon: c.icon }))
-      return [...parent, ...children]
-    })
-  }, [activeSystem, tasksHomologEnabled, projectsEnabled, bemAvivOnlyUser, agendaItems, projectItems, lshItems, bemAvivItems])
+  const secondaryNav = useMemo<SecondaryNav>(() => {
+    if (activeSystem === 'agenda' && tasksHomologEnabled) {
+      return { kind: 'flat', links: flattenMenuItems(agendaItems) }
+    }
+    if (activeSystem === 'projects' && projectsEnabled) {
+      return { kind: 'flat', links: flattenMenuItems(projectItems) }
+    }
+    if (activeSystem === 'lsh' && !bemAvivOnlyUser) {
+      return { kind: 'flat', links: flattenMenuItems(lshItems) }
+    }
+    return { kind: 'grouped', groups: bemAvivNavGroups }
+  }, [activeSystem, tasksHomologEnabled, projectsEnabled, bemAvivOnlyUser, agendaItems, projectItems, lshItems, bemAvivNavGroups])
 
   return (
     <div className="min-h-screen bg-white">
@@ -162,17 +205,35 @@ export function AppLayout() {
                   Bem Aviv
                 </NavLink>
               </div>
-              <div className="flex max-w-[74vw] flex-wrap justify-end gap-1">
-                {selectedLinks.map((item) => (
-                  <NavLink
-                    key={`${item.to}-${item.label}`}
-                    to={item.to}
-                    className={({ isActive }) => `${moduleLinkBase} ${isActive ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : ''}`}
-                  >
-                    {item.icon ? <item.icon size={13} className="opacity-80" aria-hidden /> : null}
-                    {item.label}
-                  </NavLink>
-                ))}
+              <div className="flex max-w-[min(100vw-1.5rem,56rem)] flex-col items-end gap-2 sm:max-w-[74vw] sm:flex-row sm:flex-wrap sm:justify-end">
+                {secondaryNav.kind === 'flat'
+                  ? secondaryNav.links.map((item) => (
+                      <NavLink
+                        key={`${item.to}-${item.label}`}
+                        to={item.to}
+                        className={({ isActive }) => `${moduleLinkBase} ${isActive ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : ''}`}
+                      >
+                        {item.icon ? <item.icon size={13} className="opacity-80" aria-hidden /> : null}
+                        {item.label}
+                      </NavLink>
+                    ))
+                  : secondaryNav.groups.map((group) => (
+                      <div key={group.title} className="flex flex-col items-end gap-1">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{group.title}</span>
+                        <div className="flex flex-wrap justify-end gap-1">
+                          {group.links.map((item) => (
+                            <NavLink
+                              key={`${item.to}-${item.label}`}
+                              to={item.to}
+                              className={({ isActive }) => `${moduleLinkBase} ${isActive ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : ''}`}
+                            >
+                              {item.icon ? <item.icon size={13} className="opacity-80" aria-hidden /> : null}
+                              {item.label}
+                            </NavLink>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
               </div>
             </nav>
           </div>
