@@ -2,6 +2,7 @@ import { useUser, UserButton } from '@clerk/clerk-react'
 import {
   BriefcaseBusiness,
   CalendarDays,
+  ChevronDown,
   ChevronLeft,
   CircleDollarSign,
   CreditCard,
@@ -26,7 +27,7 @@ import {
   Users,
   Workflow,
 } from 'lucide-react'
-import { type ComponentType, useMemo, useState } from 'react'
+import { type ComponentType, useEffect, useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { cn } from '../lib/cn'
 import { getHubBreadcrumb } from '../lib/hubBreadcrumb'
@@ -48,6 +49,15 @@ type NavLinkEntry = {
   icon?: ComponentType<{ size?: number; className?: string; 'aria-hidden'?: boolean }>
 }
 
+type SidebarSystem = 'global' | 'financeiro' | 'bem-aviv' | 'projetos'
+
+type SidebarSection = {
+  key: string
+  title: string
+  system: SidebarSystem
+  items: NavLinkEntry[]
+}
+
 function flattenMenuItems(items: MenuItem[]): NavLinkEntry[] {
   return items.flatMap((item) => {
     const parent = item.to ? [{ label: item.label, to: item.to, icon: item.icon }] : []
@@ -64,6 +74,7 @@ export function AppLayout() {
   const { user } = useUser()
   const location = useLocation()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [openSectionKey, setOpenSectionKey] = useState<string | null>(null)
 
   const emails = clerkEmailCandidates(user)
   const bemAvivOnlyUser = isBemAvivOnlyUser(emails)
@@ -106,7 +117,7 @@ export function AppLayout() {
   )
 
   const sidebarSections = useMemo(() => {
-    const sections: Array<{ title: string; items: NavLinkEntry[] }> = []
+    const sections: SidebarSection[] = []
 
     const principal: NavLinkEntry[] = [{ label: 'Visão geral', to: '/bem-aviv', icon: LayoutDashboard }]
     if (tasksHomologEnabled) {
@@ -115,11 +126,13 @@ export function AppLayout() {
         { label: 'Tarefas', to: '/lsh/tarefas', icon: ListTodo },
       )
     }
-    sections.push({ title: 'Principal', items: principal })
+    sections.push({ key: 'principal', title: 'Principal', system: 'global', items: principal })
 
     if (!bemAvivOnlyUser) {
       sections.push({
+        key: 'financeiro',
         title: 'Financeiro',
+        system: 'financeiro',
         items: flattenMenuItems([
           { label: 'Início', to: '/lsh/inicio', icon: Home },
           { label: 'Resumo', to: '/lsh/resumo', icon: PieChart },
@@ -129,7 +142,9 @@ export function AppLayout() {
     }
 
     sections.push({
+      key: 'comercial',
       title: 'Comercial',
+      system: 'bem-aviv',
       items: [
         { label: 'Clientes', to: '/bem-aviv/clientes', icon: UserCircle },
         { label: 'Follow-up', to: '/bem-aviv/follow-up', icon: MessageCircleMore },
@@ -139,7 +154,9 @@ export function AppLayout() {
     })
 
     sections.push({
+      key: 'catalogo',
       title: 'Catálogo',
+      system: 'bem-aviv',
       items: [
         { label: 'Produtos', to: '/bem-aviv/produtos-catalogo', icon: Package },
         { label: 'Categorias', to: '/bem-aviv/categorias', icon: Tags },
@@ -150,7 +167,9 @@ export function AppLayout() {
 
     if (projectsEnabled && !bemAvivOnlyUser) {
       sections.push({
+        key: 'projetos',
         title: 'Projetos',
+        system: 'projetos',
         items: flattenMenuItems([{ label: 'Visão geral', to: '/projetos', icon: FolderKanban }, ...projectItems]),
       })
     }
@@ -159,6 +178,17 @@ export function AppLayout() {
   }, [bemAvivOnlyUser, lshItems, projectItems, projectsEnabled, tasksHomologEnabled])
 
   const multiSystemUser = isMultiSystemUser(emails)
+  const currentSystem = useMemo<SidebarSystem>(() => {
+    if (location.pathname.startsWith('/lsh')) return 'financeiro'
+    if (location.pathname.startsWith('/bem-aviv')) return 'bem-aviv'
+    if (location.pathname.startsWith('/projetos')) return 'projetos'
+    return 'global'
+  }, [location.pathname])
+
+  useEffect(() => {
+    // Ao trocar de sistema, recolhe qualquer menu aberto.
+    setOpenSectionKey(null)
+  }, [currentSystem])
 
   const breadcrumb = useMemo(() => getHubBreadcrumb(location.pathname), [location.pathname])
 
@@ -212,34 +242,49 @@ export function AppLayout() {
           {sidebarSections.map((section) => (
             <div key={section.title} className="mb-2">
               {!sidebarCollapsed ? (
-                <div className="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">{section.title}</div>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-1 rounded-md px-2 pb-1 pt-2 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500 hover:bg-slate-50"
+                  onClick={() => setOpenSectionKey((prev) => (prev === section.key ? null : section.key))}
+                  aria-expanded={openSectionKey === section.key}
+                  aria-controls={`sidebar-section-${section.key}`}
+                >
+                  <ChevronDown
+                    size={12}
+                    className={cn('shrink-0 transition-transform', openSectionKey === section.key ? 'rotate-0' : '-rotate-90')}
+                    aria-hidden
+                  />
+                  <span>{section.title}</span>
+                </button>
               ) : null}
-              <ul className="space-y-px">
-                {section.items.map((item) => (
-                  <li key={`${section.title}-${item.to}-${item.label}`}>
-                    <NavLink
-                      to={item.to}
-                      end={item.to === '/bem-aviv' || item.to === '/projetos'}
-                      title={sidebarCollapsed ? item.label : undefined}
-                      className={({ isActive }) =>
-                        cn(
-                          'flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] font-medium transition-colors',
-                          isActive
-                            ? 'bg-[#E6F1FB] font-semibold text-[#185FA5] [&>.sb-ico]:bg-[#185FA5] [&>.sb-ico]:text-white'
-                            : 'text-slate-600 hover:bg-slate-50',
-                        )
-                      }
-                    >
-                      {item.icon ? (
-                        <span className="sb-ico flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md text-slate-600 transition-colors [&_svg]:stroke-[2]">
-                          <item.icon size={14} aria-hidden />
-                        </span>
-                      ) : null}
-                      {!sidebarCollapsed ? <span className="truncate">{item.label}</span> : null}
-                    </NavLink>
-                  </li>
-                ))}
-              </ul>
+              {openSectionKey === section.key ? (
+                <ul id={`sidebar-section-${section.key}`} className="space-y-px">
+                  {section.items.map((item) => (
+                    <li key={`${section.title}-${item.to}-${item.label}`}>
+                      <NavLink
+                        to={item.to}
+                        end={item.to === '/bem-aviv' || item.to === '/projetos'}
+                        title={sidebarCollapsed ? item.label : undefined}
+                        className={({ isActive }) =>
+                          cn(
+                            'flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] font-medium transition-colors',
+                            isActive
+                              ? 'bg-[#E6F1FB] font-semibold text-[#185FA5] [&>.sb-ico]:bg-[#185FA5] [&>.sb-ico]:text-white'
+                              : 'text-slate-600 hover:bg-slate-50',
+                          )
+                        }
+                      >
+                        {item.icon ? (
+                          <span className="sb-ico flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md text-slate-600 transition-colors [&_svg]:stroke-[2]">
+                            <item.icon size={14} aria-hidden />
+                          </span>
+                        ) : null}
+                        {!sidebarCollapsed ? <span className="truncate">{item.label}</span> : null}
+                      </NavLink>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
           ))}
         </nav>
