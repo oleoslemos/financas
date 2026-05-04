@@ -1,9 +1,8 @@
 import { useUser } from '@clerk/clerk-react'
 import { Building2, ChevronLeft, ChevronRight, Target, TrendingUp } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { Bar, BarChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { FollowUpCRMGrid } from '../components/bemAviv/FollowUpCRMGrid'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Progress } from '../components/ui/Progress'
 import { useSupabase } from '../hooks/useSupabase'
@@ -13,6 +12,8 @@ import { cn } from '../lib/cn'
 import { formatBRL } from '../lib/format'
 
 const DISTRIBUTION_GOAL_BRL = 100_000
+const NO_CONTACT_ALERT_DAYS = 30
+const EXCLUDED_FROM_CRITICAL_TIMELINE = new Set(['LEONARDO SILVA LEMOS', 'SUELEN JOAO ALVES'])
 
 const WEEKDAYS_SHORT = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 
@@ -52,6 +53,15 @@ function formatShortDateTime(iso: string | null) {
     dateStyle: 'short',
     timeStyle: 'short',
   }).format(dt)
+}
+
+function toInputDateTimeLocal(value?: string | null) {
+  if (!value) return ''
+  const dt = new Date(value)
+  if (Number.isNaN(dt.getTime())) return ''
+  const tz = dt.getTimezoneOffset() * 60_000
+  const local = new Date(dt.getTime() - tz)
+  return local.toISOString().slice(0, 16)
 }
 
 /** Chave local YYYY-MM-DD para comparar com dia do calendário. */
@@ -143,10 +153,10 @@ function MonthlyBarTooltip({
   const deltaCls = (v: number) => (v >= 0 ? 'text-emerald-700' : 'text-rose-700')
   const deltaSign = (v: number) => (v >= 0 ? '+' : '')
   return (
-    <div className="w-[min(92vw,390px)] rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg ring-1 ring-slate-900/5">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{p.label}</p>
-      <p className="mt-0.5 text-sm font-bold tabular-nums text-slate-900">{formatBRL(p.total)}</p>
-      <div className="mt-2 space-y-1 border-t border-slate-100 pt-2 text-[11px] leading-snug">
+    <div className="w-[min(92vw,430px)] rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 shadow-lg ring-1 ring-slate-900/5">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{p.label}</p>
+      <p className="mt-0.5 text-base font-bold tabular-nums text-slate-900">{formatBRL(p.total)}</p>
+      <div className="mt-2 space-y-1 border-t border-slate-100 pt-2 text-xs leading-snug">
         <p className="text-slate-600">
           Mês anterior:{' '}
           <span className="font-semibold text-slate-800">{formatBRL(p.prevMonthTotal)}</span>{' '}
@@ -183,7 +193,6 @@ function MonthlyBarTooltip({
 export function BemAvivHomePage() {
   const { user } = useUser()
   const supabase = useSupabase()
-  const navigate = useNavigate()
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const [loading, setLoading] = useState(true)
   const [totalSold, setTotalSold] = useState(0)
@@ -195,6 +204,14 @@ export function BemAvivHomePage() {
   const [historyModalRows, setHistoryModalRows] = useState<FollowupHistoryRow[]>([])
   const [historyModalLoading, setHistoryModalLoading] = useState(false)
   const [latestHistoryByClient, setLatestHistoryByClient] = useState<Record<string, FollowupHistoryRow>>({})
+  const [registerInlineOpen, setRegisterInlineOpen] = useState(false)
+  const [registerInlineSaving, setRegisterInlineSaving] = useState(false)
+  const [registerInlineForm, setRegisterInlineForm] = useState({
+    contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+    channel: 'WHATSAPP',
+    result: '',
+    notes: '',
+  })
 
   const load = useCallback(async () => {
     if (!supabase || !ownerUserId) {
@@ -248,13 +265,6 @@ export function BemAvivHomePage() {
     void load()
   }, [load])
 
-  const timelineClients = useMemo(() => {
-    return clients
-      .filter(includeInFollowupTimeline)
-      .sort((a, b) => new Date(a.next_followup_at!).getTime() - new Date(b.next_followup_at!).getTime())
-      .slice(0, 24)
-  }, [clients])
-
   const pendingWithDate = useMemo(() => clients.filter(includeInFollowupTimeline), [clients])
 
   const tasksForSelectedDay = useMemo(() => {
@@ -279,7 +289,7 @@ export function BemAvivHomePage() {
 
   useEffect(() => {
     if (!supabase || !ownerUserId) return
-    const ids = Array.from(new Set(agendaRows.map((r) => r.id)))
+    const ids = Array.from(new Set(clients.map((r) => r.id)))
     if (ids.length === 0) {
       setLatestHistoryByClient({})
       return
@@ -307,7 +317,37 @@ export function BemAvivHomePage() {
     return () => {
       cancelled = true
     }
-  }, [agendaRows, ownerUserId, supabase])
+  }, [clients, ownerUserId, supabase])
+
+  const criticalTimelineClients = useMemo(() => {
+    const now = Date.now()
+    const staleMs = NO_CONTACT_ALERT_DAYS * 86_400_000
+    return clients
+      .filter((c) => !EXCLUDED_FROM_CRITICAL_TIMELINE.has(c.full_name.trim().toUpperCase()))
+      .map((c) => {
+        const latestHistory = latestHistoryByClient[c.id]
+        const lastTouchIso = latestHistory?.contacted_at ?? c.last_contact_at ?? null
+        const lastTouchMs = lastTouchIso ? new Date(lastTouchIso).getTime() : 0
+        const isNoContact = !lastTouchMs
+        const isNoContact30 = !!lastTouchMs && now - lastTouchMs >= staleMs
+        const isOverdue =
+          !!c.next_followup_at &&
+          new Date(c.next_followup_at).getTime() < now &&
+          (c.next_followup_status ?? 'PENDENTE').toUpperCase() === 'PENDENTE'
+        const reason = isNoContact ? 'Sem contato' : isNoContact30 ? `Sem contato há ${NO_CONTACT_ALERT_DAYS}+ dias` : 'Atrasado'
+        return { client: c, isNoContact, isNoContact30, isOverdue, reason, lastTouchIso }
+      })
+      .filter((x) => x.isNoContact || x.isNoContact30 || x.isOverdue)
+      .sort((a, b) => {
+        const ta = a.client.next_followup_at ? new Date(a.client.next_followup_at).getTime() : Number.MAX_SAFE_INTEGER
+        const tb = b.client.next_followup_at ? new Date(b.client.next_followup_at).getTime() : Number.MAX_SAFE_INTEGER
+        if (ta !== tb) return ta - tb
+        const la = a.lastTouchIso ? new Date(a.lastTouchIso).getTime() : 0
+        const lb = b.lastTouchIso ? new Date(b.lastTouchIso).getTime() : 0
+        return la - lb
+      })
+      .slice(0, 40)
+  }, [clients, latestHistoryByClient])
 
   const countByDayInViewMonth = useMemo(() => {
     const y = calendarMonth.getFullYear()
@@ -406,6 +446,14 @@ export function BemAvivHomePage() {
   async function openHistoryModal(client: ClientRow) {
     if (!supabase || !ownerUserId) return
     setHistoryModalClient(client)
+    setRegisterInlineOpen(false)
+    setRegisterInlineSaving(false)
+    setRegisterInlineForm({
+      contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+      channel: 'WHATSAPP',
+      result: '',
+      notes: '',
+    })
     setHistoryModalRows([])
     setHistoryModalLoading(true)
     const { data, error } = await supabase
@@ -427,13 +475,74 @@ export function BemAvivHomePage() {
   function tooltipLastContact(client: ClientRow) {
     const h = latestHistoryByClient[client.id]
     if (h) {
-      const extra = h.result?.trim() ? ` — ${h.result.trim()}` : ''
-      return `Último contato: ${formatShortDateTime(h.contacted_at)} (${h.channel})${extra}`
+      const observation = h.notes?.trim() || h.result?.trim() || 'Sem observação registrada.'
+      return {
+        date: formatShortDateTime(h.contacted_at),
+        observation,
+      }
     }
     if (client.last_contact_at) {
-      return `Último contato: ${formatShortDateTime(client.last_contact_at)}`
+      return {
+        date: formatShortDateTime(client.last_contact_at),
+        observation: 'Sem observação registrada.',
+      }
     }
-    return 'Sem contato registrado'
+    return {
+      date: 'Sem contato registrado',
+      observation: 'Sem observação registrada.',
+    }
+  }
+
+  async function submitInlineFollowup(e: React.FormEvent) {
+    e.preventDefault()
+    if (!supabase || !ownerUserId || !historyModalClient) return
+    if (!registerInlineForm.contacted_at) return
+
+    setRegisterInlineSaving(true)
+    const contactedAtIso = new Date(registerInlineForm.contacted_at).toISOString()
+    const followupUserId = ownerUserId.toUpperCase()
+
+    const { error: insertError } = await supabase.from('bem_aviv_client_followups').insert({
+      user_id: followupUserId,
+      client_id: historyModalClient.id,
+      contacted_at: contactedAtIso,
+      channel: registerInlineForm.channel,
+      result: registerInlineForm.result || null,
+      notes: registerInlineForm.notes || null,
+    })
+
+    if (insertError) {
+      setRegisterInlineSaving(false)
+      return
+    }
+
+    await supabase
+      .from('bem_aviv_clients')
+      .update({
+        last_contact_at: contactedAtIso,
+        next_followup_status: 'CONCLUIDO',
+      })
+      .eq('id', historyModalClient.id)
+
+    setClients((prev) =>
+      prev.map((c) =>
+        c.id === historyModalClient.id ? { ...c, last_contact_at: contactedAtIso, next_followup_status: 'CONCLUIDO' } : c,
+      ),
+    )
+    setLatestHistoryByClient((prev) => ({
+      ...prev,
+      [historyModalClient.id]: {
+        id: `tmp-${Date.now()}`,
+        client_id: historyModalClient.id,
+        contacted_at: contactedAtIso,
+        channel: registerInlineForm.channel,
+        result: registerInlineForm.result || null,
+        notes: registerInlineForm.notes || null,
+      },
+    }))
+
+    await openHistoryModal(historyModalClient)
+    setRegisterInlineSaving(false)
   }
 
   return (
@@ -516,7 +625,7 @@ export function BemAvivHomePage() {
                   <BarChart data={chartData} margin={{ top: 12, right: 8, left: 4, bottom: 4 }} barCategoryGap="18%">
                     <XAxis
                       dataKey="label"
-                      tick={{ fontSize: 10, fill: '#64748b' }}
+                      tick={{ fontSize: 12, fill: '#64748b' }}
                       tickLine={false}
                       axisLine={{ stroke: '#e2e8f0' }}
                       interval={0}
@@ -529,7 +638,7 @@ export function BemAvivHomePage() {
                         dataKey="total"
                         position="top"
                         offset={6}
-                        className="fill-slate-600 text-[10px] font-semibold"
+                        className="fill-slate-600 text-xs font-semibold"
                         formatter={(value: unknown) => {
                           const n = Number(value ?? 0)
                           return n > 0 ? formatBRL(n) : ''
@@ -542,121 +651,163 @@ export function BemAvivHomePage() {
             </CardContent>
           </Card>
 
-          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
-              <h2 className="font-hub text-sm font-semibold text-slate-900">Agenda por dia</h2>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => shiftCalendarMonth(-1)}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                  aria-label="Mês anterior"
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <span className="min-w-[8.5rem] text-center text-xs font-medium capitalize text-slate-800 sm:min-w-[9.5rem] sm:text-sm">
-                  {calendarTitle}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => shiftCalendarMonth(1)}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                  aria-label="Próximo mês"
-                >
-                  <ChevronRight size={16} />
-                </button>
-                <button
-                  type="button"
-                  onClick={goToCurrentMonth}
-                  className="rounded-md border border-[#185FA5]/40 bg-[#E6F1FB] px-2.5 py-1 text-[11px] font-semibold text-[#185FA5] hover:bg-[#d4e8f8] sm:px-3 sm:py-1.5 sm:text-xs"
-                >
-                  Mês atual
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-3 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setSelectedDay(null)}
-                className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                Desmarcar dia (mostrar mês)
-              </button>
-            </div>
-
-            <div className="mt-4 flex flex-col gap-5 lg:flex-row lg:items-start lg:gap-6">
-              <div className="mx-auto w-full max-w-[300px] shrink-0 sm:max-w-[320px] lg:mx-0">
-                <div className="grid grid-cols-7 gap-0.5 text-center text-[10px] font-semibold text-slate-500">
-                  {WEEKDAYS_SHORT.map((w) => (
-                    <div key={w} className="py-1">
-                      {w}
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-0.5 grid grid-cols-7 gap-0.5">
-                  {cells.map((cell, idx) => {
-                    if (!cell.date) {
-                      return <div key={`e-${idx}`} className="aspect-square min-h-[2.15rem]" />
-                    }
-                    const key = formatYmd(cell.date)
-                    const n = countByDayInViewMonth.get(key) ?? 0
-                    const isSel = selectedDay === key
-                    const isToday = formatYmd(new Date()) === key
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => setSelectedDay((prev) => (prev === key ? null : key))}
-                        className={cn(
-                          'relative flex aspect-square min-h-[2.15rem] flex-col items-center justify-center rounded-md border text-xs font-medium transition-colors sm:min-h-[2.3rem]',
-                          isSel
-                            ? 'border-[#185FA5] bg-[#E6F1FB] text-[#185FA5]'
-                            : 'border-slate-200 bg-slate-50/80 text-slate-800 hover:border-slate-300 hover:bg-white',
-                          isToday && !isSel && 'ring-1 ring-[#185FA5]/40',
-                        )}
-                      >
-                        <span>{cell.date.getDate()}</span>
-                        {n > 0 ? (
-                          <span className="absolute bottom-0.5 right-0.5 flex h-3 min-w-[0.65rem] items-center justify-center rounded-full bg-[#185FA5] px-0.5 text-[8px] font-bold leading-none text-white sm:h-3.5 sm:text-[9px]">
-                            {n}
-                          </span>
-                        ) : null}
-                      </button>
-                    )
-                  })}
+          <section className="grid gap-4 xl:grid-cols-2">
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                <h2 className="font-hub text-sm font-semibold text-slate-900">Agenda por dia</h2>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => shiftCalendarMonth(-1)}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    aria-label="Mês anterior"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                  <span className="min-w-[8.5rem] text-center text-xs font-medium capitalize text-slate-800 sm:min-w-[9.5rem] sm:text-sm">
+                    {calendarTitle}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => shiftCalendarMonth(1)}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    aria-label="Próximo mês"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={goToCurrentMonth}
+                    className="rounded-md border border-[#185FA5]/40 bg-[#E6F1FB] px-2.5 py-1 text-[11px] font-semibold text-[#185FA5] hover:bg-[#d4e8f8] sm:px-3 sm:py-1.5 sm:text-xs"
+                  >
+                    Mês atual
+                  </button>
                 </div>
               </div>
 
-              <div className="min-w-0 flex-1 rounded-lg border border-slate-100 bg-slate-50/80 p-3 sm:p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  {selectedDay ? 'Dia selecionado — ' : 'Mês selecionado — '}
-                  {selectedDay
-                    ? new Intl.DateTimeFormat('pt-BR', {
-                        weekday: 'long',
-                        day: 'numeric',
-                        month: 'long',
-                        year: 'numeric',
-                      }).format(parseYmd(selectedDay))
-                    : calendarTitle}
-                </p>
-                {agendaRows.length === 0 ? (
-                  <p className="mt-3 text-sm text-slate-600">
+              <div className="mt-4 flex flex-col gap-5 lg:flex-row lg:items-start lg:gap-6">
+                <div className="mx-auto w-full max-w-[300px] shrink-0 sm:max-w-[320px] lg:mx-0">
+                  <div className="grid grid-cols-7 gap-0.5 text-center text-[10px] font-semibold text-slate-500">
+                    {WEEKDAYS_SHORT.map((w) => (
+                      <div key={w} className="py-1">
+                        {w}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-0.5 grid grid-cols-7 gap-0.5">
+                    {cells.map((cell, idx) => {
+                      if (!cell.date) {
+                        return <div key={`e-${idx}`} className="aspect-square min-h-[2.15rem]" />
+                      }
+                      const key = formatYmd(cell.date)
+                      const n = countByDayInViewMonth.get(key) ?? 0
+                      const isSel = selectedDay === key
+                      const isToday = formatYmd(new Date()) === key
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setSelectedDay((prev) => (prev === key ? null : key))}
+                          className={cn(
+                            'relative flex aspect-square min-h-[2.15rem] flex-col items-center justify-center rounded-md border text-xs font-medium transition-colors sm:min-h-[2.3rem]',
+                            isSel
+                              ? 'border-[#185FA5] bg-[#E6F1FB] text-[#185FA5]'
+                              : 'border-slate-200 bg-slate-50/80 text-slate-800 hover:border-slate-300 hover:bg-white',
+                            isToday && !isSel && 'ring-1 ring-[#185FA5]/40',
+                          )}
+                        >
+                          <span>{cell.date.getDate()}</span>
+                          {n > 0 ? (
+                            <span className="absolute bottom-0.5 right-0.5 flex h-3 min-w-[0.65rem] items-center justify-center rounded-full bg-[#185FA5] px-0.5 text-[8px] font-bold leading-none text-white sm:h-3.5 sm:text-[9px]">
+                              {n}
+                            </span>
+                          ) : null}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div className="min-w-0 flex-1 rounded-lg border border-slate-100 bg-slate-50/80 p-3 sm:p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    {selectedDay ? 'Dia selecionado — ' : 'Mês selecionado — '}
                     {selectedDay
-                      ? 'Nenhum follow-up pendente agendado para este dia.'
-                      : 'Nenhum follow-up pendente agendado para este mês.'}
+                      ? new Intl.DateTimeFormat('pt-BR', {
+                          weekday: 'long',
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric',
+                        }).format(parseYmd(selectedDay))
+                      : calendarTitle}
                   </p>
+                  {agendaRows.length === 0 ? (
+                    <p className="mt-3 text-sm text-slate-600">
+                      {selectedDay
+                        ? 'Nenhum follow-up pendente agendado para este dia.'
+                        : 'Nenhum follow-up pendente agendado para este mês.'}
+                    </p>
+                  ) : (
+                    <ul className="mt-3 max-h-[min(420px,55vh)] divide-y divide-slate-200 overflow-y-auto rounded-lg border border-slate-200 bg-white">
+                      {agendaRows.map((c) => (
+                        <li key={c.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-3 py-2.5 text-sm">
+                        {(() => {
+                          const tip = tooltipLastContact(c)
+                          return (
+                            <span className="group relative min-w-0">
+                              <span className="min-w-0 truncate font-medium text-slate-900">{c.full_name}</span>
+                              <span className="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden w-[min(90vw,340px)] rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg ring-1 ring-slate-900/5 group-hover:block">
+                                <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Último contato</span>
+                                <span className="mt-0.5 block text-sm font-bold tabular-nums text-slate-900">{tip.date}</span>
+                                <span className="mt-2 block border-t border-slate-100 pt-2 text-xs leading-snug text-slate-700">
+                                  <span className="font-semibold text-slate-600">Observação:</span> {tip.observation}
+                                </span>
+                              </span>
+                            </span>
+                          )
+                        })()}
+                          <span className="text-right text-xs text-slate-500">{formatShortDateTime(c.next_followup_at)}</span>
+                          <button
+                            type="button"
+                            onClick={() => void openHistoryModal(c)}
+                            className="text-sm font-semibold text-[#185FA5] hover:underline"
+                          >
+                            Visualizar histórico
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <Card className="border-0 shadow-sm ring-1 ring-slate-100/90">
+              <CardHeader className="pb-2">
+                <CardTitle className="font-hub text-sm font-semibold text-slate-900">
+                  Timeline crítica de follow-up
+                </CardTitle>
+                <p className="text-xs text-slate-500">
+                  Atrasados, sem contato há {NO_CONTACT_ALERT_DAYS}+ dias e sem contato.
+                </p>
+              </CardHeader>
+              <CardContent className="pt-0">
+                {criticalTimelineClients.length === 0 ? (
+                  <p className="py-4 text-sm text-slate-600">Nenhum cliente crítico no momento.</p>
                 ) : (
-                  <ul className="mt-3 max-h-[min(420px,55vh)] divide-y divide-slate-200 overflow-y-auto rounded-lg border border-slate-200 bg-white">
-                    {agendaRows.map((c) => (
-                      <li key={c.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-3 py-2.5 text-sm">
-                        <span className="min-w-0 truncate font-medium text-slate-900" title={tooltipLastContact(c)}>
-                          {c.full_name}
-                        </span>
-                        <span className="text-right text-xs text-slate-500">{formatShortDateTime(c.next_followup_at)}</span>
+                  <ul className="max-h-[min(520px,62vh)] divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200 bg-white">
+                    {criticalTimelineClients.map(({ client, reason, lastTouchIso }) => (
+                      <li key={client.id} className="grid grid-cols-[1fr_auto] items-center gap-3 px-3 py-2.5">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-slate-900">{client.full_name}</p>
+                          <p className="text-xs text-slate-500">
+                            {reason}
+                            {client.next_followup_at ? ` • Próximo: ${formatShortDateTime(client.next_followup_at)}` : ''}
+                            {lastTouchIso ? ` • Último contato: ${formatShortDateTime(lastTouchIso)}` : ''}
+                          </p>
+                        </div>
                         <button
                           type="button"
-                          onClick={() => void openHistoryModal(c)}
+                          onClick={() => void openHistoryModal(client)}
                           className="text-sm font-semibold text-[#185FA5] hover:underline"
                         >
                           Visualizar histórico
@@ -665,11 +816,9 @@ export function BemAvivHomePage() {
                     ))}
                   </ul>
                 )}
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           </section>
-
-          <FollowUpCRMGrid timelineClients={timelineClients} />
         </>
       )}
 
@@ -685,15 +834,9 @@ export function BemAvivHomePage() {
                 <button
                   type="button"
                   className="rounded-md bg-[#185FA5] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#144f8f]"
-                  onClick={() => {
-                    if (!historyModalClient) return
-                    setHistoryModalClient(null)
-                    navigate('/bem-aviv/follow-up', {
-                      state: { openStartFollowup: true, startFollowupClientId: historyModalClient.id },
-                    })
-                  }}
+                  onClick={() => setRegisterInlineOpen((v) => !v)}
                 >
-                  Incluir novo follow-up
+                  {registerInlineOpen ? 'Ocultar registro' : 'Incluir novo follow-up'}
                 </button>
                 <button
                   type="button"
@@ -704,6 +847,63 @@ export function BemAvivHomePage() {
                 </button>
               </div>
             </div>
+
+            {registerInlineOpen ? (
+              <form onSubmit={submitInlineFollowup} className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Registrar novo contato</p>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <label className="text-xs text-slate-600">
+                    Data/Hora
+                    <input
+                      type="datetime-local"
+                      required
+                      value={registerInlineForm.contacted_at}
+                      onChange={(e) => setRegisterInlineForm((prev) => ({ ...prev, contacted_at: e.target.value }))}
+                      className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+                    />
+                  </label>
+                  <label className="text-xs text-slate-600">
+                    Canal
+                    <select
+                      value={registerInlineForm.channel}
+                      onChange={(e) => setRegisterInlineForm((prev) => ({ ...prev, channel: e.target.value }))}
+                      className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+                    >
+                      <option value="WHATSAPP">WHATSAPP</option>
+                      <option value="LIGACAO">LIGAÇÃO</option>
+                      <option value="EMAIL">E-MAIL</option>
+                      <option value="OUTRO">OUTRO</option>
+                    </select>
+                  </label>
+                  <label className="text-xs text-slate-600 sm:col-span-2">
+                    Resultado
+                    <input
+                      value={registerInlineForm.result}
+                      onChange={(e) => setRegisterInlineForm((prev) => ({ ...prev, result: e.target.value }))}
+                      className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+                    />
+                  </label>
+                  <label className="text-xs text-slate-600 sm:col-span-2">
+                    Observações
+                    <textarea
+                      rows={2}
+                      value={registerInlineForm.notes}
+                      onChange={(e) => setRegisterInlineForm((prev) => ({ ...prev, notes: e.target.value }))}
+                      className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+                    />
+                  </label>
+                </div>
+                <div className="mt-3">
+                  <button
+                    type="submit"
+                    disabled={registerInlineSaving}
+                    className="rounded-md bg-[#185FA5] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#144f8f] disabled:opacity-60"
+                  >
+                    {registerInlineSaving ? 'Salvando...' : 'Salvar contato'}
+                  </button>
+                </div>
+              </form>
+            ) : null}
 
             <div className="mt-4 max-h-[65vh] overflow-auto rounded-lg border border-slate-200">
               {historyModalLoading ? (

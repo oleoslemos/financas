@@ -15,6 +15,7 @@ import {
   Package,
   PieChart,
   ShoppingCart,
+  Menu,
   PlusCircle,
   StickyNote,
   Table2,
@@ -83,6 +84,7 @@ export function AppLayout() {
   const location = useLocation()
   const navigate = useNavigate()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [openSectionKey, setOpenSectionKey] = useState<string | null>(null)
   const [openTreeGroupKeys, setOpenTreeGroupKeys] = useState<string[]>([])
 
@@ -191,6 +193,11 @@ export function AppLayout() {
     setOpenTreeGroupKeys([])
   }, [currentSystem])
 
+  useEffect(() => {
+    // Em mobile, fecha o drawer ao navegar.
+    setMobileMenuOpen(false)
+  }, [location.pathname])
+
   const breadcrumb = useMemo(() => getHubBreadcrumb(location.pathname), [location.pathname])
 
   const userInitials = useMemo(() => {
@@ -204,10 +211,19 @@ export function AppLayout() {
 
   return (
     <div className="hub-layout flex min-h-screen bg-slate-100 font-sans text-slate-900">
+      {mobileMenuOpen ? (
+        <button
+          type="button"
+          className="fixed inset-0 z-40 bg-slate-900/35 lg:hidden"
+          aria-label="Fechar menu"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      ) : null}
       <aside
         className={cn(
-          'flex shrink-0 flex-col border-r border-slate-200 bg-white transition-[width] duration-200 ease-out',
-          sidebarCollapsed ? 'w-[56px]' : 'w-[220px]',
+          'fixed inset-y-0 left-0 z-50 flex w-[272px] shrink-0 flex-col border-r border-slate-200 bg-white transition-transform duration-200 ease-out lg:static lg:z-auto lg:w-auto lg:translate-x-0',
+          mobileMenuOpen ? 'translate-x-0' : '-translate-x-full',
+          sidebarCollapsed ? 'lg:w-[56px]' : 'lg:w-[220px]',
         )}
         aria-label="Menu lateral"
       >
@@ -226,11 +242,19 @@ export function AppLayout() {
           </div>
           <button
             type="button"
-            className="ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+            className="ml-auto hidden h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800 lg:flex"
             onClick={() => setSidebarCollapsed((v) => !v)}
             aria-label={sidebarCollapsed ? 'Expandir menu' : 'Recolher menu'}
           >
             <ChevronLeft size={16} className={cn('transition-transform', sidebarCollapsed && 'rotate-180')} />
+          </button>
+          <button
+            type="button"
+            className="ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800 lg:hidden"
+            onClick={() => setMobileMenuOpen(false)}
+            aria-label="Fechar menu lateral"
+          >
+            <ChevronLeft size={16} />
           </button>
         </div>
 
@@ -354,18 +378,26 @@ export function AppLayout() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-[52px] shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 lg:px-5">
-          <p className="text-xs text-slate-500">
+          <button
+            type="button"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 lg:hidden"
+            onClick={() => setMobileMenuOpen(true)}
+            aria-label="Abrir menu lateral"
+          >
+            <Menu size={16} />
+          </button>
+          <p className="truncate text-xs text-slate-500">
             {breadcrumb.segment} / <span className="font-medium text-slate-900">{breadcrumb.current}</span>
           </p>
           <div className="ml-auto flex items-center gap-2">
-            <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1">
+            <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-1.5 py-1 sm:px-2">
               <div
                 className="flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
                 style={{ backgroundColor: hubBrand.primary }}
               >
                 {userInitials}
               </div>
-              <div className="hidden min-w-0 sm:block">
+              <div className="hidden min-w-0 md:block">
                 <p className="max-w-[170px] truncate text-xs font-medium text-slate-800">
                   {user?.fullName || user?.primaryEmailAddress?.emailAddress || 'Conta'}
                 </p>
@@ -389,7 +421,7 @@ export function AppLayout() {
           </div>
         </header>
 
-        <main className="hub-content min-h-0 flex-1 overflow-y-auto bg-slate-100 p-4 normal-case lg:p-5">
+        <main className="hub-content min-h-0 flex-1 overflow-y-auto bg-slate-100 p-3 normal-case sm:p-4 lg:p-5">
           <Outlet />
         </main>
       </div>
