@@ -1,8 +1,8 @@
 import { useUser } from '@clerk/clerk-react'
 import { Building2, ChevronLeft, ChevronRight, Target, TrendingUp } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Link, useNavigate } from 'react-router-dom'
+import { Bar, BarChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { FollowUpCRMGrid } from '../components/bemAviv/FollowUpCRMGrid'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Progress } from '../components/ui/Progress'
@@ -19,11 +19,21 @@ const WEEKDAYS_SHORT = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 type ClientRow = {
   id: string
   full_name: string
+  last_contact_at?: string | null
   next_followup_at: string | null
   next_followup_status: string | null
   phone_1?: string | null
   phone_2?: string | null
   next_followup_note?: string | null
+}
+
+type FollowupHistoryRow = {
+  id: string
+  client_id: string
+  contacted_at: string
+  channel: string
+  result: string | null
+  notes: string | null
 }
 
 /** Timeline e calendário da home: só pendente com data agendada; exclui cancelado e concluído. */
@@ -66,6 +76,21 @@ function monthKeyFromOrderDate(orderDate: string) {
   return orderDate.slice(0, 7)
 }
 
+function parseMonthKey(monthKey: string) {
+  const [y, m] = monthKey.split('-').map(Number)
+  return new Date((y ?? 1970), (m ?? 1) - 1, 1, 12, 0, 0, 0)
+}
+
+function monthKeyFromDate(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+function addMonthsToKey(monthKey: string, diff: number) {
+  const d = parseMonthKey(monthKey)
+  d.setMonth(d.getMonth() + diff)
+  return monthKeyFromDate(d)
+}
+
 function formatYmd(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
@@ -95,14 +120,62 @@ function MonthlyBarTooltip({
   payload,
 }: {
   active?: boolean
-  payload?: ReadonlyArray<{ payload?: { label: string; total: number } }>
+  payload?: ReadonlyArray<{
+    payload?: {
+      label: string
+      total: number
+      prevMonthTotal: number
+      sameMonthLastYearTotal: number
+      rolling12Total: number
+      rolling12PrevTotal: number
+      wowMonthAbs: number
+      wowMonthPct: number | null
+      yoyAbs: number
+      yoyPct: number | null
+      rollingAbs: number
+      rollingPct: number | null
+    }
+  }>
 }) {
   if (!active || !payload?.[0]?.payload) return null
   const p = payload[0].payload
+  const fmtPct = (v: number | null) => (v === null ? '—' : `${v.toFixed(1)}%`)
+  const deltaCls = (v: number) => (v >= 0 ? 'text-emerald-700' : 'text-rose-700')
+  const deltaSign = (v: number) => (v >= 0 ? '+' : '')
   return (
-    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg ring-1 ring-slate-900/5">
+    <div className="w-[min(92vw,390px)] rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg ring-1 ring-slate-900/5">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{p.label}</p>
       <p className="mt-0.5 text-sm font-bold tabular-nums text-slate-900">{formatBRL(p.total)}</p>
+      <div className="mt-2 space-y-1 border-t border-slate-100 pt-2 text-[11px] leading-snug">
+        <p className="text-slate-600">
+          Mês anterior:{' '}
+          <span className="font-semibold text-slate-800">{formatBRL(p.prevMonthTotal)}</span>{' '}
+          <span className={deltaCls(p.wowMonthAbs)}>
+            ({deltaSign(p.wowMonthAbs)}
+            {formatBRL(p.wowMonthAbs)} | {deltaSign(p.wowMonthAbs)}
+            {fmtPct(p.wowMonthPct)})
+          </span>
+        </p>
+        <p className="text-slate-600">
+          Mesmo mês ano anterior:{' '}
+          <span className="font-semibold text-slate-800">{formatBRL(p.sameMonthLastYearTotal)}</span>{' '}
+          <span className={deltaCls(p.yoyAbs)}>
+            ({deltaSign(p.yoyAbs)}
+            {formatBRL(p.yoyAbs)} | {deltaSign(p.yoyAbs)}
+            {fmtPct(p.yoyPct)})
+          </span>
+        </p>
+        <p className="text-slate-600">
+          Últimos 12m vs 12m anteriores:{' '}
+          <span className="font-semibold text-slate-800">{formatBRL(p.rolling12Total)}</span>{' '}
+          <span className="text-slate-500">(prev: {formatBRL(p.rolling12PrevTotal)})</span>{' '}
+          <span className={deltaCls(p.rollingAbs)}>
+            ({deltaSign(p.rollingAbs)}
+            {formatBRL(p.rollingAbs)} | {deltaSign(p.rollingAbs)}
+            {fmtPct(p.rollingPct)})
+          </span>
+        </p>
+      </div>
     </div>
   )
 }
@@ -110,13 +183,18 @@ function MonthlyBarTooltip({
 export function BemAvivHomePage() {
   const { user } = useUser()
   const supabase = useSupabase()
+  const navigate = useNavigate()
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const [loading, setLoading] = useState(true)
   const [totalSold, setTotalSold] = useState(0)
   const [monthlyTotals, setMonthlyTotals] = useState<Record<string, number>>({})
   const [clients, setClients] = useState<ClientRow[]>([])
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()))
-  const [selectedDay, setSelectedDay] = useState(() => formatYmd(new Date()))
+  const [selectedDay, setSelectedDay] = useState<string | null>(() => formatYmd(new Date()))
+  const [historyModalClient, setHistoryModalClient] = useState<ClientRow | null>(null)
+  const [historyModalRows, setHistoryModalRows] = useState<FollowupHistoryRow[]>([])
+  const [historyModalLoading, setHistoryModalLoading] = useState(false)
+  const [latestHistoryByClient, setLatestHistoryByClient] = useState<Record<string, FollowupHistoryRow>>({})
 
   const load = useCallback(async () => {
     if (!supabase || !ownerUserId) {
@@ -134,7 +212,7 @@ export function BemAvivHomePage() {
         .neq('status', 'CANCELADO'),
       supabase
         .from('bem_aviv_clients')
-        .select('id, full_name, next_followup_at, next_followup_status, phone_1, phone_2, next_followup_note')
+        .select('id, full_name, last_contact_at, next_followup_at, next_followup_status, phone_1, phone_2, next_followup_note')
         .eq('user_id', ownerUserId),
     ])
 
@@ -180,10 +258,56 @@ export function BemAvivHomePage() {
   const pendingWithDate = useMemo(() => clients.filter(includeInFollowupTimeline), [clients])
 
   const tasksForSelectedDay = useMemo(() => {
+    if (!selectedDay) return []
     return pendingWithDate
       .filter((c) => toLocalDateKey(c.next_followup_at!) === selectedDay)
       .sort((a, b) => new Date(a.next_followup_at!).getTime() - new Date(b.next_followup_at!).getTime())
   }, [pendingWithDate, selectedDay])
+
+  const tasksForViewMonth = useMemo(() => {
+    const y = calendarMonth.getFullYear()
+    const m = calendarMonth.getMonth()
+    return pendingWithDate
+      .filter((c) => {
+        const t = new Date(c.next_followup_at!)
+        return t.getFullYear() === y && t.getMonth() === m
+      })
+      .sort((a, b) => new Date(a.next_followup_at!).getTime() - new Date(b.next_followup_at!).getTime())
+  }, [pendingWithDate, calendarMonth])
+
+  const agendaRows = selectedDay ? tasksForSelectedDay : tasksForViewMonth
+
+  useEffect(() => {
+    if (!supabase || !ownerUserId) return
+    const ids = Array.from(new Set(agendaRows.map((r) => r.id)))
+    if (ids.length === 0) {
+      setLatestHistoryByClient({})
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      const { data, error } = await supabase
+        .from('bem_aviv_client_followups')
+        .select('id, client_id, contacted_at, channel, result, notes')
+        .eq('user_id', ownerUserId.toUpperCase())
+        .in('client_id', ids)
+        .order('contacted_at', { ascending: false })
+      if (cancelled) return
+      if (error) {
+        setLatestHistoryByClient({})
+        return
+      }
+      const rows = (data ?? []) as FollowupHistoryRow[]
+      const map: Record<string, FollowupHistoryRow> = {}
+      for (const r of rows) {
+        if (!map[r.client_id]) map[r.client_id] = r
+      }
+      setLatestHistoryByClient(map)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [agendaRows, ownerUserId, supabase])
 
   const countByDayInViewMonth = useMemo(() => {
     const y = calendarMonth.getFullYear()
@@ -228,12 +352,39 @@ export function BemAvivHomePage() {
   const chartData = useMemo(
     () =>
       chartMonths.map((mk) => {
-        const v = monthlyTotals[mk] ?? 0
+        const monthTotal = (k: string) => monthlyTotals[k] ?? 0
+        const sumWindow = (endMonthKey: string, monthsBack: number) => {
+          let sum = 0
+          for (let i = monthsBack - 1; i >= 0; i--) {
+            sum += monthTotal(addMonthsToKey(endMonthKey, -i))
+          }
+          return sum
+        }
+
+        const v = monthTotal(mk)
+        const prevMonthTotal = monthTotal(addMonthsToKey(mk, -1))
+        const sameMonthLastYearTotal = monthTotal(addMonthsToKey(mk, -12))
+        const rolling12Total = sumWindow(mk, 12)
+        const rolling12PrevTotal = sumWindow(addMonthsToKey(mk, -12), 12)
+        const wowMonthAbs = v - prevMonthTotal
+        const yoyAbs = v - sameMonthLastYearTotal
+        const rollingAbs = rolling12Total - rolling12PrevTotal
+        const pct = (cur: number, base: number) => (base === 0 ? null : ((cur - base) / base) * 100)
         const [y, mo] = mk.split('-')
         return {
           key: mk,
           label: `${mo}/${y?.slice(2)}`,
           total: v,
+          prevMonthTotal,
+          sameMonthLastYearTotal,
+          rolling12Total,
+          rolling12PrevTotal,
+          wowMonthAbs,
+          wowMonthPct: pct(v, prevMonthTotal),
+          yoyAbs,
+          yoyPct: pct(v, sameMonthLastYearTotal),
+          rollingAbs,
+          rollingPct: pct(rolling12Total, rolling12PrevTotal),
         }
       }),
     [chartMonths, monthlyTotals],
@@ -250,6 +401,39 @@ export function BemAvivHomePage() {
     const now = new Date()
     setCalendarMonth(startOfMonth(now))
     setSelectedDay(formatYmd(now))
+  }
+
+  async function openHistoryModal(client: ClientRow) {
+    if (!supabase || !ownerUserId) return
+    setHistoryModalClient(client)
+    setHistoryModalRows([])
+    setHistoryModalLoading(true)
+    const { data, error } = await supabase
+      .from('bem_aviv_client_followups')
+      .select('id, client_id, contacted_at, channel, result, notes')
+      .eq('user_id', ownerUserId.toUpperCase())
+      .eq('client_id', client.id)
+      .order('contacted_at', { ascending: false })
+      .limit(200)
+    if (error) {
+      setHistoryModalRows([])
+      setHistoryModalLoading(false)
+      return
+    }
+    setHistoryModalRows((data ?? []) as FollowupHistoryRow[])
+    setHistoryModalLoading(false)
+  }
+
+  function tooltipLastContact(client: ClientRow) {
+    const h = latestHistoryByClient[client.id]
+    if (h) {
+      const extra = h.result?.trim() ? ` — ${h.result.trim()}` : ''
+      return `Último contato: ${formatShortDateTime(h.contacted_at)} (${h.channel})${extra}`
+    }
+    if (client.last_contact_at) {
+      return `Último contato: ${formatShortDateTime(client.last_contact_at)}`
+    }
+    return 'Sem contato registrado'
   }
 
   return (
@@ -340,14 +524,23 @@ export function BemAvivHomePage() {
                     />
                     <YAxis hide domain={[0, 'dataMax']} />
                     <Tooltip content={<MonthlyBarTooltip />} cursor={{ fill: 'rgba(24, 95, 165, 0.06)' }} />
-                    <Bar dataKey="total" fill="#185FA5" radius={8} maxBarSize={56} activeBar={{ fill: '#144f8f', radius: 8 }} />
+                    <Bar dataKey="total" fill="#185FA5" radius={8} maxBarSize={56} activeBar={{ fill: '#144f8f', radius: 8 }}>
+                      <LabelList
+                        dataKey="total"
+                        position="top"
+                        offset={6}
+                        className="fill-slate-600 text-[10px] font-semibold"
+                        formatter={(value: unknown) => {
+                          const n = Number(value ?? 0)
+                          return n > 0 ? formatBRL(n) : ''
+                        }}
+                      />
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </CardContent>
           </Card>
-
-          <FollowUpCRMGrid timelineClients={timelineClients} />
 
           <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
@@ -382,11 +575,21 @@ export function BemAvivHomePage() {
               </div>
             </div>
 
+            <div className="mt-3 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setSelectedDay(null)}
+                className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Desmarcar dia (mostrar mês)
+              </button>
+            </div>
+
             <div className="mt-4 flex flex-col gap-5 lg:flex-row lg:items-start lg:gap-6">
-              <div className="mx-auto w-full max-w-[260px] shrink-0 sm:max-w-[280px] lg:mx-0">
+              <div className="mx-auto w-full max-w-[300px] shrink-0 sm:max-w-[320px] lg:mx-0">
                 <div className="grid grid-cols-7 gap-0.5 text-center text-[10px] font-semibold text-slate-500">
                   {WEEKDAYS_SHORT.map((w) => (
-                    <div key={w} className="py-0.5">
+                    <div key={w} className="py-1">
                       {w}
                     </div>
                   ))}
@@ -394,7 +597,7 @@ export function BemAvivHomePage() {
                 <div className="mt-0.5 grid grid-cols-7 gap-0.5">
                   {cells.map((cell, idx) => {
                     if (!cell.date) {
-                      return <div key={`e-${idx}`} className="aspect-square min-h-[1.85rem]" />
+                      return <div key={`e-${idx}`} className="aspect-square min-h-[2.15rem]" />
                     }
                     const key = formatYmd(cell.date)
                     const n = countByDayInViewMonth.get(key) ?? 0
@@ -404,9 +607,9 @@ export function BemAvivHomePage() {
                       <button
                         key={key}
                         type="button"
-                        onClick={() => setSelectedDay(key)}
+                        onClick={() => setSelectedDay((prev) => (prev === key ? null : key))}
                         className={cn(
-                          'relative flex aspect-square min-h-[1.85rem] flex-col items-center justify-center rounded-md border text-xs font-medium transition-colors sm:min-h-[2rem]',
+                          'relative flex aspect-square min-h-[2.15rem] flex-col items-center justify-center rounded-md border text-xs font-medium transition-colors sm:min-h-[2.3rem]',
                           isSel
                             ? 'border-[#185FA5] bg-[#E6F1FB] text-[#185FA5]'
                             : 'border-slate-200 bg-slate-50/80 text-slate-800 hover:border-slate-300 hover:bg-white',
@@ -427,7 +630,7 @@ export function BemAvivHomePage() {
 
               <div className="min-w-0 flex-1 rounded-lg border border-slate-100 bg-slate-50/80 p-3 sm:p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Dia selecionado —{' '}
+                  {selectedDay ? 'Dia selecionado — ' : 'Mês selecionado — '}
                   {selectedDay
                     ? new Intl.DateTimeFormat('pt-BR', {
                         weekday: 'long',
@@ -435,22 +638,29 @@ export function BemAvivHomePage() {
                         month: 'long',
                         year: 'numeric',
                       }).format(parseYmd(selectedDay))
-                    : '—'}
+                    : calendarTitle}
                 </p>
-                {tasksForSelectedDay.length === 0 ? (
-                  <p className="mt-3 text-sm text-slate-600">Nenhum follow-up pendente agendado para este dia.</p>
+                {agendaRows.length === 0 ? (
+                  <p className="mt-3 text-sm text-slate-600">
+                    {selectedDay
+                      ? 'Nenhum follow-up pendente agendado para este dia.'
+                      : 'Nenhum follow-up pendente agendado para este mês.'}
+                  </p>
                 ) : (
                   <ul className="mt-3 max-h-[min(420px,55vh)] divide-y divide-slate-200 overflow-y-auto rounded-lg border border-slate-200 bg-white">
-                    {tasksForSelectedDay.map((c) => (
-                      <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-sm">
-                        <span className="font-medium text-slate-900">{c.full_name}</span>
-                        <span className="text-xs text-slate-500">{formatShortDateTime(c.next_followup_at)}</span>
-                        <Link
-                          to={`/bem-aviv/follow-up/agendar/${c.id}`}
-                          className="text-xs font-semibold text-[#185FA5] hover:underline"
+                    {agendaRows.map((c) => (
+                      <li key={c.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-3 py-2.5 text-sm">
+                        <span className="min-w-0 truncate font-medium text-slate-900" title={tooltipLastContact(c)}>
+                          {c.full_name}
+                        </span>
+                        <span className="text-right text-xs text-slate-500">{formatShortDateTime(c.next_followup_at)}</span>
+                        <button
+                          type="button"
+                          onClick={() => void openHistoryModal(c)}
+                          className="text-sm font-semibold text-[#185FA5] hover:underline"
                         >
-                          Abrir
-                        </Link>
+                          Visualizar histórico
+                        </button>
                       </li>
                     ))}
                   </ul>
@@ -458,8 +668,85 @@ export function BemAvivHomePage() {
               </div>
             </div>
           </section>
+
+          <FollowUpCRMGrid timelineClients={timelineClients} />
         </>
       )}
+
+      {historyModalClient ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/35 p-3">
+          <div className="w-full max-w-5xl rounded-xl border border-slate-200 bg-white p-4 shadow-xl sm:p-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Histórico de contatos</h3>
+                <p className="text-sm text-slate-500">{historyModalClient.full_name}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="rounded-md bg-[#185FA5] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#144f8f]"
+                  onClick={() => {
+                    if (!historyModalClient) return
+                    setHistoryModalClient(null)
+                    navigate('/bem-aviv/follow-up', {
+                      state: { openStartFollowup: true, startFollowupClientId: historyModalClient.id },
+                    })
+                  }}
+                >
+                  Incluir novo follow-up
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  onClick={() => setHistoryModalClient(null)}
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4 max-h-[65vh] overflow-auto rounded-lg border border-slate-200">
+              {historyModalLoading ? (
+                <p className="p-4 text-sm text-slate-500">Carregando histórico...</p>
+              ) : historyModalRows.length === 0 ? (
+                <p className="p-4 text-sm text-slate-500">Nenhum contato registrado para este cliente.</p>
+              ) : (
+                <table className="min-w-full text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Data/Hora</th>
+                      <th className="px-3 py-2 text-left">Canal</th>
+                      <th className="px-3 py-2 text-left">Resultado</th>
+                      <th className="px-3 py-2 text-left">Observações</th>
+                      <th className="px-3 py-2 text-right">Ação</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historyModalRows.map((r) => (
+                      <tr key={r.id} className="border-t border-slate-100">
+                        <td className="px-3 py-2 text-slate-700">{formatShortDateTime(r.contacted_at)}</td>
+                        <td className="px-3 py-2 text-slate-700">{r.channel}</td>
+                        <td className="px-3 py-2 text-slate-700">{r.result || '—'}</td>
+                        <td className="px-3 py-2 text-slate-700">{r.notes || '—'}</td>
+                        <td className="px-3 py-2 text-right">
+                          <Link
+                            to="/bem-aviv/follow-up"
+                            state={{ bemAvivClientFocus: { id: historyModalClient.id, mode: 'history' as const } }}
+                            className="text-sm font-semibold text-[#185FA5] hover:underline"
+                            onClick={() => setHistoryModalClient(null)}
+                          >
+                            Editar
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
