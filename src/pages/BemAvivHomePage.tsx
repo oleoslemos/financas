@@ -103,25 +103,21 @@ export function BemAvivHomePage() {
   const { user } = useUser()
   const supabase = useSupabase()
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
-  const followupUserId = ownerUserId ? ownerUserId.toUpperCase() : null
-
   const [loading, setLoading] = useState(true)
   const [totalSold, setTotalSold] = useState(0)
   const [monthlyTotals, setMonthlyTotals] = useState<Record<string, number>>({})
   const [clients, setClients] = useState<ClientRow[]>([])
-  const [clientIdsWithFollowupHistory, setClientIdsWithFollowupHistory] = useState<Set<string>>(new Set())
-
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()))
   const [selectedDay, setSelectedDay] = useState(() => formatYmd(new Date()))
 
   const load = useCallback(async () => {
-    if (!supabase || !ownerUserId || !followupUserId) {
+    if (!supabase || !ownerUserId) {
       setLoading(false)
       return
     }
     setLoading(true)
 
-    const [ordersRes, clientsRes, fuRes] = await Promise.all([
+    const [ordersRes, clientsRes] = await Promise.all([
       supabase
         .from('bem_aviv_sales_orders')
         .select('order_date, total_amount, document_type, status')
@@ -132,12 +128,10 @@ export function BemAvivHomePage() {
         .from('bem_aviv_clients')
         .select('id, full_name, next_followup_at, next_followup_status, phone_1, phone_2, next_followup_note')
         .eq('user_id', ownerUserId),
-      supabase.from('bem_aviv_client_followups').select('client_id').eq('user_id', followupUserId),
     ])
 
     if (ordersRes.error) console.error(ordersRes.error)
     if (clientsRes.error) console.error(clientsRes.error)
-    if (fuRes.error) console.error(fuRes.error)
 
     const orders = (ordersRes.data ?? []) as Array<{
       order_date: string
@@ -161,25 +155,12 @@ export function BemAvivHomePage() {
 
     setClients(((clientsRes.data ?? []) as ClientRow[]) ?? [])
 
-    const ids = new Set<string>()
-    for (const row of fuRes.data ?? []) {
-      const id = (row as { client_id: string }).client_id
-      if (id) ids.add(id)
-    }
-    setClientIdsWithFollowupHistory(ids)
-
     setLoading(false)
-  }, [ownerUserId, followupUserId, supabase])
+  }, [ownerUserId, supabase])
 
   useEffect(() => {
     void load()
   }, [load])
-
-  const clientsSemFollowupRegistrado = useMemo(() => {
-    return clients
-      .filter((c) => !clientIdsWithFollowupHistory.has(c.id))
-      .sort((a, b) => a.full_name.localeCompare(b.full_name, 'pt-BR'))
-  }, [clients, clientIdsWithFollowupHistory])
 
   const timelineClients = useMemo(() => {
     const pending = (c: ClientRow) => (c.next_followup_status ?? 'PENDENTE') === 'PENDENTE'
@@ -362,7 +343,7 @@ export function BemAvivHomePage() {
             </CardContent>
           </Card>
 
-          <FollowUpCRMGrid attentionClients={clientsSemFollowupRegistrado} timelineClients={timelineClients} />
+          <FollowUpCRMGrid timelineClients={timelineClients} />
 
           <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">

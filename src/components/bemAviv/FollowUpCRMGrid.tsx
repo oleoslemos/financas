@@ -1,6 +1,5 @@
-import { CalendarClock, MessageCircle, Phone, UserX } from 'lucide-react'
+import { CalendarClock, MessageCircle, Phone } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { Badge } from '../ui/Badge'
 import { Avatar, AvatarFallback } from '../ui/Avatar'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card'
 import { buildWhatsappUrl } from '../../lib/whatsapp'
@@ -85,61 +84,10 @@ const avatarRing: Record<'rose' | 'sky' | 'slate', { ring: string; fallback: str
   slate: { ring: 'border-2 border-slate-200', fallback: 'bg-slate-100 text-slate-700' },
 }
 
-export function FollowUpCRMGrid({
-  attentionClients,
-  timelineClients,
-}: {
-  attentionClients: FollowUpCRMClient[]
-  timelineClients: FollowUpCRMClient[]
-}) {
-  const hasAttention = attentionClients.length > 0
-
+export function FollowUpCRMGrid({ timelineClients }: { timelineClients: FollowUpCRMClient[] }) {
   return (
-    <section className="grid gap-6 lg:grid-cols-3">
-      {hasAttention ? (
-        <Card className="border-0 shadow-md ring-1 ring-slate-100/90 lg:col-span-1">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-800">
-                <UserX size={18} aria-hidden />
-              </span>
-              <CardTitle className="font-hub text-sm font-semibold text-slate-800">Atenção necessária</CardTitle>
-            </div>
-            <Badge variant="outline" className="shrink-0 border-amber-300/80 bg-amber-50 text-amber-800">
-              {attentionClients.length} {attentionClients.length === 1 ? 'cliente' : 'clientes'}
-            </Badge>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <p className="mb-3 text-xs leading-relaxed text-slate-600">
-              Sem nenhum contato registrado no histórico — priorize o primeiro toque.
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {attentionClients.slice(0, 36).map((c) => (
-                <Link key={c.id} to={`/bem-aviv/follow-up/agendar/${c.id}`} className="inline-flex max-w-full">
-                  <Badge variant="secondary" className="cursor-pointer shadow-sm">
-                    {c.full_name}
-                  </Badge>
-                </Link>
-              ))}
-            </div>
-            {attentionClients.length > 36 ? (
-              <p className="mt-3 text-center text-xs text-slate-500">
-                +{attentionClients.length - 36} —{' '}
-                <Link className="font-medium text-[#185FA5] hover:underline" to="/bem-aviv/clientes">
-                  ver cadastro
-                </Link>
-              </p>
-            ) : null}
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <Card
-        className={cn(
-          'border-0 shadow-md ring-1 ring-slate-100/90',
-          hasAttention ? 'lg:col-span-2' : 'lg:col-span-3',
-        )}
-      >
+    <section>
+      <Card className="border-0 shadow-md ring-1 ring-slate-100/90">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <div className="flex items-center gap-2">
             <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#185FA5]/10 text-[#185FA5]">

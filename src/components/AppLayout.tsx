@@ -18,6 +18,7 @@ import {
   Package,
   PieChart,
   ShoppingCart,
+  PlusCircle,
   StickyNote,
   Table2,
   Tags,
@@ -132,6 +133,7 @@ export function AppLayout() {
       items: [
         { label: 'Clientes', to: '/bem-aviv/clientes', icon: UserCircle },
         { label: 'Follow-up', to: '/bem-aviv/follow-up', icon: MessageCircleMore },
+        { label: 'Novo pedido', to: '/bem-aviv/pedidos/novo', icon: PlusCircle },
         { label: 'Pedidos e orçamentos', to: '/bem-aviv/pedidos', icon: ShoppingCart },
       ],
     })
@@ -141,7 +143,7 @@ export function AppLayout() {
       items: [
         { label: 'Produtos', to: '/bem-aviv/produtos-catalogo', icon: Package },
         { label: 'Categorias', to: '/bem-aviv/categorias', icon: Tags },
-        { label: 'Tabela de preço', to: '/bem-aviv/tabela-preco-catalogo', icon: Table2 },
+        { label: 'Tabela de preço', to: '/bem-aviv/tabela-preco', icon: Table2 },
         { label: 'Catálogos em grade', to: '/bem-aviv/catalogos-preco', icon: LayoutGrid },
       ],
     })

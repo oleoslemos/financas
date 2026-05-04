@@ -955,10 +955,19 @@ export function BemAvivPedidosPage() {
             </Link>
           </p>
         </div>
-        <Button type="button" variant="primary" className="inline-flex items-center gap-2" onClick={openModalNew}>
-          <Plus size={18} aria-hidden />
-          {typeTab === 'PEDIDO' ? 'ADICIONAR PEDIDO' : 'ADICIONAR ORÇAMENTO'}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            to="/bem-aviv/pedidos/novo"
+            className="btn btn-secondary inline-flex items-center gap-2 font-medium normal-case"
+          >
+            <Plus size={18} aria-hidden />
+            Nova tela de pedido
+          </Link>
+          <Button type="button" variant="primary" className="inline-flex items-center gap-2" onClick={openModalNew}>
+            <Plus size={18} aria-hidden />
+            {typeTab === 'PEDIDO' ? 'ADICIONAR PEDIDO' : 'ADICIONAR ORÇAMENTO'}
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-1 border-b border-slate-200" role="tablist" aria-label="Filtrar por tipo de documento">
