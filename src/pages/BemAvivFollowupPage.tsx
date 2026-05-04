@@ -86,6 +86,8 @@ function endOfToday() {
 type FollowupLocationState = {
   bemAvivClientFocus?: { id: string; mode: 'history' }
   openStartFollowup?: boolean
+  /** Vindo de agendar follow-up: abre registro de contato para este cliente (reativar o toque). */
+  startFollowupClientId?: string
 }
 
 export function BemAvivFollowupPage() {
@@ -184,9 +186,30 @@ export function BemAvivFollowupPage() {
   useEffect(() => {
     const st = location.state as FollowupLocationState | null
     if (!st?.openStartFollowup) return
+
+    if (st.startFollowupClientId) {
+      if (rows.length === 0) return
+      const client = rows.find((r) => r.id === st.startFollowupClientId)
+      navigate('.', { replace: true, state: {} })
+      if (!client) {
+        alert('CLIENTE NÃO ENCONTRADO NA LISTA.')
+        return
+      }
+      setRegisterForm({
+        contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+        channel: 'WHATSAPP',
+        result: '',
+        notes: '',
+      })
+      setEditingHistoryId(null)
+      setRegisteringClient(client)
+      void loadHistory(client.id)
+      return
+    }
+
     setStartFollowupOpen(true)
     navigate('.', { replace: true, state: {} })
-  }, [location.state, navigate])
+  }, [location.state, rows, navigate, loadHistory])
 
   async function removeHistoryEntry(entryId: string) {
     if (!supabase || !registeringClient) return

@@ -150,7 +150,11 @@ export function BemAvivFollowupSchedulePage() {
         </Button>
         <Button
           type="button"
-          onClick={() => navigate('/bem-aviv/follow-up', { state: { openStartFollowup: true } })}
+          onClick={() =>
+            navigate('/bem-aviv/follow-up', {
+              state: { openStartFollowup: true, startFollowupClientId: client.id },
+            })
+          }
         >
           INCLUIR NOVO FOLLOW-UP
         </Button>
