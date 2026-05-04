@@ -26,6 +26,14 @@ type ClientRow = {
   next_followup_note?: string | null
 }
 
+/** Timeline e calendário da home: só pendente com data agendada; exclui cancelado e concluído. */
+function includeInFollowupTimeline(c: ClientRow): boolean {
+  if (!c.next_followup_at) return false
+  const st = (c.next_followup_status ?? 'PENDENTE').toUpperCase()
+  if (st === 'CANCELADO' || st === 'CONCLUIDO') return false
+  return st === 'PENDENTE'
+}
+
 function formatShortDateTime(iso: string | null) {
   if (!iso) return '—'
   const dt = new Date(iso)
@@ -163,17 +171,13 @@ export function BemAvivHomePage() {
   }, [load])
 
   const timelineClients = useMemo(() => {
-    const pending = (c: ClientRow) => (c.next_followup_status ?? 'PENDENTE') === 'PENDENTE'
     return clients
-      .filter((c) => c.next_followup_at && pending(c))
+      .filter(includeInFollowupTimeline)
       .sort((a, b) => new Date(a.next_followup_at!).getTime() - new Date(b.next_followup_at!).getTime())
       .slice(0, 24)
   }, [clients])
 
-  const pendingWithDate = useMemo(
-    () => clients.filter((c) => c.next_followup_at && (c.next_followup_status ?? 'PENDENTE') === 'PENDENTE'),
-    [clients],
-  )
+  const pendingWithDate = useMemo(() => clients.filter(includeInFollowupTimeline), [clients])
 
   const tasksForSelectedDay = useMemo(() => {
     return pendingWithDate

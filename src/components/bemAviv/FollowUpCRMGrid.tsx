@@ -95,7 +95,9 @@ export function FollowUpCRMGrid({ timelineClients }: { timelineClients: FollowUp
             </span>
             <div>
               <CardTitle className="font-hub text-sm font-semibold text-slate-800">Timeline de follow-up</CardTitle>
-              <p className="text-xs text-slate-500">Pendências ordenadas pela data do próximo contato.</p>
+              <p className="text-xs text-slate-500">
+                Pendências com data agendada (status pendente). Cancelados e concluídos não aparecem aqui.
+              </p>
             </div>
           </div>
           <Link
