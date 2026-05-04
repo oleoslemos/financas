@@ -267,7 +267,7 @@ export function AppLayout() {
                         <li key={`${section.title}-${item.key}`}>
                           <button
                             type="button"
-                            className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-[13px] font-medium text-slate-600 transition-colors hover:bg-slate-50"
+                            className="flex w-full appearance-none items-center gap-2.5 rounded-lg border-0 bg-transparent px-2 py-1.5 text-left text-[13px] font-medium normal-case text-slate-600 outline-none transition-colors hover:bg-slate-50 focus-visible:ring-0"
                             onClick={() =>
                               setOpenTreeGroupKeys((prev) =>
                                 prev.includes(item.key) ? prev.filter((k) => k !== item.key) : [...prev, item.key],
@@ -297,7 +297,7 @@ export function AppLayout() {
                                     title={sidebarCollapsed ? child.label : undefined}
                                     className={({ isActive }) =>
                                       cn(
-                                        'flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] font-medium transition-colors',
+                                        'flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] font-medium normal-case transition-colors',
                                         isActive
                                           ? 'bg-[#E6F1FB] font-semibold text-[#185FA5] [&>.sb-ico]:bg-[#185FA5] [&>.sb-ico]:text-white'
                                           : 'text-slate-600 hover:bg-slate-50',
@@ -327,7 +327,7 @@ export function AppLayout() {
                           title={sidebarCollapsed ? item.label : undefined}
                           className={({ isActive }) =>
                             cn(
-                              'flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] font-medium transition-colors',
+                              'flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] font-medium normal-case transition-colors',
                               isActive
                                 ? 'bg-[#E6F1FB] font-semibold text-[#185FA5] [&>.sb-ico]:bg-[#185FA5] [&>.sb-ico]:text-white'
                                 : 'text-slate-600 hover:bg-slate-50',
