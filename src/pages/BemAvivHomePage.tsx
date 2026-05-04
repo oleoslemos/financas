@@ -1,7 +1,6 @@
 import { useUser } from '@clerk/clerk-react'
 import { Building2, ChevronLeft, ChevronRight, History, Target, TrendingUp } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { Bar, BarChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Progress } from '../components/ui/Progress'
@@ -210,6 +209,7 @@ export function BemAvivHomePage() {
   const [historyModalLoading, setHistoryModalLoading] = useState(false)
   const [latestHistoryByClient, setLatestHistoryByClient] = useState<Record<string, FollowupHistoryRow>>({})
   const [registerInlineOpen, setRegisterInlineOpen] = useState(false)
+  const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null)
   const [registerInlineSaving, setRegisterInlineSaving] = useState(false)
   const [registerInlineForm, setRegisterInlineForm] = useState({
     contacted_at: toInputDateTimeLocal(new Date().toISOString()),
@@ -475,6 +475,7 @@ export function BemAvivHomePage() {
   async function openHistoryModal(client: ClientRow) {
     if (!supabase || !ownerUserId) return
     setHistoryModalClient(client)
+    setEditingHistoryId(null)
     setRegisterInlineOpen(false)
     setRegisterInlineSaving(false)
     setRegisterInlineForm({
@@ -527,6 +528,19 @@ export function BemAvivHomePage() {
     return truncateText(h?.result || h?.notes, 80)
   }
 
+  async function refetchHistoryModalRows(client: ClientRow): Promise<FollowupHistoryRow[]> {
+    if (!supabase || !ownerUserId) return []
+    const { data, error } = await supabase
+      .from('bem_aviv_client_followups')
+      .select('id, client_id, contacted_at, channel, result, notes')
+      .eq('user_id', ownerUserId.toUpperCase())
+      .eq('client_id', client.id)
+      .order('contacted_at', { ascending: false })
+      .limit(200)
+    if (error) return []
+    return (data ?? []) as FollowupHistoryRow[]
+  }
+
   async function submitInlineFollowup(e: React.FormEvent) {
     e.preventDefault()
     if (!supabase || !ownerUserId || !historyModalClient) return
@@ -535,6 +549,45 @@ export function BemAvivHomePage() {
     setRegisterInlineSaving(true)
     const contactedAtIso = new Date(registerInlineForm.contacted_at).toISOString()
     const followupUserId = ownerUserId.toUpperCase()
+
+    if (editingHistoryId) {
+      const { error: updateError } = await supabase
+        .from('bem_aviv_client_followups')
+        .update({
+          contacted_at: contactedAtIso,
+          channel: registerInlineForm.channel,
+          result: registerInlineForm.result || null,
+          notes: registerInlineForm.notes || null,
+        })
+        .eq('id', editingHistoryId)
+
+      if (updateError) {
+        setRegisterInlineSaving(false)
+        return
+      }
+
+      const rows = await refetchHistoryModalRows(historyModalClient)
+      setHistoryModalRows(rows)
+      const latest = rows[0]
+      if (latest) {
+        await supabase.from('bem_aviv_clients').update({ last_contact_at: latest.contacted_at }).eq('id', historyModalClient.id)
+        setLatestHistoryByClient((prev) => ({ ...prev, [historyModalClient.id]: latest }))
+        setClients((prev) =>
+          prev.map((c) => (c.id === historyModalClient.id ? { ...c, last_contact_at: latest.contacted_at } : c)),
+        )
+      }
+
+      setEditingHistoryId(null)
+      setRegisterInlineOpen(false)
+      setRegisterInlineForm({
+        contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+        channel: 'WHATSAPP',
+        result: '',
+        notes: '',
+      })
+      setRegisterInlineSaving(false)
+      return
+    }
 
     const { error: insertError } = await supabase.from('bem_aviv_client_followups').insert({
       user_id: followupUserId,
@@ -864,14 +917,47 @@ export function BemAvivHomePage() {
                 <button
                   type="button"
                   className="rounded-md bg-[#185FA5] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#144f8f]"
-                  onClick={() => setRegisterInlineOpen((v) => !v)}
+                  onClick={() => {
+                    if (registerInlineOpen && editingHistoryId) {
+                      setEditingHistoryId(null)
+                      setRegisterInlineForm({
+                        contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+                        channel: 'WHATSAPP',
+                        result: '',
+                        notes: '',
+                      })
+                      return
+                    }
+                    setRegisterInlineOpen((prev) => {
+                      const next = !prev
+                      if (next) {
+                        setEditingHistoryId(null)
+                        setRegisterInlineForm({
+                          contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+                          channel: 'WHATSAPP',
+                          result: '',
+                          notes: '',
+                        })
+                      } else {
+                        setEditingHistoryId(null)
+                      }
+                      return next
+                    })
+                  }}
                 >
-                  {registerInlineOpen ? 'Ocultar registro' : 'Incluir novo follow-up'}
+                  {registerInlineOpen && editingHistoryId
+                    ? 'Novo contato'
+                    : registerInlineOpen && !editingHistoryId
+                      ? 'Ocultar registro'
+                      : 'Incluir novo follow-up'}
                 </button>
                 <button
                   type="button"
                   className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                  onClick={() => setHistoryModalClient(null)}
+                  onClick={() => {
+                    setEditingHistoryId(null)
+                    setHistoryModalClient(null)
+                  }}
                 >
                   Fechar
                 </button>
@@ -880,7 +966,9 @@ export function BemAvivHomePage() {
 
             {registerInlineOpen ? (
               <form onSubmit={submitInlineFollowup} className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Registrar novo contato</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  {editingHistoryId ? 'Editar contato' : 'Registrar novo contato'}
+                </p>
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
                   <label className="text-xs text-slate-600">
                     Data/Hora
@@ -923,14 +1011,32 @@ export function BemAvivHomePage() {
                     />
                   </label>
                 </div>
-                <div className="mt-3">
+                <div className="mt-3 flex flex-wrap items-center gap-2">
                   <button
                     type="submit"
                     disabled={registerInlineSaving}
                     className="rounded-md bg-[#185FA5] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#144f8f] disabled:opacity-60"
                   >
-                    {registerInlineSaving ? 'Salvando...' : 'Salvar contato'}
+                    {registerInlineSaving ? 'Salvando...' : editingHistoryId ? 'Salvar edição' : 'Salvar contato'}
                   </button>
+                  {editingHistoryId ? (
+                    <button
+                      type="button"
+                      className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                      onClick={() => {
+                        setEditingHistoryId(null)
+                        setRegisterInlineOpen(false)
+                        setRegisterInlineForm({
+                          contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+                          channel: 'WHATSAPP',
+                          result: '',
+                          notes: '',
+                        })
+                      }}
+                    >
+                      Cancelar edição
+                    </button>
+                  ) : null}
                 </div>
               </form>
             ) : null}
@@ -953,20 +1059,34 @@ export function BemAvivHomePage() {
                   </thead>
                   <tbody>
                     {historyModalRows.map((r) => (
-                      <tr key={r.id} className="border-t border-slate-100">
+                      <tr
+                        key={r.id}
+                        className={cn(
+                          'border-t border-slate-100',
+                          editingHistoryId === r.id && 'bg-sky-50/80',
+                        )}
+                      >
                         <td className="px-3 py-2 text-slate-700">{formatShortDateTime(r.contacted_at)}</td>
                         <td className="px-3 py-2 text-slate-700">{r.channel}</td>
                         <td className="px-3 py-2 text-slate-700">{r.result || '—'}</td>
                         <td className="px-3 py-2 text-slate-700">{r.notes || '—'}</td>
                         <td className="px-3 py-2 text-right">
-                          <Link
-                            to="/bem-aviv/follow-up"
-                            state={{ bemAvivClientFocus: { id: historyModalClient.id, mode: 'history' as const } }}
+                          <button
+                            type="button"
                             className="text-sm font-semibold text-[#185FA5] hover:underline"
-                            onClick={() => setHistoryModalClient(null)}
+                            onClick={() => {
+                              setEditingHistoryId(r.id)
+                              setRegisterInlineForm({
+                                contacted_at: toInputDateTimeLocal(r.contacted_at),
+                                channel: r.channel,
+                                result: r.result ?? '',
+                                notes: r.notes ?? '',
+                              })
+                              setRegisterInlineOpen(true)
+                            }}
                           >
                             Editar
-                          </Link>
+                          </button>
                         </td>
                       </tr>
                     ))}

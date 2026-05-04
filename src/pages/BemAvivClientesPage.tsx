@@ -103,21 +103,6 @@ function initialsFromName(name: string) {
   return `${p[0]![0]}${p[p.length - 1]![0]}`.toUpperCase()
 }
 
-function completenessPct(r: Cliente) {
-  let n = 0
-  if (toUpperTrim(r.full_name)) n += 25
-  if (onlyDigits(r.cpf).length >= 11) n += 25
-  if (onlyDigits(r.phone_1 ?? '').length >= 10 || onlyDigits(r.phone_2 ?? '').length >= 10) n += 25
-  if (toUpperTrim(r.email ?? '')) n += 25
-  return n
-}
-
-function completenessBarColor(pct: number) {
-  if (pct === 100) return '#639922'
-  if (pct >= 50) return '#378ADD'
-  return '#EF9F27'
-}
-
 function phonesSortValue(r: Cliente) {
   return `${onlyDigits(r.phone_1 ?? '')}${onlyDigits(r.phone_2 ?? '')}`
 }
@@ -517,7 +502,7 @@ export function BemAvivClientesPage() {
           <table>
             <thead>
               <tr>
-                <SortHeader label="Nome / Completude" column="full_name" />
+                <SortHeader label="Nome" column="full_name" />
                 <SortHeader label="Telefones" column="phones" />
                 <SortHeader label="STATUS" column="client_status" />
                 <th className="text-right">Ações</th>
@@ -525,12 +510,11 @@ export function BemAvivClientesPage() {
             </thead>
             <tbody>
               {displayedRows.map((r) => {
-                const pct = completenessPct(r)
                 const pal = avatarPalette(r.full_name || '?')
                 return (
                 <tr key={r.id}>
                   <td>
-                    <div className="flex min-w-0 max-w-[min(720px,55vw)] items-start gap-2.5 xl:max-w-none">
+                    <div className="flex min-w-0 max-w-[min(720px,55vw)] items-center gap-2.5 xl:max-w-none">
                       <div
                         className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
                         style={{ backgroundColor: pal.bg, color: pal.fg }}
@@ -539,15 +523,6 @@ export function BemAvivClientesPage() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium normal-case text-slate-900">{r.full_name}</p>
-                        <div className="mt-1 flex items-center gap-1.5">
-                          <div className="h-1 flex-1 rounded-full bg-slate-200">
-                            <div
-                              className="h-1 rounded-full transition-[width]"
-                              style={{ width: `${pct}%`, backgroundColor: completenessBarColor(pct) }}
-                            />
-                          </div>
-                          <span className="text-[9px] tabular-nums text-slate-500">{pct}%</span>
-                        </div>
                       </div>
                     </div>
                   </td>

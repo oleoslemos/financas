@@ -1,5 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
-import { CalendarPlus, History, MessageCircle, Pencil, PhoneForwarded, PlusCircle, Search, Trash2, UserX } from 'lucide-react'
+import { CalendarPlus, History, MessageCircle, Pencil, PhoneForwarded, PlusCircle, Search, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
@@ -98,11 +98,6 @@ function lastTouchMsFromClientAndFollowup(client: Cliente, latestFollowup: Follo
     if (!Number.isNaN(t)) m = Math.max(m, t)
   }
   return m
-}
-
-/** Sem `last_contact_at` válido e sem nenhum registo em bem_aviv_client_followups. */
-function isSemContato(client: Cliente, latestFollowup: FollowupHistoryRow | undefined): boolean {
-  return lastTouchMsFromClientAndFollowup(client, latestFollowup) === 0
 }
 
 /** CONCLUÍDO e já houve contacto alguma vez, mas o último toque (cadastro ou histórico) é há mais de N dias. */
@@ -351,13 +346,6 @@ export function BemAvivFollowupPage() {
     return { vencidos, hoje, proximos7, statusCounts }
   }, [rows])
 
-  const clientesSemContato = useMemo(() => {
-    if (!latestFollowupsReady) return []
-    return rows
-      .filter((r) => isSemContato(r, latestFollowupByClientId[r.id]))
-      .sort((a, b) => a.full_name.localeCompare(b.full_name, 'pt-BR'))
-  }, [rows, latestFollowupByClientId, latestFollowupsReady])
-
   const concluidoMais30DiasSemContactar = useMemo(() => {
     if (!latestFollowupsReady) return []
     return rows
@@ -525,106 +513,6 @@ export function BemAvivFollowupPage() {
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-xs text-amber-700">HOJE</p><p className="text-2xl font-semibold text-amber-900">{productivityMetrics.hoje}</p></div>
         <div className="rounded-xl border border-sky-200 bg-sky-50 p-4"><p className="text-xs text-sky-700">PRÓXIMOS 7 DIAS</p><p className="text-2xl font-semibold text-sky-900">{productivityMetrics.proximos7}</p></div>
       </div>
-
-      {!loading && latestFollowupsReady && clientesSemContato.length > 0 ? (
-        <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-4 shadow-sm">
-          <div className="mb-3 flex flex-wrap items-start gap-2">
-            <UserX className="mt-0.5 h-5 w-5 shrink-0 text-amber-800" aria-hidden />
-            <div>
-              <h3 className="text-sm font-semibold text-amber-950">Sem contacto registado</h3>
-              <p className="mt-1 text-sm text-amber-950/85">
-                Sem data de último contacto no cadastro e sem nenhum registo no histórico de follow-up. Qualquer estado de follow-up
-                (pendente, concluído, etc.).
-              </p>
-            </div>
-            <span className="ml-auto rounded-full bg-amber-200/90 px-2.5 py-0.5 text-xs font-semibold text-amber-950">
-              {clientesSemContato.length} cliente{clientesSemContato.length === 1 ? '' : 's'}
-            </span>
-          </div>
-
-          <ul className="space-y-3 md:hidden" aria-label="Clientes sem contacto">
-            {clientesSemContato.map((row) => (
-              <li key={row.id} className="rounded-xl border border-amber-200/90 bg-white p-4 shadow-sm">
-                <p className="font-semibold text-slate-900">{row.full_name}</p>
-                <p className="mt-1 text-xs text-slate-600">
-                  Status follow-up: <span className="font-medium">{row.next_followup_status ?? 'PENDENTE'}</span>
-                </p>
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                  <Button
-                    variant="secondary"
-                    className="min-h-11 justify-center px-2 text-xs sm:text-sm"
-                    onClick={async () => {
-                      setRegisteringClient(row)
-                      await loadHistory(row.id)
-                    }}
-                  >
-                    <PhoneForwarded size={16} className="sm:mr-1" aria-hidden />
-                    <span className="hidden sm:inline">Contato</span>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className="min-h-11 justify-center border border-slate-200 px-2 text-xs sm:text-sm"
-                    onClick={() => navigate(`/bem-aviv/follow-up/agendar/${row.id}`)}
-                  >
-                    <CalendarPlus size={16} className="sm:mr-1" aria-hidden />
-                    <span className="hidden sm:inline">Agendar</span>
-                  </Button>
-                  <Button variant="primary" className="min-h-11 justify-center px-2 text-xs sm:text-sm" onClick={() => openWhatsapp(row)}>
-                    <MessageCircle size={16} className="sm:mr-1" aria-hidden />
-                    <span className="hidden sm:inline">WhatsApp</span>
-                  </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
-
-          <div className="table-wrap hidden md:block">
-            <table>
-              <thead>
-                <tr>
-                  <th>CLIENTE</th>
-                  <th>STATUS F/U</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {clientesSemContato.map((row) => (
-                  <tr key={row.id}>
-                    <td className="font-medium">{row.full_name}</td>
-                    <td>{row.next_followup_status ?? 'PENDENTE'}</td>
-                    <td className="whitespace-nowrap">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="secondary"
-                          className="px-2.5"
-                          onClick={async () => {
-                            setRegisteringClient(row)
-                            await loadHistory(row.id)
-                          }}
-                          title="Registrar contato"
-                        >
-                          <PhoneForwarded size={15} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          className="px-2.5"
-                          onClick={() => navigate(`/bem-aviv/follow-up/agendar/${row.id}`)}
-                          title="Agendar próximo follow-up"
-                        >
-                          <CalendarPlus size={15} />
-                        </Button>
-                        <Button variant="primary" className="px-2.5" onClick={() => openWhatsapp(row)} title="Abrir WhatsApp">
-                          <MessageCircle size={15} />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ) : null}
 
       {!loading && latestFollowupsReady && concluidoMais30DiasSemContactar.length > 0 ? (
         <div className="rounded-xl border border-violet-200 bg-violet-50/50 p-4 shadow-sm">
