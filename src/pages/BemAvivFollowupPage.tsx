@@ -634,7 +634,7 @@ export function BemAvivFollowupPage() {
               <h3 className="text-sm font-semibold text-violet-950">Concluídos — mais de {STALE_CONCLUIDO_DAYS} dias sem contactar</h3>
               <p className="mt-1 text-sm text-violet-900/85">
                 Apenas clientes com status de follow-up <span className="font-semibold">concluído</span> e com último contacto (cadastro ou
-                histórico) há mais de {STALE_CONCLUIDO_DIAS} dias. Ordenado do mais antigo para o mais recente.
+                histórico) há mais de {STALE_CONCLUIDO_DAYS} dias. Ordenado do mais antigo para o mais recente.
               </p>
             </div>
             <span className="ml-auto rounded-full bg-violet-200/80 px-2.5 py-0.5 text-xs font-semibold text-violet-900">
