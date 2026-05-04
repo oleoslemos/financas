@@ -1,7 +1,6 @@
 import { useUser, UserButton } from '@clerk/clerk-react'
 import {
   BriefcaseBusiness,
-  CalendarDays,
   ChevronDown,
   ChevronLeft,
   CircleDollarSign,
@@ -10,7 +9,6 @@ import {
   Home,
   KanbanSquare,
   Landmark,
-  LayoutDashboard,
   LayoutGrid,
   ListTodo,
   SlidersHorizontal,
