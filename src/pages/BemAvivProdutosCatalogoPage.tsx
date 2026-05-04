@@ -6,15 +6,40 @@ import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { formatBRL, parseDigitsCentsToNumber, numberToCentsDigits } from '../lib/format'
-import { normalizePayload, type OfferPayload, type OfferProduct, type OfferVariation } from '../lib/bemAvivOfferProduct'
+import {
+  computeKitPayloadPrice,
+  normalizePayload,
+  type OfferKitLine,
+  type OfferPayload,
+  type OfferProduct,
+  type OfferVariation,
+} from '../lib/bemAvivOfferProduct'
 import { toUpperTrim } from '../lib/text'
 
 type PriceTable = { id: string; name: string; is_default: boolean }
 
 type VariationFormRow = { dimensions: string; priceDigits: string }
 
+type KitRowForm = { componentId: string; variationCode: string; qtyStr: string }
+
 function emptyVariationRow(): VariationFormRow {
   return { dimensions: '', priceDigits: '' }
+}
+
+function emptyKitRow(): KitRowForm {
+  return { componentId: '', variationCode: '', qtyStr: '1' }
+}
+
+function parseKitRowsForSubmit(formRows: KitRowForm[]): { ok: true; lines: OfferKitLine[] } | { ok: false } {
+  const lines: OfferKitLine[] = []
+  for (const row of formRows) {
+    const cid = row.componentId.trim()
+    if (!cid) continue
+    if (!row.variationCode.trim()) return { ok: false }
+    const qty = Math.max(1, parseInt(row.qtyStr.replace(/\D/g, ''), 10) || 1)
+    lines.push({ offer_product_id: cid, variation_code: row.variationCode.trim(), quantity: qty })
+  }
+  return { ok: true, lines }
 }
 
 function autoVariationCode(index: number) {
@@ -60,16 +85,17 @@ export function BemAvivProdutosCatalogoPage() {
   const [category, setCategory] = useState('')
   const [productLine, setProductLine] = useState('')
   const [productType, setProductType] = useState('')
-  const [pricingMode, setPricingMode] = useState<'UNICO' | 'GRADE'>('UNICO')
+  const [pricingMode, setPricingMode] = useState<'UNICO' | 'GRADE' | 'KIT'>('UNICO')
   const [priceTableId, setPriceTableId] = useState('')
   const [varRows, setVarRows] = useState([emptyVariationRow()])
+  const [kitRows, setKitRows] = useState<KitRowForm[]>([emptyKitRow()])
   const [loadError, setLoadError] = useState<string | null>(null)
   const [gradePreview, setGradePreview] = useState<OfferProduct | null>(null)
   const [filterName, setFilterName] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
   const [filterLine, setFilterLine] = useState('')
   const [filterType, setFilterType] = useState('')
-  const [filterMode, setFilterMode] = useState<'TODOS' | 'UNICO' | 'GRADE'>('TODOS')
+  const [filterMode, setFilterMode] = useState<'TODOS' | 'UNICO' | 'GRADE' | 'KIT'>('TODOS')
 
   const load = useCallback(async () => {
     if (!supabase || !ownerUserId) return
@@ -108,6 +134,7 @@ export function BemAvivProdutosCatalogoPage() {
     setPricingMode('UNICO')
     setPriceTableId('')
     setVarRows([emptyVariationRow()])
+    setKitRows([emptyKitRow()])
   }
 
   function openNew() {
@@ -123,12 +150,28 @@ export function BemAvivProdutosCatalogoPage() {
     setCategory(r.category ?? '')
     setProductLine(r.product_line ?? '')
     setProductType(r.product_type ?? '')
-    setPricingMode(r.pricing_mode === 'GRADE' ? 'GRADE' : 'UNICO')
+    setPricingMode(r.pricing_mode === 'KIT' ? 'KIT' : r.pricing_mode === 'GRADE' ? 'GRADE' : 'UNICO')
     setPriceTableId(r.price_table_id ?? '')
-    const vars = normalizePayload(r.payload).variations ?? []
-    setVarRows(
-      vars.length ? vars.map((v) => ({ dimensions: v.dimensions, priceDigits: numberToCentsDigits(Number(v.price)) })) : [emptyVariationRow()],
-    )
+    const normalized = normalizePayload(r.payload)
+    if (r.pricing_mode === 'KIT') {
+      const kl = normalized.kit_lines ?? []
+      setKitRows(
+        kl.length
+          ? kl.map((l) => ({
+              componentId: l.offer_product_id,
+              variationCode: l.variation_code,
+              qtyStr: String(l.quantity),
+            }))
+          : [emptyKitRow()],
+      )
+      setVarRows([emptyVariationRow()])
+    } else {
+      const vars = normalized.variations ?? []
+      setVarRows(
+        vars.length ? vars.map((v) => ({ dimensions: v.dimensions, priceDigits: numberToCentsDigits(Number(v.price)) })) : [emptyVariationRow()],
+      )
+      setKitRows([emptyKitRow()])
+    }
     setShowForm(true)
   }
 
@@ -138,16 +181,43 @@ export function BemAvivProdutosCatalogoPage() {
     setCategory(r.category ?? '')
     setProductLine(r.product_line ?? '')
     setProductType(r.product_type ?? '')
-    setPricingMode(r.pricing_mode === 'GRADE' ? 'GRADE' : 'UNICO')
+    setPricingMode(r.pricing_mode === 'KIT' ? 'KIT' : r.pricing_mode === 'GRADE' ? 'GRADE' : 'UNICO')
     setPriceTableId(r.price_table_id ?? '')
-    const vars = normalizePayload(r.payload).variations ?? []
-    setVarRows(
-      vars.length ? vars.map((v) => ({ dimensions: v.dimensions, priceDigits: numberToCentsDigits(Number(v.price)) })) : [emptyVariationRow()],
-    )
+    const normalized = normalizePayload(r.payload)
+    if (r.pricing_mode === 'KIT') {
+      const kl = normalized.kit_lines ?? []
+      setKitRows(
+        kl.length
+          ? kl.map((l) => ({
+              componentId: l.offer_product_id,
+              variationCode: l.variation_code,
+              qtyStr: String(l.quantity),
+            }))
+          : [emptyKitRow()],
+      )
+      setVarRows([emptyVariationRow()])
+    } else {
+      const vars = normalized.variations ?? []
+      setVarRows(
+        vars.length ? vars.map((v) => ({ dimensions: v.dimensions, priceDigits: numberToCentsDigits(Number(v.price)) })) : [emptyVariationRow()],
+      )
+      setKitRows([emptyKitRow()])
+    }
     setShowForm(true)
   }
 
   function buildPayloadFromForm(): OfferPayload {
+    if (pricingMode === 'KIT') {
+      const parsed = parseKitRowsForSubmit(kitRows)
+      if (!parsed.ok || parsed.lines.length === 0) return { variations: [] }
+      const byId = new Map(rows.map((r) => [r.id, r]))
+      const total = computeKitPayloadPrice(byId, parsed.lines, { excludeKitProductId: editing?.id })
+      if (total == null || total <= 0) return { variations: [] }
+      return {
+        kit_lines: parsed.lines,
+        variations: [{ code: '01', dimensions: '', price: total }],
+      }
+    }
     const sourceRows = pricingMode === 'UNICO' ? [varRows[0] ?? emptyVariationRow()] : varRows
     const variations: OfferVariation[] = []
     sourceRows.forEach((row, i) => {
@@ -205,9 +275,29 @@ export function BemAvivProdutosCatalogoPage() {
       return
     }
 
+    if (pricingMode === 'KIT') {
+      const parsed = parseKitRowsForSubmit(kitRows)
+      if (!parsed.ok) {
+        alert('COMPLETE CADA LINHA DO KIT: PRODUTO BASE DO CATÁLOGO E CÓDIGO DA VARIAÇÃO.')
+        return
+      }
+      if (parsed.lines.length === 0) {
+        alert('INCLUA AO MENOS UM ITEM NO KIT (PRODUTOS JÁ CADASTRADOS).')
+        return
+      }
+      const byId = new Map(rows.map((r) => [r.id, r]))
+      const check = computeKitPayloadPrice(byId, parsed.lines, { excludeKitProductId: editing?.id })
+      if (check == null || check <= 0) {
+        alert(
+          'KIT INVÁLIDO: USE APENAS PRODUTOS ÚNICOS OU GRADE COMO ITENS, VERIFIQUE OS CÓDIGOS DE VARIAÇÃO E EVITE INCLUIR OUTRO KIT.',
+        )
+        return
+      }
+    }
+
     const payload = buildPayloadFromForm()
     if (!payload.variations?.length) {
-      alert('INCLUA AO MENOS UMA VARIAÇÃO COM PREÇO VÁLIDO.')
+      alert(pricingMode === 'KIT' ? 'NÃO FOI POSSÍVEL CALCULAR O PREÇO DO KIT.' : 'INCLUA AO MENOS UMA VARIAÇÃO COM PREÇO VÁLIDO.')
       return
     }
 
@@ -256,6 +346,19 @@ export function BemAvivProdutosCatalogoPage() {
     }
   }
 
+  const componentProductOptions = useMemo(
+    () => rows.filter((r) => r.id !== editing?.id && r.pricing_mode !== 'KIT'),
+    [rows, editing?.id],
+  )
+
+  const kitPricePreview = useMemo(() => {
+    if (pricingMode !== 'KIT') return null
+    const parsed = parseKitRowsForSubmit(kitRows)
+    if (!parsed.ok || parsed.lines.length === 0) return null
+    const byId = new Map(rows.map((r) => [r.id, r]))
+    return computeKitPayloadPrice(byId, parsed.lines, { excludeKitProductId: editing?.id })
+  }, [pricingMode, kitRows, rows, editing?.id])
+
   const filteredRows = useMemo(() => {
     const nameQ = filterName.trim().toLowerCase()
     const categoryQ = filterCategory.trim().toLowerCase()
@@ -266,7 +369,8 @@ export function BemAvivProdutosCatalogoPage() {
       if (categoryQ && !(r.category ?? '').toLowerCase().includes(categoryQ)) return false
       if (lineQ && !(r.product_line ?? '').toLowerCase().includes(lineQ)) return false
       if (typeQ && !(r.product_type ?? '').toLowerCase().includes(typeQ)) return false
-      if (filterMode !== 'TODOS' && (r.pricing_mode === 'GRADE' ? 'GRADE' : 'UNICO') !== filterMode) return false
+      const rowMode = r.pricing_mode === 'GRADE' ? 'GRADE' : r.pricing_mode === 'KIT' ? 'KIT' : 'UNICO'
+      if (filterMode !== 'TODOS' && rowMode !== filterMode) return false
       return true
     })
   }, [rows, filterName, filterCategory, filterLine, filterType, filterMode])
@@ -277,7 +381,7 @@ export function BemAvivProdutosCatalogoPage() {
         <div>
           <h2 className="text-2xl font-semibold">CADASTRO — PRODUTOS (CATÁLOGO)</h2>
           <p className="mt-1 max-w-2xl text-sm font-normal normal-case text-slate-600">
-            Produto único é o padrão e você pode alternar para grade. A nova tabela de preço é sincronizada automaticamente no cadastro.
+            Produto único, grade ou kit (vários itens do próprio catálogo). O preço do kit é a soma dos componentes; a tabela de preço é sincronizada automaticamente.
           </p>
           {loadError ? (
             <div
@@ -323,9 +427,17 @@ export function BemAvivProdutosCatalogoPage() {
               </div>
               <div>
                 <label>MODO DO PRODUTO</label>
-                <select value={pricingMode} onChange={(e) => setPricingMode(e.target.value as 'UNICO' | 'GRADE')}>
+                <select
+                  value={pricingMode}
+                  onChange={(e) => {
+                    const v = e.target.value as 'UNICO' | 'GRADE' | 'KIT'
+                    setPricingMode(v)
+                    if (v === 'KIT') setKitRows((k) => (k.length ? k : [emptyKitRow()]))
+                  }}
+                >
                   <option value="UNICO">PRODUTO ÚNICO</option>
                   <option value="GRADE">PRODUTO GRADE</option>
+                  <option value="KIT">KIT (COMPOSIÇÃO)</option>
                 </select>
               </div>
               <div className="sm:col-span-2">
@@ -392,6 +504,97 @@ export function BemAvivProdutosCatalogoPage() {
                     ))}
                   </div>
                 </div>
+              ) : pricingMode === 'KIT' ? (
+                <div className="sm:col-span-2 rounded-lg border border-slate-100 bg-slate-50/80 p-3">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-slate-800">ITENS DO KIT (CATÁLOGO)</span>
+                    <Button type="button" variant="secondary" onClick={() => setKitRows((v) => [...v, emptyKitRow()])}>
+                      + ITEM
+                    </Button>
+                  </div>
+                  <p className="mb-3 text-xs text-slate-600">
+                    Escolha produtos já cadastrados (único ou grade), o código da variação e a quantidade em cada linha. O preço do kit é a soma automática.
+                  </p>
+                  <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
+                    {kitRows.map((kRow, idx) => {
+                      const comp = kRow.componentId ? rows.find((x) => x.id === kRow.componentId) : undefined
+                      const varOpts = comp ? normalizePayload(comp.payload).variations ?? [] : []
+                      return (
+                        <div key={idx} className="grid gap-2 sm:grid-cols-12 sm:items-end">
+                          <div className="sm:col-span-5">
+                            <label className="text-xs">PRODUTO</label>
+                            <select
+                              value={kRow.componentId}
+                              onChange={(e) => {
+                                const id = e.target.value
+                                setKitRows((list) =>
+                                  list.map((row, i) =>
+                                    i === idx ? { ...row, componentId: id, variationCode: '' } : row,
+                                  ),
+                                )
+                              }}
+                            >
+                              <option value="">— SELECIONE —</option>
+                              {componentProductOptions.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.name}
+                                  {p.product_type ? ` (${p.product_type})` : ''}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="sm:col-span-3">
+                            <label className="text-xs">VARIAÇÃO (CÓD.)</label>
+                            <select
+                              value={kRow.variationCode}
+                              onChange={(e) =>
+                                setKitRows((list) => list.map((row, i) => (i === idx ? { ...row, variationCode: e.target.value } : row)))
+                              }
+                              disabled={!comp}
+                            >
+                              <option value="">—</option>
+                              {varOpts.map((v) => (
+                                <option key={v.code} value={v.code}>
+                                  [{v.code}] {v.dimensions || '—'} — {formatBRL(v.price)}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="text-xs">QTD NO KIT</label>
+                            <input
+                              inputMode="numeric"
+                              value={kRow.qtyStr}
+                              onChange={(e) =>
+                                setKitRows((list) => list.map((row, i) => (i === idx ? { ...row, qtyStr: e.target.value } : row)))
+                              }
+                              placeholder="1"
+                            />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="text-red-600"
+                              disabled={kitRows.length <= 1}
+                              onClick={() => setKitRows((r) => r.filter((_, i) => i !== idx))}
+                            >
+                              REMOVER
+                            </Button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <p className="mt-3 text-sm font-semibold text-slate-800">
+                    PREÇO DO KIT (SOMA):{' '}
+                    {kitPricePreview != null && kitPricePreview > 0 ? (
+                      <span className="text-[#185FA5]">{formatBRL(kitPricePreview)}</span>
+                    ) : (
+                      <span className="font-normal text-slate-500">— defina itens válidos</span>
+                    )}
+                  </p>
+                </div>
               ) : (
                 <div className="sm:col-span-2 rounded-lg border border-slate-100 bg-slate-50/80 p-3">
                   <p className="mb-2 text-sm font-semibold text-slate-800">PRODUTO ÚNICO</p>
@@ -441,8 +644,14 @@ export function BemAvivProdutosCatalogoPage() {
           <div className="max-h-[88vh] w-full max-w-2xl overflow-auto rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
             <div className="mb-3 flex items-center justify-between gap-2">
               <div>
-                <h3 className="text-base font-semibold text-slate-900">GRADE — {gradePreview.name}</h3>
-                <p className="text-xs text-slate-500">{gradePreview.payload.variations?.length ?? 0} variações</p>
+                <h3 className="text-base font-semibold text-slate-900">
+                  {gradePreview.pricing_mode === 'KIT' ? 'KIT' : 'GRADE'} — {gradePreview.name}
+                </h3>
+                <p className="text-xs text-slate-500">
+                  {gradePreview.pricing_mode === 'KIT'
+                    ? `${normalizePayload(gradePreview.payload).kit_lines?.length ?? 0} itens`
+                    : `${gradePreview.payload.variations?.length ?? 0} variações`}
+                </p>
               </div>
               <Button type="button" variant="secondary" className="inline-flex items-center gap-1" onClick={() => setGradePreview(null)}>
                 <X size={14} />
@@ -451,24 +660,57 @@ export function BemAvivProdutosCatalogoPage() {
             </div>
 
             <div className="table-wrap border-0">
-              <table>
-                <thead>
-                  <tr>
-                    <th>CÓDIGO</th>
-                    <th>DIMENSÕES</th>
-                    <th>PREÇO</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(gradePreview.payload.variations ?? []).map((variation) => (
-                    <tr key={variation.code}>
-                      <td>{variation.code}</td>
-                      <td>{variation.dimensions || '—'}</td>
-                      <td>{formatBRL(Number(variation.price))}</td>
+              {gradePreview.pricing_mode === 'KIT' ? (
+                <table>
+                  <thead>
+                    <tr>
+                      <th>PRODUTO</th>
+                      <th>CÓD.</th>
+                      <th>DIMENSÕES</th>
+                      <th>QTD</th>
+                      <th>PREÇO UNIT.</th>
+                      <th>SUBTOTAL</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {(normalizePayload(gradePreview.payload).kit_lines ?? []).map((line, idx) => {
+                      const comp = rows.find((x) => x.id === line.offer_product_id)
+                      const vars = comp ? normalizePayload(comp.payload).variations ?? [] : []
+                      const hit = vars.find((x) => x.code === line.variation_code)
+                      const sub = hit ? hit.price * line.quantity : 0
+                      return (
+                        <tr key={`${line.offer_product_id}-${line.variation_code}-${idx}`}>
+                          <td>{comp?.name ?? '—'}</td>
+                          <td>{line.variation_code}</td>
+                          <td>{hit?.dimensions || '—'}</td>
+                          <td>{line.quantity}</td>
+                          <td>{hit ? formatBRL(hit.price) : '—'}</td>
+                          <td>{hit ? formatBRL(sub) : '—'}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              ) : (
+                <table>
+                  <thead>
+                    <tr>
+                      <th>CÓDIGO</th>
+                      <th>DIMENSÕES</th>
+                      <th>PREÇO</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(gradePreview.payload.variations ?? []).map((variation) => (
+                      <tr key={variation.code}>
+                        <td>{variation.code}</td>
+                        <td>{variation.dimensions || '—'}</td>
+                        <td>{formatBRL(Number(variation.price))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         </div>
@@ -493,10 +735,11 @@ export function BemAvivProdutosCatalogoPage() {
         </div>
         <div className="sm:col-span-1">
           <label>MODO</label>
-          <select value={filterMode} onChange={(e) => setFilterMode(e.target.value as 'TODOS' | 'UNICO' | 'GRADE')}>
+          <select value={filterMode} onChange={(e) => setFilterMode(e.target.value as 'TODOS' | 'UNICO' | 'GRADE' | 'KIT')}>
             <option value="TODOS">TODOS</option>
             <option value="UNICO">ÚNICO</option>
             <option value="GRADE">GRADE</option>
+            <option value="KIT">KIT</option>
           </select>
         </div>
         <div className="sm:col-span-10 flex justify-end pt-1">
@@ -528,7 +771,7 @@ export function BemAvivProdutosCatalogoPage() {
                 <th>LINHA</th>
                 <th>TIPO</th>
                 <th>MODO</th>
-                <th>VARIAÇÕES</th>
+                <th>ITENS / VAR.</th>
                 <th></th>
               </tr>
             </thead>
@@ -539,17 +782,19 @@ export function BemAvivProdutosCatalogoPage() {
                   <td>{r.category || '—'}</td>
                   <td>{r.product_line || '—'}</td>
                   <td>{r.product_type || '—'}</td>
-                  <td>{r.pricing_mode === 'GRADE' ? 'GRADE' : 'ÚNICO'}</td>
-                  <td>{r.payload.variations?.length ?? 0}</td>
+                  <td>{r.pricing_mode === 'GRADE' ? 'GRADE' : r.pricing_mode === 'KIT' ? 'KIT' : 'ÚNICO'}</td>
+                  <td>
+                    {r.pricing_mode === 'KIT' ? (normalizePayload(r.payload).kit_lines?.length ?? 0) : (r.payload.variations?.length ?? 0)}
+                  </td>
                   <td className="whitespace-nowrap">
                     <div className="flex items-center justify-end gap-1">
-                      {r.pricing_mode === 'GRADE' ? (
+                      {r.pricing_mode === 'GRADE' || r.pricing_mode === 'KIT' ? (
                         <button
                           type="button"
                           className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
                           onClick={() => setGradePreview(r)}
-                          title="VER GRADE"
-                          aria-label="Ver grade"
+                          title={r.pricing_mode === 'KIT' ? 'VER KIT' : 'VER GRADE'}
+                          aria-label={r.pricing_mode === 'KIT' ? 'Ver kit' : 'Ver grade'}
                         >
                           <Eye size={15} strokeWidth={2.2} />
                         </button>

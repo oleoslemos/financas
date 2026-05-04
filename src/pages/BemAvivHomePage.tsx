@@ -200,6 +200,7 @@ export function BemAvivHomePage() {
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const [loading, setLoading] = useState(true)
   const [totalSold, setTotalSold] = useState(0)
+  const [openOrdersCount, setOpenOrdersCount] = useState(0)
   const [monthlyTotals, setMonthlyTotals] = useState<Record<string, number>>({})
   const [clients, setClients] = useState<ClientRow[]>([])
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()))
@@ -231,7 +232,7 @@ export function BemAvivHomePage() {
         .select('order_date, total_amount, document_type, status')
         .eq('user_id', ownerUserId)
         .eq('document_type', 'PEDIDO')
-        .neq('status', 'CANCELADO'),
+        .in('status', ['ABERTO', 'FINALIZADO', 'ENTREGUE']),
       supabase
         .from('bem_aviv_clients')
         .select('id, full_name, cpf, last_contact_at, next_followup_at, next_followup_status, phone_1, phone_2, next_followup_note')
@@ -248,9 +249,14 @@ export function BemAvivHomePage() {
       status: string
     }>
 
+    const soldStatuses = new Set(['FINALIZADO', 'ENTREGUE'])
     let sum = 0
+    let openCount = 0
     const byMonth: Record<string, number> = {}
     for (const o of orders) {
+      const st = (o.status ?? '').toUpperCase()
+      if (st === 'ABERTO') openCount += 1
+      if (!soldStatuses.has(st)) continue
       const amt = Number(o.total_amount ?? 0)
       if (!Number.isFinite(amt)) continue
       sum += amt
@@ -259,6 +265,7 @@ export function BemAvivHomePage() {
       byMonth[mk] = (byMonth[mk] ?? 0) + amt
     }
     setTotalSold(sum)
+    setOpenOrdersCount(openCount)
     setMonthlyTotals(byMonth)
 
     setClients(((clientsRes.data ?? []) as ClientRow[]) ?? [])
@@ -692,10 +699,15 @@ export function BemAvivHomePage() {
                   <TrendingUp size={18} aria-hidden />
                 </span>
               </CardHeader>
-              <CardContent className="pt-0">
+              <CardContent className="space-y-2 pt-0">
                 <p className="font-hub text-2xl font-bold tracking-tight text-slate-900">{formatBRL(totalSold)}</p>
-                <p className="mt-2 text-xs leading-relaxed text-slate-500">
-                  Soma dos pedidos não cancelados (valor líquido do documento).
+                <p className="text-xs leading-relaxed text-slate-500">
+                  Soma dos pedidos com status <strong className="font-semibold text-slate-700">Finalizado</strong> ou{' '}
+                  <strong className="font-semibold text-slate-700">Entregue</strong> (valor líquido do documento).
+                </p>
+                <p className="border-t border-slate-100 pt-2 text-xs text-slate-600">
+                  Pedidos em aberto (status Aberto):{' '}
+                  <strong className="font-hub tabular-nums font-semibold text-slate-900">{openOrdersCount}</strong>
                 </p>
               </CardContent>
             </Card>
@@ -704,7 +716,9 @@ export function BemAvivHomePage() {
           <Card className="border-0 shadow-md ring-1 ring-slate-100/90">
             <CardHeader className="pb-2">
               <CardTitle className="font-hub text-base font-semibold text-slate-900">Resultado mês a mês (pedidos)</CardTitle>
-              <p className="mt-1 text-xs text-slate-500">Valores por mês conforme data do pedido — passe o cursor sobre as barras.</p>
+              <p className="mt-1 text-xs text-slate-500">
+                Pedidos com status Finalizado ou Entregue, por mês conforme a data do pedido — passe o cursor sobre as barras.
+              </p>
             </CardHeader>
             <CardContent className="pt-0">
               <div className="h-[min(280px,42vh)] min-h-[200px] w-full">

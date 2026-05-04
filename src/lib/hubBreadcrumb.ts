@@ -8,6 +8,7 @@ const ROUTES: Array<{ prefix: string; segment: string; current: string }> = [
   { prefix: '/bem-aviv/follow-up/agendar', segment: 'Hub', current: 'Agendar follow-up' },
   { prefix: '/bem-aviv/follow-up', segment: 'Hub', current: 'Follow-up' },
   { prefix: '/bem-aviv/clientes', segment: 'Hub', current: 'Clientes' },
+  { prefix: '/bem-aviv/pedidos/editar', segment: 'Hub', current: 'Editar pedido' },
   { prefix: '/bem-aviv/pedidos/novo', segment: 'Hub', current: 'Novo pedido' },
   { prefix: '/bem-aviv/pedidos', segment: 'Hub', current: 'Pedidos e orçamentos' },
   { prefix: '/bem-aviv/produtos-catalogo', segment: 'Hub', current: 'Produtos (catálogo)' },

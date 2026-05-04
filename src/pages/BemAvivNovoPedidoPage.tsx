@@ -1,7 +1,7 @@
 import { useUser } from '@clerk/clerk-react'
 import { ArrowLeft, Box, Package, Search, ShoppingCart, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
@@ -68,34 +68,94 @@ function clampOrderDiscountPercent(n: number) {
   return Math.max(-999, Math.min(100, Math.round(n * 1e6) / 1e6))
 }
 
+/** Percentual no campo livre: aceita `10`, `10,5`, `10 %`, valores gerados com vírgula decimal. */
 function parseOrderDiscountPercent(raw: string) {
-  return clampOrderDiscountPercent(parseMoney(raw || '0'))
+  const cleaned = (raw ?? '')
+    .replace(/\u00a0/g, ' ')
+    .replace(/%/g, '')
+    .trim()
+  return clampOrderDiscountPercent(parseMoney(cleaned === '' ? '0' : cleaned))
+}
+
+type NovoPedidoNavState = { document_type?: 'ORCAMENTO' | 'PEDIDO' }
+
+type SalesOrderHeaderRow = {
+  id: string
+  client_id: string | null
+  order_date: string
+  document_type: 'ORCAMENTO' | 'PEDIDO'
+  document_number: string | null
+  converted_order_id: string | null
+  status: string
+  total_amount: number
+  notes: string | null
+  discount_total: number | null
+  installments_count: number | null
+  payment_option?: string | null
+  payment_method?: string | null
+  down_payment_amount?: number | null
+  down_payment_method?: string | null
+  freight_amount?: number | null
+}
+
+function parsePaymentOptionNav(v: string | null | undefined): PaymentOption {
+  return v === 'A_PRAZO' ? 'A_PRAZO' : 'A_VISTA'
+}
+
+function parsePaymentMethodNav(v: string | null | undefined): PaymentMethod {
+  const u = (v ?? 'DINHEIRO').toUpperCase()
+  if (u === 'PIX') return 'PIX'
+  if (u === 'CARTAO_DEBITO') return 'CARTAO_DEBITO'
+  if (u === 'CARTAO_CREDITO') return 'CARTAO_CREDITO'
+  if (u === 'BOLETO') return 'BOLETO'
+  return 'DINHEIRO'
+}
+
+function canEditSalesDocument(o: Pick<SalesOrderHeaderRow, 'document_type' | 'status' | 'converted_order_id'>): boolean {
+  if (o.document_type === 'ORCAMENTO' && !o.converted_order_id && o.status === 'ABERTO') return true
+  if (o.document_type === 'PEDIDO' && o.status === 'ABERTO') return true
+  return false
+}
+
+function formatDiscountPercentInput(n: number) {
+  return clampOrderDiscountPercent(n).toFixed(6).replace('.', ',')
 }
 
 export function BemAvivNovoPedidoPage() {
   const { user } = useUser()
   const supabase = useSupabase()
   const navigate = useNavigate()
+  const location = useLocation()
+  const { orderId: editOrderId } = useParams<{ orderId: string }>()
+  const isEditMode = Boolean(editOrderId)
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const submitLockRef = useRef(false)
 
   const [clients, setClients] = useState<ClienteOpt[]>([])
   const [offerProducts, setOfferProducts] = useState<OfferProduct[]>([])
   const [loading, setLoading] = useState(true)
+  const [orderBootstrapping, setOrderBootstrapping] = useState(isEditMode)
+  const [orderLoadError, setOrderLoadError] = useState<string | null>(null)
+  const [loadedDocumentLabel, setLoadedDocumentLabel] = useState<string | null>(null)
 
-  const [form, setForm] = useState({
-    client_id: '',
-    order_date: new Date().toISOString().slice(0, 10),
-    document_type: 'PEDIDO' as 'ORCAMENTO' | 'PEDIDO',
-    status: 'ABERTO',
-    discount_percent: '',
-    installments_count: '1',
-    notes: '',
-    payment_option: 'A_VISTA' as PaymentOption,
-    payment_method: 'DINHEIRO' as PaymentMethod,
-    down_payment: '',
-    down_payment_method: 'DINHEIRO' as PaymentMethod,
-    freight_amount: '',
+  const [form, setForm] = useState(() => {
+    const st = location.state as NovoPedidoNavState | null
+    const document_type: 'ORCAMENTO' | 'PEDIDO' =
+      isEditMode ? 'ORCAMENTO' : st?.document_type === 'PEDIDO' ? 'PEDIDO' : 'ORCAMENTO'
+    return {
+      client_id: '',
+      order_date: new Date().toISOString().slice(0, 10),
+      document_type,
+      status: 'ABERTO',
+      discount_percent: '',
+      installments_count: '1',
+      notes: '',
+      payment_option: 'A_VISTA' as PaymentOption,
+      payment_method: 'DINHEIRO' as PaymentMethod,
+      down_payment: '',
+      down_payment_method: 'DINHEIRO' as PaymentMethod,
+      freight_amount: '',
+    }
   })
 
   const [draftProductName, setDraftProductName] = useState('')
@@ -116,7 +176,7 @@ export function BemAvivNovoPedidoPage() {
       supabase.from('bem_aviv_clients').select('id, full_name').eq('user_id', ownerUserId).order('full_name'),
       supabase
         .from('bem_aviv_offer_products')
-        .select('id, name, category, product_line, product_type, payload')
+        .select('id, name, category, product_line, product_type, pricing_mode, payload')
         .eq('user_id', ownerUserId)
         .order('name'),
     ])
@@ -128,6 +188,122 @@ export function BemAvivNovoPedidoPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    if (!editOrderId || !supabase || !ownerUserId) {
+      setOrderBootstrapping(false)
+      return
+    }
+    if (loading) return
+
+    let cancelled = false
+    void (async () => {
+      setOrderLoadError(null)
+      setOrderBootstrapping(true)
+      setLoadedDocumentLabel(null)
+
+      const { data: order, error: oErr } = await supabase
+        .from('bem_aviv_sales_orders')
+        .select(
+          'id, client_id, order_date, document_type, document_number, converted_order_id, status, total_amount, notes, discount_total, installments_count, payment_option, payment_method, down_payment_amount, down_payment_method, freight_amount',
+        )
+        .eq('id', editOrderId)
+        .eq('user_id', ownerUserId)
+        .maybeSingle()
+
+      if (cancelled) return
+      if (oErr || !order) {
+        setOrderLoadError(oErr?.message ?? 'Documento não encontrado.')
+        setOrderBootstrapping(false)
+        return
+      }
+
+      const quote = order as SalesOrderHeaderRow
+      if (!canEditSalesDocument(quote)) {
+        setOrderLoadError('Este documento não pode ser editado (fechado, entregue ou já convertido).')
+        setOrderBootstrapping(false)
+        return
+      }
+
+      const { data: its, error: iErr } = await supabase
+        .from('bem_aviv_sales_order_items')
+        .select('offer_product_id, variation_code, item_description, quantity, unit_price, discount_amount, total_price')
+        .eq('sales_order_id', editOrderId)
+
+      if (cancelled) return
+      if (iErr) {
+        setOrderLoadError(iErr.message)
+        setOrderBootstrapping(false)
+        return
+      }
+
+      const items = (its ?? []) as Array<{
+        offer_product_id: string | null
+        variation_code: string | null
+        item_description: string
+        quantity: number
+        unit_price: number
+        discount_amount: number | null
+        total_price: number
+      }>
+
+      if (items.length > 0 && items.some((it) => !it.offer_product_id || !it.variation_code)) {
+        setOrderLoadError(
+          'Este documento tem itens antigos sem vínculo ao catálogo. A edição por esta tela não está disponível.',
+        )
+        setOrderBootstrapping(false)
+        return
+      }
+
+      const mapped: LinhaItem[] = items.map((it) => {
+        const qty = Number(it.quantity)
+        const unit = Number(it.unit_price)
+        return {
+          key: newLineKey(),
+          kind: 'PRODUCT',
+          offer_product_id: it.offer_product_id!,
+          variation_code: it.variation_code!,
+          name: it.item_description,
+          unit_price: unit,
+          quantity: qty,
+        }
+      })
+
+      const totalGrossFromItems = mapped.reduce((acc, it) => acc + it.quantity * it.unit_price, 0)
+      const quoteDiscountAmount = Number(quote.discount_total ?? 0)
+      const discountBase = mapped.length > 0 ? totalGrossFromItems : 0
+      const discountPercent =
+        discountBase > 0 ? clampOrderDiscountPercent((quoteDiscountAmount / discountBase) * 100) : 0
+
+      setForm({
+        client_id: quote.client_id ?? '',
+        order_date: quote.order_date,
+        document_type: quote.document_type,
+        status: quote.status,
+        discount_percent: discountPercent !== 0 ? formatDiscountPercentInput(discountPercent) : '',
+        installments_count: String(quote.installments_count ?? 1),
+        notes: quote.notes ?? '',
+        payment_option: parsePaymentOptionNav(quote.payment_option),
+        payment_method: parsePaymentMethodNav(quote.payment_method),
+        down_payment:
+          quote.down_payment_amount != null && Number(quote.down_payment_amount) > 0
+            ? String(Number(quote.down_payment_amount)).replace('.', ',')
+            : '',
+        down_payment_method: parsePaymentMethodNav(quote.down_payment_method ?? quote.payment_method),
+        freight_amount:
+          quote.freight_amount != null && Number(quote.freight_amount) > 0
+            ? String(Number(quote.freight_amount)).replace('.', ',')
+            : '',
+      })
+      setLineItems(mapped)
+      setLoadedDocumentLabel(quote.document_number ?? quote.id)
+      setOrderBootstrapping(false)
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [editOrderId, supabase, ownerUserId, loading])
 
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
@@ -248,8 +424,7 @@ export function BemAvivNovoPedidoPage() {
     const entrada = form.payment_option === 'A_PRAZO' ? downPaymentNum : 0
     const net = clampMoney(sumLinesNet - (sumLinesNet * p) / 100 + freightAmountNum - entrada)
     setLiquidTotalDraft(formatMoneyInput(net))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lineItems.length, sumLinesNet, freightAmountNum, form.payment_option, downPaymentNum])
+  }, [lineItems.length, sumLinesNet, freightAmountNum, form.payment_option, downPaymentNum, form.discount_percent])
 
   function applyLiquidRawToDiscount(raw: string) {
     if (lineItems.length === 0 || sumLinesNet <= 0) return
@@ -269,6 +444,49 @@ export function BemAvivNovoPedidoPage() {
       alert('SELECIONE PRODUTO E TIPO DO CATÁLOGO.')
       return
     }
+    const qty = Math.max(1, parseInt(draftQty.replace(/\D/g, ''), 10) || 1)
+
+    if (p.pricing_mode === 'KIT') {
+      const payload = normalizePayload(p.payload)
+      const kitLines = payload.kit_lines ?? []
+      if (kitLines.length === 0) {
+        alert('ESTE KIT NÃO TEM ITENS VÁLIDOS NO CADASTRO.')
+        return
+      }
+      const byId = new Map(offerProducts.map((x) => [x.id, x]))
+      const exploded: LinhaItem[] = []
+      for (const kl of kitLines) {
+        const comp = byId.get(kl.offer_product_id)
+        const vars = normalizePayload(comp?.payload ?? {}).variations ?? []
+        const v = vars.find((x) => x.code === kl.variation_code)
+        if (!comp || !v || !Number.isFinite(v.price) || v.price <= 0) {
+          alert(
+            `KIT COM ITEM INVÁLIDO (${comp?.name ?? 'PRODUTO REMOVIDO'}). ABRA O CADASTRO DO KIT EM PRODUTOS (CATÁLOGO) E CORRIJA.`,
+          )
+          return
+        }
+        const lineQty = kl.quantity * qty
+        const dimPart = v.dimensions ? ` — ${v.dimensions}` : ''
+        const descName = `${comp.name} [${v.code}]${dimPart} — parte do kit «${p.name}» (kit ×${qty})`
+        exploded.push({
+          key: newLineKey(),
+          kind: 'PRODUCT',
+          offer_product_id: comp.id,
+          variation_code: v.code,
+          name: descName,
+          unit_price: v.price,
+          quantity: lineQty,
+        })
+      }
+      setLineItems((prev) => [...prev, ...exploded])
+      setDraftProductName('')
+      setDraftProductType('')
+      setDraftVariationCode('')
+      setDraftQty('1')
+      setProductQuery('')
+      return
+    }
+
     const vars = normalizePayload(p.payload).variations ?? []
     const v = vars.find((x) => x.code === draftVariationCode)
     if (vars.length > 0 && !v) {
@@ -279,7 +497,6 @@ export function BemAvivNovoPedidoPage() {
       alert('ESTE PRODUTO NÃO TEM VARIAÇÕES CADASTRADAS.')
       return
     }
-    const qty = Math.max(1, parseInt(draftQty.replace(/\D/g, ''), 10) || 1)
     const unit = Number(v!.price)
     if (!Number.isFinite(unit) || unit <= 0) {
       alert('PREÇO DA VARIAÇÃO INVÁLIDO.')
@@ -357,6 +574,64 @@ export function BemAvivNovoPedidoPage() {
         freight_amount: freightAmountNum,
       }
 
+      if (editOrderId) {
+        const cleanUpdate = {
+          client_id: headerPayload.client_id,
+          order_date: headerPayload.order_date,
+          document_type: headerPayload.document_type,
+          status: headerPayload.status,
+          discount_total: headerPayload.discount_total,
+          installments_count: headerPayload.installments_count,
+          notes: headerPayload.notes,
+          payment_option: headerPayload.payment_option,
+          payment_method: headerPayload.payment_method,
+          down_payment_amount: headerPayload.down_payment_amount,
+          down_payment_method: headerPayload.down_payment_method,
+          freight_amount: headerPayload.freight_amount,
+          total_amount: totalInsert,
+        }
+
+        const { error: delErr } = await supabase.from('bem_aviv_sales_order_items').delete().eq('sales_order_id', editOrderId)
+        if (delErr) {
+          alert(delErr.message)
+          return
+        }
+
+        const { error: updErr } = await supabase
+          .from('bem_aviv_sales_orders')
+          .update(cleanUpdate)
+          .eq('id', editOrderId)
+          .eq('user_id', ownerUserId)
+
+        if (updErr) {
+          alert(updErr.message)
+          return
+        }
+
+        const rowsToInsert = lineItems.map((l) => ({
+          user_id: ownerUserId,
+          sales_order_id: editOrderId,
+          product_id: null,
+          catalog_price_cell_id: null,
+          offer_product_id: l.offer_product_id,
+          variation_code: l.variation_code,
+          item_description: toUpperTrim(l.name),
+          quantity: l.quantity,
+          unit_price: l.unit_price,
+          discount_amount: 0,
+          total_price: clampMoney(l.quantity * l.unit_price),
+        }))
+
+        const { error: itemsErr } = await supabase.from('bem_aviv_sales_order_items').insert(rowsToInsert)
+        if (itemsErr) {
+          alert(itemsErr.message)
+          return
+        }
+
+        navigate('/bem-aviv/pedidos')
+        return
+      }
+
       const { data: inserted, error } = await supabase
         .from('bem_aviv_sales_orders')
         .insert({
@@ -403,20 +678,32 @@ export function BemAvivNovoPedidoPage() {
 
   return (
     <div className="normal-case">
-      <div className="mb-6 flex flex-wrap items-center gap-3">
-        <Link
-          to="/bem-aviv/pedidos"
-          className="inline-flex items-center gap-2 text-sm font-semibold text-[#185FA5] hover:underline"
-        >
-          <ArrowLeft size={18} aria-hidden />
-          Voltar à lista
-        </Link>
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <Link
+            to="/bem-aviv/pedidos"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-[#185FA5] hover:underline"
+          >
+            <ArrowLeft size={18} aria-hidden />
+            Voltar à lista
+          </Link>
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight text-slate-900">
+              {isEditMode ? 'Editar orçamento / pedido' : 'Novo pedido'}
+            </h1>
+            {isEditMode && loadedDocumentLabel ? (
+              <p className="mt-0.5 text-sm text-slate-500">{loadedDocumentLabel}</p>
+            ) : null}
+          </div>
+        </div>
       </div>
 
       {!supabase || !ownerUserId ? (
         <p className="text-sm text-slate-600">Conectando…</p>
-      ) : loading ? (
-        <p className="text-sm text-slate-500">Carregando catálogo…</p>
+      ) : loading || orderBootstrapping ? (
+        <p className="text-sm text-slate-500">{orderBootstrapping ? 'Carregando documento…' : 'Carregando catálogo…'}</p>
+      ) : orderLoadError ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">{orderLoadError}</div>
       ) : (
         <form onSubmit={submit}>
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-10 lg:gap-8">
@@ -534,11 +821,8 @@ export function BemAvivNovoPedidoPage() {
                   </div>
 
                   <p className="text-xs italic text-slate-400">
-                    Dica: quando os kits estiverem cadastrados no sistema, poderão ser buscados aqui com selo{' '}
-                    <Badge variant="outline" className="mx-0.5 align-middle text-[10px]">
-                      KIT
-                    </Badge>{' '}
-                    e ícone de pacote na lista.
+                    Dica: produtos em modo kit (cadastrados em Produtos — catálogo) ao incluir no pedido geram uma linha por item do
+                    catálogo, com quantidade = (qtd do kit) × (qtd de cada item no kit).
                   </p>
 
                   {offerProducts.length === 0 ? (
@@ -687,8 +971,8 @@ export function BemAvivNovoPedidoPage() {
                         value={form.document_type}
                         onChange={(e) => setForm({ ...form, document_type: e.target.value as 'ORCAMENTO' | 'PEDIDO' })}
                       >
-                        <option value="PEDIDO">Pedido</option>
                         <option value="ORCAMENTO">Orçamento</option>
+                        <option value="PEDIDO">Pedido</option>
                       </select>
                     </div>
                   </div>
@@ -818,8 +1102,14 @@ export function BemAvivNovoPedidoPage() {
                   </div>
 
                   <div className="space-y-2 pt-2">
-                    <Button type="submit" className="h-12 w-full font-bold shadow-md shadow-sky-100" disabled={lineItems.length === 0}>
-                      Finalizar {form.document_type === 'ORCAMENTO' ? 'orçamento' : 'pedido'}
+                    <Button
+                      type="submit"
+                      className="h-12 w-full font-bold shadow-md shadow-sky-100"
+                      disabled={lineItems.length === 0}
+                    >
+                      {isEditMode
+                        ? 'Salvar alterações'
+                        : `Finalizar ${form.document_type === 'ORCAMENTO' ? 'orçamento' : 'pedido'}`}
                     </Button>
                     <Button type="button" variant="secondary" className="h-11 w-full" disabled>
                       Gerar PDF (em breve)

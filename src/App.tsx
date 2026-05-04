@@ -100,6 +100,7 @@ export default function App() {
               <Route path="/bem-aviv/produtos/bases-camas" element={<BemAvivProdutosPage />} />
               <Route path="/bem-aviv/produtos/acessorios" element={<BemAvivProdutosPage />} />
               <Route path="/bem-aviv/pedidos/novo" element={<BemAvivNovoPedidoPage />} />
+              <Route path="/bem-aviv/pedidos/editar/:orderId" element={<BemAvivNovoPedidoPage />} />
               <Route path="/bem-aviv/pedidos" element={<BemAvivPedidosPage />} />
               <Route path="/bem-aviv/categorias" element={<BemAvivCategoriasPage />} />
               <Route path="/bem-aviv/tabela-preco" element={<BemAvivTabelaPrecoPage />} />
