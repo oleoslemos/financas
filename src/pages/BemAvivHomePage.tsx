@@ -115,11 +115,6 @@ function formatYmd(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-function parseYmd(s: string): Date {
-  const [y, m, d] = s.split('-').map(Number)
-  return new Date(y!, m! - 1, d!, 12, 0, 0, 0)
-}
-
 /** Dias do mês para grade (semana começa no domingo). */
 function calendarCells(viewMonth: Date) {
   const first = startOfMonth(viewMonth)
