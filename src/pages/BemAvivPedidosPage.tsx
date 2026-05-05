@@ -1,5 +1,16 @@
 import { useUser } from '@clerk/clerk-react'
-import { CheckCircle2, CircleDollarSign, PackageCheck, Pencil, Plus, RotateCcw, Trash2, XCircle } from 'lucide-react'
+import {
+  CheckCircle2,
+  CircleDollarSign,
+  Eye,
+  PackageCheck,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Trash2,
+  X,
+  XCircle,
+} from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
@@ -40,6 +51,16 @@ type Pedido = {
 }
 
 type ClienteOpt = { id: string; full_name: string }
+
+type OrderItemDetailRow = {
+  id: string
+  item_description: string
+  quantity: number
+  unit_price: number
+  discount_amount: number
+  total_price: number
+  created_at: string
+}
 
 function clampMoney(n: number) {
   if (!Number.isFinite(n)) return 0
@@ -129,6 +150,11 @@ function canReopenPedido(r: Pedido) {
   return r.document_type === 'PEDIDO' && (r.status === 'FINALIZADO' || r.status === 'ENTREGUE')
 }
 
+/** Detalhe do pedido após pagamento confirmado ou entrega. */
+function canVerDetalhePedido(r: Pedido) {
+  return r.document_type === 'PEDIDO' && (r.status === 'FINALIZADO' || r.status === 'ENTREGUE')
+}
+
 /** Exclusão definitiva somente após cancelamento explícito. */
 function canExcluirDocumento(r: Pedido) {
   return r.status === 'CANCELADO'
@@ -162,6 +188,9 @@ export function BemAvivPedidosPage() {
   const [statusFilter, setStatusFilter] = useState<'TODOS' | 'ABERTO' | 'FINALIZADO' | 'ENTREGUE' | 'CANCELADO'>('TODOS')
   const [sortBy, setSortBy] = useState<'DATA' | 'DOCUMENTO' | 'CLIENTE' | 'STATUS' | 'VALOR'>('DATA')
   const [sortDir, setSortDir] = useState<'DESC' | 'ASC'>('DESC')
+  const [detailModalPedido, setDetailModalPedido] = useState<Pedido | null>(null)
+  const [detailModalItems, setDetailModalItems] = useState<OrderItemDetailRow[]>([])
+  const [detailModalLoading, setDetailModalLoading] = useState(false)
 
   const clientNameById = useMemo(() => {
     const m = new Map<string, string>()
@@ -507,6 +536,34 @@ export function BemAvivPedidosPage() {
     await load()
   }
 
+  function closePedidoDetailModal() {
+    setDetailModalPedido(null)
+    setDetailModalItems([])
+    setDetailModalLoading(false)
+  }
+
+  async function openPedidoDetailModal(pedido: Pedido) {
+    if (!supabase || !ownerUserId || !canVerDetalhePedido(pedido)) return
+    setDetailModalPedido(pedido)
+    setDetailModalItems([])
+    setDetailModalLoading(true)
+    const { data, error } = await supabase
+      .from('bem_aviv_sales_order_items')
+      .select('id, item_description, quantity, unit_price, discount_amount, total_price, created_at')
+      .eq('user_id', ownerUserId)
+      .eq('sales_order_id', pedido.id)
+    if (error) {
+      alert(error.message)
+      setDetailModalLoading(false)
+      return
+    }
+    const rows = ((data ?? []) as OrderItemDetailRow[]).sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+    )
+    setDetailModalItems(rows)
+    setDetailModalLoading(false)
+  }
+
   async function deleteDocumento(order: Pedido) {
     if (!supabase || !ownerUserId) return
     if (!canExcluirDocumento(order)) return
@@ -791,6 +848,17 @@ export function BemAvivPedidosPage() {
                             <PackageCheck size={18} aria-hidden />
                           </button>
                         ) : null}
+                        {canVerDetalhePedido(r) ? (
+                          <button
+                            type="button"
+                            className={`${iconBtn} border-sky-200 text-[#185FA5] hover:bg-sky-50`}
+                            title="Ver detalhes do pedido"
+                            aria-label="Ver detalhes do pedido"
+                            onClick={() => void openPedidoDetailModal(r)}
+                          >
+                            <Eye size={18} aria-hidden />
+                          </button>
+                        ) : null}
                         {canReopenPedido(r) ? (
                           <button
                             type="button"
@@ -837,6 +905,125 @@ export function BemAvivPedidosPage() {
           </table>
         )}
       </div>
+
+      {detailModalPedido ? (
+        <div
+          className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-900/45 p-0 sm:items-center sm:p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pedido-detail-modal-title"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) closePedidoDetailModal()
+          }}
+        >
+          <div
+            className="flex max-h-[min(92dvh,900px)] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 bg-slate-50/90 px-4 py-3 sm:px-5">
+              <div className="min-w-0">
+                <h3 id="pedido-detail-modal-title" className="font-hub text-lg font-semibold text-slate-900 normal-case">
+                  Detalhe do pedido
+                </h3>
+                <p className="mt-0.5 text-sm font-medium text-slate-800">{detailModalPedido.document_number ?? '—'}</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {detailModalPedido.client_id ? clientNameById.get(detailModalPedido.client_id) ?? '—' : '—'} · Data{' '}
+                  {detailModalPedido.order_date} · {detailModalPedido.status}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
+                onClick={closePedidoDetailModal}
+                aria-label="Fechar"
+              >
+                <X size={18} aria-hidden />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-5">
+              <dl className="grid gap-2 border-b border-slate-100 pb-3 text-sm sm:grid-cols-2">
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total líquido</dt>
+                  <dd className="font-semibold tabular-nums text-slate-900">{formatBRL(netTotal(detailModalPedido))}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Desconto no pedido</dt>
+                  <dd className="tabular-nums text-slate-800">{formatBRL(Number(detailModalPedido.discount_total ?? 0))}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Frete</dt>
+                  <dd className="tabular-nums text-slate-800">{formatBRL(Number(detailModalPedido.freight_amount ?? 0))}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Pagamento</dt>
+                  <dd className="text-slate-800">
+                    {parsePaymentOption(detailModalPedido.payment_option) === 'A_PRAZO' ? 'À prazo' : 'À vista'} ·{' '}
+                    {PAYMENT_METHOD_LABEL[parsePaymentMethod(detailModalPedido.payment_method)]}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Parcelas</dt>
+                  <dd className="text-slate-800">{detailModalPedido.installments_count ?? 1}x</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Parcelas (valor)</dt>
+                  <dd className="text-xs text-slate-700">{installmentCell(detailModalPedido)}</dd>
+                </div>
+              </dl>
+
+              <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-600">Itens</p>
+              {detailModalLoading ? (
+                <p className="mt-2 text-sm text-slate-500">Carregando itens…</p>
+              ) : detailModalItems.length === 0 ? (
+                <p className="mt-2 text-sm text-slate-500">Nenhum item neste pedido.</p>
+              ) : (
+                <div className="mt-2 overflow-x-auto rounded-lg border border-slate-200">
+                  <table className="w-full min-w-[520px] text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
+                        <th className="px-3 py-2">Descrição</th>
+                        <th className="px-3 py-2 text-center">Qtd</th>
+                        <th className="px-3 py-2 text-right">Preço un.</th>
+                        <th className="px-3 py-2 text-right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detailModalItems.map((it) => (
+                        <tr key={it.id} className="border-b border-slate-100 last:border-0">
+                          <td className="px-3 py-2 text-slate-800">{it.item_description}</td>
+                          <td className="px-3 py-2 text-center tabular-nums text-slate-800">{it.quantity}</td>
+                          <td className="px-3 py-2 text-right tabular-nums text-slate-800">{formatBRL(it.unit_price)}</td>
+                          <td className="px-3 py-2 text-right font-medium tabular-nums text-slate-900">
+                            {formatBRL(it.total_price)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {detailModalPedido.notes ? (
+                <div className="mt-4 rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Observações</p>
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{detailModalPedido.notes}</p>
+                </div>
+              ) : null}
+
+              <div className="mt-4 flex justify-end">
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  onClick={closePedidoDetailModal}
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
     </div>
   )
