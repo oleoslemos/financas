@@ -12,7 +12,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
@@ -31,6 +31,14 @@ type OrderRow = {
   document_number: string | null
   status: string
   total_amount: number
+}
+
+type OrderItemRow = {
+  id: string
+  sales_order_id: string
+  item_description: string
+  quantity: number
+  created_at: string
 }
 
 type FollowupHistoryRow = {
@@ -119,6 +127,19 @@ function toInputDateTimeLocal(value?: string | null) {
   return local.toISOString().slice(0, 16)
 }
 
+function isMissingAuditColumnError(message?: string) {
+  const m = (message ?? '').toLowerCase()
+  return (
+    m.includes('created_by_user_id') ||
+    m.includes('created_by_name') ||
+    m.includes('updated_by_user_id') ||
+    m.includes('updated_by_name') ||
+    m.includes('deleted_at') ||
+    m.includes('deleted_by_user_id') ||
+    m.includes('deleted_by_name')
+  )
+}
+
 const AVATAR_PALETTE = [
   { bg: '#E6F1FB', fg: '#185FA5' },
   { bg: '#EAF3DE', fg: '#3B6D11' },
@@ -200,6 +221,7 @@ export function BemAvivClientesPage() {
   const [pedidosModalClient, setPedidosModalClient] = useState<Cliente | null>(null)
   const [pedidosModalLoading, setPedidosModalLoading] = useState(false)
   const [pedidosModalRows, setPedidosModalRows] = useState<OrderRow[]>([])
+  const [pedidosModalItemsByOrder, setPedidosModalItemsByOrder] = useState<Record<string, OrderItemRow[]>>({})
   const [historyModalClient, setHistoryModalClient] = useState<Cliente | null>(null)
   const [historyModalRows, setHistoryModalRows] = useState<FollowupHistoryRow[]>([])
   const [historyModalLoading, setHistoryModalLoading] = useState(false)
@@ -332,7 +354,7 @@ export function BemAvivClientesPage() {
     })
     setHistoryModalRows([])
     setHistoryModalLoading(true)
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('bem_aviv_client_followups')
       .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
       .is('deleted_at', null)
@@ -340,6 +362,17 @@ export function BemAvivClientesPage() {
       .eq('client_id', client.id)
       .order('contacted_at', { ascending: false })
       .limit(200)
+    if (error && isMissingAuditColumnError(error.message)) {
+      const fallback = await supabase
+        .from('bem_aviv_client_followups')
+        .select('id, client_id, contacted_at, channel, result, notes')
+        .eq('user_id', ownerUserId.toUpperCase())
+        .eq('client_id', client.id)
+        .order('contacted_at', { ascending: false })
+        .limit(200)
+      data = (fallback.data ?? []).map((r) => ({ ...r, created_by_name: null }))
+      error = fallback.error
+    }
     if (error) {
       setHistoryModalRows([])
       setHistoryModalLoading(false)
@@ -351,7 +384,7 @@ export function BemAvivClientesPage() {
 
   async function refetchHistoryModalRows(clientId: string): Promise<FollowupHistoryRow[]> {
     if (!supabase || !ownerUserId) return []
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('bem_aviv_client_followups')
       .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
       .is('deleted_at', null)
@@ -359,6 +392,17 @@ export function BemAvivClientesPage() {
       .eq('client_id', clientId)
       .order('contacted_at', { ascending: false })
       .limit(200)
+    if (error && isMissingAuditColumnError(error.message)) {
+      const fallback = await supabase
+        .from('bem_aviv_client_followups')
+        .select('id, client_id, contacted_at, channel, result, notes')
+        .eq('user_id', ownerUserId.toUpperCase())
+        .eq('client_id', clientId)
+        .order('contacted_at', { ascending: false })
+        .limit(200)
+      data = (fallback.data ?? []).map((r) => ({ ...r, created_by_name: null }))
+      error = fallback.error
+    }
     if (error) return []
     return (data ?? []) as FollowupHistoryRow[]
   }
@@ -373,7 +417,7 @@ export function BemAvivClientesPage() {
     const followupUserId = ownerUserId.toUpperCase()
 
     if (editingHistoryId) {
-      const { error: updateError } = await supabase
+      let { error: updateError } = await supabase
         .from('bem_aviv_client_followups')
         .update({
           contacted_at: contactedAtIso,
@@ -385,6 +429,18 @@ export function BemAvivClientesPage() {
           notes: registerInlineForm.notes || null,
         })
         .eq('id', editingHistoryId)
+      if (updateError && isMissingAuditColumnError(updateError.message)) {
+        const fallback = await supabase
+          .from('bem_aviv_client_followups')
+          .update({
+            contacted_at: contactedAtIso,
+            channel: registerInlineForm.channel,
+            result: registerInlineForm.result || null,
+            notes: registerInlineForm.notes || null,
+          })
+          .eq('id', editingHistoryId)
+        updateError = fallback.error
+      }
 
       if (updateError) {
         setRegisterInlineSaving(false)
@@ -408,7 +464,7 @@ export function BemAvivClientesPage() {
       return
     }
 
-    const { error: insertError } = await supabase.from('bem_aviv_client_followups').insert({
+    let { error: insertError } = await supabase.from('bem_aviv_client_followups').insert({
       user_id: followupUserId,
       created_by_user_id: user?.id ?? null,
       created_by_name: followupActorName,
@@ -418,8 +474,20 @@ export function BemAvivClientesPage() {
       result: registerInlineForm.result || null,
       notes: registerInlineForm.notes || null,
     })
+    if (insertError && isMissingAuditColumnError(insertError.message)) {
+      const fallback = await supabase.from('bem_aviv_client_followups').insert({
+        user_id: followupUserId,
+        client_id: historyModalClient.id,
+        contacted_at: contactedAtIso,
+        channel: registerInlineForm.channel,
+        result: registerInlineForm.result || null,
+        notes: registerInlineForm.notes || null,
+      })
+      insertError = fallback.error
+    }
 
     if (insertError) {
+      alert(insertError.message)
       setRegisterInlineSaving(false)
       return
     }
@@ -519,7 +587,7 @@ export function BemAvivClientesPage() {
   async function removeHistoryRow(rowId: string) {
     if (!supabase || !ownerUserId || !historyModalClient) return
     if (!confirm('EXCLUIR ESTE REGISTRO DE CONTATO?')) return
-    const { error } = await supabase
+    let { error } = await supabase
       .from('bem_aviv_client_followups')
       .update({
         deleted_at: new Date().toISOString(),
@@ -528,6 +596,14 @@ export function BemAvivClientesPage() {
       })
       .eq('id', rowId)
       .eq('user_id', ownerUserId.toUpperCase())
+    if (error && isMissingAuditColumnError(error.message)) {
+      const fallback = await supabase
+        .from('bem_aviv_client_followups')
+        .delete()
+        .eq('id', rowId)
+        .eq('user_id', ownerUserId.toUpperCase())
+      error = fallback.error
+    }
     if (error) {
       alert(error.message)
       return
@@ -539,6 +615,7 @@ export function BemAvivClientesPage() {
   async function openPedidosModal(client: Cliente) {
     setPedidosModalClient(client)
     setPedidosModalRows([])
+    setPedidosModalItemsByOrder({})
     if (!supabase || !ownerUserId) return
     setPedidosModalLoading(true)
     const { data, error } = await supabase
@@ -551,15 +628,43 @@ export function BemAvivClientesPage() {
     if (error) {
       alert(error.message)
       setPedidosModalRows([])
-    } else {
-      setPedidosModalRows((data as OrderRow[]) ?? [])
+      setPedidosModalLoading(false)
+      return
     }
+    const orders = (data as OrderRow[]) ?? []
+    setPedidosModalRows(orders)
+
+    const orderIds = orders.map((o) => o.id)
+    const byOrder: Record<string, OrderItemRow[]> = {}
+    const CHUNK = 120
+    for (let i = 0; i < orderIds.length; i += CHUNK) {
+      const chunk = orderIds.slice(i, i + CHUNK)
+      const { data: itemsData, error: itemsErr } = await supabase
+        .from('bem_aviv_sales_order_items')
+        .select('id, sales_order_id, item_description, quantity, created_at')
+        .eq('user_id', ownerUserId)
+        .in('sales_order_id', chunk)
+      if (itemsErr) {
+        alert(itemsErr.message)
+        break
+      }
+      for (const row of (itemsData ?? []) as OrderItemRow[]) {
+        const sid = row.sales_order_id
+        if (!byOrder[sid]) byOrder[sid] = []
+        byOrder[sid].push(row)
+      }
+    }
+    for (const sid of Object.keys(byOrder)) {
+      byOrder[sid].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+    }
+    setPedidosModalItemsByOrder(byOrder)
     setPedidosModalLoading(false)
   }
 
   function closePedidosModal() {
     setPedidosModalClient(null)
     setPedidosModalRows([])
+    setPedidosModalItemsByOrder({})
     setPedidosModalLoading(false)
   }
 
@@ -1354,23 +1459,48 @@ export function BemAvivClientesPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {pedidosModalRows.map((o) => (
-                        <tr key={o.id} className="border-b border-slate-100 last:border-0">
-                          <td className="whitespace-nowrap px-3 py-2.5 text-slate-800">{o.order_date}</td>
-                          <td className="px-3 py-2.5">
-                            {o.document_type === 'PEDIDO' ? (
-                              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-900">Pedido</span>
-                            ) : (
-                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">Orçamento</span>
-                            )}
-                          </td>
-                          <td className="px-3 py-2.5 font-medium text-slate-900">{o.document_number ?? '—'}</td>
-                          <td className="px-3 py-2.5 text-slate-600">{o.status}</td>
-                          <td className="whitespace-nowrap px-3 py-2.5 text-right font-medium tabular-nums text-slate-900">
-                            {formatBRL(Number(o.total_amount ?? 0))}
-                          </td>
-                        </tr>
-                      ))}
+                      {pedidosModalRows.map((o) => {
+                        const linhas = pedidosModalItemsByOrder[o.id] ?? []
+                        return (
+                          <Fragment key={o.id}>
+                            <tr className="border-b border-slate-100">
+                              <td className="whitespace-nowrap px-3 py-2.5 text-slate-800">{o.order_date}</td>
+                              <td className="px-3 py-2.5">
+                                {o.document_type === 'PEDIDO' ? (
+                                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-900">Pedido</span>
+                                ) : (
+                                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">Orçamento</span>
+                                )}
+                              </td>
+                              <td className="px-3 py-2.5 font-medium text-slate-900">{o.document_number ?? '—'}</td>
+                              <td className="px-3 py-2.5 text-slate-600">{o.status}</td>
+                              <td className="whitespace-nowrap px-3 py-2.5 text-right font-medium tabular-nums text-slate-900">
+                                {formatBRL(Number(o.total_amount ?? 0))}
+                              </td>
+                            </tr>
+                            <tr className="border-b border-slate-100 bg-slate-50/80 last:border-0">
+                              <td colSpan={5} className="px-3 py-2">
+                                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Itens</p>
+                                {linhas.length === 0 ? (
+                                  <p className="mt-1 text-xs text-slate-400">Nenhum item cadastrado neste documento.</p>
+                                ) : (
+                                  <ul className="mt-1 space-y-1">
+                                    {linhas.map((it) => (
+                                      <li
+                                        key={it.id}
+                                        className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 text-xs text-slate-700"
+                                      >
+                                        <span className="min-w-0 flex-1 leading-snug">{it.item_description}</span>
+                                        <span className="shrink-0 tabular-nums font-medium text-slate-900">Qtd. {it.quantity}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </td>
+                            </tr>
+                          </Fragment>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
