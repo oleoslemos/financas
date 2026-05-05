@@ -9,3 +9,4 @@ dev-dist
 
 config/bem-aviv-auth-*.json
 config/client_secret_*.json
+.vercel
