@@ -158,6 +158,10 @@ export function BemAvivPedidosPage() {
   const [loading, setLoading] = useState(true)
   const [typeTab, setTypeTab] = useState<'ORCAMENTO' | 'PEDIDO'>('PEDIDO')
   const [clientTableFilterId, setClientTableFilterId] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'TODOS' | 'ABERTO' | 'FINALIZADO' | 'ENTREGUE' | 'CANCELADO'>('TODOS')
+  const [sortBy, setSortBy] = useState<'DATA' | 'DOCUMENTO' | 'CLIENTE' | 'STATUS' | 'VALOR'>('DATA')
+  const [sortDir, setSortDir] = useState<'DESC' | 'ASC'>('DESC')
 
   const clientNameById = useMemo(() => {
     const m = new Map<string, string>()
@@ -176,8 +180,33 @@ export function BemAvivPedidosPage() {
     if (clientTableFilterId) {
       list = list.filter((r) => r.client_id === clientTableFilterId)
     }
+    const q = search.trim().toUpperCase()
+    if (q) {
+      list = list.filter((r) => {
+        const doc = (r.document_number ?? '').toUpperCase()
+        const st = (r.status ?? '').toUpperCase()
+        const dt = (r.order_date ?? '').toUpperCase()
+        const client = r.client_id ? (clientNameById.get(r.client_id) ?? '').toUpperCase() : ''
+        return doc.includes(q) || st.includes(q) || dt.includes(q) || client.includes(q)
+      })
+    }
+    if (statusFilter !== 'TODOS') {
+      list = list.filter((r) => (r.status ?? '').toUpperCase() === statusFilter)
+    }
+    const mul = sortDir === 'ASC' ? 1 : -1
+    list = [...list].sort((a, b) => {
+      if (sortBy === 'DOCUMENTO') return (a.document_number ?? '').localeCompare(b.document_number ?? '', 'pt-BR') * mul
+      if (sortBy === 'CLIENTE') {
+        const ca = a.client_id ? clientNameById.get(a.client_id) ?? '' : ''
+        const cb = b.client_id ? clientNameById.get(b.client_id) ?? '' : ''
+        return ca.localeCompare(cb, 'pt-BR') * mul
+      }
+      if (sortBy === 'STATUS') return (a.status ?? '').localeCompare(b.status ?? '', 'pt-BR') * mul
+      if (sortBy === 'VALOR') return (netTotal(a) - netTotal(b)) * mul
+      return (a.order_date ?? '').localeCompare(b.order_date ?? '', 'pt-BR') * mul
+    })
     return { filteredRows: list, countOrcamento: o, countPedido: p }
-  }, [rows, typeTab, clientTableFilterId])
+  }, [rows, typeTab, clientTableFilterId, search, statusFilter, sortBy, sortDir, clientNameById])
 
   const load = useCallback(async () => {
     if (!supabase || !ownerUserId) return
@@ -586,6 +615,47 @@ export function BemAvivPedidosPage() {
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Taxa de conversão (kits)</p>
           <p className="mt-1 text-xl font-semibold tabular-nums text-slate-900">{kitStats.conversionRate.toFixed(1)}%</p>
           <p className="text-xs text-slate-500">Em aberto: {kitStats.openKitQuotes}</p>
+        </div>
+      </div>
+
+      <div className="grid gap-2 rounded-lg border border-slate-200 bg-white p-3 sm:grid-cols-4">
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar por documento, cliente, status ou data"
+          className="rounded-md border border-slate-300 px-2 py-2 text-sm sm:col-span-2"
+        />
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+          className="rounded-md border border-slate-300 px-2 py-2 text-sm"
+        >
+          <option value="TODOS">Status: todos</option>
+          <option value="ABERTO">Aberto</option>
+          <option value="FINALIZADO">Finalizado</option>
+          <option value="ENTREGUE">Entregue</option>
+          <option value="CANCELADO">Cancelado</option>
+        </select>
+        <div className="grid grid-cols-2 gap-2">
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+            className="rounded-md border border-slate-300 px-2 py-2 text-sm"
+          >
+            <option value="DATA">Ordenar: data</option>
+            <option value="DOCUMENTO">Documento</option>
+            <option value="CLIENTE">Cliente</option>
+            <option value="STATUS">Status</option>
+            <option value="VALOR">Valor</option>
+          </select>
+          <select
+            value={sortDir}
+            onChange={(e) => setSortDir(e.target.value as typeof sortDir)}
+            className="rounded-md border border-slate-300 px-2 py-2 text-sm"
+          >
+            <option value="DESC">Desc</option>
+            <option value="ASC">Asc</option>
+          </select>
         </div>
       </div>
 

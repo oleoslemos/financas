@@ -709,7 +709,7 @@ export function BemAvivNovoPedidoPage() {
           quantity: l.quantity,
           unit_price: l.unit_price,
           discount_amount: roundMoneySigned(lineOrderDiscountByKey[l.key] ?? 0),
-          total_price: clampMoney(clampMoney(l.quantity * l.unit_price) - roundMoneySigned(lineOrderDiscountByKey[l.key] ?? 0)),
+          total_price: clampMoney(l.quantity * l.unit_price),
         }))
 
         const { error: itemsErr } = await supabase.from('bem_aviv_sales_order_items').insert(rowsToInsert)
@@ -749,7 +749,7 @@ export function BemAvivNovoPedidoPage() {
         quantity: l.quantity,
         unit_price: l.unit_price,
         discount_amount: roundMoneySigned(lineOrderDiscountByKey[l.key] ?? 0),
-        total_price: clampMoney(clampMoney(l.quantity * l.unit_price) - roundMoneySigned(lineOrderDiscountByKey[l.key] ?? 0)),
+        total_price: clampMoney(l.quantity * l.unit_price),
       }))
 
       const { error: itemsErr } = await supabase.from('bem_aviv_sales_order_items').insert(rowsToInsert)
