@@ -164,3 +164,38 @@ tbody tr:hover td {
   background-color: var(--color-surface-soft);
   color: var(--color-primary-hover);
 }
+
+/* Bem Aviv — Tabela de preço Gold: tipografia mais legível em qualquer monitor */
+.bem-aviv-tabela-preco-gold label {
+  @apply mb-1.5 block text-sm font-semibold normal-case;
+  color: var(--color-text-muted);
+}
+
+.bem-aviv-tabela-preco-gold input:not([type='checkbox']):not([type='radio']),
+.bem-aviv-tabela-preco-gold select,
+.bem-aviv-tabela-preco-gold textarea {
+  @apply py-2.5 text-base;
+}
+
+.bem-aviv-tabela-preco-gold .btn {
+  @apply min-h-11 px-5 py-2.5 text-base font-semibold;
+}
+
+.bem-aviv-tabela-preco-gold .table-wrap table {
+  @apply text-base leading-snug;
+}
+
+.bem-aviv-tabela-preco-gold .table-wrap th {
+  @apply px-4 py-3 text-sm font-semibold tracking-wide;
+  color: #475569;
+  font-variant-numeric: tabular-nums;
+}
+
+.bem-aviv-tabela-preco-gold .table-wrap td {
+  @apply px-4 py-3.5;
+}
+
+/* Bem Aviv — Novo pedido: formulário e botões legíveis */
+.bem-aviv-novo-pedido .btn {
+  @apply min-h-11 text-base font-semibold;
+}

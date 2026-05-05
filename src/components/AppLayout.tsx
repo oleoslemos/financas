@@ -16,7 +16,6 @@ import {
   PieChart,
   ShoppingCart,
   Menu,
-  PlusCircle,
   StickyNote,
   Table2,
   Tags,
@@ -151,7 +150,6 @@ export function AppLayout() {
         { kind: 'link', key: '/bem-aviv', label: 'Visão geral', to: '/bem-aviv', icon: LayoutGrid },
         { kind: 'link', key: '/bem-aviv/clientes', label: 'Clientes', to: '/bem-aviv/clientes', icon: UserCircle },
         { kind: 'link', key: '/bem-aviv/follow-up', label: 'Follow-up', to: '/bem-aviv/follow-up', icon: MessageCircleMore },
-        { kind: 'link', key: '/bem-aviv/pedidos/novo', label: 'Novo pedido', to: '/bem-aviv/pedidos/novo', icon: PlusCircle },
         { kind: 'link', key: '/bem-aviv/pedidos', label: 'Pedidos e orçamentos', to: '/bem-aviv/pedidos', icon: ShoppingCart },
         {
           kind: 'group',

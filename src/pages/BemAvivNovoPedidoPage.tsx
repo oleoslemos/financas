@@ -1,5 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
-import { ArrowLeft, Box, Package, Search, ShoppingCart, Trash2 } from 'lucide-react'
+import { ArrowLeft, Box, ClipboardList, List, Package, Search, ShoppingCart, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Badge } from '../components/ui/Badge'
@@ -167,7 +167,21 @@ export function BemAvivNovoPedidoPage() {
   const comboRef = useRef<HTMLDivElement>(null)
 
   const [lineItems, setLineItems] = useState<LinhaItem[]>([])
+  const [unitPriceStrByKey, setUnitPriceStrByKey] = useState<Record<string, string>>({})
   const [liquidTotalDraft, setLiquidTotalDraft] = useState('')
+
+  useEffect(() => {
+    setUnitPriceStrByKey((prev) => {
+      const next: Record<string, string> = { ...prev }
+      for (const l of lineItems) {
+        if (next[l.key] === undefined) next[l.key] = formatMoneyInput(l.unit_price)
+      }
+      for (const k of Object.keys(next)) {
+        if (!lineItems.some((li) => li.key === k)) delete next[k]
+      }
+      return next
+    })
+  }, [lineItems])
 
   const load = useCallback(async () => {
     if (!supabase || !ownerUserId) return
@@ -688,7 +702,7 @@ export function BemAvivNovoPedidoPage() {
             Voltar à lista
           </Link>
           <div>
-            <h1 className="text-xl font-semibold tracking-tight text-slate-900">
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
               {isEditMode ? 'Editar orçamento / pedido' : 'Novo pedido'}
             </h1>
             {isEditMode && loadedDocumentLabel ? (
@@ -706,8 +720,155 @@ export function BemAvivNovoPedidoPage() {
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">{orderLoadError}</div>
       ) : (
         <form onSubmit={submit}>
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-10 lg:gap-8">
-            <div className="space-y-6 lg:col-span-7">
+          <div className="bem-aviv-novo-pedido grid grid-cols-1 gap-6 lg:grid-cols-12 lg:gap-8">
+            <div className="space-y-6 lg:col-span-5">
+              <Card className="border-0 shadow-md ring-1 ring-slate-100/90">
+                <CardHeader className="border-b border-slate-100 pb-3">
+                  <CardTitle className="flex items-center gap-2 font-hub text-lg font-bold text-slate-900">
+                    <ClipboardList size={22} className="text-[#185FA5]" aria-hidden />
+                    Dados do pedido
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4 pt-4">
+                  <div>
+                    <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Cliente</label>
+                    <select
+                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-3 text-base"
+                      value={form.client_id}
+                      onChange={(e) => setForm({ ...form, client_id: e.target.value })}
+                    >
+                      <option value="">— Selecione —</option>
+                      {clients.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.full_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Data</label>
+                      <Input
+                        type="date"
+                        value={form.order_date}
+                        onChange={(e) => setForm({ ...form, order_date: e.target.value })}
+                        required
+                        className="mt-1 h-12"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Tipo</label>
+                      <select
+                        className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-3 text-base"
+                        value={form.document_type}
+                        onChange={(e) => setForm({ ...form, document_type: e.target.value as 'ORCAMENTO' | 'PEDIDO' })}
+                      >
+                        <option value="ORCAMENTO">Orçamento</option>
+                        <option value="PEDIDO">Pedido</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Pagamento</label>
+                    <select
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-3 text-base"
+                      value={form.payment_option}
+                      onChange={(e) => {
+                        const v = e.target.value as PaymentOption
+                        setForm({ ...form, payment_option: v, down_payment: v === 'A_VISTA' ? '' : form.down_payment })
+                      }}
+                    >
+                      <option value="A_VISTA">À vista</option>
+                      <option value="A_PRAZO">À prazo</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Meio</label>
+                    <select
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-3 text-base"
+                      value={form.payment_method}
+                      onChange={(e) => setForm({ ...form, payment_method: e.target.value as PaymentMethod })}
+                    >
+                      {(Object.keys(PAYMENT_METHOD_LABEL) as PaymentMethod[]).map((k) => (
+                        <option key={k} value={k}>
+                          {PAYMENT_METHOD_LABEL[k]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {form.payment_option === 'A_PRAZO' ? (
+                    <div>
+                      <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Entrada (R$)</label>
+                      <Input
+                        className="mt-1 h-12"
+                        value={form.down_payment}
+                        onChange={(e) => setForm({ ...form, down_payment: e.target.value })}
+                        inputMode="decimal"
+                      />
+                    </div>
+                  ) : null}
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Parcelas</label>
+                      <Input
+                        className="mt-1 h-12"
+                        inputMode="numeric"
+                        min={1}
+                        value={form.installments_count}
+                        onChange={(e) => setForm({ ...form, installments_count: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Frete</label>
+                      <Input
+                        className="mt-1 h-12"
+                        value={form.freight_amount}
+                        onChange={(e) => setForm({ ...form, freight_amount: e.target.value })}
+                        inputMode="decimal"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Desconto no pedido (%)</label>
+                    <Input
+                      className="mt-1 h-12"
+                      value={form.discount_percent}
+                      onChange={(e) => setForm({ ...form, discount_percent: e.target.value })}
+                      inputMode="decimal"
+                    />
+                  </div>
+
+                  {lineItems.length > 0 ? (
+                    <div>
+                      <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Valor líquido (ajuste fino)</label>
+                      <Input
+                        className="mt-1 h-12"
+                        value={liquidTotalDraft}
+                        onChange={(e) => setLiquidTotalDraft(e.target.value)}
+                        onBlur={(e) => applyLiquidRawToDiscount(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            applyLiquidRawToDiscount((e.target as HTMLInputElement).value)
+                          }
+                        }}
+                        inputMode="decimal"
+                      />
+                    </div>
+                  ) : null}
+
+                  <div>
+                    <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Observações</label>
+                    <Input className="mt-1 h-12" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+                  </div>
+                </CardContent>
+              </Card>
+
               <Card className="border-0 shadow-md ring-1 ring-slate-100/90">
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 font-hub text-base font-semibold text-slate-800">
@@ -770,7 +931,7 @@ export function BemAvivNovoPedidoPage() {
 
                   <div className="grid gap-3 sm:grid-cols-3">
                     <div>
-                      <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Produto</label>
+                      <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Produto</label>
                       <SearchableSelect
                         value={draftProductName}
                         onChange={(v) => {
@@ -783,7 +944,7 @@ export function BemAvivNovoPedidoPage() {
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tipo</label>
+                      <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Tipo</label>
                       <SearchableSelect
                         value={draftProductType}
                         onChange={setDraftProductType}
@@ -794,7 +955,7 @@ export function BemAvivNovoPedidoPage() {
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Variação</label>
+                      <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Variação</label>
                       <SearchableSelect
                         value={draftVariationCode}
                         onChange={setDraftVariationCode}
@@ -807,7 +968,7 @@ export function BemAvivNovoPedidoPage() {
                   </div>
                   <div className="flex flex-wrap items-end gap-3">
                     <div className="w-24">
-                      <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Qtd</label>
+                      <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Qtd</label>
                       <Input
                         inputMode="numeric"
                         value={draftQty}
@@ -820,7 +981,7 @@ export function BemAvivNovoPedidoPage() {
                     </Button>
                   </div>
 
-                  <p className="text-xs italic text-slate-400">
+                  <p className="text-sm italic text-slate-500">
                     Dica: produtos em modo kit (cadastrados em Produtos — catálogo) ao incluir no pedido geram uma linha por item do
                     catálogo, com quantidade = (qtd do kit) × (qtd de cada item no kit).
                   </p>
@@ -838,244 +999,14 @@ export function BemAvivNovoPedidoPage() {
               </Card>
 
               <Card className="border-0 shadow-md ring-1 ring-slate-100/90">
-                <CardContent className="p-0">
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[520px] text-left text-sm">
-                      <thead className="border-b border-slate-100 bg-slate-50">
-                        <tr>
-                          <th className="p-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Item</th>
-                          <th className="p-4 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">Qtd</th>
-                          <th className="p-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Preço un.</th>
-                          <th className="p-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Total</th>
-                          <th className="w-14 p-4" />
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {lineItems.length === 0 ? (
-                          <tr>
-                            <td colSpan={5} className="p-8 text-center text-sm text-slate-500">
-                              Nenhum item ainda. Use a busca acima para montar o pedido rapidamente.
-                            </td>
-                          </tr>
-                        ) : (
-                          lineItems.map((l) => {
-                            const rowNet = clampMoney(l.quantity * l.unit_price)
-                            return (
-                              <tr key={l.key} className="transition-colors hover:bg-slate-50/60">
-                                <td className="p-4">
-                                  <div className="flex items-start gap-3">
-                                    <div
-                                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
-                                        l.kind === 'KIT' ? 'bg-indigo-50 text-indigo-700' : 'bg-sky-50 text-[#185FA5]'
-                                      }`}
-                                    >
-                                      {l.kind === 'KIT' ? <Package size={18} /> : <Box size={18} />}
-                                    </div>
-                                    <div className="min-w-0">
-                                      <div className="flex flex-wrap items-center gap-2">
-                                        <p className="font-semibold text-slate-900">{l.name}</p>
-                                        {l.kind === 'KIT' ? (
-                                          <Badge variant="outline" className="border-indigo-200 bg-indigo-50 text-indigo-800">
-                                            KIT
-                                          </Badge>
-                                        ) : null}
-                                      </div>
-                                      <p className="text-xs text-slate-500">{l.kind === 'KIT' ? 'Kit composto' : 'Catálogo oferta'}</p>
-                                    </div>
-                                  </div>
-                                </td>
-                                <td className="p-4 text-center">
-                                  <Input
-                                    className="mx-auto h-9 w-16 border-slate-200 text-center text-sm"
-                                    inputMode="numeric"
-                                    value={String(l.quantity)}
-                                    onChange={(e) => updateLineQty(l.key, e.target.value)}
-                                  />
-                                </td>
-                                <td className="p-4 tabular-nums text-slate-700">
-                                  <Input
-                                    className="h-9 w-28 border-slate-200 text-right text-sm tabular-nums"
-                                    inputMode="decimal"
-                                    defaultValue={formatMoneyInput(l.unit_price)}
-                                    key={`${l.key}-u-${l.unit_price}`}
-                                    onBlur={(e) => {
-                                      const u = clampMoney(parseMoney(e.target.value))
-                                      if (!Number.isFinite(u) || u <= 0) return
-                                      setLineItems((prev) =>
-                                        prev.map((x) => (x.key === l.key ? { ...x, unit_price: u } : x)),
-                                      )
-                                    }}
-                                  />
-                                </td>
-                                <td className="p-4 font-semibold tabular-nums text-slate-900">{formatBRL(rowNet)}</td>
-                                <td className="p-4 text-right">
-                                  <button
-                                    type="button"
-                                    className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                                    aria-label="Remover"
-                                    onClick={() => removeLine(l.key)}
-                                  >
-                                    <Trash2 size={18} />
-                                  </button>
-                                </td>
-                              </tr>
-                            )
-                          })
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            <div className="space-y-6 lg:col-span-3">
-              <Card className="sticky top-6 border-0 shadow-lg ring-1 ring-slate-100/90">
                 <CardHeader className="border-b border-slate-100 pb-3">
-                  <CardTitle className="flex items-center gap-2 font-hub text-base font-bold text-slate-900">
-                    <ShoppingCart size={18} className="text-[#185FA5]" aria-hidden />
-                    Resumo do pedido
+                  <CardTitle className="flex items-center gap-2 font-hub text-lg font-bold text-slate-900">
+                    <ShoppingCart size={22} className="text-[#185FA5]" aria-hidden />
+                    Totais e finalização
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4 pt-4">
-                  <div>
-                    <label className="text-xs font-semibold uppercase text-slate-500">Cliente</label>
-                    <select
-                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm"
-                      value={form.client_id}
-                      onChange={(e) => setForm({ ...form, client_id: e.target.value })}
-                    >
-                      <option value="">— Selecione —</option>
-                      {clients.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.full_name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-xs font-semibold uppercase text-slate-500">Data</label>
-                      <Input
-                        type="date"
-                        value={form.order_date}
-                        onChange={(e) => setForm({ ...form, order_date: e.target.value })}
-                        required
-                        className="mt-1 h-11"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold uppercase text-slate-500">Tipo</label>
-                      <select
-                        className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm"
-                        value={form.document_type}
-                        onChange={(e) => setForm({ ...form, document_type: e.target.value as 'ORCAMENTO' | 'PEDIDO' })}
-                      >
-                        <option value="ORCAMENTO">Orçamento</option>
-                        <option value="PEDIDO">Pedido</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold uppercase text-slate-500">Pagamento</label>
-                    <select
-                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm"
-                      value={form.payment_option}
-                      onChange={(e) => {
-                        const v = e.target.value as PaymentOption
-                        setForm({ ...form, payment_option: v, down_payment: v === 'A_VISTA' ? '' : form.down_payment })
-                      }}
-                    >
-                      <option value="A_VISTA">À vista</option>
-                      <option value="A_PRAZO">À prazo</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold uppercase text-slate-500">Meio</label>
-                    <select
-                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm"
-                      value={form.payment_method}
-                      onChange={(e) => setForm({ ...form, payment_method: e.target.value as PaymentMethod })}
-                    >
-                      {(Object.keys(PAYMENT_METHOD_LABEL) as PaymentMethod[]).map((k) => (
-                        <option key={k} value={k}>
-                          {PAYMENT_METHOD_LABEL[k]}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {form.payment_option === 'A_PRAZO' ? (
-                    <div>
-                      <label className="text-xs font-semibold uppercase text-slate-500">Entrada (R$)</label>
-                      <Input
-                        className="mt-1 h-11"
-                        value={form.down_payment}
-                        onChange={(e) => setForm({ ...form, down_payment: e.target.value })}
-                        inputMode="decimal"
-                      />
-                    </div>
-                  ) : null}
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-xs font-semibold uppercase text-slate-500">Parcelas</label>
-                      <Input
-                        className="mt-1 h-11"
-                        inputMode="numeric"
-                        min={1}
-                        value={form.installments_count}
-                        onChange={(e) => setForm({ ...form, installments_count: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold uppercase text-slate-500">Frete</label>
-                      <Input
-                        className="mt-1 h-11"
-                        value={form.freight_amount}
-                        onChange={(e) => setForm({ ...form, freight_amount: e.target.value })}
-                        inputMode="decimal"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold uppercase text-slate-500">Desconto no pedido (%)</label>
-                    <Input
-                      className="mt-1 h-11"
-                      value={form.discount_percent}
-                      onChange={(e) => setForm({ ...form, discount_percent: e.target.value })}
-                      inputMode="decimal"
-                    />
-                  </div>
-
-                  {lineItems.length > 0 ? (
-                    <div>
-                      <label className="text-xs font-semibold uppercase text-slate-500">Valor líquido (ajuste fino)</label>
-                      <Input
-                        className="mt-1 h-11"
-                        value={liquidTotalDraft}
-                        onChange={(e) => setLiquidTotalDraft(e.target.value)}
-                        onBlur={(e) => applyLiquidRawToDiscount(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault()
-                            applyLiquidRawToDiscount((e.target as HTMLInputElement).value)
-                          }
-                        }}
-                        inputMode="decimal"
-                      />
-                    </div>
-                  ) : null}
-
-                  <div>
-                    <label className="text-xs font-semibold uppercase text-slate-500">Observações</label>
-                    <Input className="mt-1 h-11" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-                  </div>
-
-                  <div className="space-y-2 border-t border-slate-100 pt-4 text-sm">
+                  <div className="space-y-2 text-base">
                     <div className="flex justify-between text-slate-600">
                       <span>Subtotal (itens)</span>
                       <span className="tabular-nums">{formatBRL(linesGrossTotal)}</span>
@@ -1095,7 +1026,7 @@ export function BemAvivNovoPedidoPage() {
                       </span>
                     </div>
                     {previewOrderTotal != null && installmentsNum > 1 ? (
-                      <p className="text-xs text-slate-500">
+                      <p className="text-sm text-slate-600">
                         {installmentsNum}x de {formatBRL(previewOrderTotal / installmentsNum)}
                       </p>
                     ) : null}
@@ -1104,16 +1035,120 @@ export function BemAvivNovoPedidoPage() {
                   <div className="space-y-2 pt-2">
                     <Button
                       type="submit"
-                      className="h-12 w-full font-bold shadow-md shadow-sky-100"
+                      className="h-12 w-full text-base font-bold shadow-md shadow-sky-100"
                       disabled={lineItems.length === 0}
                     >
                       {isEditMode
                         ? 'Salvar alterações'
                         : `Finalizar ${form.document_type === 'ORCAMENTO' ? 'orçamento' : 'pedido'}`}
                     </Button>
-                    <Button type="button" variant="secondary" className="h-11 w-full" disabled>
+                    <Button type="button" variant="secondary" className="h-11 w-full text-base" disabled>
                       Gerar PDF (em breve)
                     </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="lg:col-span-7">
+              <Card className="sticky top-6 border-0 shadow-lg ring-1 ring-slate-100/90">
+                <CardHeader className="border-b border-slate-100 pb-3">
+                  <CardTitle className="flex items-center gap-2 font-hub text-lg font-bold text-slate-900">
+                    <List size={22} className="text-[#185FA5]" aria-hidden />
+                    Itens do pedido
+                  </CardTitle>
+                  <p className="mt-1 text-sm text-slate-500">Preço unitário editável após incluir a linha.</p>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[560px] text-left text-base">
+                      <thead className="border-b border-slate-100 bg-slate-50">
+                        <tr>
+                          <th className="p-4 text-left text-sm font-semibold uppercase tracking-wide text-slate-600">Item</th>
+                          <th className="w-24 p-4 text-center text-sm font-semibold uppercase tracking-wide text-slate-600">Qtd</th>
+                          <th className="w-36 p-4 text-sm font-semibold uppercase tracking-wide text-slate-600">Preço un.</th>
+                          <th className="p-4 text-sm font-semibold uppercase tracking-wide text-slate-600">Total</th>
+                          <th className="w-14 p-4" />
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {lineItems.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="p-10 text-center text-base text-slate-600">
+                              Nenhum item ainda. Use a coluna à esquerda para buscar e incluir produtos ou kits.
+                            </td>
+                          </tr>
+                        ) : (
+                          lineItems.map((l) => {
+                            const rowNet = clampMoney(l.quantity * l.unit_price)
+                            return (
+                              <tr key={l.key} className="transition-colors hover:bg-slate-50/60">
+                                <td className="p-4">
+                                  <div className="flex items-start gap-3">
+                                    <div
+                                      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${
+                                        l.kind === 'KIT' ? 'bg-indigo-50 text-indigo-700' : 'bg-sky-50 text-[#185FA5]'
+                                      }`}
+                                    >
+                                      {l.kind === 'KIT' ? <Package size={20} /> : <Box size={20} />}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <p className="text-base font-semibold text-slate-900">{l.name}</p>
+                                        {l.kind === 'KIT' ? (
+                                          <Badge variant="outline" className="border-indigo-200 bg-indigo-50 text-sm text-indigo-800">
+                                            KIT
+                                          </Badge>
+                                        ) : null}
+                                      </div>
+                                      <p className="text-sm text-slate-500">{l.kind === 'KIT' ? 'Kit composto' : 'Catálogo oferta'}</p>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="p-4 text-center">
+                                  <Input
+                                    className="mx-auto h-10 w-16 border-slate-200 text-center text-base"
+                                    inputMode="numeric"
+                                    value={String(l.quantity)}
+                                    onChange={(e) => updateLineQty(l.key, e.target.value)}
+                                  />
+                                </td>
+                                <td className="p-4">
+                                  <Input
+                                    className="h-10 min-w-[8rem] border-slate-200 text-right text-base font-semibold tabular-nums text-slate-900"
+                                    inputMode="decimal"
+                                    value={unitPriceStrByKey[l.key] ?? formatMoneyInput(l.unit_price)}
+                                    onChange={(e) => setUnitPriceStrByKey((p) => ({ ...p, [l.key]: e.target.value }))}
+                                    onBlur={() => {
+                                      const raw = unitPriceStrByKey[l.key] ?? formatMoneyInput(l.unit_price)
+                                      const u = clampMoney(parseMoney(raw))
+                                      if (!Number.isFinite(u) || u <= 0) {
+                                        setUnitPriceStrByKey((p) => ({ ...p, [l.key]: formatMoneyInput(l.unit_price) }))
+                                        return
+                                      }
+                                      setLineItems((prev) => prev.map((x) => (x.key === l.key ? { ...x, unit_price: u } : x)))
+                                      setUnitPriceStrByKey((p) => ({ ...p, [l.key]: formatMoneyInput(u) }))
+                                    }}
+                                    aria-label={`Preço unitário ${l.name}`}
+                                  />
+                                </td>
+                                <td className="p-4 text-base font-semibold tabular-nums text-slate-900">{formatBRL(rowNet)}</td>
+                                <td className="p-4 text-right">
+                                  <button
+                                    type="button"
+                                    className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                                    aria-label="Remover"
+                                    onClick={() => removeLine(l.key)}
+                                  >
+                                    <Trash2 size={18} />
+                                  </button>
+                                </td>
+                              </tr>
+                            )
+                          })
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 </CardContent>
               </Card>

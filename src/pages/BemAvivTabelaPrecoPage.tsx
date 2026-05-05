@@ -270,11 +270,11 @@ export function BemAvivTabelaPrecoPage() {
   }
 
   return (
-    <div className="normal-case space-y-6">
+    <div className="bem-aviv-tabela-preco-gold normal-case space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-slate-900">Tabela de preço Gold</h2>
-          <p className="mt-1 max-w-2xl text-sm text-slate-600">
+          <h2 className="text-3xl font-semibold tracking-tight text-slate-900">Tabela de preço Gold</h2>
+          <p className="mt-2 max-w-2xl text-base leading-relaxed text-slate-700">
             Edição rápida estilo planilha. Altere os valores e clique em Salvar. Para matriz do catálogo, use{' '}
             <Link className="font-semibold text-[#185FA5] hover:underline" to="/bem-aviv/tabela-preco-catalogo">
               Tabela de preço (catálogo)
@@ -287,18 +287,18 @@ export function BemAvivTabelaPrecoPage() {
       <Card className="border-0 shadow-md ring-1 ring-slate-100/90">
         <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div className="relative min-w-[min(100%,18rem)] flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-[18px] -translate-y-1/2 text-slate-400" aria-hidden />
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-slate-400" aria-hidden />
             <Input
               value={filterQuery}
               onChange={(e) => setFilterQuery(e.target.value)}
               placeholder="Filtrar por nome da linha ou ID do produto…"
-              className="h-11 border-slate-200 pl-10 pr-3 shadow-sm"
+              className="h-12 border-slate-200 pl-10 pr-3 text-base shadow-sm"
               aria-label="Filtrar linhas"
             />
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-slate-500">
-              <Filter size={14} className="mr-1 inline align-text-bottom text-slate-400" aria-hidden />
+            <span className="text-sm text-slate-600">
+              <Filter size={16} className="mr-1 inline align-text-bottom text-slate-400" aria-hidden />
               {filteredItemsCount} linha(s) visível(is)
             </span>
             <Button type="button" variant="secondary" className="gap-1.5" onClick={() => applyMassReajuste()}>
@@ -330,7 +330,9 @@ export function BemAvivTabelaPrecoPage() {
 
       <div className="space-y-8">
         {rows.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 p-6 text-center text-sm text-slate-600">NENHUMA TABELA CADASTRADA.</p>
+          <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 p-6 text-center text-base text-slate-600">
+            NENHUMA TABELA CADASTRADA.
+          </p>
         ) : null}
         {rows.map((r) => {
           const lines = (itemsByTableId.get(r.id) ?? []).filter(itemMatchesFilter)
@@ -339,33 +341,33 @@ export function BemAvivTabelaPrecoPage() {
               <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 px-3 py-2 sm:px-4">
                 <div>
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold text-slate-900">{r.name}</p>
+                    <p className="text-lg font-semibold text-slate-900">{r.name}</p>
                   </div>
-                  <p className="text-xs text-slate-500">{r.description || '—'}</p>
+                  <p className="text-sm text-slate-600">{r.description || '—'}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
                     onClick={() => duplicateTable(r.id)}
                     title="CLONAR TABELA"
                     aria-label="Clonar tabela"
                   >
-                    <Copy size={15} strokeWidth={2.2} />
+                    <Copy size={17} strokeWidth={2.2} />
                   </button>
                   <button
                     type="button"
-                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-red-300 bg-white text-red-700 shadow-sm hover:bg-red-50"
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-red-300 bg-white text-red-700 shadow-sm hover:bg-red-50"
                     onClick={() => remove(r.id)}
                     title="EXCLUIR TABELA"
                     aria-label="Excluir tabela"
                   >
-                    <Trash2 size={15} strokeWidth={2.2} />
+                    <Trash2 size={17} strokeWidth={2.2} />
                   </button>
                 </div>
               </div>
               {lines.length === 0 ? (
-                <p className="px-3 py-3 text-sm text-slate-500 sm:px-4">
+                <p className="px-3 py-3 text-base text-slate-600 sm:px-4">
                   {(itemsByTableId.get(r.id) ?? []).length === 0
                     ? 'NENHUMA LINHA (CADASTRE PRODUTOS EM PLATAFORMA DE DESCANSO COM ESTA TABELA).'
                     : 'Nenhuma linha corresponde ao filtro atual.'}
@@ -387,20 +389,20 @@ export function BemAvivTabelaPrecoPage() {
                         <tr key={it.id} className="group transition-colors hover:bg-slate-50/70">
                           <td>
                             <div>
-                              <p className="font-medium text-slate-900">{it.line_description}</p>
-                              <p className="font-mono text-[11px] text-slate-400">{it.product_id.slice(0, 8)}…</p>
+                              <p className="text-base font-medium leading-snug text-slate-900">{it.line_description}</p>
+                              <p className="font-mono text-xs text-slate-500">{it.product_id.slice(0, 8)}…</p>
                             </div>
                           </td>
                           <td>
-                            <Badge variant="secondary" className="font-normal">
+                            <Badge variant="secondary" className="text-sm font-normal">
                               Produto
                             </Badge>
                           </td>
                           <td className="text-right">
-                            <div className="inline-flex items-center gap-0.5 font-semibold text-[#185FA5]">
-                              <span className="text-sm text-slate-500">R$</span>
+                            <div className="inline-flex items-center gap-1 font-semibold text-[#185FA5]">
+                              <span className="text-base text-slate-500">R$</span>
                               <Input
-                                className="h-9 w-[7.5rem] border-transparent bg-transparent px-1.5 text-right text-sm font-bold tabular-nums text-[#185FA5] shadow-none hover:border-slate-200 focus:border-[#185FA5] focus:bg-white"
+                                className="h-11 min-w-[9rem] border-transparent bg-transparent px-2 text-right text-base font-bold tabular-nums text-[#185FA5] shadow-none hover:border-slate-200 focus:border-[#185FA5] focus:bg-white"
                                 inputMode="decimal"
                                 value={priceDrafts[it.id] ?? ''}
                                 onChange={(e) => {
@@ -413,17 +415,17 @@ export function BemAvivTabelaPrecoPage() {
                             </div>
                           </td>
                           <td className="text-center">
-                            <Badge className="border-0 bg-emerald-100 text-emerald-800 hover:bg-emerald-100">Ativo</Badge>
+                            <Badge className="border-0 bg-emerald-100 text-sm text-emerald-800 hover:bg-emerald-100">Ativo</Badge>
                           </td>
                           <td className="whitespace-nowrap text-right">
                             <button
                               type="button"
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 opacity-80 shadow-sm hover:bg-slate-50 group-hover:opacity-100"
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 opacity-80 shadow-sm hover:bg-slate-50 group-hover:opacity-100"
                               onClick={() => setProductCompare({ productId: it.product_id, lineDescription: it.line_description })}
                               title="Comparar em tabelas"
                               aria-label="Gráfico por produto"
                             >
-                              <BarChart3 size={14} strokeWidth={2.2} />
+                              <BarChart3 size={16} strokeWidth={2.2} />
                             </button>
                           </td>
                         </tr>
@@ -442,8 +444,8 @@ export function BemAvivTabelaPrecoPage() {
           <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
             <div className="mb-3 flex items-center justify-between gap-2">
               <div>
-                <p className="text-sm font-semibold text-slate-900">GRÁFICO POR PRODUTO</p>
-                <p className="text-xs text-slate-500">{productCompare.lineDescription}</p>
+                <p className="text-base font-semibold text-slate-900">GRÁFICO POR PRODUTO</p>
+                <p className="text-sm text-slate-600">{productCompare.lineDescription}</p>
               </div>
               <Button type="button" variant="secondary" className="inline-flex items-center gap-1" onClick={() => setProductCompare(null)}>
                 <X size={14} />
@@ -451,7 +453,7 @@ export function BemAvivTabelaPrecoPage() {
               </Button>
             </div>
             {productCompareSeries.length === 0 ? (
-              <p className="text-sm text-slate-500">ESTE PRODUTO NÃO POSSUI VALORES NAS TABELAS CADASTRADAS.</p>
+              <p className="text-base text-slate-600">ESTE PRODUTO NÃO POSSUI VALORES NAS TABELAS CADASTRADAS.</p>
             ) : (
               <div className="space-y-2">
                 {productCompareSeries.map((row) => {
@@ -459,8 +461,8 @@ export function BemAvivTabelaPrecoPage() {
                   return (
                     <div key={row.tableName} className="rounded-lg border border-slate-200 p-2">
                       <div className="flex items-center justify-between gap-2">
-                        <p className="text-xs font-medium text-slate-700">{row.tableName}</p>
-                        <span className="text-xs font-semibold text-slate-900">{formatBRL(row.price)}</span>
+                        <p className="text-sm font-medium text-slate-800">{row.tableName}</p>
+                        <span className="text-sm font-semibold text-slate-900">{formatBRL(row.price)}</span>
                       </div>
                       <div className="mt-1 h-2 rounded bg-slate-100">
                         <div className="h-2 rounded bg-sky-500/80" style={{ width: `${width}%` }} />
