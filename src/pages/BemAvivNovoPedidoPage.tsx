@@ -1,5 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
-import { ArrowLeft, Box, CircleDollarSign, ClipboardList, List, Package, Search, ShoppingCart, Trash2 } from 'lucide-react'
+import { Box, ChevronLeft, CircleDollarSign, ClipboardList, List, Package, Search, ShoppingCart, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Badge } from '../components/ui/Badge'
@@ -467,6 +467,46 @@ export function BemAvivNovoPedidoPage() {
         alert('ESTE KIT NÃO TEM ITENS VÁLIDOS NO CADASTRO.')
         return
       }
+      const vars = payload.variations ?? []
+      const v = vars.find((x) => x.code === draftVariationCode)
+      if (vars.length > 0 && !v) {
+        alert('SELECIONE A VARIAÇÃO (CÓDIGO / DIMENSÕES).')
+        return
+      }
+      if (vars.length === 0) {
+        alert('ESTE KIT NÃO TEM PREÇO VÁLIDO CADASTRADO.')
+        return
+      }
+      const kitUnit = Number(v!.price)
+      if (!Number.isFinite(kitUnit) || kitUnit <= 0) {
+        alert('PREÇO DO KIT INVÁLIDO.')
+        return
+      }
+
+      // Em ORÇAMENTO, mostrar o KIT como item único para facilitar simulações ao cliente.
+      if (form.document_type === 'ORCAMENTO') {
+        const dimPart = v!.dimensions ? ` — ${v!.dimensions}` : ''
+        const descName = `${p.name} [${v!.code}]${dimPart}`
+        setLineItems((prev) => [
+          ...prev,
+          {
+            key: newLineKey(),
+            kind: 'KIT',
+            offer_product_id: p.id,
+            variation_code: v!.code,
+            name: descName,
+            unit_price: kitUnit,
+            quantity: qty,
+          },
+        ])
+        setDraftProductName('')
+        setDraftProductType('')
+        setDraftVariationCode('')
+        setDraftQty('1')
+        setProductQuery('')
+        return
+      }
+
       const byId = new Map(offerProducts.map((x) => [x.id, x]))
       const exploded: LinhaItem[] = []
       for (const kl of kitLines) {
@@ -696,10 +736,11 @@ export function BemAvivNovoPedidoPage() {
         <div className="flex flex-wrap items-center gap-3">
           <Link
             to="/bem-aviv/pedidos"
-            className="inline-flex items-center gap-2 text-sm font-semibold text-[#185FA5] hover:underline"
+            title="Voltar para lista"
+            aria-label="Voltar para lista"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-[#185FA5] shadow-sm transition-colors hover:bg-slate-50"
           >
-            <ArrowLeft size={18} aria-hidden />
-            Voltar à lista
+            <ChevronLeft size={16} aria-hidden />
           </Link>
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-slate-900">

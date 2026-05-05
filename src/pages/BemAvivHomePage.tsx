@@ -201,6 +201,7 @@ export function BemAvivHomePage() {
   const [loading, setLoading] = useState(true)
   const [totalSold, setTotalSold] = useState(0)
   const [openOrdersCount, setOpenOrdersCount] = useState(0)
+  const [openOrdersAmount, setOpenOrdersAmount] = useState(0)
   const [monthlyTotals, setMonthlyTotals] = useState<Record<string, number>>({})
   const [clients, setClients] = useState<ClientRow[]>([])
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()))
@@ -252,12 +253,16 @@ export function BemAvivHomePage() {
     const soldStatuses = new Set(['FINALIZADO', 'ENTREGUE'])
     let sum = 0
     let openCount = 0
+    let openAmount = 0
     const byMonth: Record<string, number> = {}
     for (const o of orders) {
       const st = (o.status ?? '').toUpperCase()
-      if (st === 'ABERTO') openCount += 1
-      if (!soldStatuses.has(st)) continue
       const amt = Number(o.total_amount ?? 0)
+      if (st === 'ABERTO') {
+        openCount += 1
+        if (Number.isFinite(amt)) openAmount += amt
+      }
+      if (!soldStatuses.has(st)) continue
       if (!Number.isFinite(amt)) continue
       sum += amt
       const mk = monthKeyFromOrderDate(o.order_date || '')
@@ -266,6 +271,7 @@ export function BemAvivHomePage() {
     }
     setTotalSold(sum)
     setOpenOrdersCount(openCount)
+    setOpenOrdersAmount(openAmount)
     setMonthlyTotals(byMonth)
 
     setClients(((clientsRes.data ?? []) as ClientRow[]) ?? [])
@@ -399,28 +405,23 @@ export function BemAvivHomePage() {
   }, [pendingWithDate, calendarMonth])
 
   const chartMonths = useMemo(() => {
+    const now = new Date()
+    let anchor = new Date(now.getFullYear(), now.getMonth(), 1)
     const keys = Object.keys(monthlyTotals).sort()
-    if (keys.length === 0) {
-      const cur = new Date()
-      const out: string[] = []
-      for (let i = 11; i >= 0; i--) {
-        const d = new Date(cur.getFullYear(), cur.getMonth() - i, 1)
-        const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-        out.push(k)
+    if (keys.length > 0) {
+      const last = keys[keys.length - 1]!
+      const [yy, mm] = last.split('-').map((v) => Number(v))
+      if (Number.isFinite(yy) && Number.isFinite(mm) && mm >= 1 && mm <= 12) {
+        const latestDataMonth = new Date(yy, mm - 1, 1)
+        if (latestDataMonth > anchor) anchor = latestDataMonth
       }
-      return out
     }
-    const min = keys[0]!
-    const max = keys[keys.length - 1]!
-    const start = new Date(min + '-01T12:00:00')
-    const end = new Date(max + '-01T12:00:00')
     const out: string[] = []
-    const d = new Date(start)
-    while (d <= end) {
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(anchor.getFullYear(), anchor.getMonth() - i, 1)
       out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
-      d.setMonth(d.getMonth() + 1)
     }
-    return out.length > 12 ? out.slice(-12) : out
+    return out
   }, [monthlyTotals])
 
   const progressPct = Math.min(100, DISTRIBUTION_GOAL_BRL > 0 ? (totalSold / DISTRIBUTION_GOAL_BRL) * 100 : 0)
@@ -707,7 +708,9 @@ export function BemAvivHomePage() {
                 </p>
                 <p className="border-t border-slate-100 pt-2 text-xs text-slate-600">
                   Pedidos em aberto (status Aberto):{' '}
-                  <strong className="font-hub tabular-nums font-semibold text-slate-900">{openOrdersCount}</strong>
+                  <strong className="font-hub tabular-nums font-semibold text-slate-900">{openOrdersCount}</strong>{' '}
+                  — Valor:{' '}
+                  <strong className="font-hub tabular-nums font-semibold text-slate-900">{formatBRL(openOrdersAmount)}</strong>
                 </p>
               </CardContent>
             </Card>
@@ -964,6 +967,18 @@ export function BemAvivHomePage() {
                     : registerInlineOpen && !editingHistoryId
                       ? 'Ocultar registro'
                       : 'Incluir novo follow-up'}
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-sky-300 bg-white px-3 py-1.5 text-sm font-semibold text-sky-700 hover:bg-sky-50"
+                  onClick={() => {
+                    const clientId = historyModalClient.id
+                    setEditingHistoryId(null)
+                    setHistoryModalClient(null)
+                    navigate(`/bem-aviv/follow-up/agendar/${clientId}`)
+                  }}
+                >
+                  Agendar próximo follow-up
                 </button>
                 <button
                   type="button"

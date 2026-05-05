@@ -20,7 +20,7 @@ import { resolveDataOwnerId } from '../lib/dataOwner'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { cn } from '../lib/cn'
 import { formatBRL } from '../lib/format'
-import { toUpperTrim } from '../lib/text'
+import { normalizeSearchText, toUpperTrim } from '../lib/text'
 import { buildWhatsappUrl } from '../lib/whatsapp'
 
 type OrderRow = {
@@ -30,6 +30,15 @@ type OrderRow = {
   document_number: string | null
   status: string
   total_amount: number
+}
+
+type FollowupHistoryRow = {
+  id: string
+  client_id: string
+  contacted_at: string
+  channel: string
+  result: string | null
+  notes: string | null
 }
 
 type Cliente = {
@@ -79,6 +88,25 @@ function formatCep(v?: string | null) {
   return `${d.slice(0, 5)}-${d.slice(5)}`
 }
 
+function formatShortDateTime(iso: string | null) {
+  if (!iso) return '—'
+  const dt = new Date(iso)
+  if (Number.isNaN(dt.getTime())) return '—'
+  return new Intl.DateTimeFormat('pt-BR', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(dt)
+}
+
+function toInputDateTimeLocal(value?: string | null) {
+  if (!value) return ''
+  const dt = new Date(value)
+  if (Number.isNaN(dt.getTime())) return ''
+  const tz = dt.getTimezoneOffset() * 60_000
+  const local = new Date(dt.getTime() - tz)
+  return local.toISOString().slice(0, 16)
+}
+
 const AVATAR_PALETTE = [
   { bg: '#E6F1FB', fg: '#185FA5' },
   { bg: '#EAF3DE', fg: '#3B6D11' },
@@ -110,10 +138,10 @@ function phonesSortValue(r: Cliente) {
 function clientMatchesSearch(r: Cliente, raw: string) {
   const needle = raw.trim()
   if (!needle) return true
-  const upper = needle.toUpperCase()
+  const upper = normalizeSearchText(needle)
   const digits = onlyDigits(needle)
-  if ((r.full_name ?? '').toUpperCase().includes(upper)) return true
-  if ((r.email ?? '').toUpperCase().includes(upper)) return true
+  if (normalizeSearchText(r.full_name ?? '').includes(upper)) return true
+  if (normalizeSearchText(r.email ?? '').includes(upper)) return true
   if (digits.length > 0) {
     if (onlyDigits(r.cpf).includes(digits)) return true
     if (onlyDigits(r.phone_1 ?? '').includes(digits)) return true
@@ -159,6 +187,18 @@ export function BemAvivClientesPage() {
   const [pedidosModalClient, setPedidosModalClient] = useState<Cliente | null>(null)
   const [pedidosModalLoading, setPedidosModalLoading] = useState(false)
   const [pedidosModalRows, setPedidosModalRows] = useState<OrderRow[]>([])
+  const [historyModalClient, setHistoryModalClient] = useState<Cliente | null>(null)
+  const [historyModalRows, setHistoryModalRows] = useState<FollowupHistoryRow[]>([])
+  const [historyModalLoading, setHistoryModalLoading] = useState(false)
+  const [registerInlineOpen, setRegisterInlineOpen] = useState(false)
+  const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null)
+  const [registerInlineSaving, setRegisterInlineSaving] = useState(false)
+  const [registerInlineForm, setRegisterInlineForm] = useState({
+    contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+    channel: 'WHATSAPP',
+    result: '',
+    notes: '',
+  })
 
   const load = useCallback(async () => {
     if (!supabase || !ownerUserId) return
@@ -254,8 +294,123 @@ export function BemAvivClientesPage() {
     navigate(`/bem-aviv/follow-up/agendar/${client.id}`)
   }
 
-  function goToFollowupHistory(client: Cliente) {
-    navigate('/bem-aviv/follow-up', { state: { bemAvivClientFocus: { id: client.id, mode: 'history' as const } } })
+  async function openHistoryModal(client: Cliente) {
+    if (!supabase || !ownerUserId) return
+    setHistoryModalClient(client)
+    setEditingHistoryId(null)
+    setRegisterInlineOpen(false)
+    setRegisterInlineSaving(false)
+    setRegisterInlineForm({
+      contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+      channel: 'WHATSAPP',
+      result: '',
+      notes: '',
+    })
+    setHistoryModalRows([])
+    setHistoryModalLoading(true)
+    const { data, error } = await supabase
+      .from('bem_aviv_client_followups')
+      .select('id, client_id, contacted_at, channel, result, notes')
+      .eq('user_id', ownerUserId.toUpperCase())
+      .eq('client_id', client.id)
+      .order('contacted_at', { ascending: false })
+      .limit(200)
+    if (error) {
+      setHistoryModalRows([])
+      setHistoryModalLoading(false)
+      return
+    }
+    setHistoryModalRows((data ?? []) as FollowupHistoryRow[])
+    setHistoryModalLoading(false)
+  }
+
+  async function refetchHistoryModalRows(clientId: string): Promise<FollowupHistoryRow[]> {
+    if (!supabase || !ownerUserId) return []
+    const { data, error } = await supabase
+      .from('bem_aviv_client_followups')
+      .select('id, client_id, contacted_at, channel, result, notes')
+      .eq('user_id', ownerUserId.toUpperCase())
+      .eq('client_id', clientId)
+      .order('contacted_at', { ascending: false })
+      .limit(200)
+    if (error) return []
+    return (data ?? []) as FollowupHistoryRow[]
+  }
+
+  async function submitInlineFollowup(e: React.FormEvent) {
+    e.preventDefault()
+    if (!supabase || !ownerUserId || !historyModalClient) return
+    if (!registerInlineForm.contacted_at) return
+
+    setRegisterInlineSaving(true)
+    const contactedAtIso = new Date(registerInlineForm.contacted_at).toISOString()
+    const followupUserId = ownerUserId.toUpperCase()
+
+    if (editingHistoryId) {
+      const { error: updateError } = await supabase
+        .from('bem_aviv_client_followups')
+        .update({
+          contacted_at: contactedAtIso,
+          channel: registerInlineForm.channel,
+          result: registerInlineForm.result || null,
+          notes: registerInlineForm.notes || null,
+        })
+        .eq('id', editingHistoryId)
+
+      if (updateError) {
+        setRegisterInlineSaving(false)
+        return
+      }
+
+      const rows = await refetchHistoryModalRows(historyModalClient.id)
+      setHistoryModalRows(rows)
+      if (rows[0]) {
+        await supabase.from('bem_aviv_clients').update({ last_contact_at: rows[0].contacted_at }).eq('id', historyModalClient.id)
+      }
+      setEditingHistoryId(null)
+      setRegisterInlineOpen(false)
+      setRegisterInlineForm({
+        contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+        channel: 'WHATSAPP',
+        result: '',
+        notes: '',
+      })
+      setRegisterInlineSaving(false)
+      return
+    }
+
+    const { error: insertError } = await supabase.from('bem_aviv_client_followups').insert({
+      user_id: followupUserId,
+      client_id: historyModalClient.id,
+      contacted_at: contactedAtIso,
+      channel: registerInlineForm.channel,
+      result: registerInlineForm.result || null,
+      notes: registerInlineForm.notes || null,
+    })
+
+    if (insertError) {
+      setRegisterInlineSaving(false)
+      return
+    }
+
+    await supabase
+      .from('bem_aviv_clients')
+      .update({
+        last_contact_at: contactedAtIso,
+        next_followup_status: 'CONCLUIDO',
+      })
+      .eq('id', historyModalClient.id)
+
+    const rows = await refetchHistoryModalRows(historyModalClient.id)
+    setHistoryModalRows(rows)
+    setRegisterInlineOpen(false)
+    setRegisterInlineForm({
+      contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+      channel: 'WHATSAPP',
+      result: '',
+      notes: '',
+    })
+    setRegisterInlineSaving(false)
   }
 
   async function openPedidosModal(client: Cliente) {
@@ -556,7 +711,7 @@ export function BemAvivClientesPage() {
                       <button
                         type="button"
                         className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-violet-300 bg-white text-violet-800 shadow-sm hover:bg-violet-50 sm:h-10 sm:w-10"
-                        onClick={() => goToFollowupHistory(r)}
+                        onClick={() => void openHistoryModal(r)}
                         title="Histórico de follow-up"
                         aria-label="Histórico de follow-up"
                       >
@@ -734,6 +889,211 @@ export function BemAvivClientesPage() {
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {historyModalClient ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/35 p-3">
+          <div className="w-full max-w-5xl rounded-xl border border-slate-200 bg-white p-4 shadow-xl sm:p-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900 normal-case">Histórico de contatos</h3>
+                <p className="text-sm text-slate-500 normal-case">{historyModalClient.full_name}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="rounded-md bg-[#185FA5] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#144f8f]"
+                  onClick={() => {
+                    if (registerInlineOpen && editingHistoryId) {
+                      setEditingHistoryId(null)
+                      setRegisterInlineForm({
+                        contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+                        channel: 'WHATSAPP',
+                        result: '',
+                        notes: '',
+                      })
+                      return
+                    }
+                    setRegisterInlineOpen((prev) => {
+                      const next = !prev
+                      if (next) {
+                        setEditingHistoryId(null)
+                        setRegisterInlineForm({
+                          contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+                          channel: 'WHATSAPP',
+                          result: '',
+                          notes: '',
+                        })
+                      } else {
+                        setEditingHistoryId(null)
+                      }
+                      return next
+                    })
+                  }}
+                >
+                  {registerInlineOpen && editingHistoryId
+                    ? 'Novo contato'
+                    : registerInlineOpen && !editingHistoryId
+                      ? 'Ocultar registro'
+                      : 'Incluir novo follow-up'}
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-sky-300 bg-white px-3 py-1.5 text-sm font-semibold text-sky-700 hover:bg-sky-50"
+                  onClick={() => {
+                    const clientId = historyModalClient.id
+                    setEditingHistoryId(null)
+                    setHistoryModalClient(null)
+                    navigate(`/bem-aviv/follow-up/agendar/${clientId}`)
+                  }}
+                >
+                  Agendar próximo follow-up
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  onClick={() => {
+                    setEditingHistoryId(null)
+                    setHistoryModalClient(null)
+                  }}
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+
+            {registerInlineOpen ? (
+              <form onSubmit={submitInlineFollowup} className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  {editingHistoryId ? 'Editar contato' : 'Registrar novo contato'}
+                </p>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <label className="text-xs text-slate-600">
+                    Data/Hora
+                    <input
+                      type="datetime-local"
+                      required
+                      value={registerInlineForm.contacted_at}
+                      onChange={(e) => setRegisterInlineForm((prev) => ({ ...prev, contacted_at: e.target.value }))}
+                      className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+                    />
+                  </label>
+                  <label className="text-xs text-slate-600">
+                    Canal
+                    <select
+                      value={registerInlineForm.channel}
+                      onChange={(e) => setRegisterInlineForm((prev) => ({ ...prev, channel: e.target.value }))}
+                      className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+                    >
+                      <option value="WHATSAPP">WHATSAPP</option>
+                      <option value="LIGACAO">LIGAÇÃO</option>
+                      <option value="EMAIL">E-MAIL</option>
+                      <option value="OUTRO">OUTRO</option>
+                    </select>
+                  </label>
+                  <label className="text-xs text-slate-600 sm:col-span-2">
+                    Resumo
+                    <input
+                      value={registerInlineForm.result}
+                      onChange={(e) => setRegisterInlineForm((prev) => ({ ...prev, result: e.target.value }))}
+                      className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+                    />
+                  </label>
+                  <label className="text-xs text-slate-600 sm:col-span-2">
+                    Detalhe
+                    <textarea
+                      rows={2}
+                      value={registerInlineForm.notes}
+                      onChange={(e) => setRegisterInlineForm((prev) => ({ ...prev, notes: e.target.value }))}
+                      className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+                    />
+                  </label>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="submit"
+                    disabled={registerInlineSaving}
+                    className="rounded-md bg-[#185FA5] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#144f8f] disabled:opacity-60"
+                  >
+                    {registerInlineSaving ? 'Salvando...' : editingHistoryId ? 'Salvar edição' : 'Salvar contato'}
+                  </button>
+                  {editingHistoryId ? (
+                    <button
+                      type="button"
+                      className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                      onClick={() => {
+                        setEditingHistoryId(null)
+                        setRegisterInlineOpen(false)
+                        setRegisterInlineForm({
+                          contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+                          channel: 'WHATSAPP',
+                          result: '',
+                          notes: '',
+                        })
+                      }}
+                    >
+                      Cancelar edição
+                    </button>
+                  ) : null}
+                </div>
+              </form>
+            ) : null}
+
+            <div className="mt-4 max-h-[65vh] overflow-auto rounded-lg border border-slate-200">
+              {historyModalLoading ? (
+                <p className="p-4 text-sm text-slate-500">Carregando histórico...</p>
+              ) : historyModalRows.length === 0 ? (
+                <p className="p-4 text-sm text-slate-500">Nenhum contato registrado para este cliente.</p>
+              ) : (
+                <table className="min-w-full text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Data/Hora</th>
+                      <th className="px-3 py-2 text-left">Canal</th>
+                      <th className="px-3 py-2 text-left">Resumo</th>
+                      <th className="px-3 py-2 text-left">Detalhe</th>
+                      <th className="px-3 py-2 text-right">Ação</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historyModalRows.map((r) => (
+                      <tr
+                        key={r.id}
+                        className={cn(
+                          'border-t border-slate-100',
+                          editingHistoryId === r.id && 'bg-sky-50/80',
+                        )}
+                      >
+                        <td className="px-3 py-2 text-slate-700">{formatShortDateTime(r.contacted_at)}</td>
+                        <td className="px-3 py-2 text-slate-700">{r.channel}</td>
+                        <td className="px-3 py-2 text-slate-700">{r.result || '—'}</td>
+                        <td className="px-3 py-2 text-slate-700">{r.notes || '—'}</td>
+                        <td className="px-3 py-2 text-right">
+                          <button
+                            type="button"
+                            className="text-sm font-semibold text-[#185FA5] hover:underline"
+                            onClick={() => {
+                              setEditingHistoryId(r.id)
+                              setRegisterInlineForm({
+                                contacted_at: toInputDateTimeLocal(r.contacted_at),
+                                channel: r.channel,
+                                result: r.result ?? '',
+                                notes: r.notes ?? '',
+                              })
+                              setRegisterInlineOpen(true)
+                            }}
+                          >
+                            Editar
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
           </div>
         </div>
       ) : null}

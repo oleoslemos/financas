@@ -20,7 +20,7 @@ export default {
         '9xl': ['126px', { lineHeight: '1' }],
         /** Menu lateral (valores finos fora da escala padrão). */
         'sidebar-section': ['11px', { lineHeight: '14px' }],
-        'sidebar-item': ['10px', { lineHeight: '14px' }],
+        'sidebar-item': ['11px', { lineHeight: '15px' }],
       },
       fontFamily: {
         sans: ['DM Sans', 'Segoe UI', 'Trebuchet MS', 'Verdana', 'sans-serif'],

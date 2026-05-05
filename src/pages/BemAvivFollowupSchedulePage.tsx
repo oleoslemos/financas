@@ -18,6 +18,31 @@ type Cliente = {
   next_followup_status: FollowupStatus | null
 }
 
+function splitFollowupNote(note?: string | null) {
+  const raw = (note ?? '').trim()
+  if (!raw) return { summary: '', details: '' }
+  const marker = 'RESUMO:'
+  if (raw.toUpperCase().startsWith(marker)) {
+    const firstBreak = raw.indexOf('\n')
+    if (firstBreak > -1) {
+      return {
+        summary: raw.slice(marker.length, firstBreak).trim(),
+        details: raw.slice(firstBreak + 1).trim(),
+      }
+    }
+    return { summary: raw.slice(marker.length).trim(), details: '' }
+  }
+  return { summary: '', details: raw }
+}
+
+function composeFollowupNote(summary: string, details: string) {
+  const s = summary.trim()
+  const d = details.trim()
+  if (s && d) return `RESUMO: ${s}\n${d}`
+  if (s) return `RESUMO: ${s}`
+  return d
+}
+
 function toInputDateTimeLocal(value?: string | null) {
   if (!value) return ''
   const dt = new Date(value)
@@ -38,8 +63,9 @@ export function BemAvivFollowupSchedulePage() {
   const [client, setClient] = useState<Cliente | null>(null)
   const [scheduleForm, setScheduleForm] = useState({
     next_followup_at: '',
+    next_followup_summary: '',
     next_followup_note: '',
-    next_followup_status: 'PENDENTE' as FollowupStatus,
+    contact_done: false,
     commercial_stage: 'CONTATO',
   })
 
@@ -58,11 +84,13 @@ export function BemAvivFollowupSchedulePage() {
       setClient(null)
     } else if (data) {
       const c = data as Cliente
+      const parsed = splitFollowupNote(c.next_followup_note)
       setClient(c)
       setScheduleForm({
         next_followup_at: toInputDateTimeLocal(c.next_followup_at),
-        next_followup_note: c.next_followup_note ?? '',
-        next_followup_status: (c.next_followup_status ?? 'PENDENTE') as FollowupStatus,
+        next_followup_summary: parsed.summary,
+        next_followup_note: parsed.details,
+        contact_done: (c.next_followup_status ?? 'PENDENTE') === 'CONCLUIDO',
         commercial_stage: c.commercial_stage ?? 'CONTATO',
       })
     } else {
@@ -89,8 +117,8 @@ export function BemAvivFollowupSchedulePage() {
       .from('bem_aviv_clients')
       .update({
         next_followup_at: new Date(scheduleForm.next_followup_at).toISOString(),
-        next_followup_note: scheduleForm.next_followup_note || null,
-        next_followup_status: scheduleForm.next_followup_status,
+        next_followup_note: composeFollowupNote(scheduleForm.next_followup_summary, scheduleForm.next_followup_note) || null,
+        next_followup_status: scheduleForm.contact_done ? 'CONCLUIDO' : 'PENDENTE',
         commercial_stage: scheduleForm.commercial_stage,
         client_status: clientStatus,
       })
@@ -143,28 +171,37 @@ export function BemAvivFollowupSchedulePage() {
   }
 
   return (
-    <div className="mx-auto max-w-xl space-y-4 pb-8 normal-case">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button variant="secondary" type="button" onClick={() => navigate('/bem-aviv')}>
-          VOLTAR AO DASHBOARD
-        </Button>
-        <Button
-          type="button"
-          onClick={() =>
-            navigate('/bem-aviv/follow-up', {
-              state: { openStartFollowup: true, startFollowupClientId: client.id },
-            })
-          }
-        >
-          INCLUIR NOVO FOLLOW-UP
-        </Button>
-      </div>
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/35 p-3 normal-case">
+      <div className="w-full max-w-xl rounded-xl border border-slate-200 bg-white p-4 shadow-xl sm:p-6">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <Button variant="secondary" type="button" onClick={() => navigate('/bem-aviv')}>
+            VOLTAR AO DASHBOARD
+          </Button>
+          <Button
+            type="button"
+            onClick={() =>
+              navigate('/bem-aviv/follow-up', {
+                state: { openStartFollowup: true, startFollowupClientId: client.id },
+              })
+            }
+          >
+            INCLUIR NOVO FOLLOW-UP
+          </Button>
+        </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
         <h1 className="text-lg font-semibold sm:text-xl">AGENDAR PRÓXIMO FOLLOW-UP</h1>
         <p className="mt-1 text-sm text-slate-500">{client.full_name}</p>
 
         <form onSubmit={submitScheduleFollowup} className="mt-6 grid gap-3">
+          <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <input
+              type="checkbox"
+              checked={scheduleForm.contact_done}
+              onChange={(e) => setScheduleForm((prev) => ({ ...prev, contact_done: e.target.checked }))}
+              className="h-4 w-4 rounded border-slate-300"
+            />
+            Contato realizado
+          </label>
           <div>
             <label>PRÓXIMO FOLLOW-UP</label>
             <input
@@ -175,18 +212,7 @@ export function BemAvivFollowupSchedulePage() {
             />
           </div>
           <div>
-            <label>STATUS</label>
-            <select
-              value={scheduleForm.next_followup_status}
-              onChange={(e) => setScheduleForm((prev) => ({ ...prev, next_followup_status: e.target.value as FollowupStatus }))}
-            >
-              <option value="PENDENTE">PENDENTE</option>
-              <option value="CONCLUIDO">CONCLUIDO</option>
-              <option value="CANCELADO">CANCELADO</option>
-            </select>
-          </div>
-          <div>
-            <label>STATUS COMERCIAL</label>
+            <label>STATUS RELACIONAMENTO</label>
             <select
               value={scheduleForm.commercial_stage}
               onChange={(e) => setScheduleForm((prev) => ({ ...prev, commercial_stage: e.target.value }))}
@@ -197,6 +223,16 @@ export function BemAvivFollowupSchedulePage() {
                 </option>
               ))}
             </select>
+          </div>
+          <div>
+            <label>RESUMO (ATÉ 60 CARACTERES)</label>
+            <input
+              maxLength={60}
+              value={scheduleForm.next_followup_summary}
+              onChange={(e) => setScheduleForm((prev) => ({ ...prev, next_followup_summary: e.target.value }))}
+              placeholder="Ex.: Confirmar horário da visita"
+            />
+            <p className="mt-1 text-[8px] text-slate-500">{scheduleForm.next_followup_summary.length}/60</p>
           </div>
           <div>
             <label>REGISTRO</label>

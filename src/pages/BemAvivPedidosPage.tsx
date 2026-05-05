@@ -5,6 +5,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
+import { normalizePayload, type OfferProduct } from '../lib/bemAvivOfferProduct'
 import { formatBRL } from '../lib/format'
 
 type PaymentOption = 'A_VISTA' | 'A_PRAZO'
@@ -267,19 +268,131 @@ export function BemAvivPedidosPage() {
     }>
 
     if (items.length > 0) {
-      const copyRows = items.map((it) => ({
-        user_id: ownerUserId,
-        sales_order_id: newOrder.id,
-        product_id: it.product_id,
-        catalog_price_cell_id: it.catalog_price_cell_id,
-        offer_product_id: it.offer_product_id,
-        variation_code: it.variation_code ?? null,
-        item_description: it.item_description,
-        quantity: it.quantity,
-        unit_price: it.unit_price,
-        discount_amount: it.discount_amount ?? 0,
-        total_price: it.total_price,
-      }))
+      const initialOfferIds = Array.from(new Set(items.map((it) => it.offer_product_id).filter((id): id is string => !!id)))
+      const offerById = new Map<string, OfferProduct>()
+      if (initialOfferIds.length > 0) {
+        const { data: baseOffers, error: offersErr } = await supabase
+          .from('bem_aviv_offer_products')
+          .select('id, name, pricing_mode, payload')
+          .eq('user_id', ownerUserId)
+          .in('id', initialOfferIds)
+        if (offersErr) {
+          alert(offersErr.message)
+          return
+        }
+        for (const o of (baseOffers ?? []) as OfferProduct[]) {
+          offerById.set(o.id, { ...o, payload: normalizePayload(o.payload) })
+        }
+      }
+
+      // Se houver kits, carregar também os componentes para explosão na conversão para pedido.
+      const missingComponentIds = new Set<string>()
+      for (const it of items) {
+        if (!it.offer_product_id) continue
+        const parent = offerById.get(it.offer_product_id)
+        if (!parent || parent.pricing_mode !== 'KIT') continue
+        const kitLines = normalizePayload(parent.payload).kit_lines ?? []
+        for (const kl of kitLines) {
+          if (!offerById.has(kl.offer_product_id)) missingComponentIds.add(kl.offer_product_id)
+        }
+      }
+      if (missingComponentIds.size > 0) {
+        const { data: compOffers, error: compErr } = await supabase
+          .from('bem_aviv_offer_products')
+          .select('id, name, pricing_mode, payload')
+          .eq('user_id', ownerUserId)
+          .in('id', Array.from(missingComponentIds))
+        if (compErr) {
+          alert(compErr.message)
+          return
+        }
+        for (const row of (compOffers ?? []) as OfferProduct[]) {
+          offerById.set(row.id, { ...row, payload: normalizePayload(row.payload) })
+        }
+      }
+
+      const copyRows: Array<{
+        user_id: string
+        sales_order_id: string
+        product_id: string | null
+        catalog_price_cell_id: string | null
+        offer_product_id: string | null
+        variation_code: string | null
+        item_description: string
+        quantity: number
+        unit_price: number
+        discount_amount: number
+        total_price: number
+      }> = []
+
+      for (const it of items) {
+        if (!it.offer_product_id) {
+          copyRows.push({
+            user_id: ownerUserId,
+            sales_order_id: newOrder.id,
+            product_id: it.product_id,
+            catalog_price_cell_id: it.catalog_price_cell_id,
+            offer_product_id: it.offer_product_id,
+            variation_code: it.variation_code ?? null,
+            item_description: it.item_description,
+            quantity: it.quantity,
+            unit_price: it.unit_price,
+            discount_amount: it.discount_amount ?? 0,
+            total_price: it.total_price,
+          })
+          continue
+        }
+
+        const offer = offerById.get(it.offer_product_id)
+        if (!offer || offer.pricing_mode !== 'KIT') {
+          copyRows.push({
+            user_id: ownerUserId,
+            sales_order_id: newOrder.id,
+            product_id: it.product_id,
+            catalog_price_cell_id: it.catalog_price_cell_id,
+            offer_product_id: it.offer_product_id,
+            variation_code: it.variation_code ?? null,
+            item_description: it.item_description,
+            quantity: it.quantity,
+            unit_price: it.unit_price,
+            discount_amount: it.discount_amount ?? 0,
+            total_price: it.total_price,
+          })
+          continue
+        }
+
+        const kitLines = normalizePayload(offer.payload).kit_lines ?? []
+        if (kitLines.length === 0) {
+          alert(`KIT SEM COMPONENTES NO CATÁLOGO: ${offer.name}`)
+          return
+        }
+
+        for (const kl of kitLines) {
+          const component = offerById.get(kl.offer_product_id)
+          const vars = normalizePayload(component?.payload ?? {}).variations ?? []
+          const v = vars.find((x) => x.code === kl.variation_code)
+          if (!component || !v || !Number.isFinite(v.price) || v.price <= 0) {
+            alert(`KIT INVÁLIDO AO CONVERTER: ${offer.name}. Verifique os itens do kit no catálogo.`)
+            return
+          }
+          const qty = Math.max(1, Number(it.quantity) || 1) * Math.max(1, Number(kl.quantity) || 1)
+          const dimPart = v.dimensions ? ` — ${v.dimensions}` : ''
+          copyRows.push({
+            user_id: ownerUserId,
+            sales_order_id: newOrder.id,
+            product_id: null,
+            catalog_price_cell_id: null,
+            offer_product_id: component.id,
+            variation_code: v.code,
+            item_description: `${component.name} [${v.code}]${dimPart} — parte do kit «${offer.name}»`,
+            quantity: qty,
+            unit_price: v.price,
+            discount_amount: 0,
+            total_price: clampMoney(qty * v.price),
+          })
+        }
+      }
+
       const { error: copyErr } = await supabase.from('bem_aviv_sales_order_items').insert(copyRows)
       if (copyErr) {
         alert(copyErr.message)
