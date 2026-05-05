@@ -29,6 +29,7 @@ type FollowupHistoryRow = {
   id: string
   contacted_at: string
   channel: string
+  created_by_name?: string | null
   result: string | null
   notes: string | null
 }
@@ -145,6 +146,7 @@ export function BemAvivFollowupPage() {
   const navigate = useNavigate()
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const followupUserId = ownerUserId ? ownerUserId.toUpperCase() : null
+  const followupActorName = (user?.fullName || user?.primaryEmailAddress?.emailAddress || ownerUserId || 'USUÁRIO').trim().toUpperCase()
 
   const [rows, setRows] = useState<Cliente[]>([])
   const [loading, setLoading] = useState(true)
@@ -200,7 +202,7 @@ export function BemAvivFollowupPage() {
       setLoadingHistory(true)
       const { data, error } = await supabase
         .from('bem_aviv_client_followups')
-        .select('id, contacted_at, channel, result, notes')
+        .select('id, contacted_at, channel, created_by_name, result, notes')
         .eq('user_id', followupUserId)
         .eq('client_id', clientId)
         .order('contacted_at', { ascending: false })
@@ -379,7 +381,7 @@ export function BemAvivFollowupPage() {
         const chunk = ids.slice(i, i + CHUNK)
         const { data, error } = await supabase
           .from('bem_aviv_client_followups')
-          .select('id, client_id, contacted_at, channel, result, notes')
+          .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
           .eq('user_id', followupUserId)
           .in('client_id', chunk)
           .order('contacted_at', { ascending: false })
@@ -398,6 +400,7 @@ export function BemAvivFollowupPage() {
             id: row.id,
             contacted_at: row.contacted_at,
             channel: row.channel,
+            created_by_name: row.created_by_name,
             result: row.result,
             notes: row.notes,
           }
@@ -432,6 +435,7 @@ export function BemAvivFollowupPage() {
         .update({
           contacted_at: contactedAtIso,
           channel: registerForm.channel,
+          created_by_name: followupActorName,
           result: registerForm.result || null,
           notes: registerForm.notes || null,
         })
@@ -444,6 +448,8 @@ export function BemAvivFollowupPage() {
     } else {
       const { error: insertError } = await supabase.from('bem_aviv_client_followups').insert({
         user_id: followupUserId,
+        created_by_user_id: user?.id ?? null,
+        created_by_name: followupActorName,
         client_id: registeringClient.id,
         contacted_at: contactedAtIso,
         channel: registerForm.channel,
@@ -940,7 +946,7 @@ export function BemAvivFollowupPage() {
                       <div key={item.id} className="mb-2 rounded-md border border-slate-200 p-2 last:mb-0">
                         <div className="flex items-start justify-between gap-2">
                           <p className="text-xs text-slate-500">
-                            {formatDateTime(item.contacted_at)} • {item.channel}
+                            {formatDateTime(item.contacted_at)} • {item.channel} • {item.created_by_name || '—'}
                           </p>
                           <button
                             type="button"

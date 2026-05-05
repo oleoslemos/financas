@@ -26,6 +26,7 @@ type FollowupRow = {
   client_id: string
   contacted_at: string
   channel: string | null
+  created_by_name?: string | null
   result: string | null
   notes: string | null
 }
@@ -119,6 +120,7 @@ export function BemAvivFollowupProdutividadePage() {
   const supabase = useSupabase()
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const followupUserId = ownerUserId ? ownerUserId.toUpperCase() : null
+  const followupActorName = (user?.fullName || user?.primaryEmailAddress?.emailAddress || ownerUserId || 'USUÁRIO').trim().toUpperCase()
   const [periodFilter, setPeriodFilter] = useState<
     'ULTIMOS_7_DIAS' | 'ULTIMOS_30_DIAS' | 'ULTIMOS_90_DIAS' | 'PROXIMOS_7_DIAS' | 'MES_ATUAL' | 'MES_PASSADO' | 'MES_PROXIMO'
   >('MES_ATUAL')
@@ -160,7 +162,7 @@ export function BemAvivFollowupProdutividadePage() {
     setLoadingHistory(true)
     const { data, error } = await supabase
       .from('bem_aviv_client_followups')
-      .select('id, client_id, contacted_at, channel, result, notes')
+      .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
       .eq('user_id', followupUserId)
       .eq('client_id', client.id)
       .order('contacted_at', { ascending: false })
@@ -195,6 +197,8 @@ export function BemAvivFollowupProdutividadePage() {
     const contactedAtIso = new Date(historyForm.contacted_at).toISOString()
     const { error } = await supabase.from('bem_aviv_client_followups').insert({
       user_id: followupUserId,
+      created_by_user_id: user?.id ?? null,
+      created_by_name: followupActorName,
       client_id: historyTarget.id,
       contacted_at: contactedAtIso,
       channel: historyForm.channel,
@@ -461,7 +465,7 @@ export function BemAvivFollowupProdutividadePage() {
                 ? historyRows.map((item) => (
                     <div key={item.id} className="rounded-md border border-slate-200 p-2">
                       <p className="text-xs text-slate-500">
-                        {formatDateTime(item.contacted_at)} • {item.channel ?? 'OUTRO'}
+                        {formatDateTime(item.contacted_at)} • {item.channel ?? 'OUTRO'} • {item.created_by_name || '—'}
                       </p>
                       <p>{item.result || 'SEM RESULTADO'}</p>
                       {item.notes ? <p className="text-xs text-slate-500">{item.notes}</p> : null}

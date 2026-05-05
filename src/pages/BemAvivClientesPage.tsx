@@ -18,6 +18,7 @@ import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
+import { BEM_AVIV_CLIENT_COMMERCIAL_STAGE_OPTIONS } from '../lib/bemAvivClientStatus'
 import { cn } from '../lib/cn'
 import { formatBRL } from '../lib/format'
 import { normalizeSearchText, toUpperTrim } from '../lib/text'
@@ -37,6 +38,7 @@ type FollowupHistoryRow = {
   client_id: string
   contacted_at: string
   channel: string
+  created_by_name?: string | null
   result: string | null
   notes: string | null
 }
@@ -65,6 +67,7 @@ type Cliente = {
   address_state: string | null
   email: string | null
   client_status: string | null
+  commercial_stage: string | null
 }
 
 type SortKey = 'full_name' | 'phones' | 'client_status'
@@ -180,6 +183,7 @@ export function BemAvivClientesPage() {
   const supabase = useSupabase()
   const navigate = useNavigate()
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
+  const followupActorName = (user?.fullName || user?.primaryEmailAddress?.emailAddress || ownerUserId || 'USUÁRIO').trim().toUpperCase()
 
   const [rows, setRows] = useState<Cliente[]>([])
   const [editing, setEditing] = useState<Cliente | null>(null)
@@ -210,7 +214,9 @@ export function BemAvivClientesPage() {
     notes: '',
   })
   const [scheduleInlineForm, setScheduleInlineForm] = useState({
+    contact_done: false,
     next_followup_at: toInputDateTimeLocal(new Date().toISOString()),
+    commercial_stage: 'CONTATO',
     summary: '',
     details: '',
   })
@@ -327,7 +333,7 @@ export function BemAvivClientesPage() {
     setHistoryModalLoading(true)
     const { data, error } = await supabase
       .from('bem_aviv_client_followups')
-      .select('id, client_id, contacted_at, channel, result, notes')
+      .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
       .eq('user_id', ownerUserId.toUpperCase())
       .eq('client_id', client.id)
       .order('contacted_at', { ascending: false })
@@ -345,7 +351,7 @@ export function BemAvivClientesPage() {
     if (!supabase || !ownerUserId) return []
     const { data, error } = await supabase
       .from('bem_aviv_client_followups')
-      .select('id, client_id, contacted_at, channel, result, notes')
+      .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
       .eq('user_id', ownerUserId.toUpperCase())
       .eq('client_id', clientId)
       .order('contacted_at', { ascending: false })
@@ -369,6 +375,7 @@ export function BemAvivClientesPage() {
         .update({
           contacted_at: contactedAtIso,
           channel: registerInlineForm.channel,
+          created_by_name: followupActorName,
           result: registerInlineForm.result || null,
           notes: registerInlineForm.notes || null,
         })
@@ -398,6 +405,8 @@ export function BemAvivClientesPage() {
 
     const { error: insertError } = await supabase.from('bem_aviv_client_followups').insert({
       user_id: followupUserId,
+      created_by_user_id: user?.id ?? null,
+      created_by_name: followupActorName,
       client_id: historyModalClient.id,
       contacted_at: contactedAtIso,
       channel: registerInlineForm.channel,
@@ -464,7 +473,9 @@ export function BemAvivClientesPage() {
     setEditingHistoryId(null)
     setScheduleInlineOpen((prev) => !prev)
     setScheduleInlineForm({
+      contact_done: false,
       next_followup_at: toInputDateTimeLocal(new Date().toISOString()),
+      commercial_stage: historyModalClient?.commercial_stage || 'CONTATO',
       summary: '',
       details: '',
     })
@@ -484,6 +495,8 @@ export function BemAvivClientesPage() {
         next_followup_at: new Date(scheduleInlineForm.next_followup_at).toISOString(),
         next_followup_note: composeFollowupNote(scheduleInlineForm.summary, scheduleInlineForm.details) || null,
         next_followup_status: 'PENDENTE',
+        commercial_stage: scheduleInlineForm.commercial_stage,
+        last_contact_at: scheduleInlineForm.contact_done ? new Date().toISOString() : historyModalClient.last_contact_at ?? null,
       })
       .eq('id', historyModalClient.id)
       .eq('user_id', ownerUserId)
@@ -496,6 +509,22 @@ export function BemAvivClientesPage() {
     setScheduleInlineSaving(false)
     await load()
     alert('PRÓXIMO FOLLOW-UP AGENDADO COM SUCESSO.')
+  }
+
+  async function removeHistoryRow(rowId: string) {
+    if (!supabase || !ownerUserId || !historyModalClient) return
+    if (!confirm('EXCLUIR ESTE REGISTRO DE CONTATO?')) return
+    const { error } = await supabase
+      .from('bem_aviv_client_followups')
+      .delete()
+      .eq('id', rowId)
+      .eq('user_id', ownerUserId.toUpperCase())
+    if (error) {
+      alert(error.message)
+      return
+    }
+    const rows = await refetchHistoryModalRows(historyModalClient.id)
+    setHistoryModalRows(rows)
   }
 
   async function openPedidosModal(client: Cliente) {
@@ -1098,6 +1127,15 @@ export function BemAvivClientesPage() {
             {scheduleInlineOpen ? (
               <form onSubmit={submitInlineSchedule} className="mt-4 rounded-lg border border-sky-200 bg-sky-50/40 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Agendar próximo follow-up</p>
+                <label className="mt-2 inline-flex items-center gap-2 text-xs font-semibold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={scheduleInlineForm.contact_done}
+                    onChange={(e) => setScheduleInlineForm((prev) => ({ ...prev, contact_done: e.target.checked }))}
+                    className="h-4 w-4 rounded border-slate-300"
+                  />
+                  Contato realizado
+                </label>
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
                   <label className="text-xs text-slate-600 sm:col-span-2">
                     Próximo follow-up
@@ -1110,6 +1148,20 @@ export function BemAvivClientesPage() {
                     />
                   </label>
                   <label className="text-xs text-slate-600 sm:col-span-2">
+                    Status relacionamento
+                    <select
+                      value={scheduleInlineForm.commercial_stage}
+                      onChange={(e) => setScheduleInlineForm((prev) => ({ ...prev, commercial_stage: e.target.value }))}
+                      className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+                    >
+                      {BEM_AVIV_CLIENT_COMMERCIAL_STAGE_OPTIONS.map((stage) => (
+                        <option key={stage} value={stage}>
+                          {stage}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-xs text-slate-600 sm:col-span-2">
                     Resumo (até 60 caracteres)
                     <input
                       maxLength={60}
@@ -1117,9 +1169,10 @@ export function BemAvivClientesPage() {
                       onChange={(e) => setScheduleInlineForm((prev) => ({ ...prev, summary: e.target.value }))}
                       className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
                     />
+                    <p className="mt-1 text-[8px] text-slate-500">{scheduleInlineForm.summary.length}/60</p>
                   </label>
                   <label className="text-xs text-slate-600 sm:col-span-2">
-                    Detalhe
+                    Registro
                     <textarea
                       rows={2}
                       value={scheduleInlineForm.details}
@@ -1151,6 +1204,7 @@ export function BemAvivClientesPage() {
                     <tr>
                       <th className="px-3 py-2 text-left">Data/Hora</th>
                       <th className="px-3 py-2 text-left">Canal</th>
+                      <th className="px-3 py-2 text-left">Usuário</th>
                       <th className="px-3 py-2 text-left">Resumo</th>
                       <th className="px-3 py-2 text-left">Detalhe</th>
                       <th className="px-3 py-2 text-right">Ação</th>
@@ -1167,25 +1221,40 @@ export function BemAvivClientesPage() {
                       >
                         <td className="px-3 py-2 text-slate-700">{formatShortDateTime(r.contacted_at)}</td>
                         <td className="px-3 py-2 text-slate-700">{r.channel}</td>
+                        <td className="px-3 py-2 text-slate-700">{r.created_by_name || '—'}</td>
                         <td className="px-3 py-2 text-slate-700">{r.result || '—'}</td>
                         <td className="px-3 py-2 text-slate-700">{r.notes || '—'}</td>
                         <td className="px-3 py-2 text-right">
-                          <button
-                            type="button"
-                            className="text-sm font-semibold text-[#185FA5] hover:underline"
-                            onClick={() => {
-                              setEditingHistoryId(r.id)
-                              setRegisterInlineForm({
-                                contacted_at: toInputDateTimeLocal(r.contacted_at),
-                                channel: r.channel,
-                                result: r.result ?? '',
-                                notes: r.notes ?? '',
-                              })
-                              setRegisterInlineOpen(true)
-                            }}
-                          >
-                            Editar
-                          </button>
+                          <div className="inline-flex items-center gap-1">
+                            <button
+                              type="button"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
+                              onClick={() => {
+                                setScheduleInlineOpen(false)
+                                setEditingHistoryId(r.id)
+                                setRegisterInlineForm({
+                                  contacted_at: toInputDateTimeLocal(r.contacted_at),
+                                  channel: r.channel,
+                                  result: r.result ?? '',
+                                  notes: r.notes ?? '',
+                                })
+                                setRegisterInlineOpen(true)
+                              }}
+                              title="Editar registro"
+                              aria-label="Editar registro"
+                            >
+                              <Pencil size={15} strokeWidth={2.2} />
+                            </button>
+                            <button
+                              type="button"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-300 bg-white text-red-700 shadow-sm hover:bg-red-50"
+                              onClick={() => void removeHistoryRow(r.id)}
+                              title="Excluir registro"
+                              aria-label="Excluir registro"
+                            >
+                              <Trash2 size={15} strokeWidth={2.2} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}

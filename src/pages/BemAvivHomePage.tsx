@@ -35,6 +35,7 @@ type FollowupHistoryRow = {
   client_id: string
   contacted_at: string
   channel: string
+  created_by_name?: string | null
   result: string | null
   notes: string | null
 }
@@ -200,6 +201,7 @@ export function BemAvivHomePage() {
   const supabase = useSupabase()
   const navigate = useNavigate()
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
+  const followupActorName = (user?.fullName || user?.primaryEmailAddress?.emailAddress || ownerUserId || 'USUÁRIO').trim().toUpperCase()
   const [loading, setLoading] = useState(true)
   const [totalSold, setTotalSold] = useState(0)
   const [openOrdersCount, setOpenOrdersCount] = useState(0)
@@ -318,7 +320,7 @@ export function BemAvivHomePage() {
     void (async () => {
       const { data, error } = await supabase
         .from('bem_aviv_client_followups')
-        .select('id, client_id, contacted_at, channel, result, notes')
+        .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
         .eq('user_id', ownerUserId.toUpperCase())
         .in('client_id', ids)
         .order('contacted_at', { ascending: false })
@@ -498,7 +500,7 @@ export function BemAvivHomePage() {
     setHistoryModalLoading(true)
     const { data, error } = await supabase
       .from('bem_aviv_client_followups')
-      .select('id, client_id, contacted_at, channel, result, notes')
+      .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
       .eq('user_id', ownerUserId.toUpperCase())
       .eq('client_id', client.id)
       .order('contacted_at', { ascending: false })
@@ -542,7 +544,7 @@ export function BemAvivHomePage() {
     if (!supabase || !ownerUserId) return []
     const { data, error } = await supabase
       .from('bem_aviv_client_followups')
-      .select('id, client_id, contacted_at, channel, result, notes')
+      .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
       .eq('user_id', ownerUserId.toUpperCase())
       .eq('client_id', client.id)
       .order('contacted_at', { ascending: false })
@@ -566,6 +568,7 @@ export function BemAvivHomePage() {
         .update({
           contacted_at: contactedAtIso,
           channel: registerInlineForm.channel,
+          created_by_name: followupActorName,
           result: registerInlineForm.result || null,
           notes: registerInlineForm.notes || null,
         })
@@ -601,6 +604,8 @@ export function BemAvivHomePage() {
 
     const { error: insertError } = await supabase.from('bem_aviv_client_followups').insert({
       user_id: followupUserId,
+      created_by_user_id: user?.id ?? null,
+      created_by_name: followupActorName,
       client_id: historyModalClient.id,
       contacted_at: contactedAtIso,
       channel: registerInlineForm.channel,
@@ -633,6 +638,7 @@ export function BemAvivHomePage() {
         client_id: historyModalClient.id,
         contacted_at: contactedAtIso,
         channel: registerInlineForm.channel,
+        created_by_name: followupActorName,
         result: registerInlineForm.result || null,
         notes: registerInlineForm.notes || null,
       },
@@ -1083,6 +1089,7 @@ export function BemAvivHomePage() {
                     <tr>
                       <th className="px-3 py-2 text-left">Data/Hora</th>
                       <th className="px-3 py-2 text-left">Canal</th>
+                      <th className="px-3 py-2 text-left">Usuário</th>
                       <th className="px-3 py-2 text-left">Resumo</th>
                       <th className="px-3 py-2 text-left">Detalhe</th>
                       <th className="px-3 py-2 text-right">Ação</th>
@@ -1099,6 +1106,7 @@ export function BemAvivHomePage() {
                       >
                         <td className="px-3 py-2 text-slate-700">{formatShortDateTime(r.contacted_at)}</td>
                         <td className="px-3 py-2 text-slate-700">{r.channel}</td>
+                        <td className="px-3 py-2 text-slate-700">{r.created_by_name || '—'}</td>
                         <td className="px-3 py-2 text-slate-700">{r.result || '—'}</td>
                         <td className="px-3 py-2 text-slate-700">{r.notes || '—'}</td>
                         <td className="px-3 py-2 text-right">
