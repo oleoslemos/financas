@@ -41,6 +41,14 @@ type FollowupHistoryRow = {
   notes: string | null
 }
 
+function composeFollowupNote(summary: string, details: string) {
+  const s = summary.trim()
+  const d = details.trim()
+  if (s && d) return `RESUMO: ${s}\n${d}`
+  if (s) return `RESUMO: ${s}`
+  return d
+}
+
 type Cliente = {
   id: string
   full_name: string
@@ -191,13 +199,20 @@ export function BemAvivClientesPage() {
   const [historyModalRows, setHistoryModalRows] = useState<FollowupHistoryRow[]>([])
   const [historyModalLoading, setHistoryModalLoading] = useState(false)
   const [registerInlineOpen, setRegisterInlineOpen] = useState(false)
+  const [scheduleInlineOpen, setScheduleInlineOpen] = useState(false)
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null)
   const [registerInlineSaving, setRegisterInlineSaving] = useState(false)
+  const [scheduleInlineSaving, setScheduleInlineSaving] = useState(false)
   const [registerInlineForm, setRegisterInlineForm] = useState({
     contacted_at: toInputDateTimeLocal(new Date().toISOString()),
     channel: 'WHATSAPP',
     result: '',
     notes: '',
+  })
+  const [scheduleInlineForm, setScheduleInlineForm] = useState({
+    next_followup_at: toInputDateTimeLocal(new Date().toISOString()),
+    summary: '',
+    details: '',
   })
 
   const load = useCallback(async () => {
@@ -299,7 +314,9 @@ export function BemAvivClientesPage() {
     setHistoryModalClient(client)
     setEditingHistoryId(null)
     setRegisterInlineOpen(false)
+    setScheduleInlineOpen(false)
     setRegisterInlineSaving(false)
+    setScheduleInlineSaving(false)
     setRegisterInlineForm({
       contacted_at: toInputDateTimeLocal(new Date().toISOString()),
       channel: 'WHATSAPP',
@@ -414,6 +431,7 @@ export function BemAvivClientesPage() {
   }
 
   function toggleInlineFollowupForm() {
+    setScheduleInlineOpen(false)
     if (registerInlineOpen && editingHistoryId) {
       setEditingHistoryId(null)
       setRegisterInlineForm({
@@ -439,6 +457,45 @@ export function BemAvivClientesPage() {
       }
       return next
     })
+  }
+
+  function toggleInlineScheduleForm() {
+    setRegisterInlineOpen(false)
+    setEditingHistoryId(null)
+    setScheduleInlineOpen((prev) => !prev)
+    setScheduleInlineForm({
+      next_followup_at: toInputDateTimeLocal(new Date().toISOString()),
+      summary: '',
+      details: '',
+    })
+  }
+
+  async function submitInlineSchedule(e: React.FormEvent) {
+    e.preventDefault()
+    if (!supabase || !ownerUserId || !historyModalClient) return
+    if (!scheduleInlineForm.next_followup_at) {
+      alert('INFORME A DATA/HORA DO AGENDAMENTO.')
+      return
+    }
+    setScheduleInlineSaving(true)
+    const { error } = await supabase
+      .from('bem_aviv_clients')
+      .update({
+        next_followup_at: new Date(scheduleInlineForm.next_followup_at).toISOString(),
+        next_followup_note: composeFollowupNote(scheduleInlineForm.summary, scheduleInlineForm.details) || null,
+        next_followup_status: 'PENDENTE',
+      })
+      .eq('id', historyModalClient.id)
+      .eq('user_id', ownerUserId)
+    if (error) {
+      alert(error.message)
+      setScheduleInlineSaving(false)
+      return
+    }
+    setScheduleInlineOpen(false)
+    setScheduleInlineSaving(false)
+    await load()
+    alert('PRÓXIMO FOLLOW-UP AGENDADO COM SUCESSO.')
   }
 
   async function openPedidosModal(client: Cliente) {
@@ -944,7 +1001,7 @@ export function BemAvivClientesPage() {
                 <button
                   type="button"
                   className="rounded-md border border-sky-300 bg-white px-3 py-1.5 text-sm font-semibold text-sky-700 hover:bg-sky-50"
-                  onClick={toggleInlineFollowupForm}
+                  onClick={toggleInlineScheduleForm}
                 >
                   Agendar próximo follow-up
                 </button>
@@ -1034,6 +1091,51 @@ export function BemAvivClientesPage() {
                       Cancelar edição
                     </button>
                   ) : null}
+                </div>
+              </form>
+            ) : null}
+
+            {scheduleInlineOpen ? (
+              <form onSubmit={submitInlineSchedule} className="mt-4 rounded-lg border border-sky-200 bg-sky-50/40 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Agendar próximo follow-up</p>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <label className="text-xs text-slate-600 sm:col-span-2">
+                    Próximo follow-up
+                    <input
+                      type="datetime-local"
+                      required
+                      value={scheduleInlineForm.next_followup_at}
+                      onChange={(e) => setScheduleInlineForm((prev) => ({ ...prev, next_followup_at: e.target.value }))}
+                      className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+                    />
+                  </label>
+                  <label className="text-xs text-slate-600 sm:col-span-2">
+                    Resumo (até 60 caracteres)
+                    <input
+                      maxLength={60}
+                      value={scheduleInlineForm.summary}
+                      onChange={(e) => setScheduleInlineForm((prev) => ({ ...prev, summary: e.target.value }))}
+                      className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+                    />
+                  </label>
+                  <label className="text-xs text-slate-600 sm:col-span-2">
+                    Detalhe
+                    <textarea
+                      rows={2}
+                      value={scheduleInlineForm.details}
+                      onChange={(e) => setScheduleInlineForm((prev) => ({ ...prev, details: e.target.value }))}
+                      className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+                    />
+                  </label>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="submit"
+                    disabled={scheduleInlineSaving}
+                    className="rounded-md bg-[#185FA5] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#144f8f] disabled:opacity-60"
+                  >
+                    {scheduleInlineSaving ? 'Salvando...' : 'Salvar agendamento'}
+                  </button>
                 </div>
               </form>
             ) : null}
