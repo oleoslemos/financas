@@ -137,7 +137,7 @@ export function CardInvoicesPage() {
 
         <div className="flex min-w-0 w-full flex-wrap items-end gap-x-2 gap-y-2 sm:gap-x-3 lg:w-auto lg:flex-nowrap">
           <div className="min-w-0 w-full sm:w-auto sm:min-w-[9rem] sm:max-w-[14rem]">
-            <label className="mb-0 block text-[10px] font-medium uppercase tracking-wide text-slate-600 sm:text-[11px]">
+            <label className="mb-0 block text-[8px] font-medium uppercase tracking-wide text-slate-600 sm:text-[9px]">
               Cartão
             </label>
             <select
@@ -154,13 +154,13 @@ export function CardInvoicesPage() {
             </select>
           </div>
           <div className="w-[10.5rem] max-w-full">
-            <label className="mb-0 block text-[10px] font-medium uppercase tracking-wide text-slate-600 sm:text-[11px]">
+            <label className="mb-0 block text-[8px] font-medium uppercase tracking-wide text-slate-600 sm:text-[9px]">
               Mês ref.
             </label>
             <input type="month" value={refMonth} onChange={(e) => setRefMonth(e.target.value)} required />
           </div>
           <div className="w-[10rem] max-w-full">
-            <label className="mb-0 block text-[10px] font-medium uppercase tracking-wide text-slate-600 sm:text-[11px]">
+            <label className="mb-0 block text-[8px] font-medium uppercase tracking-wide text-slate-600 sm:text-[9px]">
               Vencimento
             </label>
             <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} required />
@@ -177,7 +177,7 @@ export function CardInvoicesPage() {
               checked={openDetailAfterCreate}
               onChange={(e) => setOpenDetailAfterCreate(e.target.checked)}
             />
-            <span className="whitespace-nowrap text-[10px] text-slate-700 sm:text-xs">Abrir após criar</span>
+            <span className="whitespace-nowrap text-[8px] text-slate-700 sm:text-xs">Abrir após criar</span>
           </label>
           <Button type="submit" variant="primary" className="h-10 shrink-0 text-xs sm:text-sm">
             NOVA FATURA

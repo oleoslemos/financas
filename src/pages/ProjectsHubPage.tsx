@@ -93,7 +93,7 @@ export function ProjectsHubPage() {
               <div className="rounded-xl bg-emerald-50 p-2 text-emerald-700">
                 <card.icon size={18} />
               </div>
-              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-slate-600">{card.chip}</span>
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[9px] font-medium uppercase tracking-wide text-slate-600">{card.chip}</span>
             </div>
             <h3 className="mt-4 text-base font-semibold text-slate-900">{card.title}</h3>
             <p className="mt-1 text-sm text-slate-600">{card.description}</p>

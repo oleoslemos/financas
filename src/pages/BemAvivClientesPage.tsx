@@ -430,24 +430,24 @@ export function BemAvivClientesPage() {
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Total</p>
-          <p className="font-hub mt-1 text-[22px] font-bold text-slate-900">{stats.total}</p>
-          <span className="mt-1 inline-block rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">Cadastros</span>
+          <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Total</p>
+          <p className="font-hub mt-1 text-[20px] font-bold text-slate-900">{stats.total}</p>
+          <span className="mt-1 inline-block rounded-full bg-slate-100 px-2 py-0.5 text-[8px] text-slate-600">Cadastros</span>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Clientes</p>
-          <p className="font-hub mt-1 text-[22px] font-bold text-slate-900">{stats.clientes}</p>
-          <span className="mt-1 inline-block rounded-full bg-[#EAF3DE] px-2 py-0.5 text-[10px] font-medium text-[#3B6D11]">Ativos</span>
+          <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Clientes</p>
+          <p className="font-hub mt-1 text-[20px] font-bold text-slate-900">{stats.clientes}</p>
+          <span className="mt-1 inline-block rounded-full bg-[#EAF3DE] px-2 py-0.5 text-[8px] font-medium text-[#3B6D11]">Ativos</span>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Prospecção</p>
-          <p className="font-hub mt-1 text-[22px] font-bold text-slate-900">{stats.prospec}</p>
-          <span className="mt-1 inline-block rounded-full bg-[#FAEEDA] px-2 py-0.5 text-[10px] font-medium text-[#854F0B]">Prospects</span>
+          <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Prospecção</p>
+          <p className="font-hub mt-1 text-[20px] font-bold text-slate-900">{stats.prospec}</p>
+          <span className="mt-1 inline-block rounded-full bg-[#FAEEDA] px-2 py-0.5 text-[8px] font-medium text-[#854F0B]">Prospects</span>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Cadastro completo</p>
-          <p className="font-hub mt-1 text-[22px] font-bold text-slate-900">{stats.comEmail}</p>
-          <span className="mt-1 inline-block rounded-full bg-[#E6F1FB] px-2 py-0.5 text-[10px] font-medium text-[#185FA5]">Com e-mail</span>
+          <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Cadastro completo</p>
+          <p className="font-hub mt-1 text-[20px] font-bold text-slate-900">{stats.comEmail}</p>
+          <span className="mt-1 inline-block rounded-full bg-[#E6F1FB] px-2 py-0.5 text-[8px] font-medium text-[#185FA5]">Com e-mail</span>
         </div>
       </div>
 
@@ -516,7 +516,7 @@ export function BemAvivClientesPage() {
                   <td>
                     <div className="flex min-w-0 max-w-[min(720px,55vw)] items-center gap-2.5 xl:max-w-none">
                       <div
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[8px] font-semibold"
                         style={{ backgroundColor: pal.bg, color: pal.fg }}
                       >
                         {initialsFromName(r.full_name)}
@@ -531,12 +531,12 @@ export function BemAvivClientesPage() {
                   </td>
                   <td>
                     {(r.client_status ?? '').trim() === 'CLIENTE' ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-[#EAF3DE] px-2 py-0.5 text-[10px] font-medium text-[#3B6D11]">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-[#EAF3DE] px-2 py-0.5 text-[8px] font-medium text-[#3B6D11]">
                         <span className="h-1 w-1 rounded-full bg-[#639922]" aria-hidden />
                         Cliente
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-[#FAEEDA] px-2 py-0.5 text-[10px] font-medium text-[#854F0B]">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-[#FAEEDA] px-2 py-0.5 text-[8px] font-medium text-[#854F0B]">
                         <span className="h-1 w-1 rounded-full bg-[#EF9F27]" aria-hidden />
                         Prospecção
                       </span>
@@ -617,7 +617,7 @@ export function BemAvivClientesPage() {
         )}
         {!loading ? (
           <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-2.5">
-            <span className="text-[11px] text-slate-500">
+            <span className="text-[9px] text-slate-500">
               {displayedRows.length} registro{displayedRows.length !== 1 ? 's' : ''}
             </span>
           </div>
@@ -771,17 +771,17 @@ export function BemAvivClientesPage() {
               </div>
               <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
                 <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-center">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Total comprado</p>
+                  <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Total comprado</p>
                   <p className="font-hub text-sm font-bold tabular-nums text-slate-900">{formatBRL(pedidosModalStats.total)}</p>
                 </div>
                 <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-center">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Média</p>
+                  <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Média</p>
                   <p className="font-hub text-sm font-bold tabular-nums text-slate-900">
                     {pedidosModalStats.media != null ? formatBRL(pedidosModalStats.media) : '—'}
                   </p>
                 </div>
                 <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-center">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Última compra</p>
+                  <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Última compra</p>
                   <p className="text-sm font-semibold tabular-nums text-slate-900">
                     {pedidosModalStats.ultima
                       ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(pedidosModalStats.ultima + 'T12:00:00'))

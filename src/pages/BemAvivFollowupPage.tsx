@@ -540,7 +540,7 @@ export function BemAvivFollowupPage() {
                   <p className="mt-1 text-xs text-slate-600">
                     Último toque (referência): {formatDateTime(new Date(refMs).toISOString())} · {formatDaysSinceTouchMs(refMs)}
                   </p>
-                  <p className="mt-0.5 text-[11px] text-slate-500">
+                  <p className="mt-0.5 text-[9px] text-slate-500">
                     Cadastro: {formatDateTime(row.last_contact_at)} · Último no histórico:{' '}
                     {lastHist ? formatDateTime(lastHist.contacted_at) : '—'}
                   </p>
@@ -610,7 +610,7 @@ export function BemAvivFollowupPage() {
                       <td>
                         <span className="text-slate-800">{formatDateTime(new Date(refMs).toISOString())}</span>
                         <span className="ml-1 text-xs text-slate-500">({formatDaysSinceTouchMs(refMs)})</span>
-                        <p className="mt-1 text-[11px] text-slate-500">
+                        <p className="mt-1 text-[9px] text-slate-500">
                           Cad.: {formatDateTime(row.last_contact_at)} · Hist.:{' '}
                           {lastHist ? formatDateTime(lastHist.contacted_at) : '—'}
                         </p>

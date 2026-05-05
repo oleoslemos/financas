@@ -13,6 +13,6 @@ export function Avatar({ className, ...props }: DivProps) {
 
 export function AvatarFallback({ className, ...props }: DivProps) {
   return (
-    <div className={cn('flex h-full w-full items-center justify-center rounded-full text-[11px] font-bold uppercase', className)} {...props} />
+    <div className={cn('flex h-full w-full items-center justify-center rounded-full text-[9px] font-bold uppercase', className)} {...props} />
   )
 }

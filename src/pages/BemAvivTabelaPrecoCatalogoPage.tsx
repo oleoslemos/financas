@@ -376,7 +376,7 @@ export function BemAvivTabelaPrecoCatalogoPage() {
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-semibold text-slate-900">{r.name}</p>
                     {r.is_default ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-semibold text-amber-900">
                         <Star size={12} />
                         PADRÃO
                       </span>
@@ -442,7 +442,7 @@ export function BemAvivTabelaPrecoCatalogoPage() {
                           <td>
                             {row.product?.name ?? row.items[0]?.line_description}
                             {row.isGrade ? (
-                              <span className="ml-2 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+                              <span className="ml-2 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-medium text-slate-700">
                                 GRADE ({row.items.length})
                               </span>
                             ) : null}

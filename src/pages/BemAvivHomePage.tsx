@@ -779,7 +779,7 @@ export function BemAvivHomePage() {
                   <button
                     type="button"
                     onClick={goToCurrentMonth}
-                    className="rounded-md border border-[#185FA5]/40 bg-[#E6F1FB] px-2.5 py-1 text-[11px] font-semibold text-[#185FA5] hover:bg-[#d4e8f8] sm:px-3 sm:py-1.5 sm:text-xs"
+                    className="rounded-md border border-[#185FA5]/40 bg-[#E6F1FB] px-2.5 py-1 text-[9px] font-semibold text-[#185FA5] hover:bg-[#d4e8f8] sm:px-3 sm:py-1.5 sm:text-xs"
                   >
                     Mês atual
                   </button>
@@ -788,7 +788,7 @@ export function BemAvivHomePage() {
 
               <div className="mt-4 flex flex-col gap-5 lg:flex-row lg:items-start lg:gap-6">
                 <div className="mx-auto w-full max-w-[300px] shrink-0 sm:max-w-[320px] lg:mx-0">
-                  <div className="grid grid-cols-7 gap-0.5 text-center text-[10px] font-semibold text-slate-500">
+                  <div className="grid grid-cols-7 gap-0.5 text-center text-[8px] font-semibold text-slate-500">
                     {WEEKDAYS_SHORT.map((w) => (
                       <div key={w} className="py-1">
                         {w}
@@ -819,7 +819,7 @@ export function BemAvivHomePage() {
                         >
                           <span>{cell.date.getDate()}</span>
                           {n > 0 ? (
-                            <span className="absolute bottom-0.5 right-0.5 flex h-3 min-w-[0.65rem] items-center justify-center rounded-full bg-[#185FA5] px-0.5 text-[8px] font-bold leading-none text-white sm:h-3.5 sm:text-[9px]">
+                            <span className="absolute bottom-0.5 right-0.5 flex h-3 min-w-[0.65rem] items-center justify-center rounded-full bg-[#185FA5] px-0.5 text-[6px] font-bold leading-none text-white sm:h-3.5 sm:text-[7px]">
                               {n}
                             </span>
                           ) : null}
@@ -849,7 +849,7 @@ export function BemAvivHomePage() {
                               <span className="mt-0.5 block min-w-0 truncate text-xs text-slate-500">{agendaResumo(c.id)}</span>
                             ) : null}
                               <span className="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden w-[min(90vw,340px)] overflow-hidden rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg ring-1 ring-slate-900/5 group-hover:block">
-                                <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Último contato</span>
+                                <span className="block text-[9px] font-semibold uppercase tracking-wide text-slate-500">Último contato</span>
                                 <span className="mt-0.5 block text-sm font-bold tabular-nums text-slate-900">{tip.date}</span>
                                 <span className="mt-2 block whitespace-normal break-words border-t border-slate-100 pt-2 text-xs leading-snug text-slate-700">
                                   <span className="font-semibold text-slate-600">Observação:</span> {tip.observation}

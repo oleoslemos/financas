@@ -455,7 +455,7 @@ export function BemAvivPedidosPage() {
                       {parsePaymentOption(r.payment_option) === 'A_PRAZO' ? (
                         <span className="inline-flex flex-col items-end">
                           <span>{formatBRL(downVal(r))}</span>
-                          <span className="text-[11px] text-slate-500">{PAYMENT_METHOD_LABEL[downMethod]}</span>
+                          <span className="text-[9px] text-slate-500">{PAYMENT_METHOD_LABEL[downMethod]}</span>
                         </span>
                       ) : (
                         '—'

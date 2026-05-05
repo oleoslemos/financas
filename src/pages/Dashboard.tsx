@@ -304,7 +304,7 @@ export function Dashboard() {
               <Button
                 type="button"
                 variant="secondary"
-                className={`text-[11px] ${selectedBankId === 'ALL' ? 'ring-1 ring-sky-500/60' : ''}`}
+                className={`text-[9px] ${selectedBankId === 'ALL' ? 'ring-1 ring-sky-500/60' : ''}`}
                 onClick={() => setSelectedBankId('ALL')}
               >
                 TODAS
@@ -330,7 +330,7 @@ export function Dashboard() {
                       selected ? 'border-sky-500 ring-1 ring-sky-200' : 'border-slate-200 hover:border-slate-300'
                     }`}
                   >
-                    <div className="mb-1 flex items-center gap-2 text-[11px] text-slate-500">
+                    <div className="mb-1 flex items-center gap-2 text-[9px] text-slate-500">
                       <Landmark size={14} />
                       <span>{b.name}</span>
                     </div>
@@ -355,10 +355,10 @@ export function Dashboard() {
                 onChange={(e) => setSelectedMonth(e.target.value)}
                 className="w-44"
               />
-              <div className="mt-2 text-[11px] text-slate-500">
+              <div className="mt-2 text-[9px] text-slate-500">
                 EXIBINDO: {selectedMonth} E {nextMonthKey(selectedMonth)}
               </div>
-              <div className="mt-1 text-[11px] text-slate-500">
+              <div className="mt-1 text-[9px] text-slate-500">
                 FILTRO DE CONTA: {selectedBankName}
               </div>
             </div>
@@ -367,9 +367,9 @@ export function Dashboard() {
               <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
                 <h3 className="mb-2 text-xs font-semibold text-slate-700">CONTAS ABERTAS — {selectedMonth}</h3>
                 <div className="space-y-2">
-                  <p className="text-[11px] font-medium text-amber-800">A PAGAR</p>
+                  <p className="text-[9px] font-medium text-amber-800">A PAGAR</p>
                   {payCurrent.length === 0 ? (
-                    <p className="text-[11px] text-slate-500">
+                    <p className="text-[9px] text-slate-500">
                       SEM REGISTROS
                       {selectedBankId !== 'ALL' ? ' NESTA CONTA.' : '.'}
                     </p>
@@ -388,9 +388,9 @@ export function Dashboard() {
                     ))
                   )}
 
-                  <p className="pt-2 text-[11px] font-medium text-emerald-800">A RECEBER</p>
+                  <p className="pt-2 text-[9px] font-medium text-emerald-800">A RECEBER</p>
                   {recCurrent.length === 0 ? (
-                    <p className="text-[11px] text-slate-500">
+                    <p className="text-[9px] text-slate-500">
                       SEM REGISTROS
                       {selectedBankId !== 'ALL' ? ' NESTA CONTA.' : '.'}
                     </p>
@@ -414,9 +414,9 @@ export function Dashboard() {
               <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
                 <h3 className="mb-2 text-xs font-semibold text-slate-700">CONTAS ABERTAS — {monthNext}</h3>
                 <div className="space-y-2">
-                  <p className="text-[11px] font-medium text-amber-800">A PAGAR</p>
+                  <p className="text-[9px] font-medium text-amber-800">A PAGAR</p>
                   {payNext.length === 0 ? (
-                    <p className="text-[11px] text-slate-500">
+                    <p className="text-[9px] text-slate-500">
                       SEM REGISTROS
                       {selectedBankId !== 'ALL' ? ' NESTA CONTA.' : '.'}
                     </p>
@@ -435,9 +435,9 @@ export function Dashboard() {
                     ))
                   )}
 
-                  <p className="pt-2 text-[11px] font-medium text-emerald-800">A RECEBER</p>
+                  <p className="pt-2 text-[9px] font-medium text-emerald-800">A RECEBER</p>
                   {recNext.length === 0 ? (
-                    <p className="text-[11px] text-slate-500">
+                    <p className="text-[9px] text-slate-500">
                       SEM REGISTROS
                       {selectedBankId !== 'ALL' ? ' NESTA CONTA.' : '.'}
                     </p>
@@ -473,17 +473,17 @@ export function Dashboard() {
             <CreditCard size={16} className="text-sky-600" />
             <span>EVOLUÇÃO POR CARTÃO (TOTAL DA FATURA)</span>
           </div>
-          <Link to="/lsh/cartoes" className="text-[11px] text-sky-600 hover:underline">
+          <Link to="/lsh/cartoes" className="text-[9px] text-sky-600 hover:underline">
             GERENCIAR CARTÕES
           </Link>
         </div>
-        <p className="text-[11px] text-slate-500">
+        <p className="text-[9px] text-slate-500">
           CADA CARD É UM CARTÃO: BASE DE 3 MESES ANTERIORES + MÊS ATUAL ({monthKey(new Date())}), DEPOIS MESES À FRENTE
           CONFORME O FILTRO. VALORES = SOMA DOS ITENS DA FATURA POR COMPETÊNCIA.
         </p>
         <div className="flex flex-wrap items-end gap-4">
           <div>
-            <label className="mb-1 block text-[11px] text-slate-600">À FRENTE (EM CADA CARD)</label>
+            <label className="mb-1 block text-[9px] text-slate-600">À FRENTE (EM CADA CARD)</label>
             <select
               className="min-w-[200px]"
               value={ccFutureMonths}
@@ -524,7 +524,7 @@ export function Dashboard() {
                     }`}
                   >
                     {row.isCurrent ? (
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-700 sm:text-xs">
+                      <p className="text-[8px] font-semibold uppercase tracking-wide text-sky-700 sm:text-xs">
                         Mês atual
                       </p>
                     ) : null}

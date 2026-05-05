@@ -262,7 +262,7 @@ export function AppLayout() {
               {!sidebarCollapsed ? (
                 <button
                   type="button"
-                  className="flex w-full items-center gap-1 rounded-md px-2 pb-1 pt-2 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500 hover:bg-slate-50"
+                  className="flex w-full items-center gap-1 rounded-md px-2 pb-1 pt-2 text-left text-sidebar-section font-semibold uppercase tracking-wide text-slate-500 hover:bg-slate-50"
                   onClick={() => {
                     setOpenSectionKey((prev) => (prev === section.key ? null : section.key))
                     if (section.system === 'bem-aviv') {
@@ -289,7 +289,7 @@ export function AppLayout() {
                         <li key={`${section.title}-${item.key}`}>
                           <button
                             type="button"
-                            className="flex w-full appearance-none items-center gap-2.5 rounded-lg border-0 bg-transparent px-2 py-1.5 text-left text-[13px] font-medium normal-case text-slate-600 outline-none transition-colors hover:bg-slate-50 focus-visible:ring-0"
+                            className="flex w-full appearance-none items-center gap-2.5 rounded-lg border-0 bg-transparent px-2 py-1.5 text-left text-sidebar-item font-medium normal-case text-slate-600 outline-none transition-colors hover:bg-slate-50 focus-visible:ring-0"
                             onClick={() =>
                               setOpenTreeGroupKeys((prev) =>
                                 prev.includes(item.key) ? prev.filter((k) => k !== item.key) : [...prev, item.key],
@@ -319,7 +319,7 @@ export function AppLayout() {
                                     title={sidebarCollapsed ? child.label : undefined}
                                     className={({ isActive }) =>
                                       cn(
-                                        'flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] font-medium normal-case transition-colors',
+                                        'flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sidebar-item font-medium normal-case transition-colors',
                                         isActive
                                           ? 'bg-[#E6F1FB] font-semibold text-[#185FA5] [&>.sb-ico]:bg-[#185FA5] [&>.sb-ico]:text-white'
                                           : 'text-slate-600 hover:bg-slate-50',
@@ -349,7 +349,7 @@ export function AppLayout() {
                           title={sidebarCollapsed ? item.label : undefined}
                           className={({ isActive }) =>
                             cn(
-                              'flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] font-medium normal-case transition-colors',
+                              'flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sidebar-item font-medium normal-case transition-colors',
                               isActive
                                 ? 'bg-[#E6F1FB] font-semibold text-[#185FA5] [&>.sb-ico]:bg-[#185FA5] [&>.sb-ico]:text-white'
                                 : 'text-slate-600 hover:bg-slate-50',
@@ -390,7 +390,7 @@ export function AppLayout() {
           <div className="ml-auto flex items-center gap-2">
             <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-1.5 py-1 sm:px-2">
               <div
-                className="flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+                className="flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-full text-[8px] font-semibold text-white"
                 style={{ backgroundColor: hubBrand.primary }}
               >
                 {userInitials}
