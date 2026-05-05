@@ -1,6 +1,7 @@
 import { useUser } from '@clerk/clerk-react'
 import { Building2, ChevronLeft, ChevronRight, History, Target, TrendingUp } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Bar, BarChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Progress } from '../components/ui/Progress'
@@ -197,6 +198,7 @@ function MonthlyBarTooltip({
 export function BemAvivHomePage() {
   const { user } = useUser()
   const supabase = useSupabase()
+  const navigate = useNavigate()
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const [loading, setLoading] = useState(true)
   const [totalSold, setTotalSold] = useState(0)
