@@ -13,6 +13,7 @@ type Cliente = {
   id: string
   full_name: string
   commercial_stage: string | null
+  last_contact_at: string | null
   next_followup_at: string | null
   next_followup_note: string | null
   next_followup_status: FollowupStatus | null
@@ -74,7 +75,7 @@ export function BemAvivFollowupSchedulePage() {
     setLoading(true)
     const { data, error } = await supabase
       .from('bem_aviv_clients')
-      .select('id, full_name, commercial_stage, next_followup_at, next_followup_note, next_followup_status')
+      .select('id, full_name, commercial_stage, last_contact_at, next_followup_at, next_followup_note, next_followup_status')
       .eq('user_id', ownerUserId)
       .eq('id', clientId)
       .maybeSingle()

@@ -68,6 +68,7 @@ type Cliente = {
   email: string | null
   client_status: string | null
   commercial_stage: string | null
+  last_contact_at: string | null
 }
 
 type SortKey = 'full_name' | 'phones' | 'client_status'
