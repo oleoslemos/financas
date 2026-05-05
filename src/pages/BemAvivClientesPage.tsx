@@ -413,6 +413,34 @@ export function BemAvivClientesPage() {
     setRegisterInlineSaving(false)
   }
 
+  function toggleInlineFollowupForm() {
+    if (registerInlineOpen && editingHistoryId) {
+      setEditingHistoryId(null)
+      setRegisterInlineForm({
+        contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+        channel: 'WHATSAPP',
+        result: '',
+        notes: '',
+      })
+      return
+    }
+    setRegisterInlineOpen((prev) => {
+      const next = !prev
+      if (next) {
+        setEditingHistoryId(null)
+        setRegisterInlineForm({
+          contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+          channel: 'WHATSAPP',
+          result: '',
+          notes: '',
+        })
+      } else {
+        setEditingHistoryId(null)
+      }
+      return next
+    })
+  }
+
   async function openPedidosModal(client: Cliente) {
     setPedidosModalClient(client)
     setPedidosModalRows([])
@@ -905,33 +933,7 @@ export function BemAvivClientesPage() {
                 <button
                   type="button"
                   className="rounded-md bg-[#185FA5] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#144f8f]"
-                  onClick={() => {
-                    if (registerInlineOpen && editingHistoryId) {
-                      setEditingHistoryId(null)
-                      setRegisterInlineForm({
-                        contacted_at: toInputDateTimeLocal(new Date().toISOString()),
-                        channel: 'WHATSAPP',
-                        result: '',
-                        notes: '',
-                      })
-                      return
-                    }
-                    setRegisterInlineOpen((prev) => {
-                      const next = !prev
-                      if (next) {
-                        setEditingHistoryId(null)
-                        setRegisterInlineForm({
-                          contacted_at: toInputDateTimeLocal(new Date().toISOString()),
-                          channel: 'WHATSAPP',
-                          result: '',
-                          notes: '',
-                        })
-                      } else {
-                        setEditingHistoryId(null)
-                      }
-                      return next
-                    })
-                  }}
+                  onClick={toggleInlineFollowupForm}
                 >
                   {registerInlineOpen && editingHistoryId
                     ? 'Novo contato'
@@ -942,12 +944,7 @@ export function BemAvivClientesPage() {
                 <button
                   type="button"
                   className="rounded-md border border-sky-300 bg-white px-3 py-1.5 text-sm font-semibold text-sky-700 hover:bg-sky-50"
-                  onClick={() => {
-                    const clientId = historyModalClient.id
-                    setEditingHistoryId(null)
-                    setHistoryModalClient(null)
-                    navigate(`/bem-aviv/follow-up/agendar/${clientId}`)
-                  }}
+                  onClick={toggleInlineFollowupForm}
                 >
                   Agendar próximo follow-up
                 </button>
