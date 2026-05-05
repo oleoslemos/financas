@@ -149,6 +149,12 @@ export function BemAvivPedidosPage() {
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const [rows, setRows] = useState<Pedido[]>([])
   const [clients, setClients] = useState<ClienteOpt[]>([])
+  const [kitStats, setKitStats] = useState({
+    quotesWithKit: 0,
+    convertedFromKitQuotes: 0,
+    openKitQuotes: 0,
+    conversionRate: 0,
+  })
   const [loading, setLoading] = useState(true)
   const [typeTab, setTypeTab] = useState<'ORCAMENTO' | 'PEDIDO'>('PEDIDO')
   const [clientTableFilterId, setClientTableFilterId] = useState<string | null>(null)
@@ -176,12 +182,49 @@ export function BemAvivPedidosPage() {
   const load = useCallback(async () => {
     if (!supabase || !ownerUserId) return
     setLoading(true)
-    const [{ data: orders }, { data: cl }] = await Promise.all([
+    const [{ data: orders }, { data: cl }, { data: offerProducts }] = await Promise.all([
       supabase.from('bem_aviv_sales_orders').select('*').eq('user_id', ownerUserId).order('order_date', { ascending: false }),
       supabase.from('bem_aviv_clients').select('id, full_name').eq('user_id', ownerUserId).order('full_name'),
+      supabase.from('bem_aviv_offer_products').select('id, pricing_mode').eq('user_id', ownerUserId).eq('pricing_mode', 'KIT'),
     ])
-    setRows((orders as Pedido[]) ?? [])
+    const ordersList = (orders as Pedido[]) ?? []
+    setRows(ordersList)
     setClients((cl as ClienteOpt[]) ?? [])
+
+    const kitOfferIds = new Set(((offerProducts ?? []) as Array<{ id: string; pricing_mode: string }>).map((r) => r.id))
+    if (kitOfferIds.size > 0 && ordersList.length > 0) {
+      const quoteMap = new Map(ordersList.filter((o) => o.document_type === 'ORCAMENTO').map((o) => [o.id, o]))
+      const quoteIds = Array.from(quoteMap.keys())
+      const quoteIdsWithKit = new Set<string>()
+      const CHUNK = 200
+      for (let i = 0; i < quoteIds.length; i += CHUNK) {
+        const chunk = quoteIds.slice(i, i + CHUNK)
+        const { data: items } = await supabase
+          .from('bem_aviv_sales_order_items')
+          .select('sales_order_id, offer_product_id')
+          .in('sales_order_id', chunk)
+        for (const it of (items ?? []) as Array<{ sales_order_id: string; offer_product_id: string | null }>) {
+          if (it.offer_product_id && kitOfferIds.has(it.offer_product_id)) quoteIdsWithKit.add(it.sales_order_id)
+        }
+      }
+      const quotesWithKit = quoteIdsWithKit.size
+      let convertedFromKitQuotes = 0
+      let openKitQuotes = 0
+      for (const qid of quoteIdsWithKit) {
+        const q = quoteMap.get(qid)
+        if (!q) continue
+        if (q.converted_order_id) convertedFromKitQuotes += 1
+        if ((q.status ?? '').toUpperCase() === 'ABERTO') openKitQuotes += 1
+      }
+      setKitStats({
+        quotesWithKit,
+        convertedFromKitQuotes,
+        openKitQuotes,
+        conversionRate: quotesWithKit > 0 ? (convertedFromKitQuotes / quotesWithKit) * 100 : 0,
+      })
+    } else {
+      setKitStats({ quotesWithKit: 0, convertedFromKitQuotes: 0, openKitQuotes: 0, conversionRate: 0 })
+    }
     setLoading(false)
   }, [ownerUserId, supabase])
 
@@ -529,6 +572,22 @@ export function BemAvivPedidosPage() {
           </button>
         </div>
       ) : null}
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Orçamentos com kit</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums text-slate-900">{kitStats.quotesWithKit}</p>
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Convertidos em pedido</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums text-slate-900">{kitStats.convertedFromKitQuotes}</p>
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Taxa de conversão (kits)</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums text-slate-900">{kitStats.conversionRate.toFixed(1)}%</p>
+          <p className="text-xs text-slate-500">Em aberto: {kitStats.openKitQuotes}</p>
+        </div>
+      </div>
 
       <div className="table-wrap">
         {loading ? (

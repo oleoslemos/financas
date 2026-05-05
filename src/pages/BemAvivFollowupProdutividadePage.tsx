@@ -163,6 +163,7 @@ export function BemAvivFollowupProdutividadePage() {
     const { data, error } = await supabase
       .from('bem_aviv_client_followups')
       .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
+      .is('deleted_at', null)
       .eq('user_id', followupUserId)
       .eq('client_id', client.id)
       .order('contacted_at', { ascending: false })

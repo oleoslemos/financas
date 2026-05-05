@@ -203,6 +203,7 @@ export function BemAvivFollowupPage() {
       const { data, error } = await supabase
         .from('bem_aviv_client_followups')
         .select('id, contacted_at, channel, created_by_name, result, notes')
+        .is('deleted_at', null)
         .eq('user_id', followupUserId)
         .eq('client_id', clientId)
         .order('contacted_at', { ascending: false })
@@ -269,7 +270,14 @@ export function BemAvivFollowupPage() {
     if (!supabase || !registeringClient) return
     if (!confirm('EXCLUIR ESTE REGISTRO DE CONTATO?')) return
 
-    const { error } = await supabase.from('bem_aviv_client_followups').delete().eq('id', entryId)
+    const { error } = await supabase
+      .from('bem_aviv_client_followups')
+      .update({
+        deleted_at: new Date().toISOString(),
+        deleted_by_user_id: user?.id ?? null,
+        deleted_by_name: followupActorName,
+      })
+      .eq('id', entryId)
     if (error) {
       alert(error.message)
       return
@@ -382,6 +390,7 @@ export function BemAvivFollowupPage() {
         const { data, error } = await supabase
           .from('bem_aviv_client_followups')
           .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
+          .is('deleted_at', null)
           .eq('user_id', followupUserId)
           .in('client_id', chunk)
           .order('contacted_at', { ascending: false })
@@ -436,6 +445,8 @@ export function BemAvivFollowupPage() {
           contacted_at: contactedAtIso,
           channel: registerForm.channel,
           created_by_name: followupActorName,
+          updated_by_user_id: user?.id ?? null,
+          updated_by_name: followupActorName,
           result: registerForm.result || null,
           notes: registerForm.notes || null,
         })

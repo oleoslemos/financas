@@ -40,6 +40,8 @@ type FollowupHistoryRow = {
   notes: string | null
 }
 
+type MetricsPeriod = 'TODO' | 'MES_ATUAL' | 'ULT_30' | 'ULT_90' | 'ULT_180' | 'ULT_365'
+
 /** Timeline e calendário da home: só pendente com data agendada; exclui cancelado e concluído. */
 function includeInFollowupTimeline(c: ClientRow): boolean {
   const cpf = (c.cpf ?? '').replace(/\D/g, '')
@@ -204,8 +206,12 @@ export function BemAvivHomePage() {
   const followupActorName = (user?.fullName || user?.primaryEmailAddress?.emailAddress || ownerUserId || 'USUÁRIO').trim().toUpperCase()
   const [loading, setLoading] = useState(true)
   const [totalSold, setTotalSold] = useState(0)
+  const [soldOrdersCount, setSoldOrdersCount] = useState(0)
   const [openOrdersCount, setOpenOrdersCount] = useState(0)
   const [openOrdersAmount, setOpenOrdersAmount] = useState(0)
+  const [quotesCount, setQuotesCount] = useState(0)
+  const [convertedQuotesCount, setConvertedQuotesCount] = useState(0)
+  const [metricsPeriod, setMetricsPeriod] = useState<MetricsPeriod>('TODO')
   const [monthlyTotals, setMonthlyTotals] = useState<Record<string, number>>({})
   const [clients, setClients] = useState<ClientRow[]>([])
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()))
@@ -234,10 +240,10 @@ export function BemAvivHomePage() {
     const [ordersRes, clientsRes] = await Promise.all([
       supabase
         .from('bem_aviv_sales_orders')
-        .select('order_date, total_amount, document_type, status')
+        .select('order_date, total_amount, document_type, status, converted_order_id')
         .eq('user_id', ownerUserId)
-        .eq('document_type', 'PEDIDO')
-        .in('status', ['ABERTO', 'FINALIZADO', 'ENTREGUE']),
+        .in('document_type', ['ORCAMENTO', 'PEDIDO'])
+        .in('status', ['ABERTO', 'FINALIZADO', 'ENTREGUE', 'CANCELADO']),
       supabase
         .from('bem_aviv_clients')
         .select('id, full_name, cpf, last_contact_at, next_followup_at, next_followup_status, phone_1, phone_2, next_followup_note')
@@ -252,16 +258,40 @@ export function BemAvivHomePage() {
       total_amount: number
       document_type: string
       status: string
+      converted_order_id: string | null
     }>
 
     const soldStatuses = new Set(['FINALIZADO', 'ENTREGUE'])
+    const now = new Date()
+    const periodStart = (() => {
+      if (metricsPeriod === 'TODO') return null
+      if (metricsPeriod === 'MES_ATUAL') return new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0)
+      if (metricsPeriod === 'ULT_30') return new Date(now.getTime() - 30 * 86_400_000)
+      if (metricsPeriod === 'ULT_180') return new Date(now.getTime() - 180 * 86_400_000)
+      if (metricsPeriod === 'ULT_365') return new Date(now.getTime() - 365 * 86_400_000)
+      return new Date(now.getTime() - 90 * 86_400_000)
+    })()
     let sum = 0
     let openCount = 0
     let openAmount = 0
+    let soldCount = 0
+    let quoteTotal = 0
+    let quoteConverted = 0
     const byMonth: Record<string, number> = {}
     for (const o of orders) {
+      const docType = (o.document_type ?? '').toUpperCase()
       const st = (o.status ?? '').toUpperCase()
       const amt = Number(o.total_amount ?? 0)
+      const dt = new Date(o.order_date)
+      const inPeriod = !Number.isNaN(dt.getTime()) && (periodStart === null || (dt >= periodStart && dt <= now))
+      if (docType === 'ORCAMENTO') {
+        if (inPeriod) {
+          quoteTotal += 1
+          if (o.converted_order_id) quoteConverted += 1
+        }
+      }
+      if (docType !== 'PEDIDO') continue
+      if (!inPeriod) continue
       if (st === 'ABERTO') {
         openCount += 1
         if (Number.isFinite(amt)) openAmount += amt
@@ -269,19 +299,23 @@ export function BemAvivHomePage() {
       if (!soldStatuses.has(st)) continue
       if (!Number.isFinite(amt)) continue
       sum += amt
+      soldCount += 1
       const mk = monthKeyFromOrderDate(o.order_date || '')
       if (!mk || mk.length < 7) continue
       byMonth[mk] = (byMonth[mk] ?? 0) + amt
     }
     setTotalSold(sum)
+    setSoldOrdersCount(soldCount)
     setOpenOrdersCount(openCount)
     setOpenOrdersAmount(openAmount)
+    setQuotesCount(quoteTotal)
+    setConvertedQuotesCount(quoteConverted)
     setMonthlyTotals(byMonth)
 
     setClients(((clientsRes.data ?? []) as ClientRow[]) ?? [])
 
     setLoading(false)
-  }, [ownerUserId, supabase])
+  }, [ownerUserId, supabase, metricsPeriod])
 
   useEffect(() => {
     void load()
@@ -321,6 +355,7 @@ export function BemAvivHomePage() {
       const { data, error } = await supabase
         .from('bem_aviv_client_followups')
         .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
+        .is('deleted_at', null)
         .eq('user_id', ownerUserId.toUpperCase())
         .in('client_id', ids)
         .order('contacted_at', { ascending: false })
@@ -429,6 +464,20 @@ export function BemAvivHomePage() {
   }, [monthlyTotals])
 
   const progressPct = Math.min(100, DISTRIBUTION_GOAL_BRL > 0 ? (totalSold / DISTRIBUTION_GOAL_BRL) * 100 : 0)
+  const avgTicket = soldOrdersCount > 0 ? totalSold / soldOrdersCount : 0
+  const quoteConversionRate = quotesCount > 0 ? (convertedQuotesCount / quotesCount) * 100 : 0
+  const periodLabel =
+    metricsPeriod === 'TODO'
+      ? 'todo período'
+      : metricsPeriod === 'MES_ATUAL'
+      ? 'mês atual'
+      : metricsPeriod === 'ULT_30'
+        ? 'últimos 30 dias'
+        : metricsPeriod === 'ULT_180'
+          ? 'últimos 180 dias'
+          : metricsPeriod === 'ULT_365'
+            ? 'últimos 365 dias'
+            : 'últimos 90 dias'
 
   const chartData = useMemo(
     () =>
@@ -501,6 +550,7 @@ export function BemAvivHomePage() {
     const { data, error } = await supabase
       .from('bem_aviv_client_followups')
       .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
+      .is('deleted_at', null)
       .eq('user_id', ownerUserId.toUpperCase())
       .eq('client_id', client.id)
       .order('contacted_at', { ascending: false })
@@ -545,6 +595,7 @@ export function BemAvivHomePage() {
     const { data, error } = await supabase
       .from('bem_aviv_client_followups')
       .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
+      .is('deleted_at', null)
       .eq('user_id', ownerUserId.toUpperCase())
       .eq('client_id', client.id)
       .order('contacted_at', { ascending: false })
@@ -569,6 +620,8 @@ export function BemAvivHomePage() {
           contacted_at: contactedAtIso,
           channel: registerInlineForm.channel,
           created_by_name: followupActorName,
+          updated_by_user_id: user?.id ?? null,
+          updated_by_name: followupActorName,
           result: registerInlineForm.result || null,
           notes: registerInlineForm.notes || null,
         })
@@ -668,6 +721,24 @@ export function BemAvivHomePage() {
         <p className="text-sm text-slate-500">Carregando indicadores…</p>
       ) : (
         <>
+          <section className="flex justify-end">
+            <label className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+              Período métricas
+              <select
+                value={metricsPeriod}
+                onChange={(e) => setMetricsPeriod(e.target.value as MetricsPeriod)}
+                className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700"
+              >
+                <option value="TODO">Todo período</option>
+                <option value="MES_ATUAL">Mês atual</option>
+                <option value="ULT_30">Últimos 30 dias</option>
+                <option value="ULT_90">Últimos 90 dias</option>
+                <option value="ULT_180">Últimos 180 dias</option>
+                <option value="ULT_365">Últimos 365 dias</option>
+              </select>
+            </label>
+          </section>
+
           <section className="grid gap-4 sm:grid-cols-2">
             <Card className="border-0 shadow-md ring-1 ring-slate-100/90 transition-shadow hover:shadow-lg">
               <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
@@ -679,7 +750,7 @@ export function BemAvivHomePage() {
               <CardContent className="space-y-4 pt-0">
                 <div>
                   <p className="font-hub text-2xl font-bold tracking-tight text-slate-900">{formatBRL(DISTRIBUTION_GOAL_BRL)}</p>
-                  <p className="mt-1 text-xs text-slate-500">Referência para o período comercial.</p>
+                  <p className="mt-1 text-xs text-slate-500">Referência para o período comercial ({periodLabel}).</p>
                 </div>
                 <div className="border-t border-slate-100 pt-4">
                   <div className="mb-2 flex items-center justify-between gap-2">
@@ -712,13 +783,22 @@ export function BemAvivHomePage() {
                 <p className="font-hub text-2xl font-bold tracking-tight text-slate-900">{formatBRL(totalSold)}</p>
                 <p className="text-xs leading-relaxed text-slate-500">
                   Soma dos pedidos com status <strong className="font-semibold text-slate-700">Finalizado</strong> ou{' '}
-                  <strong className="font-semibold text-slate-700">Entregue</strong> (valor líquido do documento).
+                  <strong className="font-semibold text-slate-700">Entregue</strong> no período de {periodLabel} (valor líquido do documento).
                 </p>
                 <p className="border-t border-slate-100 pt-2 text-xs text-slate-600">
                   Pedidos em aberto (status Aberto):{' '}
                   <strong className="font-hub tabular-nums font-semibold text-slate-900">{openOrdersCount}</strong>{' '}
                   — Valor:{' '}
                   <strong className="font-hub tabular-nums font-semibold text-slate-900">{formatBRL(openOrdersAmount)}</strong>
+                </p>
+                <p className="text-xs text-slate-600">
+                  Ticket médio (Finalizado/Entregue):{' '}
+                  <strong className="font-hub tabular-nums font-semibold text-slate-900">{formatBRL(avgTicket)}</strong>
+                </p>
+                <p className="text-xs text-slate-600">
+                  Conversão orçamento → pedido:{' '}
+                  <strong className="font-hub tabular-nums font-semibold text-slate-900">{quoteConversionRate.toFixed(1)}%</strong>{' '}
+                  ({convertedQuotesCount}/{quotesCount})
                 </p>
               </CardContent>
             </Card>

@@ -454,6 +454,17 @@ export function BemAvivNovoPedidoPage() {
     return map
   }, [lineItems, sumLinesNet, orderDiscount, downPaymentApplied])
 
+  const lineOrderDiscountByKey = useMemo(() => {
+    const map: Record<string, number> = {}
+    if (lineItems.length === 0 || sumLinesNet <= 0 || orderDiscount === 0) return map
+    const baseTotals = lineItems.map((l) => clampMoney(l.quantity * l.unit_price))
+    const rowDiscounts = splitSignedAmountProportionally(baseTotals, roundMoneySigned(orderDiscount))
+    lineItems.forEach((l, idx) => {
+      map[l.key] = rowDiscounts[idx]
+    })
+    return map
+  }, [lineItems, sumLinesNet, orderDiscount])
+
   useEffect(() => {
     if (lineItems.length === 0) {
       setLiquidTotalDraft('')
@@ -697,8 +708,8 @@ export function BemAvivNovoPedidoPage() {
           item_description: toUpperTrim(l.name),
           quantity: l.quantity,
           unit_price: l.unit_price,
-          discount_amount: 0,
-          total_price: clampMoney(l.quantity * l.unit_price),
+          discount_amount: roundMoneySigned(lineOrderDiscountByKey[l.key] ?? 0),
+          total_price: clampMoney(clampMoney(l.quantity * l.unit_price) - roundMoneySigned(lineOrderDiscountByKey[l.key] ?? 0)),
         }))
 
         const { error: itemsErr } = await supabase.from('bem_aviv_sales_order_items').insert(rowsToInsert)
@@ -737,8 +748,8 @@ export function BemAvivNovoPedidoPage() {
         item_description: toUpperTrim(l.name),
         quantity: l.quantity,
         unit_price: l.unit_price,
-        discount_amount: 0,
-        total_price: clampMoney(l.quantity * l.unit_price),
+        discount_amount: roundMoneySigned(lineOrderDiscountByKey[l.key] ?? 0),
+        total_price: clampMoney(clampMoney(l.quantity * l.unit_price) - roundMoneySigned(lineOrderDiscountByKey[l.key] ?? 0)),
       }))
 
       const { error: itemsErr } = await supabase.from('bem_aviv_sales_order_items').insert(rowsToInsert)
@@ -754,6 +765,28 @@ export function BemAvivNovoPedidoPage() {
   }
 
   const discountDisplay = orderDiscount
+  const checklist = useMemo(
+    () => ({
+      hasClient: Boolean(form.client_id),
+      hasItems: lineItems.length > 0,
+      hasOrderDate: Boolean(form.order_date),
+      hasValidInstallments: installmentsNum >= 1,
+      hasValidDownPayment:
+        form.payment_option !== 'A_PRAZO' || downPaymentApplied <= clampMoney(sumLinesNet - orderDiscount + freightAmountNum),
+    }),
+    [
+      form.client_id,
+      lineItems.length,
+      form.order_date,
+      installmentsNum,
+      form.payment_option,
+      downPaymentApplied,
+      sumLinesNet,
+      orderDiscount,
+      freightAmountNum,
+    ],
+  )
+  const checklistOk = Object.values(checklist).every(Boolean)
 
   return (
     <div className="normal-case">
@@ -1017,6 +1050,7 @@ export function BemAvivNovoPedidoPage() {
                         value={form.down_payment}
                         onChange={(e) => setForm({ ...form, down_payment: e.target.value })}
                         inputMode="decimal"
+                        title="Entrada paga no ato. Reduz o saldo final."
                       />
                     </div>
                   ) : null}
@@ -1039,6 +1073,7 @@ export function BemAvivNovoPedidoPage() {
                         value={form.freight_amount}
                         onChange={(e) => setForm({ ...form, freight_amount: e.target.value })}
                         inputMode="decimal"
+                        title="Frete somado ao total do pedido."
                       />
                     </div>
                   </div>
@@ -1050,6 +1085,7 @@ export function BemAvivNovoPedidoPage() {
                       value={form.discount_percent}
                       onChange={(e) => setForm({ ...form, discount_percent: e.target.value })}
                       inputMode="decimal"
+                      title="Desconto aplicado proporcionalmente nos itens."
                     />
                   </div>
 
@@ -1068,6 +1104,7 @@ export function BemAvivNovoPedidoPage() {
                           }
                         }}
                         inputMode="decimal"
+                        title="Ajuste fino do total líquido (recalcula desconto automaticamente)."
                       />
                     </div>
                   ) : null}
@@ -1109,10 +1146,20 @@ export function BemAvivNovoPedidoPage() {
                   </div>
 
                   <div className="space-y-2 pt-2">
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                      <p className="mb-2 font-semibold uppercase tracking-wide text-slate-700">Checklist pré-finalização</p>
+                      <div className="grid gap-1">
+                        <p>{checklist.hasClient ? 'OK' : 'Pendente'} Cliente selecionado</p>
+                        <p>{checklist.hasItems ? 'OK' : 'Pendente'} Itens adicionados</p>
+                        <p>{checklist.hasOrderDate ? 'OK' : 'Pendente'} Data do pedido</p>
+                        <p>{checklist.hasValidInstallments ? 'OK' : 'Pendente'} Parcelas válidas</p>
+                        <p>{checklist.hasValidDownPayment ? 'OK' : 'Pendente'} Entrada compatível com o total</p>
+                      </div>
+                    </div>
                     <Button
                       type="submit"
                       className="h-12 w-full text-base font-bold shadow-md shadow-sky-100"
-                      disabled={lineItems.length === 0}
+                      disabled={!checklistOk}
                     >
                       {isEditMode
                         ? 'Salvar alterações'
@@ -1178,6 +1225,12 @@ export function BemAvivNovoPedidoPage() {
                                         ) : null}
                                       </div>
                                       <p className="text-sm text-slate-500">{l.kind === 'KIT' ? 'Kit composto' : 'Catálogo oferta'}</p>
+                                      {(lineOrderDiscountByKey[l.key] ?? 0) > 0 || downPaymentApplied > 0 ? (
+                                        <p className="text-xs text-slate-400">
+                                          Bruto {formatBRL(rowNet)} · Abat. {formatBRL(rowNet - (lineNetByKey[l.key] ?? rowNet))} · Líquido{' '}
+                                          {formatBRL(lineNetByKey[l.key] ?? rowNet)}
+                                        </p>
+                                      ) : null}
                                     </div>
                                   </div>
                                 </td>
