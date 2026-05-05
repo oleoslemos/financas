@@ -55,6 +55,19 @@ function formatMoneyInput(n: number) {
   return clampMoney(n).toFixed(2).replace('.', ',')
 }
 
+function splitSignedAmountProportionally(baseValues: number[], totalToSplit: number) {
+  if (baseValues.length === 0) return [] as number[]
+  const baseSum = baseValues.reduce((acc, v) => acc + Math.max(0, v), 0)
+  if (baseSum <= 0) return baseValues.map(() => 0)
+  const rounded = baseValues.map((v) => roundMoneySigned((Math.max(0, v) / baseSum) * totalToSplit))
+  const diff = roundMoneySigned(totalToSplit - rounded.reduce((acc, v) => acc + v, 0))
+  if (Math.abs(diff) >= 0.01) {
+    const last = rounded.length - 1
+    rounded[last] = roundMoneySigned(rounded[last] + diff)
+  }
+  return rounded
+}
+
 function normalizeTextKey(v: string) {
   return v
     .normalize('NFD')
@@ -415,6 +428,7 @@ export function BemAvivNovoPedidoPage() {
   const downPaymentNum = useMemo(() => clampMoney(parseMoney(form.down_payment || '0')), [form.down_payment])
   const freightAmountNum = useMemo(() => clampMoney(parseMoney(form.freight_amount || '0')), [form.freight_amount])
   const linesGrossTotal = sumLinesNet
+  const downPaymentApplied = form.payment_option === 'A_PRAZO' ? downPaymentNum : 0
 
   const orderDiscount = useMemo(() => {
     const base = lineItems.length > 0 ? linesGrossTotal : 0
@@ -425,9 +439,20 @@ export function BemAvivNovoPedidoPage() {
   const previewOrderTotal = useMemo(() => {
     if (lineItems.length === 0) return null
     const net = clampMoney(sumLinesNet - orderDiscount + freightAmountNum)
-    const entrada = form.payment_option === 'A_PRAZO' ? downPaymentNum : 0
-    return clampMoney(net - entrada)
-  }, [lineItems.length, sumLinesNet, orderDiscount, freightAmountNum, form.payment_option, downPaymentNum])
+    return clampMoney(net - downPaymentApplied)
+  }, [lineItems.length, sumLinesNet, orderDiscount, freightAmountNum, downPaymentApplied])
+
+  const lineNetByKey = useMemo(() => {
+    const map: Record<string, number> = {}
+    if (lineItems.length === 0 || sumLinesNet <= 0) return map
+    const baseTotals = lineItems.map((l) => clampMoney(l.quantity * l.unit_price))
+    const orderAbatement = roundMoneySigned(orderDiscount + downPaymentApplied)
+    const rowAbatements = splitSignedAmountProportionally(baseTotals, orderAbatement)
+    lineItems.forEach((l, idx) => {
+      map[l.key] = clampMoney(baseTotals[idx] - rowAbatements[idx])
+    })
+    return map
+  }, [lineItems, sumLinesNet, orderDiscount, downPaymentApplied])
 
   useEffect(() => {
     if (lineItems.length === 0) {
@@ -1183,7 +1208,9 @@ export function BemAvivNovoPedidoPage() {
                                     aria-label={`Preço unitário ${l.name}`}
                                   />
                                 </td>
-                                <td className="p-4 text-base font-semibold tabular-nums text-slate-900">{formatBRL(rowNet)}</td>
+                                <td className="p-4 text-base font-semibold tabular-nums text-slate-900">
+                                  {formatBRL(lineNetByKey[l.key] ?? rowNet)}
+                                </td>
                                 <td className="p-4 text-right">
                                   <button
                                     type="button"
