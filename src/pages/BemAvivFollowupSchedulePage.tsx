@@ -90,7 +90,7 @@ export function BemAvivFollowupSchedulePage() {
         next_followup_at: toInputDateTimeLocal(c.next_followup_at),
         next_followup_summary: parsed.summary,
         next_followup_note: parsed.details,
-        contact_done: (c.next_followup_status ?? 'PENDENTE') === 'CONCLUIDO',
+        contact_done: false,
         commercial_stage: c.commercial_stage ?? 'CONTATO',
       })
     } else {
@@ -118,7 +118,9 @@ export function BemAvivFollowupSchedulePage() {
       .update({
         next_followup_at: new Date(scheduleForm.next_followup_at).toISOString(),
         next_followup_note: composeFollowupNote(scheduleForm.next_followup_summary, scheduleForm.next_followup_note) || null,
-        next_followup_status: scheduleForm.contact_done ? 'CONCLUIDO' : 'PENDENTE',
+        // Agendamento de próximo retorno deve permanecer pendente para aparecer no calendário da Visão Geral.
+        next_followup_status: 'PENDENTE',
+        last_contact_at: scheduleForm.contact_done ? new Date().toISOString() : client.last_contact_at ?? null,
         commercial_stage: scheduleForm.commercial_stage,
         client_status: clientStatus,
       })
