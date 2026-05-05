@@ -1,5 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
-import { ArrowLeft, Box, ClipboardList, List, Package, Search, ShoppingCart, Trash2 } from 'lucide-react'
+import { ArrowLeft, Box, CircleDollarSign, ClipboardList, List, Package, Search, ShoppingCart, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Badge } from '../components/ui/Badge'
@@ -770,99 +770,6 @@ export function BemAvivNovoPedidoPage() {
                   </div>
 
                   <div>
-                    <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Pagamento</label>
-                    <select
-                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-3 text-base"
-                      value={form.payment_option}
-                      onChange={(e) => {
-                        const v = e.target.value as PaymentOption
-                        setForm({ ...form, payment_option: v, down_payment: v === 'A_VISTA' ? '' : form.down_payment })
-                      }}
-                    >
-                      <option value="A_VISTA">À vista</option>
-                      <option value="A_PRAZO">À prazo</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Meio</label>
-                    <select
-                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-3 text-base"
-                      value={form.payment_method}
-                      onChange={(e) => setForm({ ...form, payment_method: e.target.value as PaymentMethod })}
-                    >
-                      {(Object.keys(PAYMENT_METHOD_LABEL) as PaymentMethod[]).map((k) => (
-                        <option key={k} value={k}>
-                          {PAYMENT_METHOD_LABEL[k]}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {form.payment_option === 'A_PRAZO' ? (
-                    <div>
-                      <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Entrada (R$)</label>
-                      <Input
-                        className="mt-1 h-12"
-                        value={form.down_payment}
-                        onChange={(e) => setForm({ ...form, down_payment: e.target.value })}
-                        inputMode="decimal"
-                      />
-                    </div>
-                  ) : null}
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Parcelas</label>
-                      <Input
-                        className="mt-1 h-12"
-                        inputMode="numeric"
-                        min={1}
-                        value={form.installments_count}
-                        onChange={(e) => setForm({ ...form, installments_count: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Frete</label>
-                      <Input
-                        className="mt-1 h-12"
-                        value={form.freight_amount}
-                        onChange={(e) => setForm({ ...form, freight_amount: e.target.value })}
-                        inputMode="decimal"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Desconto no pedido (%)</label>
-                    <Input
-                      className="mt-1 h-12"
-                      value={form.discount_percent}
-                      onChange={(e) => setForm({ ...form, discount_percent: e.target.value })}
-                      inputMode="decimal"
-                    />
-                  </div>
-
-                  {lineItems.length > 0 ? (
-                    <div>
-                      <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Valor líquido (ajuste fino)</label>
-                      <Input
-                        className="mt-1 h-12"
-                        value={liquidTotalDraft}
-                        onChange={(e) => setLiquidTotalDraft(e.target.value)}
-                        onBlur={(e) => applyLiquidRawToDiscount(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault()
-                            applyLiquidRawToDiscount((e.target as HTMLInputElement).value)
-                          }
-                        }}
-                        inputMode="decimal"
-                      />
-                    </div>
-                  ) : null}
-
-                  <div>
                     <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Observações</label>
                     <Input className="mt-1 h-12" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
                   </div>
@@ -994,6 +901,109 @@ export function BemAvivNovoPedidoPage() {
                       </Link>
                       .
                     </p>
+                  ) : null}
+                </CardContent>
+              </Card>
+
+              <Card className="border-0 shadow-md ring-1 ring-slate-100/90">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 font-hub text-base font-semibold text-slate-800">
+                    <CircleDollarSign size={20} className="text-[#185FA5]" aria-hidden />
+                    Informações pagamento desconto e frete
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4 pt-0">
+                  <div>
+                    <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Pagamento</label>
+                    <select
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-3 text-base"
+                      value={form.payment_option}
+                      onChange={(e) => {
+                        const v = e.target.value as PaymentOption
+                        setForm({ ...form, payment_option: v, down_payment: v === 'A_VISTA' ? '' : form.down_payment })
+                      }}
+                    >
+                      <option value="A_VISTA">À vista</option>
+                      <option value="A_PRAZO">À prazo</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Meio</label>
+                    <select
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-3 text-base"
+                      value={form.payment_method}
+                      onChange={(e) => setForm({ ...form, payment_method: e.target.value as PaymentMethod })}
+                    >
+                      {(Object.keys(PAYMENT_METHOD_LABEL) as PaymentMethod[]).map((k) => (
+                        <option key={k} value={k}>
+                          {PAYMENT_METHOD_LABEL[k]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {form.payment_option === 'A_PRAZO' ? (
+                    <div>
+                      <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Entrada (R$)</label>
+                      <Input
+                        className="mt-1 h-12"
+                        value={form.down_payment}
+                        onChange={(e) => setForm({ ...form, down_payment: e.target.value })}
+                        inputMode="decimal"
+                      />
+                    </div>
+                  ) : null}
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Parcelas</label>
+                      <Input
+                        className="mt-1 h-12"
+                        inputMode="numeric"
+                        min={1}
+                        value={form.installments_count}
+                        onChange={(e) => setForm({ ...form, installments_count: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Frete</label>
+                      <Input
+                        className="mt-1 h-12"
+                        value={form.freight_amount}
+                        onChange={(e) => setForm({ ...form, freight_amount: e.target.value })}
+                        inputMode="decimal"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Desconto no pedido (%)</label>
+                    <Input
+                      className="mt-1 h-12"
+                      value={form.discount_percent}
+                      onChange={(e) => setForm({ ...form, discount_percent: e.target.value })}
+                      inputMode="decimal"
+                    />
+                  </div>
+
+                  {lineItems.length > 0 ? (
+                    <div>
+                      <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Valor líquido (ajuste fino)</label>
+                      <Input
+                        className="mt-1 h-12"
+                        value={liquidTotalDraft}
+                        onChange={(e) => setLiquidTotalDraft(e.target.value)}
+                        onBlur={(e) => applyLiquidRawToDiscount(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            applyLiquidRawToDiscount((e.target as HTMLInputElement).value)
+                          }
+                        }}
+                        inputMode="decimal"
+                      />
+                    </div>
                   ) : null}
                 </CardContent>
               </Card>
