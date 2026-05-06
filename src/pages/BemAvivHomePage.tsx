@@ -71,12 +71,6 @@ function toInputDateTimeLocal(value?: string | null) {
   return local.toISOString().slice(0, 16)
 }
 
-function truncateText(value: string | null | undefined, max = 80) {
-  const t = (value ?? '').trim()
-  if (!t) return ''
-  return t.length <= max ? t : `${t.slice(0, max)}…`
-}
-
 /** Chave local YYYY-MM-DD para comparar com dia do calendário. */
 function toLocalDateKey(iso: string): string {
   const d = new Date(iso)
@@ -564,11 +558,6 @@ export function BemAvivHomePage() {
     setHistoryModalLoading(false)
   }
 
-  function agendaResumo(clientId: string) {
-    const h = latestHistoryByClient[clientId]
-    return truncateText(h?.result || h?.notes, 80)
-  }
-
   async function refetchHistoryModalRows(client: ClientRow): Promise<FollowupHistoryRow[]> {
     if (!supabase || !ownerUserId) return []
     const { data, error } = await supabase
@@ -910,12 +899,7 @@ export function BemAvivHomePage() {
                     <ul className="mt-3 max-h-[min(420px,55vh)] divide-y divide-slate-200 overflow-y-auto rounded-lg border border-slate-200 bg-white">
                       {agendaRows.map((c) => (
                         <li key={c.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-3 py-2.5 text-sm">
-                        <span className="min-w-0">
-                          <span className="min-w-0 truncate font-medium text-slate-900">{c.full_name}</span>
-                          {agendaResumo(c.id) ? (
-                            <span className="mt-0.5 block min-w-0 truncate text-xs text-slate-500">{agendaResumo(c.id)}</span>
-                          ) : null}
-                        </span>
+                        <span className="min-w-0 truncate font-medium text-slate-900">{c.full_name}</span>
                           <span className="text-right text-xs text-slate-500">{formatShortDateTime(c.next_followup_at)}</span>
                           <button
                             type="button"
