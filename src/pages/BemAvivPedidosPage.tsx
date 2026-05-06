@@ -574,11 +574,30 @@ export function BemAvivPedidosPage() {
     ) {
       return
     }
+    const quoteIdToReopen =
+      order.document_type === 'PEDIDO' && order.source_quote_id ? order.source_quote_id : null
+
     const { error } = await supabase.from('bem_aviv_sales_orders').delete().eq('id', order.id).eq('user_id', ownerUserId)
     if (error) {
       alert(error.message)
       return
     }
+
+    if (quoteIdToReopen) {
+      const { error: reopenErr } = await supabase
+        .from('bem_aviv_sales_orders')
+        .update({ status: 'ABERTO' })
+        .eq('id', quoteIdToReopen)
+        .eq('user_id', ownerUserId)
+        .eq('document_type', 'ORCAMENTO')
+
+      if (reopenErr) {
+        alert(
+          `O pedido foi excluído, mas o orçamento de origem não pôde ser reaberto automaticamente: ${reopenErr.message}\n\nAtualize o status do orçamento manualmente, se necessário.`,
+        )
+      }
+    }
+
     await load()
   }
 

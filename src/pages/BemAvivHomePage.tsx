@@ -564,27 +564,6 @@ export function BemAvivHomePage() {
     setHistoryModalLoading(false)
   }
 
-  function tooltipLastContact(client: ClientRow) {
-    const h = latestHistoryByClient[client.id]
-    if (h) {
-      const observation = h.notes?.trim() || h.result?.trim() || 'Sem observação registrada.'
-      return {
-        date: formatShortDateTime(h.contacted_at),
-        observation,
-      }
-    }
-    if (client.last_contact_at) {
-      return {
-        date: formatShortDateTime(client.last_contact_at),
-        observation: 'Sem observação registrada.',
-      }
-    }
-    return {
-      date: 'Sem contato registrado',
-      observation: 'Sem observação registrada.',
-    }
-  }
-
   function agendaResumo(clientId: string) {
     const h = latestHistoryByClient[clientId]
     return truncateText(h?.result || h?.notes, 80)
@@ -931,24 +910,12 @@ export function BemAvivHomePage() {
                     <ul className="mt-3 max-h-[min(420px,55vh)] divide-y divide-slate-200 overflow-y-auto rounded-lg border border-slate-200 bg-white">
                       {agendaRows.map((c) => (
                         <li key={c.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-3 py-2.5 text-sm">
-                        {(() => {
-                          const tip = tooltipLastContact(c)
-                          return (
-                          <span className="group relative min-w-0">
-                            <span className="min-w-0 truncate font-medium text-slate-900">{c.full_name}</span>
-                            {agendaResumo(c.id) ? (
-                              <span className="mt-0.5 block min-w-0 truncate text-xs text-slate-500">{agendaResumo(c.id)}</span>
-                            ) : null}
-                              <span className="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden w-[min(90vw,340px)] overflow-hidden rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg ring-1 ring-slate-900/5 group-hover:block">
-                                <span className="block text-[9px] font-semibold uppercase tracking-wide text-slate-500">Último contato</span>
-                                <span className="mt-0.5 block text-sm font-bold tabular-nums text-slate-900">{tip.date}</span>
-                                <span className="mt-2 block whitespace-normal break-words border-t border-slate-100 pt-2 text-xs leading-snug text-slate-700">
-                                  <span className="font-semibold text-slate-600">Observação:</span> {tip.observation}
-                                </span>
-                              </span>
-                            </span>
-                          )
-                        })()}
+                        <span className="min-w-0">
+                          <span className="min-w-0 truncate font-medium text-slate-900">{c.full_name}</span>
+                          {agendaResumo(c.id) ? (
+                            <span className="mt-0.5 block min-w-0 truncate text-xs text-slate-500">{agendaResumo(c.id)}</span>
+                          ) : null}
+                        </span>
                           <span className="text-right text-xs text-slate-500">{formatShortDateTime(c.next_followup_at)}</span>
                           <button
                             type="button"
