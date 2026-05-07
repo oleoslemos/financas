@@ -1161,6 +1161,12 @@ export function BemAvivNovoPedidoPage() {
                       <span>Descontos</span>
                       <span className="tabular-nums text-emerald-600">− {formatBRL(discountDisplay)}</span>
                     </div>
+                    {form.payment_option === 'A_PRAZO' && downPaymentApplied > 0 ? (
+                      <div className="flex justify-between text-slate-600">
+                        <span>Entrada</span>
+                        <span className="tabular-nums text-emerald-600">− {formatBRL(downPaymentApplied)}</span>
+                      </div>
+                    ) : null}
                     <div className="flex justify-between text-slate-600">
                       <span>Frete</span>
                       <span className="tabular-nums">{formatBRL(freightAmountNum)}</span>
@@ -1168,7 +1174,7 @@ export function BemAvivNovoPedidoPage() {
                     <div className="flex items-end justify-between border-t border-slate-100 pt-3">
                       <span className="text-sm font-medium text-slate-900">Total</span>
                       <span className="text-2xl font-black tabular-nums text-[#185FA5]">
-                        {lineItems.length > 0 ? formatBRL(clampMoney(sumLinesNet - orderDiscount + freightAmountNum)) : '—'}
+                        {lineItems.length > 0 ? formatBRL(clampMoney(sumLinesNet - orderDiscount + freightAmountNum - downPaymentApplied)) : '—'}
                       </span>
                     </div>
                     {previewOrderTotal != null && installmentsNum > 1 ? (
