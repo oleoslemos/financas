@@ -4,13 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
-import { BEM_AVIV_CLIENT_COMMERCIAL_STAGE_OPTIONS } from '../lib/bemAvivClientStatus'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { buildWhatsappUrl } from '../lib/whatsapp'
 
 type FollowupStatus = 'PENDENTE' | 'CONCLUIDO' | 'CANCELADO'
 type DateFilter = 'TODOS' | 'VENCIDOS' | 'HOJE' | 'PROXIMOS_7' | 'SEM_AGENDAMENTO'
+type StatusFilter = 'TODOS' | FollowupStatus | 'VISITA_AGENDADA'
+type SortKey = 'full_name' | 'phone' | 'client_status' | 'commercial_stage' | 'last_contact_at' | 'next_followup_at' | 'next_followup_status'
 
 type Cliente = {
   id: string
@@ -152,7 +153,9 @@ export function BemAvivFollowupPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [dateFilter, setDateFilter] = useState<DateFilter>('TODOS')
-  const [statusFilter, setStatusFilter] = useState<'TODOS' | FollowupStatus>('TODOS')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('TODOS')
+  const [sortKey, setSortKey] = useState<SortKey>('full_name')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [registeringClient, setRegisteringClient] = useState<Cliente | null>(null)
   const [historyRows, setHistoryRows] = useState<FollowupHistoryRow[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
@@ -306,7 +309,7 @@ export function BemAvivFollowupPage() {
     nextSevenEnd.setDate(nextSevenEnd.getDate() + 7)
     nextSevenEnd.setHours(23, 59, 59, 999)
 
-    return rows.filter((row) => {
+    const filtered = rows.filter((row) => {
       const hasSearchMatch =
         !q ||
         row.full_name.toUpperCase().includes(q) ||
@@ -315,8 +318,12 @@ export function BemAvivFollowupPage() {
 
       if (!hasSearchMatch) return false
 
-      if (statusFilter !== 'TODOS' && (row.next_followup_status ?? 'PENDENTE') !== statusFilter) {
-        return false
+      if (statusFilter !== 'TODOS') {
+        if (statusFilter === 'VISITA_AGENDADA') {
+          if ((row.commercial_stage ?? 'CONTATO') !== 'VISITA AGENDADA') return false
+        } else if ((row.next_followup_status ?? 'PENDENTE') !== statusFilter) {
+          return false
+        }
       }
 
       const nextDate = row.next_followup_at ? new Date(row.next_followup_at) : null
@@ -334,27 +341,52 @@ export function BemAvivFollowupPage() {
       if (dateFilter === 'PROXIMOS_7') return nextDate >= todayStart && nextDate <= nextSevenEnd
       return true
     })
-  }, [rows, search, dateFilter, statusFilter])
+    const safeTime = (v: string | null) => {
+      if (!v) return 0
+      const n = new Date(v).getTime()
+      return Number.isNaN(n) ? 0 : n
+    }
+    const mul = sortDir === 'asc' ? 1 : -1
+    return [...filtered].sort((a, b) => {
+      let cmp = 0
+      switch (sortKey) {
+        case 'full_name':
+          cmp = (a.full_name ?? '').localeCompare(b.full_name ?? '', 'pt-BR')
+          break
+        case 'phone': {
+          const pa = formatPhone(a.phone_1) || formatPhone(a.phone_2) || ''
+          const pb = formatPhone(b.phone_1) || formatPhone(b.phone_2) || ''
+          cmp = pa.localeCompare(pb, 'pt-BR', { numeric: true })
+          break
+        }
+        case 'client_status':
+          cmp = (a.client_status ?? '').localeCompare(b.client_status ?? '', 'pt-BR')
+          break
+        case 'commercial_stage':
+          cmp = (a.commercial_stage ?? 'CONTATO').localeCompare(b.commercial_stage ?? 'CONTATO', 'pt-BR')
+          break
+        case 'last_contact_at':
+          cmp = safeTime(a.last_contact_at) - safeTime(b.last_contact_at)
+          break
+        case 'next_followup_at':
+          cmp = safeTime(a.next_followup_at) - safeTime(b.next_followup_at)
+          break
+        case 'next_followup_status':
+          cmp = (a.next_followup_status ?? 'PENDENTE').localeCompare(b.next_followup_status ?? 'PENDENTE', 'pt-BR')
+          break
+      }
+      return cmp * mul
+    })
+  }, [rows, search, dateFilter, statusFilter, sortKey, sortDir])
 
-  const productivityMetrics = useMemo(() => {
-    const now = new Date()
-    const todayStart = startOfToday()
-    const tomorrow = new Date(todayStart)
-    tomorrow.setDate(tomorrow.getDate() + 1)
-    const weekEnd = new Date(todayStart)
-    weekEnd.setDate(weekEnd.getDate() + 7)
-    weekEnd.setHours(23, 59, 59, 999)
-
-    const pendingRows = rows.filter((c) => (c.next_followup_status ?? 'PENDENTE') === 'PENDENTE')
-    const vencidos = pendingRows.filter((c) => c.next_followup_at && new Date(c.next_followup_at) < now).length
-    const hoje = pendingRows.filter((c) => c.next_followup_at && new Date(c.next_followup_at) >= todayStart && new Date(c.next_followup_at) < tomorrow).length
-    const proximos7 = pendingRows.filter((c) => c.next_followup_at && new Date(c.next_followup_at) >= todayStart && new Date(c.next_followup_at) <= weekEnd).length
-    const statusCounts = BEM_AVIV_CLIENT_COMMERCIAL_STAGE_OPTIONS.map((stage) => ({
-      stage,
-      count: rows.filter((c) => (c.commercial_stage ?? 'CONTATO') === stage).length,
-    }))
-    return { vencidos, hoje, proximos7, statusCounts }
-  }, [rows])
+  function toggleSort(key: SortKey) {
+    if (sortKey !== key) {
+      setSortKey(key)
+      setSortDir('asc')
+      return
+    }
+    setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+  }
 
   const concluidoMais30DiasSemContactar = useMemo(() => {
     if (!latestFollowupsReady) return []
@@ -525,12 +557,6 @@ export function BemAvivFollowupPage() {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4"><p className="text-xs text-rose-700">VENCIDOS</p><p className="text-2xl font-semibold text-rose-900">{productivityMetrics.vencidos}</p></div>
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-xs text-amber-700">HOJE</p><p className="text-2xl font-semibold text-amber-900">{productivityMetrics.hoje}</p></div>
-        <div className="rounded-xl border border-sky-200 bg-sky-50 p-4"><p className="text-xs text-sky-700">PRÓXIMOS 7 DIAS</p><p className="text-2xl font-semibold text-sky-900">{productivityMetrics.proximos7}</p></div>
-      </div>
-
       {!loading && latestFollowupsReady && concluidoMais30DiasSemContactar.length > 0 ? (
         <div className="rounded-xl border border-violet-200 bg-violet-50/50 p-4 shadow-sm">
           <div className="mb-3 flex flex-wrap items-start gap-2">
@@ -680,18 +706,6 @@ export function BemAvivFollowupPage() {
         </div>
       ) : null}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h3 className="mb-3 text-sm font-semibold text-slate-700">ETAPAS COMERCIAIS DOS CLIENTES</h3>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-          {productivityMetrics.statusCounts.map((item) => (
-            <div key={item.stage} className="rounded-md border border-slate-200 px-3 py-2">
-              <p className="text-xs text-slate-500">{item.stage}</p>
-              <p className="text-lg font-semibold text-slate-900">{item.count}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
       <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <label>BUSCA</label>
@@ -712,11 +726,12 @@ export function BemAvivFollowupPage() {
         </div>
         <div>
           <label>STATUS</label>
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as 'TODOS' | FollowupStatus)}>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}>
             <option value="TODOS">Todos</option>
             <option value="PENDENTE">Pendente</option>
             <option value="CONCLUIDO">Concluído</option>
             <option value="CANCELADO">Cancelado</option>
+            <option value="VISITA_AGENDADA">Visita agendada</option>
           </select>
         </div>
         <div className="flex items-end">
@@ -810,13 +825,41 @@ export function BemAvivFollowupPage() {
             <table>
               <thead>
                 <tr>
-                  <th>CLIENTE</th>
-                  <th>TELEFONE</th>
-                  <th>STATUS CLIENTE</th>
-                  <th>ETAPA COMERCIAL</th>
-                  <th>ÚLTIMO CONTATO</th>
-                  <th>PRÓXIMO FOLLOW-UP</th>
-                  <th>STATUS FOLLOW-UP</th>
+                  <th>
+                    <button type="button" className="font-semibold" onClick={() => toggleSort('full_name')}>
+                      CLIENTE
+                    </button>
+                  </th>
+                  <th>
+                    <button type="button" className="font-semibold" onClick={() => toggleSort('phone')}>
+                      TELEFONE
+                    </button>
+                  </th>
+                  <th>
+                    <button type="button" className="font-semibold" onClick={() => toggleSort('client_status')}>
+                      STATUS CLIENTE
+                    </button>
+                  </th>
+                  <th>
+                    <button type="button" className="font-semibold" onClick={() => toggleSort('commercial_stage')}>
+                      ETAPA COMERCIAL
+                    </button>
+                  </th>
+                  <th>
+                    <button type="button" className="font-semibold" onClick={() => toggleSort('last_contact_at')}>
+                      ÚLTIMO CONTATO
+                    </button>
+                  </th>
+                  <th>
+                    <button type="button" className="font-semibold" onClick={() => toggleSort('next_followup_at')}>
+                      PRÓXIMO FOLLOW-UP
+                    </button>
+                  </th>
+                  <th>
+                    <button type="button" className="font-semibold" onClick={() => toggleSort('next_followup_status')}>
+                      STATUS FOLLOW-UP
+                    </button>
+                  </th>
                   <th></th>
                 </tr>
               </thead>

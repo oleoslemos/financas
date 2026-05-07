@@ -150,6 +150,7 @@ export function BemAvivNovoPedidoPage() {
   const [orderBootstrapping, setOrderBootstrapping] = useState(isEditMode)
   const [orderLoadError, setOrderLoadError] = useState<string | null>(null)
   const [loadedDocumentLabel, setLoadedDocumentLabel] = useState<string | null>(null)
+  const [deletingDocument, setDeletingDocument] = useState(false)
 
   const [form, setForm] = useState(() => {
     const st = location.state as NovoPedidoNavState | null
@@ -617,6 +618,25 @@ export function BemAvivNovoPedidoPage() {
     setLineItems((prev) => prev.filter((l) => l.key !== key))
   }
 
+  async function deleteCurrentDocument() {
+    if (!supabase || !ownerUserId || !editOrderId || !isEditMode || deletingDocument) return
+    if (
+      !confirm(
+        `EXCLUIR DEFINITIVAMENTE ${loadedDocumentLabel ?? 'ESTE DOCUMENTO'}?\n\nOs itens vinculados também serão removidos. Esta ação não pode ser desfeita.`,
+      )
+    ) {
+      return
+    }
+    setDeletingDocument(true)
+    const { error } = await supabase.from('bem_aviv_sales_orders').delete().eq('id', editOrderId).eq('user_id', ownerUserId)
+    setDeletingDocument(false)
+    if (error) {
+      alert(error.message)
+      return
+    }
+    navigate('/bem-aviv/pedidos')
+  }
+
   function updateLineQty(key: string, qtyStr: string) {
     const qty = Math.max(1, parseInt(qtyStr.replace(/\D/g, ''), 10) || 1)
     setLineItems((prev) => prev.map((l) => (l.key !== key ? l : { ...l, quantity: qty })))
@@ -809,6 +829,17 @@ export function BemAvivNovoPedidoPage() {
             ) : null}
           </div>
         </div>
+        {isEditMode ? (
+          <Button
+            type="button"
+            variant="danger"
+            className="h-10"
+            onClick={() => void deleteCurrentDocument()}
+            disabled={deletingDocument}
+          >
+            {deletingDocument ? 'Excluindo...' : 'Excluir documento'}
+          </Button>
+        ) : null}
       </div>
 
       {!supabase || !ownerUserId ? (
