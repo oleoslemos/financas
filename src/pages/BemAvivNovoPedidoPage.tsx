@@ -407,6 +407,12 @@ export function BemAvivNovoPedidoPage() {
   }, [draftProductName])
 
   useEffect(() => {
+    if (productTypeOptions.length === 1) {
+      setDraftProductType(productTypeOptions[0])
+    }
+  }, [productTypeOptions])
+
+  useEffect(() => {
     setDraftVariationCode('')
   }, [draftProductType])
 

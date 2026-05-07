@@ -816,23 +816,6 @@ export function BemAvivPedidosPage() {
                             <Pencil size={18} aria-hidden />
                           </button>
                         ) : null}
-                        {canCancelPedido(r) ? (
-                          <button
-                            type="button"
-                            className={`${iconBtn} border-red-200 text-red-700 hover:bg-red-50`}
-                            title="Cancelar pedido"
-                            aria-label="Cancelar pedido"
-                            onClick={() =>
-                              void updateOrderStatus(
-                                r,
-                                'CANCELADO',
-                                `CONFIRMAR CANCELAMENTO DO PEDIDO ${r.document_number ?? ''}?`,
-                              )
-                            }
-                          >
-                            <XCircle size={18} aria-hidden />
-                          </button>
-                        ) : null}
                         {canConfirmPayment(r) ? (
                           <button
                             type="button"
@@ -904,6 +887,23 @@ export function BemAvivPedidosPage() {
                             onClick={() => void deleteDocumento(r)}
                           >
                             <Trash2 size={18} aria-hidden />
+                          </button>
+                        ) : null}
+                        {canCancelPedido(r) ? (
+                          <button
+                            type="button"
+                            className={`${iconBtn} ml-2 border-red-200 text-red-700 hover:bg-red-50`}
+                            title="Cancelar pedido"
+                            aria-label="Cancelar pedido"
+                            onClick={() =>
+                              void updateOrderStatus(
+                                r,
+                                'CANCELADO',
+                                `CONFIRMAR CANCELAMENTO DO PEDIDO ${r.document_number ?? ''}?`,
+                              )
+                            }
+                          >
+                            <XCircle size={18} aria-hidden />
                           </button>
                         ) : null}
                       </div>
