@@ -744,7 +744,7 @@ export function BemAvivNovoPedidoPage() {
           return
         }
 
-        navigate('/bem-aviv/pedidos')
+        navigate('/bem-aviv/pedidos', { state: { bemAvivPedidosTab: form.document_type } })
         return
       }
 
@@ -784,7 +784,7 @@ export function BemAvivNovoPedidoPage() {
         return
       }
 
-      navigate('/bem-aviv/pedidos')
+      navigate('/bem-aviv/pedidos', { state: { bemAvivPedidosTab: form.document_type } })
     } finally {
       submitLockRef.current = false
     }
