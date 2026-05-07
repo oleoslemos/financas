@@ -825,21 +825,23 @@ export function BemAvivNovoPedidoPage() {
               {isEditMode ? 'Editar orçamento / pedido' : 'Novo pedido'}
             </h1>
             {isEditMode && loadedDocumentLabel ? (
-              <p className="mt-0.5 text-sm text-slate-500">{loadedDocumentLabel}</p>
+              <div className="mt-0.5 flex items-center gap-2">
+                <p className="text-sm text-slate-500">{loadedDocumentLabel}</p>
+                <button
+                  type="button"
+                  onClick={() => void deleteCurrentDocument()}
+                  disabled={deletingDocument}
+                  className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-red-600 disabled:opacity-50"
+                  title="Excluir documento"
+                  aria-label="Excluir documento"
+                >
+                  <Trash2 size={13} />
+                  {deletingDocument ? 'Excluindo...' : 'Excluir'}
+                </button>
+              </div>
             ) : null}
           </div>
         </div>
-        {isEditMode ? (
-          <Button
-            type="button"
-            variant="danger"
-            className="h-10"
-            onClick={() => void deleteCurrentDocument()}
-            disabled={deletingDocument}
-          >
-            {deletingDocument ? 'Excluindo...' : 'Excluir documento'}
-          </Button>
-        ) : null}
       </div>
 
       {!supabase || !ownerUserId ? (
