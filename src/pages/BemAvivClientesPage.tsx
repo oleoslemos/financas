@@ -1145,11 +1145,11 @@ export function BemAvivClientesPage() {
                   value={editing?.client_status ?? 'PROSPECÇÃO'}
                   readOnly
                   className="bg-slate-100 text-slate-600"
-                  title="Atualizado automaticamente com base nos pedidos (itens por categoria)."
+                  title="Só muda após haver pedido com status diferente de Aberto e Cancelado. Itens: colchão vs demais."
                 />
                 <p className="mt-1 text-[10px] leading-snug text-slate-500">
-                  Novos cadastros começam em Prospecção. Ao registrar pedidos, o sistema classifica por colchão (plataforma de descanso) e
-                  demais produtos.
+                  Novos cadastros começam em Prospecção. A classificação usa pedidos confirmados (não abertos e não cancelados) e distingue
+                  colchão (plataforma de descanso, texto ou dimensões) e demais produtos.
                 </p>
               </div>
               <div className="sticky bottom-0 z-10 flex flex-wrap gap-2 border-t border-slate-100 bg-white/95 py-3 backdrop-blur sm:col-span-12">
