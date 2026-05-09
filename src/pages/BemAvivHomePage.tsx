@@ -2,7 +2,7 @@ import { useUser } from '@clerk/clerk-react'
 import { Building2, ChevronLeft, ChevronRight, History, Target, TrendingUp } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bar, BarChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Progress } from '../components/ui/Progress'
 import { useSupabase } from '../hooks/useSupabase'
@@ -785,7 +785,8 @@ export function BemAvivHomePage() {
             <CardHeader className="pb-2">
               <CardTitle className="font-hub text-base font-semibold text-slate-900">Resultado mês a mês (pedidos)</CardTitle>
               <p className="mt-1 text-xs text-slate-500">
-                Base em pedidos por mês: confirmado (Finalizado/Entregue) + projeção de pedidos em aberto em tom mais claro.
+                Confirmado (Finalizado/Entregue) em azul escuro. O tom mais claro só aparece nos meses com pedidos em aberto
+                (base = confirmado + aberto).
               </p>
             </CardHeader>
             <CardContent className="pt-0">
@@ -802,9 +803,12 @@ export function BemAvivHomePage() {
                     />
                     <YAxis hide domain={[0, (dataMax: number) => Math.max(1, dataMax * 1.18)]} />
                     <Tooltip content={<MonthlyBarTooltip />} cursor={{ fill: 'rgba(24, 95, 165, 0.06)' }} />
-                    <Bar dataKey="totalProjected" fill="#9fd4ff" radius={[8, 8, 0, 0]} maxBarSize={56}>
+                    <Bar dataKey="totalProjected" fill="#9fd4ff" stroke="none" radius={[8, 8, 0, 0]} maxBarSize={56}>
+                      {chartData.map((entry) => (
+                        <Cell key={entry.key} fill={entry.projectionOpen > 0 ? '#9fd4ff' : 'transparent'} />
+                      ))}
                       <LabelList
-                        dataKey="totalProjected"
+                        dataKey="total"
                         position="top"
                         offset={6}
                         className="fill-slate-600 text-xs font-semibold"
@@ -814,7 +818,7 @@ export function BemAvivHomePage() {
                         }}
                       />
                     </Bar>
-                    <Bar dataKey="totalConfirmed" fill="#185FA5" radius={[8, 8, 0, 0]} maxBarSize={56} />
+                    <Bar dataKey="totalConfirmed" fill="#185FA5" stroke="none" radius={[8, 8, 0, 0]} maxBarSize={56} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
