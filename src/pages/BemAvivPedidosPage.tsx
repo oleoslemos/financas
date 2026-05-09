@@ -169,7 +169,7 @@ export function BemAvivPedidosPage() {
   const [clientTableFilterId, setClientTableFilterId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<
-    'TODOS' | 'ABERTO' | 'ENTREGA PENDENTE' | 'ENTREGUE' | 'CANCELADO' | 'FINALIZADO'
+    'TODOS' | 'ABERTO' | 'ENTREGA PENDENTE' | 'ENTREGUE' | 'CANCELADO'
   >('TODOS')
   const [sortBy, setSortBy] = useState<'DATA' | 'DOCUMENTO' | 'CLIENTE' | 'STATUS' | 'VALOR'>('DATA')
   const [sortDir, setSortDir] = useState<'DESC' | 'ASC'>('DESC')
@@ -648,7 +648,6 @@ export function BemAvivPedidosPage() {
           <option value="ENTREGA PENDENTE">Entrega pendente</option>
           <option value="ENTREGUE">Entregue</option>
           <option value="CANCELADO">Cancelado</option>
-          <option value="FINALIZADO">Finalizado (legado)</option>
         </select>
         <div className="grid grid-cols-2 gap-2">
           <select
