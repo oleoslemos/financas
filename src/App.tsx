@@ -38,7 +38,6 @@ const BemAvivProdutosCatalogoPage = lazy(() =>
 const BemAvivPedidosPage = lazy(() => import('./pages/BemAvivPedidosPage').then((m) => ({ default: m.BemAvivPedidosPage })))
 const BemAvivNovoPedidoPage = lazy(() => import('./pages/BemAvivNovoPedidoPage').then((m) => ({ default: m.BemAvivNovoPedidoPage })))
 const BemAvivCategoriasPage = lazy(() => import('./pages/BemAvivCategoriasPage').then((m) => ({ default: m.BemAvivCategoriasPage })))
-const BemAvivTabelaPrecoPage = lazy(() => import('./pages/BemAvivTabelaPrecoPage').then((m) => ({ default: m.BemAvivTabelaPrecoPage })))
 const BemAvivTabelaPrecoCatalogoPage = lazy(() =>
   import('./pages/BemAvivTabelaPrecoCatalogoPage').then((m) => ({ default: m.BemAvivTabelaPrecoCatalogoPage })),
 )
@@ -103,7 +102,7 @@ export default function App() {
               <Route path="/bem-aviv/pedidos/editar/:orderId" element={<BemAvivNovoPedidoPage />} />
               <Route path="/bem-aviv/pedidos" element={<BemAvivPedidosPage />} />
               <Route path="/bem-aviv/categorias" element={<BemAvivCategoriasPage />} />
-              <Route path="/bem-aviv/tabela-preco" element={<BemAvivTabelaPrecoPage />} />
+              <Route path="/bem-aviv/tabela-preco" element={<Navigate to="/bem-aviv/tabela-preco-catalogo" replace />} />
               <Route path="/bem-aviv/tabela-preco-catalogo" element={<BemAvivTabelaPrecoCatalogoPage />} />
               <Route path="/bem-aviv/catalogos-preco" element={<BemAvivCatalogosPrecoPage />} />
               <Route path="/bem-aviv/catalogos-preco/:catalogId" element={<BemAvivCatalogoPrecoDetailPage />} />

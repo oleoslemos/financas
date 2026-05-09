@@ -15,7 +15,6 @@ const ROUTES: Array<{ prefix: string; segment: string; current: string }> = [
   { prefix: '/bem-aviv/produtos', segment: 'Hub', current: 'Produtos' },
   { prefix: '/bem-aviv/categorias', segment: 'Hub', current: 'Categorias' },
   { prefix: '/bem-aviv/tabela-preco-catalogo', segment: 'Hub', current: 'Tabela de preço (catálogo)' },
-  { prefix: '/bem-aviv/tabela-preco', segment: 'Hub', current: 'Tabela de preço Gold' },
   { prefix: '/bem-aviv/catalogos-preco', segment: 'Hub', current: 'Catálogos em grade' },
   { prefix: '/bem-aviv', segment: 'Hub', current: 'Visão geral' },
   { prefix: '/lsh/agenda', segment: 'Agenda', current: 'Agenda' },

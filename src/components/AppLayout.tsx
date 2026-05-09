@@ -159,7 +159,13 @@ export function AppLayout() {
           children: [
             { kind: 'link', key: '/bem-aviv/produtos-catalogo', label: 'Produtos', to: '/bem-aviv/produtos-catalogo', icon: Package },
             { kind: 'link', key: '/bem-aviv/categorias', label: 'Categorias', to: '/bem-aviv/categorias', icon: Tags },
-            { kind: 'link', key: '/bem-aviv/tabela-preco', label: 'Tabela de preço', to: '/bem-aviv/tabela-preco', icon: Table2 },
+            {
+              kind: 'link',
+              key: '/bem-aviv/tabela-preco-catalogo',
+              label: 'Tabela de preço',
+              to: '/bem-aviv/tabela-preco-catalogo',
+              icon: Table2,
+            },
             { kind: 'link', key: '/bem-aviv/catalogos-preco', label: 'Catálogos em grade', to: '/bem-aviv/catalogos-preco', icon: LayoutGrid },
           ],
         },

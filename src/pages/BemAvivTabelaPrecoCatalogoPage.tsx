@@ -28,6 +28,22 @@ type GradeModalState = {
   editable: boolean
 } | null
 
+type ProductCopyModalState = {
+  sourceTableId: string
+  sourceTableName: string
+  productId: string
+  productName: string
+  items: PriceTableItem[]
+} | null
+
+function normalizeSearchText(v: string) {
+  return v
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
 function nextCopyName(baseName: string, existingNames: string[]) {
   const used = new Set(existingNames)
   const normalized = `${baseName} CÓPIA`
@@ -54,6 +70,9 @@ export function BemAvivTabelaPrecoCatalogoPage() {
   const [tableEditDesc, setTableEditDesc] = useState('')
   const [singlePriceEdit, setSinglePriceEdit] = useState<PriceTableItem | null>(null)
   const [singlePriceDraft, setSinglePriceDraft] = useState('')
+  const [productFilter, setProductFilter] = useState('')
+  const [productCopyModal, setProductCopyModal] = useState<ProductCopyModalState>(null)
+  const [copyTargetTableId, setCopyTargetTableId] = useState('')
 
   const itemsByTableId = useMemo(() => {
     const m = new Map<string, PriceTableItem[]>()
@@ -323,9 +342,88 @@ export function BemAvivTabelaPrecoCatalogoPage() {
     await load()
   }
 
+  function openProductCopyModal(args: {
+    sourceTableId: string
+    sourceTableName: string
+    productId: string
+    productName: string
+    items: PriceTableItem[]
+  }) {
+    setProductCopyModal({
+      sourceTableId: args.sourceTableId,
+      sourceTableName: args.sourceTableName,
+      productId: args.productId,
+      productName: args.productName,
+      items: args.items,
+    })
+    setCopyTargetTableId('')
+  }
+
+  async function confirmCopyProductToTable() {
+    if (!supabase || !ownerUserId || !productCopyModal) return
+    if (!copyTargetTableId) {
+      alert('SELECIONE A TABELA DE DESTINO.')
+      return
+    }
+    if (copyTargetTableId === productCopyModal.sourceTableId) {
+      alert('SELECIONE UMA TABELA DIFERENTE DA ORIGEM.')
+      return
+    }
+
+    const existingMap = new Map<string, string>()
+    const { data: existingRows, error: existingErr } = await supabase
+      .from('bem_aviv_offer_price_table_items')
+      .select('id, variation_code')
+      .eq('user_id', ownerUserId)
+      .eq('price_table_id', copyTargetTableId)
+      .eq('offer_product_id', productCopyModal.productId)
+
+    if (existingErr) {
+      alert(existingErr.message)
+      return
+    }
+    for (const row of (existingRows as Array<{ id: string; variation_code: string }>) ?? []) {
+      existingMap.set(row.variation_code, row.id)
+    }
+
+    for (const sourceItem of productCopyModal.items) {
+      const existingId = existingMap.get(sourceItem.variation_code)
+      if (existingId) {
+        const { error } = await supabase
+          .from('bem_aviv_offer_price_table_items')
+          .update({
+            line_description: sourceItem.line_description,
+            price: sourceItem.price,
+          })
+          .eq('id', existingId)
+        if (error) {
+          alert(error.message)
+          return
+        }
+      } else {
+        const { error } = await supabase.from('bem_aviv_offer_price_table_items').insert({
+          user_id: ownerUserId,
+          price_table_id: copyTargetTableId,
+          offer_product_id: productCopyModal.productId,
+          variation_code: sourceItem.variation_code,
+          line_description: sourceItem.line_description,
+          price: sourceItem.price,
+        })
+        if (error) {
+          alert(error.message)
+          return
+        }
+      }
+    }
+
+    setProductCopyModal(null)
+    setCopyTargetTableId('')
+    await load()
+  }
+
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-semibold">GERAL — TABELA DE PREÇO (CATÁLOGO)</h2>
+      <h2 className="text-2xl font-semibold">TABELA DE VENDAS</h2>
 
       <form onSubmit={submit} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-2">
         <div>
@@ -349,6 +447,17 @@ export function BemAvivTabelaPrecoCatalogoPage() {
         </div>
       </form>
 
+      <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+        <label htmlFor="catalog-product-filter">PESQUISAR PRODUTO</label>
+        <input
+          id="catalog-product-filter"
+          value={productFilter}
+          onChange={(e) => setProductFilter(e.target.value)}
+          placeholder="Digite nome do produto (com ou sem acento)"
+          autoComplete="off"
+        />
+      </div>
+
       <div className="space-y-8">
         {rows.length === 0 ? (
           <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 p-6 text-center text-sm text-slate-600">NENHUMA TABELA CADASTRADA.</p>
@@ -369,6 +478,13 @@ export function BemAvivTabelaPrecoCatalogoPage() {
               return { productId, product, isGrade, items: sorted }
             })
           })()
+          const filterKey = normalizeSearchText(productFilter)
+          const filteredGroupedRows = filterKey
+            ? groupedRows.filter((row) => {
+                const productName = row.product?.name ?? row.items[0]?.line_description ?? ''
+                return normalizeSearchText(productName).includes(filterKey)
+              })
+            : groupedRows
           return (
             <div key={r.id} className="rounded-xl border border-slate-200 bg-white shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 px-3 py-2 sm:px-4">
@@ -426,6 +542,8 @@ export function BemAvivTabelaPrecoCatalogoPage() {
               </div>
               {lines.length === 0 ? (
                 <p className="px-3 py-3 text-sm text-slate-500 sm:px-4">NENHUMA LINHA NESTA TABELA. CADASTRE/EDITE PRODUTOS PARA POPULAR OS PREÇOS.</p>
+              ) : filteredGroupedRows.length === 0 ? (
+                <p className="px-3 py-3 text-sm text-slate-500 sm:px-4">NENHUM PRODUTO CORRESPONDE AO FILTRO.</p>
               ) : (
                 <div className="table-wrap border-0">
                   <table>
@@ -437,7 +555,7 @@ export function BemAvivTabelaPrecoCatalogoPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {groupedRows.map((row) => (
+                      {filteredGroupedRows.map((row) => (
                         <tr key={`${r.id}:${row.productId}`}>
                           <td>
                             {row.product?.name ?? row.items[0]?.line_description}
@@ -452,6 +570,23 @@ export function BemAvivTabelaPrecoCatalogoPage() {
                             <div className="inline-flex items-center gap-1">
                               {row.isGrade ? (
                                 <>
+                                  <button
+                                    type="button"
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
+                                    title="COPIAR PRODUTO PARA OUTRA TABELA"
+                                    aria-label="Copiar produto para outra tabela"
+                                    onClick={() =>
+                                      openProductCopyModal({
+                                        sourceTableId: r.id,
+                                        sourceTableName: r.name,
+                                        productId: row.productId,
+                                        productName: row.product?.name ?? row.items[0]?.line_description ?? 'PRODUTO',
+                                        items: row.items,
+                                      })
+                                    }
+                                  >
+                                    <Copy size={14} strokeWidth={2.2} />
+                                  </button>
                                   <button
                                     type="button"
                                     className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
@@ -472,15 +607,34 @@ export function BemAvivTabelaPrecoCatalogoPage() {
                                   </button>
                                 </>
                               ) : (
-                                <button
-                                  type="button"
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
-                                  title="EDITAR VALOR"
-                                  aria-label="Editar valor"
-                                  onClick={() => openSinglePriceEdit(row.items[0])}
-                                >
-                                  <Pencil size={14} strokeWidth={2.2} />
-                                </button>
+                                <>
+                                  <button
+                                    type="button"
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
+                                    title="COPIAR PRODUTO PARA OUTRA TABELA"
+                                    aria-label="Copiar produto para outra tabela"
+                                    onClick={() =>
+                                      openProductCopyModal({
+                                        sourceTableId: r.id,
+                                        sourceTableName: r.name,
+                                        productId: row.productId,
+                                        productName: row.product?.name ?? row.items[0]?.line_description ?? 'PRODUTO',
+                                        items: row.items,
+                                      })
+                                    }
+                                  >
+                                    <Copy size={14} strokeWidth={2.2} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
+                                    title="EDITAR VALOR"
+                                    aria-label="Editar valor"
+                                    onClick={() => openSinglePriceEdit(row.items[0])}
+                                  >
+                                    <Pencil size={14} strokeWidth={2.2} />
+                                  </button>
+                                </>
                               )}
                             </div>
                           </td>
@@ -551,6 +705,51 @@ export function BemAvivTabelaPrecoCatalogoPage() {
             onChange={(e) => setSinglePriceDraft(e.target.value)}
             autoComplete="off"
           />
+        </div>
+      </FormDialog>
+
+      <FormDialog
+        open={Boolean(productCopyModal)}
+        title="Copiar produto para outra tabela"
+        description={
+          productCopyModal
+            ? `${productCopyModal.productName} — origem: ${productCopyModal.sourceTableName}`
+            : undefined
+        }
+        onClose={() => {
+          setProductCopyModal(null)
+          setCopyTargetTableId('')
+        }}
+        actions={
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setProductCopyModal(null)
+                setCopyTargetTableId('')
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button type="button" variant="primary" onClick={() => void confirmCopyProductToTable()}>
+              Copiar
+            </Button>
+          </>
+        }
+      >
+        <div>
+          <label htmlFor="copy-target-table">Tabela de destino</label>
+          <select id="copy-target-table" value={copyTargetTableId} onChange={(e) => setCopyTargetTableId(e.target.value)}>
+            <option value="">— Selecione —</option>
+            {rows
+              .filter((t) => t.id !== productCopyModal?.sourceTableId)
+              .map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+          </select>
         </div>
       </FormDialog>
 

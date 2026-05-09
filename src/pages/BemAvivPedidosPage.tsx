@@ -48,6 +48,7 @@ type Pedido = {
   down_payment_amount?: number | null
   down_payment_method?: string | null
   freight_amount?: number | null
+  other_expenses?: number | null
 }
 
 type ClienteOpt = { id: string; full_name: string }
@@ -287,6 +288,7 @@ export function BemAvivPedidosPage() {
     const downMethod = parsePaymentMethod(quote.down_payment_method ?? quote.payment_method)
     const down = quote.down_payment_amount != null ? Number(quote.down_payment_amount) : null
     const freight = quote.freight_amount != null ? Number(quote.freight_amount) : 0
+    const otherExp = quote.other_expenses != null ? Number(quote.other_expenses) : 0
 
     const { data: inserted, error: insertError } = await supabase
       .from('bem_aviv_sales_orders')
@@ -306,6 +308,7 @@ export function BemAvivPedidosPage() {
         down_payment_amount: payOpt === 'A_PRAZO' ? down : null,
         down_payment_method: payOpt === 'A_PRAZO' ? downMethod : null,
         freight_amount: freight,
+        other_expenses: otherExp > 0 ? otherExp : null,
       })
       .select('id, document_number')
       .single()
@@ -918,6 +921,10 @@ export function BemAvivPedidosPage() {
                 <div>
                   <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Frete</dt>
                   <dd className="tabular-nums text-slate-800">{formatBRL(Number(detailModalPedido.freight_amount ?? 0))}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Outras despesas</dt>
+                  <dd className="tabular-nums text-slate-800">{formatBRL(Number(detailModalPedido.other_expenses ?? 0))}</dd>
                 </div>
                 <div>
                   <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Pagamento</dt>

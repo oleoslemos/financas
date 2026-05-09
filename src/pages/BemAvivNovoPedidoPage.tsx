@@ -27,6 +27,15 @@ const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
 
 type ClienteOpt = { id: string; full_name: string }
 
+type OfferPriceTableRow = { id: string; name: string; is_default: boolean }
+
+type OfferPriceTableItemRow = {
+  price_table_id: string
+  offer_product_id: string
+  variation_code: string
+  price: number
+}
+
 type LinhaItem = {
   key: string
   kind: 'PRODUCT' | 'KIT'
@@ -76,6 +85,44 @@ function normalizeTextKey(v: string) {
     .trim()
 }
 
+/** Preço da linha na tabela selecionada; se não houver linha na tabela, usa o valor base do catálogo. */
+function resolveTableUnitPrice(
+  tableId: string,
+  productId: string,
+  variationCode: string,
+  fallback: number,
+  lookup: Map<string, number>,
+): number {
+  const k = `${tableId}:${productId}:${variationCode}`
+  const p = lookup.get(k)
+  if (p != null && Number.isFinite(p) && p > 0) return p
+  return fallback
+}
+
+function inferPriceTableForOrderItems(
+  tables: OfferPriceTableRow[],
+  productIdsByTable: Map<string, Set<string>>,
+  productIds: string[],
+): string | null {
+  if (tables.length === 0) return null
+  const uniq = [...new Set(productIds)]
+  if (uniq.length === 0) return tables.find((t) => t.is_default)?.id ?? tables[0]?.id ?? null
+
+  const matching: string[] = []
+  for (const t of tables) {
+    const set = productIdsByTable.get(t.id)
+    if (!set) continue
+    if (uniq.every((id) => set.has(id))) matching.push(t.id)
+  }
+  if (matching.length === 1) return matching[0]
+  if (matching.length > 1) {
+    const def = tables.find((t) => t.is_default && matching.includes(t.id))
+    if (def) return def.id
+    return matching[0]
+  }
+  return tables.find((t) => t.is_default)?.id ?? tables[0]?.id ?? null
+}
+
 function clampOrderDiscountPercent(n: number) {
   if (!Number.isFinite(n)) return 0
   return Math.max(-999, Math.min(100, Math.round(n * 1e6) / 1e6))
@@ -109,6 +156,7 @@ type SalesOrderHeaderRow = {
   down_payment_amount?: number | null
   down_payment_method?: string | null
   freight_amount?: number | null
+  other_expenses?: number | null
 }
 
 function parsePaymentOptionNav(v: string | null | undefined): PaymentOption {
@@ -152,6 +200,12 @@ export function BemAvivNovoPedidoPage() {
   const [loadedDocumentLabel, setLoadedDocumentLabel] = useState<string | null>(null)
   const [deletingDocument, setDeletingDocument] = useState(false)
 
+  const [priceTables, setPriceTables] = useState<OfferPriceTableRow[]>([])
+  const [tableItems, setTableItems] = useState<OfferPriceTableItemRow[]>([])
+  const [selectedPriceTableId, setSelectedPriceTableId] = useState('')
+  const editTableInferredRef = useRef(false)
+  const prevPriceTableForDraftResetRef = useRef<string | null>(null)
+
   const [form, setForm] = useState(() => {
     const st = location.state as NovoPedidoNavState | null
     const document_type: 'ORCAMENTO' | 'PEDIDO' =
@@ -169,6 +223,7 @@ export function BemAvivNovoPedidoPage() {
       down_payment: '',
       down_payment_method: 'DINHEIRO' as PaymentMethod,
       freight_amount: '',
+      other_expenses: '',
     }
   })
 
@@ -200,14 +255,44 @@ export function BemAvivNovoPedidoPage() {
   const load = useCallback(async () => {
     if (!supabase || !ownerUserId) return
     setLoading(true)
-    const [{ data: cl }, { data: offers }] = await Promise.all([
+    const [{ data: cl }, { data: offers }, { data: tbls }] = await Promise.all([
       supabase.from('bem_aviv_clients').select('id, full_name').eq('user_id', ownerUserId).order('full_name'),
       supabase
         .from('bem_aviv_offer_products')
-        .select('id, name, category, product_line, product_type, pricing_mode, payload')
+        .select('id, name, category, product_line, product_type, pricing_mode, price_table_id, payload')
         .eq('user_id', ownerUserId)
         .order('name'),
+      supabase.from('bem_aviv_offer_price_tables').select('id, name, is_default').eq('user_id', ownerUserId).order('name'),
     ])
+
+    const tablesList = ((tbls ?? []) as OfferPriceTableRow[]) ?? []
+    setPriceTables(tablesList)
+
+    const tableIds = tablesList.map((t) => t.id)
+    let tiRows: OfferPriceTableItemRow[] = []
+    if (tableIds.length > 0) {
+      const { data: ti } = await supabase
+        .from('bem_aviv_offer_price_table_items')
+        .select('price_table_id, offer_product_id, variation_code, price')
+        .in('price_table_id', tableIds)
+      tiRows =
+        ((ti ?? []) as Array<{
+          price_table_id: string
+          offer_product_id: string
+          variation_code: string
+          price: number | string
+        }>).map((r) => ({
+          price_table_id: r.price_table_id,
+          offer_product_id: r.offer_product_id,
+          variation_code: r.variation_code,
+          price: Number(r.price),
+        })) ?? []
+    }
+    setTableItems(tiRows)
+
+    const defaultTableId = tablesList.find((t) => t.is_default)?.id ?? tablesList[0]?.id ?? ''
+    setSelectedPriceTableId(defaultTableId)
+
     setClients((cl as ClienteOpt[]) ?? [])
     setOfferProducts(((offers ?? []) as OfferProduct[]).map((r) => ({ ...r, payload: normalizePayload(r.payload) })))
     setLoading(false)
@@ -216,6 +301,59 @@ export function BemAvivNovoPedidoPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    editTableInferredRef.current = false
+  }, [editOrderId])
+
+  const productIdsByTable = useMemo(() => {
+    const m = new Map<string, Set<string>>()
+    for (const it of tableItems) {
+      if (!m.has(it.price_table_id)) m.set(it.price_table_id, new Set())
+      m.get(it.price_table_id)!.add(it.offer_product_id)
+    }
+    return m
+  }, [tableItems])
+
+  const priceLookup = useMemo(() => {
+    const mm = new Map<string, number>()
+    for (const it of tableItems) {
+      mm.set(`${it.price_table_id}:${it.offer_product_id}:${it.variation_code}`, Number(it.price))
+    }
+    return mm
+  }, [tableItems])
+
+  const catalogForTable = useMemo(() => {
+    if (!selectedPriceTableId) return [] as OfferProduct[]
+    const allowed = productIdsByTable.get(selectedPriceTableId)
+    if (!allowed || allowed.size === 0) return [] as OfferProduct[]
+    return offerProducts.filter((p) => allowed.has(p.id))
+  }, [offerProducts, productIdsByTable, selectedPriceTableId])
+
+  useEffect(() => {
+    if (!isEditMode || orderBootstrapping || lineItems.length === 0 || priceTables.length === 0) return
+    if (editTableInferredRef.current) return
+    const ids = [...new Set(lineItems.map((l) => l.offer_product_id))]
+    const inferred = inferPriceTableForOrderItems(priceTables, productIdsByTable, ids)
+    editTableInferredRef.current = true
+    if (inferred) setSelectedPriceTableId(inferred)
+  }, [isEditMode, orderBootstrapping, lineItems, priceTables, productIdsByTable])
+
+  useEffect(() => {
+    if (!selectedPriceTableId) return
+    if (prevPriceTableForDraftResetRef.current === null) {
+      prevPriceTableForDraftResetRef.current = selectedPriceTableId
+      return
+    }
+    if (prevPriceTableForDraftResetRef.current !== selectedPriceTableId) {
+      prevPriceTableForDraftResetRef.current = selectedPriceTableId
+      setDraftProductName('')
+      setDraftProductType('')
+      setDraftVariationCode('')
+      setProductQuery('')
+      setDraftQty('1')
+    }
+  }, [selectedPriceTableId])
 
   useEffect(() => {
     if (!editOrderId || !supabase || !ownerUserId) {
@@ -233,7 +371,7 @@ export function BemAvivNovoPedidoPage() {
       const { data: order, error: oErr } = await supabase
         .from('bem_aviv_sales_orders')
         .select(
-          'id, client_id, order_date, document_type, document_number, converted_order_id, status, total_amount, notes, discount_total, installments_count, payment_option, payment_method, down_payment_amount, down_payment_method, freight_amount',
+          'id, client_id, order_date, document_type, document_number, converted_order_id, status, total_amount, notes, discount_total, installments_count, payment_option, payment_method, down_payment_amount, down_payment_method, freight_amount, other_expenses',
         )
         .eq('id', editOrderId)
         .eq('user_id', ownerUserId)
@@ -322,6 +460,10 @@ export function BemAvivNovoPedidoPage() {
           quote.freight_amount != null && Number(quote.freight_amount) > 0
             ? String(Number(quote.freight_amount)).replace('.', ',')
             : '',
+        other_expenses:
+          quote.other_expenses != null && Number(quote.other_expenses) > 0
+            ? String(Number(quote.other_expenses)).replace('.', ',')
+            : '',
       })
       setLineItems(mapped)
       setLoadedDocumentLabel(quote.document_number ?? quote.id)
@@ -343,14 +485,14 @@ export function BemAvivNovoPedidoPage() {
 
   const uniqueProductNames = useMemo(() => {
     const byKey = new Map<string, string>()
-    for (const p of offerProducts) {
+    for (const p of catalogForTable) {
       const name = (p.name ?? '').trim()
       if (!name) continue
       const key = normalizeTextKey(name)
       if (!byKey.has(key)) byKey.set(key, name)
     }
     return [...byKey.values()].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }))
-  }, [offerProducts])
+  }, [catalogForTable])
 
   const productSuggestions = useMemo(() => {
     const q = normalizeTextKey(productQuery)
@@ -362,27 +504,31 @@ export function BemAvivNovoPedidoPage() {
     if (!draftProductName) return [] as string[]
     const types = new Set<string>()
     const selectedNameKey = normalizeTextKey(draftProductName)
-    for (const p of offerProducts) {
+    for (const p of catalogForTable) {
       if (normalizeTextKey(p.name) !== selectedNameKey) continue
       types.add((p.product_type ?? '').trim() || '—')
     }
     return [...types].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }))
-  }, [offerProducts, draftProductName])
+  }, [catalogForTable, draftProductName])
 
   const selectedOffer = useMemo(
     () =>
-      offerProducts.find((p) => {
+      catalogForTable.find((p) => {
         if (normalizeTextKey(p.name) !== normalizeTextKey(draftProductName)) return false
         const t = (p.product_type ?? '').trim() || '—'
         return t === draftProductType
       }) ?? null,
-    [draftProductName, draftProductType, offerProducts],
+    [draftProductName, draftProductType, catalogForTable],
   )
 
   const variationOptions = useMemo(() => {
-    if (!selectedOffer) return [] as OfferVariation[]
-    return normalizePayload(selectedOffer.payload).variations ?? []
-  }, [selectedOffer])
+    if (!selectedOffer || !selectedPriceTableId) return [] as OfferVariation[]
+    const vars = normalizePayload(selectedOffer.payload).variations ?? []
+    return vars.map((v) => ({
+      ...v,
+      price: resolveTableUnitPrice(selectedPriceTableId, selectedOffer.id, v.code, v.price, priceLookup),
+    }))
+  }, [selectedOffer, selectedPriceTableId, priceLookup])
 
   const productSelectOptions = useMemo(
     () => uniqueProductNames.map((name) => ({ value: name, label: name })),
@@ -434,6 +580,7 @@ export function BemAvivNovoPedidoPage() {
 
   const downPaymentNum = useMemo(() => clampMoney(parseMoney(form.down_payment || '0')), [form.down_payment])
   const freightAmountNum = useMemo(() => clampMoney(parseMoney(form.freight_amount || '0')), [form.freight_amount])
+  const otherExpensesNum = useMemo(() => clampMoney(parseMoney(form.other_expenses || '0')), [form.other_expenses])
   const linesGrossTotal = sumLinesNet
   const downPaymentApplied = form.payment_option === 'A_PRAZO' ? downPaymentNum : 0
 
@@ -445,9 +592,9 @@ export function BemAvivNovoPedidoPage() {
 
   const previewOrderTotal = useMemo(() => {
     if (lineItems.length === 0) return null
-    const net = clampMoney(sumLinesNet - orderDiscount + freightAmountNum)
+    const net = clampMoney(sumLinesNet - orderDiscount + freightAmountNum + otherExpensesNum)
     return clampMoney(net - downPaymentApplied)
-  }, [lineItems.length, sumLinesNet, orderDiscount, freightAmountNum, downPaymentApplied])
+  }, [lineItems.length, sumLinesNet, orderDiscount, freightAmountNum, otherExpensesNum, downPaymentApplied])
 
   const lineNetByKey = useMemo(() => {
     const map: Record<string, number> = {}
@@ -479,23 +626,60 @@ export function BemAvivNovoPedidoPage() {
     }
     const p = parseOrderDiscountPercent(form.discount_percent)
     const entrada = form.payment_option === 'A_PRAZO' ? downPaymentNum : 0
-    const net = clampMoney(sumLinesNet - (sumLinesNet * p) / 100 + freightAmountNum - entrada)
+    const net = clampMoney(sumLinesNet - (sumLinesNet * p) / 100 + freightAmountNum + otherExpensesNum - entrada)
     setLiquidTotalDraft(formatMoneyInput(net))
-  }, [lineItems.length, sumLinesNet, freightAmountNum, form.payment_option, downPaymentNum, form.discount_percent])
+  }, [
+    lineItems.length,
+    sumLinesNet,
+    freightAmountNum,
+    otherExpensesNum,
+    form.payment_option,
+    downPaymentNum,
+    form.discount_percent,
+  ])
 
   function applyLiquidRawToDiscount(raw: string) {
     if (lineItems.length === 0 || sumLinesNet <= 0) return
     const targetLiquid = clampMoney(parseMoney(raw))
     if (targetLiquid < 0) return
+    const G = sumLinesNet
+    const F = freightAmountNum
+    const O = otherExpensesNum
     const entrada = form.payment_option === 'A_PRAZO' ? downPaymentNum : 0
-    const discOrderExact = roundMoneySigned(sumLinesNet + freightAmountNum - entrada - targetLiquid)
-    if (discOrderExact > sumLinesNet + 0.000_001) return
-    const p = sumLinesNet > 0 ? (discOrderExact / sumLinesNet) * 100 : 0
-    setForm((f) => ({ ...f, discount_percent: clampOrderDiscountPercent(p).toFixed(6).replace('.', ',') }))
+    /** Desconto em R$ necessário para atingir o líquido, mantendo frete e outras despesas atuais. */
+    const discNeeded = roundMoneySigned(G + F + O - entrada - targetLiquid)
+    if (discNeeded > G + 0.000_001) {
+      alert('Valor líquido alvo é inválido para os itens e encargos atuais.')
+      return
+    }
+    if (discNeeded >= -0.000_001) {
+      const p = G > 0 ? (discNeeded / G) * 100 : 0
+      setForm((f) => ({
+        ...f,
+        discount_percent: clampOrderDiscountPercent(p).toFixed(6).replace('.', ','),
+      }))
+      setLiquidTotalDraft(formatMoneyInput(targetLiquid))
+      return
+    }
+    /** Total desejado acima do subtotal + frete − entrada: não usar desconto negativo — usar outras despesas. */
+    const newOther = roundMoneySigned(targetLiquid - G - F + entrada)
+    if (newOther < -0.000_001) {
+      alert('Não foi possível ajustar com outras despesas e desconto zerado.')
+      return
+    }
+    setForm((f) => ({
+      ...f,
+      discount_percent: '',
+      other_expenses: newOther > 0 ? formatMoneyInput(newOther) : '',
+    }))
     setLiquidTotalDraft(formatMoneyInput(targetLiquid))
   }
 
   function addLineFromDraft() {
+    if (!selectedPriceTableId) {
+      alert('SELECIONE UMA TABELA DE PREÇO.')
+      return
+    }
     const p = selectedOffer
     if (!p) {
       alert('SELECIONE PRODUTO E TIPO DO CATÁLOGO.')
@@ -510,7 +694,7 @@ export function BemAvivNovoPedidoPage() {
         alert('ESTE KIT NÃO TEM ITENS VÁLIDOS NO CADASTRO.')
         return
       }
-      const vars = payload.variations ?? []
+      const vars = variationOptions
       const v = vars.find((x) => x.code === draftVariationCode)
       if (vars.length > 0 && !v) {
         alert('SELECIONE A VARIAÇÃO (CÓDIGO / DIMENSÕES).')
@@ -550,28 +734,35 @@ export function BemAvivNovoPedidoPage() {
         return
       }
 
-      const byId = new Map(offerProducts.map((x) => [x.id, x]))
+      const byId = new Map(catalogForTable.map((x) => [x.id, x]))
       const exploded: LinhaItem[] = []
       for (const kl of kitLines) {
         const comp = byId.get(kl.offer_product_id)
-        const vars = normalizePayload(comp?.payload ?? {}).variations ?? []
-        const v = vars.find((x) => x.code === kl.variation_code)
-        if (!comp || !v || !Number.isFinite(v.price) || v.price <= 0) {
+        const varsComp = normalizePayload(comp?.payload ?? {}).variations ?? []
+        const vRaw = varsComp.find((x) => x.code === kl.variation_code)
+        if (!comp || !vRaw) {
+          alert(
+            `KIT COM ITEM INVÁLIDO (${comp?.name ?? 'PRODUTO REMOVIDO'}). VERIFIQUE SE O COMPONENTE ESTÁ NESTA TABELA DE PREÇO OU AJUSTE O CADASTRO DO KIT.`,
+          )
+          return
+        }
+        const unit = resolveTableUnitPrice(selectedPriceTableId, comp.id, kl.variation_code, vRaw.price, priceLookup)
+        if (!Number.isFinite(unit) || unit <= 0) {
           alert(
             `KIT COM ITEM INVÁLIDO (${comp?.name ?? 'PRODUTO REMOVIDO'}). ABRA O CADASTRO DO KIT EM PRODUTOS (CATÁLOGO) E CORRIJA.`,
           )
           return
         }
         const lineQty = kl.quantity * qty
-        const dimPart = v.dimensions ? ` — ${v.dimensions}` : ''
-        const descName = `${comp.name} [${v.code}]${dimPart} — parte do kit «${p.name}» (kit ×${qty})`
+        const dimPart = vRaw.dimensions ? ` — ${vRaw.dimensions}` : ''
+        const descName = `${comp.name} [${vRaw.code}]${dimPart} — parte do kit «${p.name}» (kit ×${qty})`
         exploded.push({
           key: newLineKey(),
           kind: 'PRODUCT',
           offer_product_id: comp.id,
-          variation_code: v.code,
+          variation_code: vRaw.code,
           name: descName,
-          unit_price: v.price,
+          unit_price: unit,
           quantity: lineQty,
         })
       }
@@ -584,7 +775,7 @@ export function BemAvivNovoPedidoPage() {
       return
     }
 
-    const vars = normalizePayload(p.payload).variations ?? []
+    const vars = variationOptions
     const v = vars.find((x) => x.code === draftVariationCode)
     if (vars.length > 0 && !v) {
       alert('SELECIONE A VARIAÇÃO (CÓDIGO / DIMENSÕES).')
@@ -661,14 +852,14 @@ export function BemAvivNovoPedidoPage() {
       const entrada = form.payment_option === 'A_PRAZO' ? downPaymentNum : 0
       const discOrder = roundMoneySigned(orderDiscount)
       const inst = installmentsNum
-      const totalInsert = clampMoney(sumLinesNet - discOrder + freightAmountNum)
+      const totalInsert = clampMoney(sumLinesNet - discOrder + freightAmountNum + otherExpensesNum)
 
-      const netCheck = roundMoneySigned(sumLinesNet - discOrder + freightAmountNum - entrada)
+      const netCheck = roundMoneySigned(sumLinesNet - discOrder + freightAmountNum + otherExpensesNum - entrada)
       if (netCheck < -0.005) {
-        alert('DESCONTO NO PEDIDO É MAIOR QUE A SOMA DOS ITENS + FRETE.')
+        alert('DESCONTO NO PEDIDO É MAIOR QUE A SOMA DOS ITENS + FRETE + OUTRAS DESPESAS.')
         return
       }
-      const totalBruto = linesGrossTotal + freightAmountNum
+      const totalBruto = linesGrossTotal + freightAmountNum + otherExpensesNum
       if (form.payment_option === 'A_PRAZO' && entrada > totalBruto) {
         alert('ENTRADA NÃO PODE SER MAIOR QUE O VALOR A PRAZO (BRUTO).')
         return
@@ -688,6 +879,7 @@ export function BemAvivNovoPedidoPage() {
         down_payment_amount: form.payment_option === 'A_PRAZO' && entrada > 0 ? entrada : null,
         down_payment_method: form.payment_option === 'A_PRAZO' ? form.down_payment_method : null,
         freight_amount: freightAmountNum,
+        other_expenses: otherExpensesNum > 0 ? otherExpensesNum : null,
       }
 
       if (editOrderId) {
@@ -704,6 +896,7 @@ export function BemAvivNovoPedidoPage() {
           down_payment_amount: headerPayload.down_payment_amount,
           down_payment_method: headerPayload.down_payment_method,
           freight_amount: headerPayload.freight_amount,
+          other_expenses: headerPayload.other_expenses,
           total_amount: totalInsert,
         }
 
@@ -798,7 +991,8 @@ export function BemAvivNovoPedidoPage() {
       hasOrderDate: Boolean(form.order_date),
       hasValidInstallments: installmentsNum >= 1,
       hasValidDownPayment:
-        form.payment_option !== 'A_PRAZO' || downPaymentApplied <= clampMoney(sumLinesNet - orderDiscount + freightAmountNum),
+        form.payment_option !== 'A_PRAZO' ||
+        downPaymentApplied <= clampMoney(sumLinesNet - orderDiscount + freightAmountNum + otherExpensesNum),
     }),
     [
       form.client_id,
@@ -810,6 +1004,7 @@ export function BemAvivNovoPedidoPage() {
       sumLinesNet,
       orderDiscount,
       freightAmountNum,
+      otherExpensesNum,
     ],
   )
   const checklistOk = Object.values(checklist).every(Boolean)
@@ -922,6 +1117,31 @@ export function BemAvivNovoPedidoPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-3">
+                    <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Tabela de preço</label>
+                    <select
+                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-base"
+                      value={selectedPriceTableId}
+                      onChange={(e) => setSelectedPriceTableId(e.target.value)}
+                      disabled={priceTables.length === 0}
+                      aria-label="Tabela de preço"
+                    >
+                      {priceTables.length === 0 ? (
+                        <option value="">— Nenhuma tabela —</option>
+                      ) : (
+                        priceTables.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name}
+                            {t.is_default ? ' (padrão)' : ''}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                    <p className="mt-1.5 text-xs leading-snug text-slate-500">
+                      A lista de produtos abaixo usa apenas itens cadastrados na tabela escolhida (preços conforme a tabela).
+                    </p>
+                  </div>
+
                   <div ref={comboRef} className="relative flex flex-col gap-3 sm:flex-row sm:items-start">
                     <div className="relative min-w-0 flex-1">
                       <Search className="pointer-events-none absolute left-3 top-1/2 z-[1] -translate-y-1/2 text-slate-400" size={18} />
@@ -935,6 +1155,7 @@ export function BemAvivNovoPedidoPage() {
                         placeholder="Busque por nome, linha ou tipo…"
                         className="h-12 border-slate-200 pl-10 pr-3 shadow-sm focus-visible:ring-2 focus-visible:ring-[#185FA5]/30"
                         autoComplete="off"
+                        disabled={!selectedPriceTableId || catalogForTable.length === 0}
                       />
                       {comboOpen && productSuggestions.length > 0 ? (
                         <ul
@@ -1039,6 +1260,14 @@ export function BemAvivNovoPedidoPage() {
                       </Link>
                       .
                     </p>
+                  ) : catalogForTable.length === 0 && selectedPriceTableId ? (
+                    <p className="text-sm text-amber-800">
+                      Nenhum produto vinculado a esta tabela de preço. Cadastre preços em{' '}
+                      <Link className="font-medium underline" to="/bem-aviv/tabela-preco-catalogo">
+                        Tabela de vendas
+                      </Link>{' '}
+                      ou selecione outra tabela.
+                    </p>
                   ) : null}
                 </CardContent>
               </Card>
@@ -1094,7 +1323,7 @@ export function BemAvivNovoPedidoPage() {
                     </div>
                   ) : null}
 
-                  <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Parcelas</label>
                       <Input
@@ -1115,6 +1344,17 @@ export function BemAvivNovoPedidoPage() {
                         title="Frete somado ao total do pedido."
                       />
                     </div>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Outras despesas (R$)</label>
+                    <Input
+                      className="mt-1 h-12"
+                      value={form.other_expenses}
+                      onChange={(e) => setForm({ ...form, other_expenses: e.target.value })}
+                      inputMode="decimal"
+                      title="Taxas, extras ou acréscimos fora do catálogo. Somado ao total (não entra no desconto %). Edite também o preço unitário nas linhas, se precisar."
+                    />
                   </div>
 
                   <div>
@@ -1143,7 +1383,7 @@ export function BemAvivNovoPedidoPage() {
                           }
                         }}
                         inputMode="decimal"
-                        title="Ajuste fino do total líquido (recalcula desconto automaticamente)."
+                        title="Ajuste fino do total líquido. Se o valor for maior que o subtotal + frete, o acréscimo vai para «Outras despesas» (e não para desconto negativo)."
                       />
                     </div>
                   ) : null}
@@ -1177,10 +1417,16 @@ export function BemAvivNovoPedidoPage() {
                       <span>Frete</span>
                       <span className="tabular-nums">{formatBRL(freightAmountNum)}</span>
                     </div>
+                    <div className="flex justify-between text-slate-600">
+                      <span>Outras despesas</span>
+                      <span className="tabular-nums">{formatBRL(otherExpensesNum)}</span>
+                    </div>
                     <div className="flex items-end justify-between border-t border-slate-100 pt-3">
                       <span className="text-sm font-medium text-slate-900">Total</span>
                       <span className="text-2xl font-black tabular-nums text-[#185FA5]">
-                        {lineItems.length > 0 ? formatBRL(clampMoney(sumLinesNet - orderDiscount + freightAmountNum - downPaymentApplied)) : '—'}
+                        {lineItems.length > 0
+                          ? formatBRL(clampMoney(sumLinesNet - orderDiscount + freightAmountNum + otherExpensesNum - downPaymentApplied))
+                          : '—'}
                       </span>
                     </div>
                     {previewOrderTotal != null && installmentsNum > 1 ? (
