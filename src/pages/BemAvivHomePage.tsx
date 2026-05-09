@@ -257,7 +257,7 @@ export function BemAvivHomePage() {
         .select('order_date, total_amount, document_type, status, converted_order_id')
         .eq('user_id', ownerUserId)
         .in('document_type', ['ORCAMENTO', 'PEDIDO'])
-        .in('status', ['ABERTO', 'FINALIZADO', 'ENTREGUE', 'CANCELADO']),
+        .in('status', ['ABERTO', 'FINALIZADO', 'ENTREGA PENDENTE', 'ENTREGUE', 'CANCELADO']),
       supabase
         .from('bem_aviv_clients')
         .select('id, full_name, cpf, last_contact_at, next_followup_at, next_followup_status, phone_1, phone_2, next_followup_note')
@@ -275,7 +275,8 @@ export function BemAvivHomePage() {
       converted_order_id: string | null
     }>
 
-    const soldStatuses = new Set(['FINALIZADO', 'ENTREGUE'])
+    /** Pedido pago / concluído no gráfico: entrega pendente conta como venda confirmada, igual finalizado/entregue. */
+    const soldStatuses = new Set(['FINALIZADO', 'ENTREGA PENDENTE', 'ENTREGUE'])
     const now = new Date()
     const periodStart = (() => {
       if (metricsPeriod === 'TODO') return null

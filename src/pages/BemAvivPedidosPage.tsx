@@ -81,40 +81,26 @@ function parsePaymentMethod(v: string | null | undefined): PaymentMethod {
   return 'DINHEIRO'
 }
 
+/** Valor total gravado: subtotal dos itens após desconto do pedido + frete + outras despesas (sem abater entrada). */
 function netTotal(r: Pedido) {
   return clampMoney(Number(r.total_amount))
-}
-
-function grossTotal(r: Pedido) {
-  return clampMoney(netTotal(r) + Number(r.discount_total ?? 0))
 }
 
 function downVal(r: Pedido) {
   return clampMoney(Number(r.down_payment_amount ?? 0))
 }
 
-/** Total líquido do pedido/orçamento (já com desconto aplicado). */
-function displayValorAvista(r: Pedido) {
+/** Total do pedido/orçamento gravado em `total_amount`: itens − desconto % + frete + outras despesas (antes da entrada). */
+function displayTotalPedido(r: Pedido) {
   return netTotal(r)
-}
-
-/** Valor financiado (total − entrada) quando a prazo. */
-function displayValorPrazo(r: Pedido) {
-  const opt = parsePaymentOption(r.payment_option)
-  if (opt !== 'A_PRAZO') return null
-  return grossTotal(r)
 }
 
 function installmentCell(r: Pedido) {
   const net = netTotal(r)
   const inst = Math.min(120, Math.max(1, r.installments_count ?? 1))
-  const opt = parsePaymentOption(r.payment_option)
   const entrada = downVal(r)
-  if (opt === 'A_VISTA') {
-    const each = inst > 0 ? net / inst : net
-    return `${inst}x ${formatBRL(each)}`
-  }
-  const financed = clampMoney(grossTotal(r) - entrada)
+  /** Saldo após entrada — tanto à prazo quanto à vista com entrada parcial. */
+  const financed = clampMoney(net - entrada)
   const each = inst > 0 ? financed / inst : financed
   return `${inst}x ${formatBRL(each)}`
 }
@@ -139,21 +125,22 @@ function canConfirmPayment(r: Pedido) {
   return r.document_type === 'PEDIDO' && r.status === 'ABERTO'
 }
 
-function isPendingDelivery(r: Pedido) {
-  return r.document_type === 'PEDIDO' && r.status === 'FINALIZADO'
-}
-
 function canConfirmDelivery(r: Pedido) {
-  return r.document_type === 'PEDIDO' && r.status === 'FINALIZADO'
+  return r.document_type === 'PEDIDO' && r.status === 'ENTREGA PENDENTE'
 }
 
 function canReopenPedido(r: Pedido) {
-  return r.document_type === 'PEDIDO' && (r.status === 'FINALIZADO' || r.status === 'ENTREGUE')
+  const s = r.status
+  return (
+    r.document_type === 'PEDIDO' &&
+    (s === 'ENTREGUE' || s === 'ENTREGA PENDENTE' || s === 'FINALIZADO')
+  )
 }
 
-/** Detalhe do pedido após pagamento confirmado ou entrega. */
+/** Detalhe do pedido após pagamento (entrega pendente), entregue ou legado finalizado. */
 function canVerDetalhePedido(r: Pedido) {
-  return r.document_type === 'PEDIDO' && (r.status === 'FINALIZADO' || r.status === 'ENTREGUE')
+  const s = r.status
+  return r.document_type === 'PEDIDO' && (s === 'ENTREGUE' || s === 'ENTREGA PENDENTE' || s === 'FINALIZADO')
 }
 
 /** Exclusão definitiva somente após cancelamento explícito. */
@@ -181,7 +168,9 @@ export function BemAvivPedidosPage() {
   const [typeTab, setTypeTab] = useState<'ORCAMENTO' | 'PEDIDO'>('PEDIDO')
   const [clientTableFilterId, setClientTableFilterId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'TODOS' | 'ABERTO' | 'FINALIZADO' | 'ENTREGUE' | 'CANCELADO'>('TODOS')
+  const [statusFilter, setStatusFilter] = useState<
+    'TODOS' | 'ABERTO' | 'ENTREGA PENDENTE' | 'ENTREGUE' | 'CANCELADO' | 'FINALIZADO'
+  >('TODOS')
   const [sortBy, setSortBy] = useState<'DATA' | 'DOCUMENTO' | 'CLIENTE' | 'STATUS' | 'VALOR'>('DATA')
   const [sortDir, setSortDir] = useState<'DESC' | 'ASC'>('DESC')
   const [detailModalPedido, setDetailModalPedido] = useState<Pedido | null>(null)
@@ -656,9 +645,10 @@ export function BemAvivPedidosPage() {
         >
           <option value="TODOS">Status: todos</option>
           <option value="ABERTO">Aberto</option>
-          <option value="FINALIZADO">Finalizado</option>
+          <option value="ENTREGA PENDENTE">Entrega pendente</option>
           <option value="ENTREGUE">Entregue</option>
           <option value="CANCELADO">Cancelado</option>
+          <option value="FINALIZADO">Finalizado (legado)</option>
         </select>
         <div className="grid grid-cols-2 gap-2">
           <select
@@ -694,9 +684,7 @@ export function BemAvivPedidosPage() {
                 <th>DATA</th>
                 <th>CLIENTE</th>
                 <th>STATUS</th>
-                <th>PENDENTE DE ENTREGA</th>
-                <th className="text-right">À VISTA (C/ DESC.)</th>
-                <th className="text-right">À PRAZO</th>
+                <th className="text-right">VALOR TOTAL</th>
                 <th className="text-right">ENTRADA</th>
                 <th className="text-right">PARCELAS (VALOR)</th>
                 <th className="text-right">AÇÕES</th>
@@ -704,7 +692,6 @@ export function BemAvivPedidosPage() {
             </thead>
             <tbody>
               {filteredRows.map((r) => {
-                const prazo = displayValorPrazo(r)
                 const downMethod = parsePaymentMethod(r.down_payment_method ?? r.payment_method)
                 return (
                   <tr key={r.id}>
@@ -714,11 +701,9 @@ export function BemAvivPedidosPage() {
                       {r.client_id ? clientNameById.get(r.client_id) ?? '—' : '—'}
                     </td>
                     <td>{r.status}</td>
-                    <td>{isPendingDelivery(r) ? 'SIM' : '—'}</td>
-                    <td className="text-right whitespace-nowrap">{formatBRL(displayValorAvista(r))}</td>
-                    <td className="text-right whitespace-nowrap">{prazo != null ? formatBRL(prazo) : '—'}</td>
+                    <td className="text-right whitespace-nowrap">{formatBRL(displayTotalPedido(r))}</td>
                     <td className="text-right whitespace-nowrap">
-                      {parsePaymentOption(r.payment_option) === 'A_PRAZO' ? (
+                      {downVal(r) > 0 ? (
                         <span className="inline-flex flex-col items-end">
                           <span>{formatBRL(downVal(r))}</span>
                           <span className="text-[9px] text-slate-500">{PAYMENT_METHOD_LABEL[downMethod]}</span>
@@ -773,8 +758,8 @@ export function BemAvivPedidosPage() {
                             onClick={() =>
                               void updateOrderStatus(
                                 r,
-                                'FINALIZADO',
-                                `CONFIRMAR PAGAMENTO DO PEDIDO ${r.document_number ?? ''}? O STATUS SERÁ FINALIZADO.`,
+                                'ENTREGA PENDENTE',
+                                `CONFIRMAR PAGAMENTO DO PEDIDO ${r.document_number ?? ''}? O STATUS SERÁ ENTREGA PENDENTE ATÉ CONFIRMAR A ENTREGA.`,
                               )
                             }
                           >

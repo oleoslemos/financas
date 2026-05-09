@@ -1,5 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
-import { Copy, Eye, Pencil, RefreshCw, Star, Trash2, X } from 'lucide-react'
+import { Copy, Eye, Pencil, Plus, RefreshCw, Star, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '../components/ui/Button'
 import { FormDialog } from '../components/ui/FormDialog'
@@ -73,6 +73,7 @@ export function BemAvivTabelaPrecoCatalogoPage() {
   const [productFilter, setProductFilter] = useState('')
   const [productCopyModal, setProductCopyModal] = useState<ProductCopyModalState>(null)
   const [copyTargetTableId, setCopyTargetTableId] = useState('')
+  const [addTableModalOpen, setAddTableModalOpen] = useState(false)
 
   const itemsByTableId = useMemo(() => {
     const m = new Map<string, PriceTableItem[]>()
@@ -115,8 +116,13 @@ export function BemAvivTabelaPrecoCatalogoPage() {
     void load()
   }, [load])
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault()
+  function resetNewTableForm() {
+    setName('')
+    setDescription('')
+    setIsDefault(false)
+  }
+
+  async function saveNewTable() {
     if (!supabase || !ownerUserId) return
     const normalizedName = toUpperTrim(name)
     if (!normalizedName) {
@@ -139,9 +145,8 @@ export function BemAvivTabelaPrecoCatalogoPage() {
       return
     }
 
-    setName('')
-    setDescription('')
-    setIsDefault(false)
+    resetNewTableForm()
+    setAddTableModalOpen(false)
     await load()
   }
 
@@ -313,6 +318,42 @@ export function BemAvivTabelaPrecoCatalogoPage() {
     await load()
   }
 
+  async function removeProductFromGradeTable() {
+    if (!supabase || !gradeModal || !ownerUserId) return
+    if (
+      !confirm(
+        'REMOVER ESTE PRODUTO DESTA TABELA DE VENDAS?\n\nTodas as variações desta tabela serão excluídas. O cadastro do produto no catálogo permanece; apenas o vínculo de preços nesta tabela é removido.',
+      )
+    ) {
+      return
+    }
+    const { error } = await supabase
+      .from('bem_aviv_offer_price_table_items')
+      .delete()
+      .eq('price_table_id', gradeModal.tableId)
+      .eq('offer_product_id', gradeModal.productId)
+      .eq('user_id', ownerUserId)
+    if (error) {
+      alert(error.message)
+      return
+    }
+    const product = productsById.get(gradeModal.productId)
+    if (product?.price_table_id === gradeModal.tableId) {
+      const { error: pErr } = await supabase
+        .from('bem_aviv_offer_products')
+        .update({ price_table_id: null, updated_at: new Date().toISOString() })
+        .eq('id', gradeModal.productId)
+        .eq('user_id', ownerUserId)
+      if (pErr) {
+        alert(pErr.message)
+        return
+      }
+    }
+    setGradeModal(null)
+    setGradePriceDraft({})
+    await load()
+  }
+
   async function applyTableToAllProducts(tableId: string) {
     if (!supabase || !ownerUserId) return
     if (!confirm('VINCULAR ESTA TABELA COMO PADRÃO EM TODOS OS PRODUTOS DO CATÁLOGO?')) return
@@ -423,29 +464,21 @@ export function BemAvivTabelaPrecoCatalogoPage() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-semibold">TABELA DE VENDAS</h2>
-
-      <form onSubmit={submit} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-2">
-        <div>
-          <label>NOME</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} required />
-        </div>
-        <div>
-          <label>DESCRIÇÃO</label>
-          <input value={description} onChange={(e) => setDescription(e.target.value)} />
-        </div>
-        <div className="sm:col-span-2 flex items-center gap-2">
-          <input id="table-default-catalog" type="checkbox" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} />
-          <label htmlFor="table-default-catalog" className="mb-0 font-normal normal-case">
-            Definir como tabela padrão (novos produtos)
-          </label>
-        </div>
-        <div className="sm:col-span-2">
-          <Button type="submit" variant="primary">
-            ADICIONAR TABELA
-          </Button>
-        </div>
-      </form>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <h2 className="text-2xl font-semibold">TABELA DE VENDAS</h2>
+        <Button
+          type="button"
+          variant="primary"
+          className="inline-flex items-center gap-2"
+          onClick={() => {
+            resetNewTableForm()
+            setAddTableModalOpen(true)
+          }}
+        >
+          <Plus size={18} aria-hidden />
+          Nova tabela
+        </Button>
+      </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
         <label htmlFor="catalog-product-filter">PESQUISAR PRODUTO</label>
@@ -650,6 +683,62 @@ export function BemAvivTabelaPrecoCatalogoPage() {
       </div>
 
       <FormDialog
+        open={addTableModalOpen}
+        title="Nova tabela de preço"
+        description="Nome e descrição serão gravados em maiúsculas (regra do cadastro)."
+        onClose={() => {
+          setAddTableModalOpen(false)
+          resetNewTableForm()
+        }}
+        actions={
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setAddTableModalOpen(false)
+                resetNewTableForm()
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button type="button" variant="primary" onClick={() => void saveNewTable()}>
+              Adicionar tabela
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label htmlFor="catalog-new-table-name">Nome</label>
+            <input
+              id="catalog-new-table-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              autoComplete="off"
+              autoFocus
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label htmlFor="catalog-new-table-desc">Descrição</label>
+            <input id="catalog-new-table-desc" value={description} onChange={(e) => setDescription(e.target.value)} autoComplete="off" />
+          </div>
+          <div className="sm:col-span-2 flex items-start gap-2">
+            <input
+              id="catalog-new-table-default"
+              type="checkbox"
+              checked={isDefault}
+              onChange={(e) => setIsDefault(e.target.checked)}
+              className="mt-1"
+            />
+            <label htmlFor="catalog-new-table-default" className="mb-0 font-normal normal-case leading-snug">
+              Definir como tabela padrão (novos produtos)
+            </label>
+          </div>
+        </div>
+      </FormDialog>
+
+      <FormDialog
         open={Boolean(tableEdit)}
         title="Editar tabela de preço"
         description="Nome e descrição ficam em maiúsculas ao salvar (regra do cadastro)."
@@ -804,12 +893,21 @@ export function BemAvivTabelaPrecoCatalogoPage() {
             </div>
 
             {gradeModal.editable ? (
-              <div className="mt-3 flex justify-end gap-2">
+              <div className="mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-4">
                 <Button type="button" variant="secondary" onClick={() => setGradeModal(null)}>
                   CANCELAR
                 </Button>
-                <Button type="button" variant="primary" onClick={saveGradePrices}>
+                <Button type="button" variant="primary" onClick={() => void saveGradePrices()}>
                   SALVAR
+                </Button>
+                <Button
+                  type="button"
+                  variant="danger"
+                  className="inline-flex items-center gap-1.5"
+                  onClick={() => void removeProductFromGradeTable()}
+                >
+                  <Trash2 size={16} aria-hidden />
+                  Excluir
                 </Button>
               </div>
             ) : null}

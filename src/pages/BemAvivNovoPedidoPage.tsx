@@ -582,7 +582,8 @@ export function BemAvivNovoPedidoPage() {
   const freightAmountNum = useMemo(() => clampMoney(parseMoney(form.freight_amount || '0')), [form.freight_amount])
   const otherExpensesNum = useMemo(() => clampMoney(parseMoney(form.other_expenses || '0')), [form.other_expenses])
   const linesGrossTotal = sumLinesNet
-  const downPaymentApplied = form.payment_option === 'A_PRAZO' ? downPaymentNum : 0
+  /** Entrada pode ser usada também em «À vista» (ex.: parte no ato, saldo na entrega da mercadoria). */
+  const downPaymentApplied = downPaymentNum
 
   const orderDiscount = useMemo(() => {
     const base = lineItems.length > 0 ? linesGrossTotal : 0
@@ -625,7 +626,7 @@ export function BemAvivNovoPedidoPage() {
       return
     }
     const p = parseOrderDiscountPercent(form.discount_percent)
-    const entrada = form.payment_option === 'A_PRAZO' ? downPaymentNum : 0
+    const entrada = downPaymentNum
     const net = clampMoney(sumLinesNet - (sumLinesNet * p) / 100 + freightAmountNum + otherExpensesNum - entrada)
     setLiquidTotalDraft(formatMoneyInput(net))
   }, [
@@ -633,7 +634,6 @@ export function BemAvivNovoPedidoPage() {
     sumLinesNet,
     freightAmountNum,
     otherExpensesNum,
-    form.payment_option,
     downPaymentNum,
     form.discount_percent,
   ])
@@ -645,7 +645,7 @@ export function BemAvivNovoPedidoPage() {
     const G = sumLinesNet
     const F = freightAmountNum
     const O = otherExpensesNum
-    const entrada = form.payment_option === 'A_PRAZO' ? downPaymentNum : 0
+    const entrada = downPaymentNum
     /** Desconto em R$ necessário para atingir o líquido, mantendo frete e outras despesas atuais. */
     const discNeeded = roundMoneySigned(G + F + O - entrada - targetLiquid)
     if (discNeeded > G + 0.000_001) {
@@ -849,7 +849,7 @@ export function BemAvivNovoPedidoPage() {
     }
     submitLockRef.current = true
     try {
-      const entrada = form.payment_option === 'A_PRAZO' ? downPaymentNum : 0
+      const entrada = downPaymentNum
       const discOrder = roundMoneySigned(orderDiscount)
       const inst = installmentsNum
       const totalInsert = clampMoney(sumLinesNet - discOrder + freightAmountNum + otherExpensesNum)
@@ -860,8 +860,8 @@ export function BemAvivNovoPedidoPage() {
         return
       }
       const totalBruto = linesGrossTotal + freightAmountNum + otherExpensesNum
-      if (form.payment_option === 'A_PRAZO' && entrada > totalBruto) {
-        alert('ENTRADA NÃO PODE SER MAIOR QUE O VALOR A PRAZO (BRUTO).')
+      if (entrada > totalBruto + 0.000_001) {
+        alert('ENTRADA NÃO PODE SER MAIOR QUE O TOTAL DO PEDIDO (ITENS + FRETE + OUTRAS DESPESAS APÓS DESCONTOS).')
         return
       }
 
@@ -876,8 +876,8 @@ export function BemAvivNovoPedidoPage() {
         notes: toUpperTrim(form.notes) || null,
         payment_option: form.payment_option,
         payment_method: form.payment_method,
-        down_payment_amount: form.payment_option === 'A_PRAZO' && entrada > 0 ? entrada : null,
-        down_payment_method: form.payment_option === 'A_PRAZO' ? form.down_payment_method : null,
+        down_payment_amount: entrada > 0 ? entrada : null,
+        down_payment_method: entrada > 0 ? form.down_payment_method : null,
         freight_amount: freightAmountNum,
         other_expenses: otherExpensesNum > 0 ? otherExpensesNum : null,
       }
@@ -991,7 +991,6 @@ export function BemAvivNovoPedidoPage() {
       hasOrderDate: Boolean(form.order_date),
       hasValidInstallments: installmentsNum >= 1,
       hasValidDownPayment:
-        form.payment_option !== 'A_PRAZO' ||
         downPaymentApplied <= clampMoney(sumLinesNet - orderDiscount + freightAmountNum + otherExpensesNum),
     }),
     [
@@ -999,7 +998,6 @@ export function BemAvivNovoPedidoPage() {
       lineItems.length,
       form.order_date,
       installmentsNum,
-      form.payment_option,
       downPaymentApplied,
       sumLinesNet,
       orderDiscount,
@@ -1287,7 +1285,7 @@ export function BemAvivNovoPedidoPage() {
                       value={form.payment_option}
                       onChange={(e) => {
                         const v = e.target.value as PaymentOption
-                        setForm({ ...form, payment_option: v, down_payment: v === 'A_VISTA' ? '' : form.down_payment })
+                        setForm({ ...form, payment_option: v })
                       }}
                     >
                       <option value="A_VISTA">À vista</option>
@@ -1310,7 +1308,7 @@ export function BemAvivNovoPedidoPage() {
                     </select>
                   </div>
 
-                  {form.payment_option === 'A_PRAZO' ? (
+                  <div className="grid gap-3 sm:grid-cols-2">
                     <div>
                       <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Entrada (R$)</label>
                       <Input
@@ -1318,10 +1316,25 @@ export function BemAvivNovoPedidoPage() {
                         value={form.down_payment}
                         onChange={(e) => setForm({ ...form, down_payment: e.target.value })}
                         inputMode="decimal"
-                        title="Entrada paga no ato. Reduz o saldo final."
+                        title="Opcional. Valor pago no ato; o saldo entra no total e pode ser quitado na entrega (à vista ou parcelado nas parcelas abaixo)."
                       />
                     </div>
-                  ) : null}
+                    <div>
+                      <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Meio da entrada</label>
+                      <select
+                        className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-3 text-base"
+                        value={form.down_payment_method}
+                        onChange={(e) => setForm({ ...form, down_payment_method: e.target.value as PaymentMethod })}
+                        aria-label="Meio da entrada"
+                      >
+                        {(Object.keys(PAYMENT_METHOD_LABEL) as PaymentMethod[]).map((k) => (
+                          <option key={k} value={k}>
+                            {PAYMENT_METHOD_LABEL[k]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
 
                     <div className="grid grid-cols-2 gap-2">
                     <div>
@@ -1407,7 +1420,7 @@ export function BemAvivNovoPedidoPage() {
                       <span>Descontos</span>
                       <span className="tabular-nums text-emerald-600">− {formatBRL(discountDisplay)}</span>
                     </div>
-                    {form.payment_option === 'A_PRAZO' && downPaymentApplied > 0 ? (
+                    {downPaymentApplied > 0 ? (
                       <div className="flex justify-between text-slate-600">
                         <span>Entrada</span>
                         <span className="tabular-nums text-emerald-600">− {formatBRL(downPaymentApplied)}</span>
