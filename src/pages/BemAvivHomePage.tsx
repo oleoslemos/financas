@@ -791,7 +791,7 @@ export function BemAvivHomePage() {
             <CardContent className="pt-0">
               <div className="h-[min(280px,42vh)] min-h-[200px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} margin={{ top: 30, right: 8, left: 4, bottom: 4 }} barCategoryGap="18%">
+                  <BarChart data={chartData} margin={{ top: 30, right: 8, left: 4, bottom: 4 }} barCategoryGap="18%" barGap={-56}>
                     <XAxis
                       dataKey="label"
                       tick={{ fontSize: 12, fill: '#64748b' }}
@@ -802,8 +802,7 @@ export function BemAvivHomePage() {
                     />
                     <YAxis hide domain={[0, (dataMax: number) => Math.max(1, dataMax * 1.18)]} />
                     <Tooltip content={<MonthlyBarTooltip />} cursor={{ fill: 'rgba(24, 95, 165, 0.06)' }} />
-                    <Bar dataKey="totalConfirmed" stackId="proj" fill="#185FA5" radius={[8, 8, 0, 0]} maxBarSize={56} />
-                    <Bar dataKey="projectionOpen" stackId="proj" fill="#9fd4ff" radius={[8, 8, 0, 0]} maxBarSize={56}>
+                    <Bar dataKey="totalProjected" fill="#9fd4ff" radius={[8, 8, 0, 0]} maxBarSize={56}>
                       <LabelList
                         dataKey="totalProjected"
                         position="top"
@@ -815,6 +814,7 @@ export function BemAvivHomePage() {
                         }}
                       />
                     </Bar>
+                    <Bar dataKey="totalConfirmed" fill="#185FA5" radius={[8, 8, 0, 0]} maxBarSize={56} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
