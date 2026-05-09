@@ -112,8 +112,6 @@ export function BemAvivFollowupSchedulePage() {
       return
     }
 
-    const clientStatus = scheduleForm.commercial_stage === 'FECHADO PLATAFORMA CONFORTO' ? 'CLIENTE' : 'PROSPECÇÃO'
-
     const { error } = await supabase
       .from('bem_aviv_clients')
       .update({
@@ -123,7 +121,6 @@ export function BemAvivFollowupSchedulePage() {
         next_followup_status: 'PENDENTE',
         last_contact_at: scheduleForm.contact_done ? new Date().toISOString() : client.last_contact_at ?? null,
         commercial_stage: scheduleForm.commercial_stage,
-        client_status: clientStatus,
       })
       .eq('id', client.id)
 

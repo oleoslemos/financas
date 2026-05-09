@@ -18,7 +18,12 @@ import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
-import { BEM_AVIV_CLIENT_COMMERCIAL_STAGE_OPTIONS } from '../lib/bemAvivClientStatus'
+import {
+  BEM_AVIV_CLIENT_COMMERCIAL_STAGE_OPTIONS,
+  BEM_AVIV_CLIENT_STATUS_OPTIONS,
+  bemAvivClientStatusShortLabel,
+  type BemAvivClientStatusFilter,
+} from '../lib/bemAvivClientStatus'
 import { cn } from '../lib/cn'
 import { formatBRL } from '../lib/format'
 import { normalizeSearchText, toUpperTrim } from '../lib/text'
@@ -183,6 +188,43 @@ function clientMatchesSearch(r: Cliente, raw: string) {
   return false
 }
 
+function clientStatusPill(status: string | null) {
+  const s = (status ?? '').trim()
+  if (s === 'PROSPECÇÃO') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-[#FAEEDA] px-2 py-0.5 text-[8px] font-medium text-[#854F0B]">
+        <span className="h-1 w-1 rounded-full bg-[#EF9F27]" aria-hidden />
+        Prospecção
+      </span>
+    )
+  }
+  if (s === 'CLIENTE - COLCHÃO') {
+    return (
+      <span className="inline-flex max-w-[11rem] items-center gap-1 rounded-full bg-[#EAF3DE] px-2 py-0.5 text-[8px] font-medium text-[#3B6D11]">
+        <span className="h-1 w-1 rounded-full bg-[#639922]" aria-hidden />
+        <span className="truncate">Cliente — colchão</span>
+      </span>
+    )
+  }
+  if (s === 'CLIENTE - DIVERSOS') {
+    return (
+      <span className="inline-flex max-w-[11rem] items-center gap-1 rounded-full bg-[#E6F1FB] px-2 py-0.5 text-[8px] font-medium text-[#185FA5]">
+        <span className="h-1 w-1 rounded-full bg-[#185FA5]" aria-hidden />
+        <span className="truncate">Cliente — diversos</span>
+      </span>
+    )
+  }
+  if (s === 'CLIENTE - COLCHÃO/DIVERSOS') {
+    return (
+      <span className="inline-flex max-w-[12rem] items-center gap-1 rounded-full bg-[#EEEDFE] px-2 py-0.5 text-[8px] font-medium text-[#3C3489]">
+        <span className="h-1 w-1 rounded-full bg-[#6B5CB3]" aria-hidden />
+        <span className="truncate">Colchão + diversos</span>
+      </span>
+    )
+  }
+  return <span className="text-[8px] text-slate-500">{s || '—'}</span>
+}
+
 const emptyForm = {
   full_name: '',
   cpf: '',
@@ -213,7 +255,7 @@ export function BemAvivClientesPage() {
   const [clientModalOpen, setClientModalOpen] = useState(false)
   const [cepLoading, setCepLoading] = useState(false)
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'TODOS' | 'CLIENTE' | 'PROSPECÇÃO'>('TODOS')
+  const [statusFilter, setStatusFilter] = useState<BemAvivClientStatusFilter>('TODOS')
   const [sortKey, setSortKey] = useState<SortKey>('full_name')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [form, setForm] = useState(emptyForm)
@@ -258,19 +300,21 @@ export function BemAvivClientesPage() {
 
   const stats = useMemo(() => {
     const total = rows.length
-    const clientes = rows.filter((r) => (r.client_status ?? '').trim() === 'CLIENTE').length
-    const prospec = rows.filter((r) => (r.client_status ?? '').trim() !== 'CLIENTE').length
-    const comEmail = rows.filter((r) => toUpperTrim(r.email ?? '').length > 0).length
-    return { total, clientes, prospec, comEmail }
+    const byStatus = (v: string) => rows.filter((r) => (r.client_status ?? '').trim() === v).length
+    return {
+      total,
+      prospec: byStatus('PROSPECÇÃO'),
+      clienteColchao: byStatus('CLIENTE - COLCHÃO'),
+      clienteDiversos: byStatus('CLIENTE - DIVERSOS'),
+      clienteColchaoDiversos: byStatus('CLIENTE - COLCHÃO/DIVERSOS'),
+    }
   }, [rows])
 
   const displayedRows = useMemo(() => {
     const filtered = rows.filter((r) => {
       if (!clientMatchesSearch(r, search)) return false
       if (statusFilter === 'TODOS') return true
-      const st = (r.client_status ?? '').trim()
-      if (statusFilter === 'CLIENTE') return st === 'CLIENTE'
-      return st !== 'CLIENTE'
+      return (r.client_status ?? '').trim() === statusFilter
     })
     const mul = sortDir === 'asc' ? 1 : -1
     return [...filtered].sort((a, b) => {
@@ -811,16 +855,11 @@ export function BemAvivClientesPage() {
         <p className="mt-0.5 text-sm text-slate-500">Base completa de clientes e prospects</p>
       </header>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
         <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
           <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Total</p>
           <p className="font-hub mt-1 text-[20px] font-bold text-slate-900">{stats.total}</p>
           <span className="mt-1 inline-block rounded-full bg-slate-100 px-2 py-0.5 text-[8px] text-slate-600">Cadastros</span>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
-          <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Clientes</p>
-          <p className="font-hub mt-1 text-[20px] font-bold text-slate-900">{stats.clientes}</p>
-          <span className="mt-1 inline-block rounded-full bg-[#EAF3DE] px-2 py-0.5 text-[8px] font-medium text-[#3B6D11]">Ativos</span>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
           <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Prospecção</p>
@@ -828,9 +867,19 @@ export function BemAvivClientesPage() {
           <span className="mt-1 inline-block rounded-full bg-[#FAEEDA] px-2 py-0.5 text-[8px] font-medium text-[#854F0B]">Prospects</span>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
-          <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Cadastro completo</p>
-          <p className="font-hub mt-1 text-[20px] font-bold text-slate-900">{stats.comEmail}</p>
-          <span className="mt-1 inline-block rounded-full bg-[#E6F1FB] px-2 py-0.5 text-[8px] font-medium text-[#185FA5]">Com e-mail</span>
+          <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Cliente — colchão</p>
+          <p className="font-hub mt-1 text-[20px] font-bold text-slate-900">{stats.clienteColchao}</p>
+          <span className="mt-1 inline-block rounded-full bg-[#EAF3DE] px-2 py-0.5 text-[8px] font-medium text-[#3B6D11]">Comprou colchão</span>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
+          <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Cliente — diversos</p>
+          <p className="font-hub mt-1 text-[20px] font-bold text-slate-900">{stats.clienteDiversos}</p>
+          <span className="mt-1 inline-block rounded-full bg-[#E6F1FB] px-2 py-0.5 text-[8px] font-medium text-[#185FA5]">Outros produtos</span>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
+          <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Colchão + diversos</p>
+          <p className="font-hub mt-1 text-[20px] font-bold text-slate-900">{stats.clienteColchaoDiversos}</p>
+          <span className="mt-1 inline-block rounded-full bg-[#EEEDFE] px-2 py-0.5 text-[8px] font-medium text-[#3C3489]">Mix</span>
         </div>
       </div>
 
@@ -853,20 +902,18 @@ export function BemAvivClientesPage() {
           >
             Todos
           </button>
-          <button
-            type="button"
-            className={cn(pillBase, statusFilter === 'CLIENTE' ? pillActive : pillIdle)}
-            onClick={() => setStatusFilter('CLIENTE')}
-          >
-            Clientes
-          </button>
-          <button
-            type="button"
-            className={cn(pillBase, statusFilter === 'PROSPECÇÃO' ? pillActive : pillIdle)}
-            onClick={() => setStatusFilter('PROSPECÇÃO')}
-          >
-            Prospecção
-          </button>
+          {BEM_AVIV_CLIENT_STATUS_OPTIONS.map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              className={cn(pillBase, statusFilter === opt ? pillActive : pillIdle)}
+              onClick={() => setStatusFilter(opt)}
+              title={opt}
+            >
+              <span className="hidden sm:inline">{opt}</span>
+              <span className="sm:hidden">{bemAvivClientStatusShortLabel(opt)}</span>
+            </button>
+          ))}
         </div>
         <button
           type="button"
@@ -912,19 +959,7 @@ export function BemAvivClientesPage() {
                   <td className="min-w-[9rem] text-xs normal-case text-slate-600">
                     {[formatPhone(r.phone_1), formatPhone(r.phone_2)].filter(Boolean).join(' / ') || '—'}
                   </td>
-                  <td>
-                    {(r.client_status ?? '').trim() === 'CLIENTE' ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-[#EAF3DE] px-2 py-0.5 text-[8px] font-medium text-[#3B6D11]">
-                        <span className="h-1 w-1 rounded-full bg-[#639922]" aria-hidden />
-                        Cliente
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-[#FAEEDA] px-2 py-0.5 text-[8px] font-medium text-[#854F0B]">
-                        <span className="h-1 w-1 rounded-full bg-[#EF9F27]" aria-hidden />
-                        Prospecção
-                      </span>
-                    )}
-                  </td>
+                  <td>{clientStatusPill(r.client_status)}</td>
                   <td className="whitespace-nowrap">
                     <div className="flex max-w-[280px] flex-wrap items-center justify-end gap-1 sm:max-w-none sm:gap-1.5">
                       <button
@@ -1106,7 +1141,16 @@ export function BemAvivClientesPage() {
               </div>
               <div className="sm:col-span-4">
                 <label>CLASSIFICAÇÃO</label>
-                <input value={editing?.client_status ?? 'PROSPECÇÃO'} readOnly className="bg-slate-100 text-slate-600" />
+                <input
+                  value={editing?.client_status ?? 'PROSPECÇÃO'}
+                  readOnly
+                  className="bg-slate-100 text-slate-600"
+                  title="Atualizado automaticamente com base nos pedidos (itens por categoria)."
+                />
+                <p className="mt-1 text-[10px] leading-snug text-slate-500">
+                  Novos cadastros começam em Prospecção. Ao registrar pedidos, o sistema classifica por colchão (plataforma de descanso) e
+                  demais produtos.
+                </p>
               </div>
               <div className="sticky bottom-0 z-10 flex flex-wrap gap-2 border-t border-slate-100 bg-white/95 py-3 backdrop-blur sm:col-span-12">
                 <Button variant="primary" type="submit">
