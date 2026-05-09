@@ -2,7 +2,7 @@ import { useUser } from '@clerk/clerk-react'
 import { Building2, ChevronLeft, ChevronRight, History, Target, TrendingUp } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bar, BarChart, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Progress } from '../components/ui/Progress'
 import { useSupabase } from '../hooks/useSupabase'
@@ -125,6 +125,20 @@ function calendarCells(viewMonth: Date) {
   }
   while (cells.length % 7 !== 0) cells.push({ date: null, inMonth: false })
   return cells
+}
+
+function OrderStackTopLabel(p: { x?: number | string; y?: number | string; width?: number | string; payload?: { total?: number } }) {
+  const x = Number(p.x ?? 0)
+  const y = Number(p.y ?? 0)
+  const width = Number(p.width ?? 0)
+  const payload = p.payload
+  const t = Number(payload?.total ?? 0)
+  if (!Number.isFinite(t) || t <= 0) return null
+  return (
+    <text x={x + width / 2} y={y - 6} textAnchor="middle" className="fill-slate-600 text-[11px] font-semibold" style={{ fontVariantNumeric: 'tabular-nums' }}>
+      {formatBRL(t)}
+    </text>
+  )
 }
 
 function MonthlyBarTooltip({
@@ -485,7 +499,9 @@ export function BemAvivHomePage() {
         }
 
         const v = monthTotal(mk)
-        const openV = monthlyOpenTotals[mk] ?? 0
+        const openRaw = monthlyOpenTotals[mk] ?? 0
+        /** Evita ruído numérico exibir faixa “aberto” fantasma. */
+        const openV = openRaw >= 0.01 ? openRaw : 0
         const projected = v + openV
         const prevMonthTotal = monthTotal(addMonthsToKey(mk, -1))
         const prevMonthOpen = monthlyOpenTotals[addMonthsToKey(mk, -1)] ?? 0
@@ -785,14 +801,14 @@ export function BemAvivHomePage() {
             <CardHeader className="pb-2">
               <CardTitle className="font-hub text-base font-semibold text-slate-900">Resultado mês a mês (pedidos)</CardTitle>
               <p className="mt-1 text-xs text-slate-500">
-                Confirmado (Finalizado/Entregue) em azul escuro. O tom mais claro só aparece nos meses com pedidos em aberto
-                (base = confirmado + aberto).
+                Empilhado: confirmado (Finalizado/Entregue) em azul escuro na base; pedidos em aberto em azul claro só no topo do mês em que
+                existirem.
               </p>
             </CardHeader>
             <CardContent className="pt-0">
               <div className="h-[min(280px,42vh)] min-h-[200px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} margin={{ top: 30, right: 8, left: 4, bottom: 4 }} barCategoryGap="18%" barGap={-56}>
+                  <BarChart data={chartData} margin={{ top: 30, right: 8, left: 4, bottom: 4 }} barCategoryGap="18%">
                     <XAxis
                       dataKey="label"
                       tick={{ fontSize: 12, fill: '#64748b' }}
@@ -803,22 +819,29 @@ export function BemAvivHomePage() {
                     />
                     <YAxis hide domain={[0, (dataMax: number) => Math.max(1, dataMax * 1.18)]} />
                     <Tooltip content={<MonthlyBarTooltip />} cursor={{ fill: 'rgba(24, 95, 165, 0.06)' }} />
-                    <Bar dataKey="totalProjected" fill="#9fd4ff" stroke="none" radius={[8, 8, 0, 0]} maxBarSize={56}>
-                      {chartData.map((entry) => (
-                        <Cell key={entry.key} fill={entry.projectionOpen > 0 ? '#9fd4ff' : 'transparent'} />
-                      ))}
+                    <Bar stackId="orders" dataKey="totalConfirmed" fill="#185FA5" maxBarSize={56} name="Confirmado">
                       <LabelList
-                        dataKey="total"
-                        position="top"
-                        offset={6}
-                        className="fill-slate-600 text-xs font-semibold"
-                        formatter={(value: unknown) => {
-                          const n = Number(value ?? 0)
-                          return n > 0 ? formatBRL(n) : ''
+                        content={(raw) => {
+                          const props = raw as { payload?: { projectionOpen?: number; total?: number }; x?: number | string; y?: number | string; width?: number | string }
+                          return (props.payload?.projectionOpen ?? 0) > 0 ? null : <OrderStackTopLabel {...props} />
                         }}
                       />
                     </Bar>
-                    <Bar dataKey="totalConfirmed" fill="#185FA5" stroke="none" radius={[8, 8, 0, 0]} maxBarSize={56} />
+                    <Bar
+                      stackId="orders"
+                      dataKey="projectionOpen"
+                      fill="#9fd4ff"
+                      maxBarSize={56}
+                      name="Pedidos em aberto"
+                      radius={[8, 8, 0, 0]}
+                    >
+                      <LabelList
+                        content={(raw) => {
+                          const props = raw as { payload?: { projectionOpen?: number; total?: number }; x?: number | string; y?: number | string; width?: number | string }
+                          return (props.payload?.projectionOpen ?? 0) > 0 ? <OrderStackTopLabel {...props} /> : null
+                        }}
+                      />
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
