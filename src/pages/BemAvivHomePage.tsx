@@ -136,6 +136,9 @@ function MonthlyBarTooltip({
     payload?: {
       label: string
       total: number
+      totalConfirmed: number
+      projectionOpen: number
+      totalProjected: number
       prevMonthTotal: number
       sameMonthLastYearTotal: number
       rolling12Total: number
@@ -158,6 +161,10 @@ function MonthlyBarTooltip({
     <div className="w-[min(92vw,430px)] rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 shadow-lg ring-1 ring-slate-900/5">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{p.label}</p>
       <p className="mt-0.5 text-base font-bold tabular-nums text-slate-900">{formatBRL(p.total)}</p>
+      <p className="mt-1 text-xs text-slate-600">
+        Confirmado: <span className="font-semibold text-slate-800">{formatBRL(p.totalConfirmed)}</span> · Projeção (aberto):{' '}
+        <span className="font-semibold text-slate-800">{formatBRL(p.projectionOpen)}</span>
+      </p>
       <div className="mt-2 space-y-1 border-t border-slate-100 pt-2 text-xs leading-snug">
         <p className="text-slate-600">
           Mês anterior:{' '}
@@ -203,10 +210,9 @@ export function BemAvivHomePage() {
   const [soldOrdersCount, setSoldOrdersCount] = useState(0)
   const [openOrdersCount, setOpenOrdersCount] = useState(0)
   const [openOrdersAmount, setOpenOrdersAmount] = useState(0)
-  const [quotesCount, setQuotesCount] = useState(0)
-  const [convertedQuotesCount, setConvertedQuotesCount] = useState(0)
   const [metricsPeriod, setMetricsPeriod] = useState<MetricsPeriod>('TODO')
   const [monthlyTotals, setMonthlyTotals] = useState<Record<string, number>>({})
+  const [monthlyOpenTotals, setMonthlyOpenTotals] = useState<Record<string, number>>({})
   const [clients, setClients] = useState<ClientRow[]>([])
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()))
   const [selectedDay, setSelectedDay] = useState<string | null>(() => formatYmd(new Date()))
@@ -269,26 +275,21 @@ export function BemAvivHomePage() {
     let openCount = 0
     let openAmount = 0
     let soldCount = 0
-    let quoteTotal = 0
-    let quoteConverted = 0
     const byMonth: Record<string, number> = {}
+    const byMonthOpen: Record<string, number> = {}
     for (const o of orders) {
       const docType = (o.document_type ?? '').toUpperCase()
       const st = (o.status ?? '').toUpperCase()
       const amt = Number(o.total_amount ?? 0)
       const dt = new Date(o.order_date)
       const inPeriod = !Number.isNaN(dt.getTime()) && (periodStart === null || (dt >= periodStart && dt <= now))
-      if (docType === 'ORCAMENTO') {
-        if (inPeriod) {
-          quoteTotal += 1
-          if (o.converted_order_id) quoteConverted += 1
-        }
-      }
       if (docType !== 'PEDIDO') continue
       if (!inPeriod) continue
       if (st === 'ABERTO') {
         openCount += 1
         if (Number.isFinite(amt)) openAmount += amt
+        const mk = monthKeyFromOrderDate(o.order_date || '')
+        if (mk && mk.length >= 7 && Number.isFinite(amt)) byMonthOpen[mk] = (byMonthOpen[mk] ?? 0) + amt
       }
       if (!soldStatuses.has(st)) continue
       if (!Number.isFinite(amt)) continue
@@ -302,9 +303,8 @@ export function BemAvivHomePage() {
     setSoldOrdersCount(soldCount)
     setOpenOrdersCount(openCount)
     setOpenOrdersAmount(openAmount)
-    setQuotesCount(quoteTotal)
-    setConvertedQuotesCount(quoteConverted)
     setMonthlyTotals(byMonth)
+    setMonthlyOpenTotals(byMonthOpen)
 
     setClients(((clientsRes.data ?? []) as ClientRow[]) ?? [])
 
@@ -459,7 +459,6 @@ export function BemAvivHomePage() {
 
   const progressPct = Math.min(100, DISTRIBUTION_GOAL_BRL > 0 ? (totalSold / DISTRIBUTION_GOAL_BRL) * 100 : 0)
   const avgTicket = soldOrdersCount > 0 ? totalSold / soldOrdersCount : 0
-  const quoteConversionRate = quotesCount > 0 ? (convertedQuotesCount / quotesCount) * 100 : 0
   const periodLabel =
     metricsPeriod === 'TODO'
       ? 'todo período'
@@ -486,32 +485,43 @@ export function BemAvivHomePage() {
         }
 
         const v = monthTotal(mk)
+        const openV = monthlyOpenTotals[mk] ?? 0
+        const projected = v + openV
         const prevMonthTotal = monthTotal(addMonthsToKey(mk, -1))
+        const prevMonthOpen = monthlyOpenTotals[addMonthsToKey(mk, -1)] ?? 0
         const sameMonthLastYearTotal = monthTotal(addMonthsToKey(mk, -12))
-        const rolling12Total = sumWindow(mk, 12)
-        const rolling12PrevTotal = sumWindow(addMonthsToKey(mk, -12), 12)
-        const wowMonthAbs = v - prevMonthTotal
-        const yoyAbs = v - sameMonthLastYearTotal
+        const sameMonthLastYearOpen = monthlyOpenTotals[addMonthsToKey(mk, -12)] ?? 0
+        const rolling12Total = sumWindow(mk, 12) + chartMonths.slice(-12).reduce((acc, key) => acc + (monthlyOpenTotals[key] ?? 0), 0)
+        const rolling12PrevTotal =
+          sumWindow(addMonthsToKey(mk, -12), 12) +
+          chartMonths.slice(-24, -12).reduce((acc, key) => acc + (monthlyOpenTotals[key] ?? 0), 0)
+        const prevProjected = prevMonthTotal + prevMonthOpen
+        const sameMonthLastYearProjected = sameMonthLastYearTotal + sameMonthLastYearOpen
+        const wowMonthAbs = projected - prevProjected
+        const yoyAbs = projected - sameMonthLastYearProjected
         const rollingAbs = rolling12Total - rolling12PrevTotal
         const pct = (cur: number, base: number) => (base === 0 ? null : ((cur - base) / base) * 100)
         const [y, mo] = mk.split('-')
         return {
           key: mk,
           label: `${mo}/${y?.slice(2)}`,
-          total: v,
-          prevMonthTotal,
-          sameMonthLastYearTotal,
+          total: projected,
+          totalConfirmed: v,
+          projectionOpen: openV,
+          totalProjected: projected,
+          prevMonthTotal: prevProjected,
+          sameMonthLastYearTotal: sameMonthLastYearProjected,
           rolling12Total,
           rolling12PrevTotal,
           wowMonthAbs,
-          wowMonthPct: pct(v, prevMonthTotal),
+          wowMonthPct: pct(projected, prevProjected),
           yoyAbs,
-          yoyPct: pct(v, sameMonthLastYearTotal),
+          yoyPct: pct(projected, sameMonthLastYearProjected),
           rollingAbs,
           rollingPct: pct(rolling12Total, rolling12PrevTotal),
         }
       }),
-    [chartMonths, monthlyTotals],
+    [chartMonths, monthlyTotals, monthlyOpenTotals],
   )
 
   const calendarTitle = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(calendarMonth)
@@ -764,9 +774,8 @@ export function BemAvivHomePage() {
                   <strong className="font-hub tabular-nums font-semibold text-slate-900">{formatBRL(avgTicket)}</strong>
                 </p>
                 <p className="text-xs text-slate-600">
-                  Conversão orçamento → pedido:{' '}
-                  <strong className="font-hub tabular-nums font-semibold text-slate-900">{quoteConversionRate.toFixed(1)}%</strong>{' '}
-                  ({convertedQuotesCount}/{quotesCount})
+                  Projeção (confirmado + em aberto):{' '}
+                  <strong className="font-hub tabular-nums font-semibold text-slate-900">{formatBRL(totalSold + openOrdersAmount)}</strong>
                 </p>
               </CardContent>
             </Card>
@@ -776,7 +785,7 @@ export function BemAvivHomePage() {
             <CardHeader className="pb-2">
               <CardTitle className="font-hub text-base font-semibold text-slate-900">Resultado mês a mês (pedidos)</CardTitle>
               <p className="mt-1 text-xs text-slate-500">
-                Pedidos com status Finalizado ou Entregue, por mês conforme a data do pedido — passe o cursor sobre as barras.
+                Base em pedidos por mês: confirmado (Finalizado/Entregue) + projeção de pedidos em aberto em tom mais claro.
               </p>
             </CardHeader>
             <CardContent className="pt-0">
@@ -793,9 +802,10 @@ export function BemAvivHomePage() {
                     />
                     <YAxis hide domain={[0, (dataMax: number) => Math.max(1, dataMax * 1.18)]} />
                     <Tooltip content={<MonthlyBarTooltip />} cursor={{ fill: 'rgba(24, 95, 165, 0.06)' }} />
-                    <Bar dataKey="total" fill="#185FA5" radius={8} maxBarSize={56} activeBar={{ fill: '#144f8f', radius: 8 }}>
+                    <Bar dataKey="totalConfirmed" stackId="proj" fill="#185FA5" radius={[8, 8, 0, 0]} maxBarSize={56} />
+                    <Bar dataKey="projectionOpen" stackId="proj" fill="#9fd4ff" radius={[8, 8, 0, 0]} maxBarSize={56}>
                       <LabelList
-                        dataKey="total"
+                        dataKey="totalProjected"
                         position="top"
                         offset={6}
                         className="fill-slate-600 text-xs font-semibold"
