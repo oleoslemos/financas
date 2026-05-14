@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Input } from '../components/ui/Input'
 import { SearchableSelect } from '../components/ui/SearchableSelect'
 import { useSupabase } from '../hooks/useSupabase'
+import { useCompany } from '../context/CompanyContext'
 import { normalizePayload, type OfferProduct, type OfferVariation } from '../lib/bemAvivOfferProduct'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { resolveDataOwnerId } from '../lib/dataOwner'
@@ -187,6 +188,7 @@ export function BemAvivNovoPedidoPage() {
   const supabase = useSupabase()
   const navigate = useNavigate()
   const location = useLocation()
+  const { activeCompanyId } = useCompany()
   const { orderId: editOrderId } = useParams<{ orderId: string }>()
   const isEditMode = Boolean(editOrderId)
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
@@ -253,10 +255,18 @@ export function BemAvivNovoPedidoPage() {
   }, [lineItems])
 
   const load = useCallback(async () => {
-    if (!supabase || !ownerUserId) return
+    if (!supabase || !ownerUserId || !activeCompanyId) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
     const [{ data: cl }, { data: offers }, { data: tbls }] = await Promise.all([
-      supabase.from('bem_aviv_clients').select('id, full_name').eq('user_id', ownerUserId).order('full_name'),
+      supabase
+        .from('bem_aviv_clients')
+        .select('id, full_name')
+        .eq('user_id', ownerUserId)
+        .eq('company_id', activeCompanyId)
+        .order('full_name'),
       supabase
         .from('bem_aviv_offer_products')
         .select('id, name, category, product_line, product_type, pricing_mode, price_table_id, payload')
@@ -296,7 +306,7 @@ export function BemAvivNovoPedidoPage() {
     setClients((cl as ClienteOpt[]) ?? [])
     setOfferProducts(((offers ?? []) as OfferProduct[]).map((r) => ({ ...r, payload: normalizePayload(r.payload) })))
     setLoading(false)
-  }, [ownerUserId, supabase])
+  }, [ownerUserId, supabase, activeCompanyId])
 
   useEffect(() => {
     void load()
@@ -356,7 +366,7 @@ export function BemAvivNovoPedidoPage() {
   }, [selectedPriceTableId])
 
   useEffect(() => {
-    if (!editOrderId || !supabase || !ownerUserId) {
+    if (!editOrderId || !supabase || !ownerUserId || !activeCompanyId) {
       setOrderBootstrapping(false)
       return
     }
@@ -375,6 +385,7 @@ export function BemAvivNovoPedidoPage() {
         )
         .eq('id', editOrderId)
         .eq('user_id', ownerUserId)
+        .eq('company_id', activeCompanyId)
         .maybeSingle()
 
       if (cancelled) return
@@ -473,7 +484,7 @@ export function BemAvivNovoPedidoPage() {
     return () => {
       cancelled = true
     }
-  }, [editOrderId, supabase, ownerUserId, loading])
+  }, [editOrderId, supabase, ownerUserId, loading, activeCompanyId])
 
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
@@ -816,7 +827,7 @@ export function BemAvivNovoPedidoPage() {
   }
 
   async function deleteCurrentDocument() {
-    if (!supabase || !ownerUserId || !editOrderId || !isEditMode || deletingDocument) return
+    if (!supabase || !ownerUserId || !activeCompanyId || !editOrderId || !isEditMode || deletingDocument) return
     if (
       !confirm(
         `EXCLUIR DEFINITIVAMENTE ${loadedDocumentLabel ?? 'ESTE DOCUMENTO'}?\n\nOs itens vinculados também serão removidos. Esta ação não pode ser desfeita.`,
@@ -825,7 +836,12 @@ export function BemAvivNovoPedidoPage() {
       return
     }
     setDeletingDocument(true)
-    const { error } = await supabase.from('bem_aviv_sales_orders').delete().eq('id', editOrderId).eq('user_id', ownerUserId)
+    const { error } = await supabase
+      .from('bem_aviv_sales_orders')
+      .delete()
+      .eq('id', editOrderId)
+      .eq('user_id', ownerUserId)
+      .eq('company_id', activeCompanyId)
     setDeletingDocument(false)
     if (error) {
       alert(error.message)
@@ -841,7 +857,7 @@ export function BemAvivNovoPedidoPage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (!supabase || !ownerUserId) return
+    if (!supabase || !ownerUserId || !activeCompanyId) return
     if (submitLockRef.current) return
     if (lineItems.length === 0) {
       alert('ADICIONE PELO MENOS UM ITEM OU USE A LISTAGEM DE PEDIDOS PARA VALOR MANUAL.')
@@ -867,6 +883,7 @@ export function BemAvivNovoPedidoPage() {
 
       const headerPayload = {
         user_id: ownerUserId,
+        company_id: activeCompanyId,
         client_id: form.client_id || null,
         order_date: form.order_date,
         document_type: form.document_type,
@@ -911,6 +928,7 @@ export function BemAvivNovoPedidoPage() {
           .update(cleanUpdate)
           .eq('id', editOrderId)
           .eq('user_id', ownerUserId)
+          .eq('company_id', activeCompanyId)
 
         if (updErr) {
           alert(updErr.message)

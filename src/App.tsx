@@ -44,6 +44,7 @@ const BemAvivTabelaPrecoCatalogoPage = lazy(() =>
 const BemAvivCatalogosPrecoPage = lazy(() => import('./pages/BemAvivCatalogosPrecoPage').then((m) => ({ default: m.BemAvivCatalogosPrecoPage })))
 const BemAvivCatalogoPrecoDetailPage = lazy(() => import('./pages/BemAvivCatalogoPrecoDetailPage').then((m) => ({ default: m.BemAvivCatalogoPrecoDetailPage })))
 const BemAvivCatalogoMatrizBlocoPage = lazy(() => import('./pages/BemAvivCatalogoMatrizBlocoPage').then((m) => ({ default: m.BemAvivCatalogoMatrizBlocoPage })))
+const BemAvivEmpresaPage = lazy(() => import('./pages/BemAvivEmpresaPage').then((m) => ({ default: m.BemAvivEmpresaPage })))
 const BemAvivHomePage = lazy(() => import('./pages/BemAvivHomePage').then((m) => ({ default: m.BemAvivHomePage })))
 const AgendaPage = lazy(() => import('./pages/AgendaPage').then((m) => ({ default: m.AgendaPage })))
 const TasksPage = lazy(() => import('./pages/TasksPage').then((m) => ({ default: m.TasksPage })))
@@ -107,6 +108,7 @@ export default function App() {
               <Route path="/bem-aviv/catalogos-preco" element={<BemAvivCatalogosPrecoPage />} />
               <Route path="/bem-aviv/catalogos-preco/:catalogId" element={<BemAvivCatalogoPrecoDetailPage />} />
               <Route path="/bem-aviv/catalogos-preco/:catalogId/bloco/:blockId" element={<BemAvivCatalogoMatrizBlocoPage />} />
+              <Route path="/bem-aviv/empresas" element={<BemAvivEmpresaPage />} />
 
               <Route element={<RequireFullHubAccess />}>
                 <Route path="/lsh/inicio" element={<Navigate to="/lsh/resumo" replace />} />

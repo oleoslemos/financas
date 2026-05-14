@@ -1,12 +1,13 @@
 import { SignOutButton, useUser } from '@clerk/clerk-react'
 import { Outlet } from 'react-router-dom'
 import { Button } from './ui/Button'
-import { getAllowedEmailSet, isEmailAllowed } from '../lib/allowedEmails'
+import { getAllowedEmailSetForHostname, isEmailAllowed } from '../lib/allowedEmails'
 
-/** Bloqueia o app se o e-mail do usuário não estiver em VITE_ALLOWED_EMAILS (quando definido). */
+/** Bloqueia o app se o e-mail do usuário não estiver na lista permitida para o host (quando definida). */
 export function AllowedEmailGuard() {
   const { user, isLoaded } = useUser()
-  const allowed = getAllowedEmailSet()
+  const host = typeof window !== 'undefined' ? window.location.hostname : ''
+  const allowed = getAllowedEmailSetForHostname(host)
 
   if (allowed === null) {
     return <Outlet />

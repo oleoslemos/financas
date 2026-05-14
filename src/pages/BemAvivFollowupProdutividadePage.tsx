@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
+import { useCompany } from '../context/CompanyContext'
 import { BEM_AVIV_CLIENT_COMMERCIAL_STAGE_OPTIONS } from '../lib/bemAvivClientStatus'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { resolveDataOwnerId } from '../lib/dataOwner'
@@ -118,6 +119,7 @@ function getPeriodRange(
 export function BemAvivFollowupProdutividadePage() {
   const { user } = useUser()
   const supabase = useSupabase()
+  const { activeCompanyId } = useCompany()
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const followupUserId = ownerUserId ? ownerUserId.toUpperCase() : null
   const followupActorName = (user?.fullName || user?.primaryEmailAddress?.emailAddress || ownerUserId || 'USUÁRIO').trim().toUpperCase()
@@ -140,24 +142,28 @@ export function BemAvivFollowupProdutividadePage() {
   const [followupStatusFilter, setFollowupStatusFilter] = useState<'TODOS' | 'PENDENTE' | 'CONCLUIDO' | 'CANCELADO'>('TODOS')
 
   const load = useCallback(async () => {
-    if (!supabase || !ownerUserId || !followupUserId) return
+    if (!supabase || !ownerUserId || !followupUserId || !activeCompanyId) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
     const { data, error } = await supabase
       .from('bem_aviv_clients')
       .select('id, full_name, phone_1, phone_2, client_status, commercial_stage, last_contact_at, next_followup_at, next_followup_status')
       .eq('user_id', ownerUserId)
+      .eq('company_id', activeCompanyId)
 
     if (error) alert(error.message)
     setClients((data as ClienteRow[]) ?? [])
     setLoading(false)
-  }, [ownerUserId, followupUserId, supabase])
+  }, [ownerUserId, followupUserId, supabase, activeCompanyId])
 
   useEffect(() => {
     void load()
   }, [load])
 
   async function openClientHistory(client: ClientHistoryTarget) {
-    if (!supabase || !followupUserId) return
+    if (!supabase || !followupUserId || !activeCompanyId) return
     setHistoryTarget(client)
     setLoadingHistory(true)
     const { data, error } = await supabase
@@ -165,6 +171,7 @@ export function BemAvivFollowupProdutividadePage() {
       .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
       .is('deleted_at', null)
       .eq('user_id', followupUserId)
+      .eq('company_id', activeCompanyId)
       .eq('client_id', client.id)
       .order('contacted_at', { ascending: false })
       .limit(30)
@@ -189,7 +196,7 @@ export function BemAvivFollowupProdutividadePage() {
 
   async function submitHistoryEntry(e: React.FormEvent) {
     e.preventDefault()
-    if (!supabase || !followupUserId || !historyTarget) return
+    if (!supabase || !followupUserId || !historyTarget || !activeCompanyId) return
     if (!historyForm.contacted_at) {
       alert('INFORME A DATA/HORA DO CONTATO.')
       return
@@ -198,6 +205,7 @@ export function BemAvivFollowupProdutividadePage() {
     const contactedAtIso = new Date(historyForm.contacted_at).toISOString()
     const { error } = await supabase.from('bem_aviv_client_followups').insert({
       user_id: followupUserId,
+      company_id: activeCompanyId,
       created_by_user_id: user?.id ?? null,
       created_by_name: followupActorName,
       client_id: historyTarget.id,
@@ -217,6 +225,7 @@ export function BemAvivFollowupProdutividadePage() {
         last_contact_at: contactedAtIso,
       })
       .eq('id', historyTarget.id)
+      .eq('company_id', activeCompanyId)
     if (clientError) {
       alert(clientError.message)
       return

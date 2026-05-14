@@ -1,6 +1,7 @@
 import { useUser, UserButton } from '@clerk/clerk-react'
 import {
   BriefcaseBusiness,
+  Building2,
   ChevronDown,
   ChevronLeft,
   CircleDollarSign,
@@ -31,6 +32,7 @@ import { canAccessTasksHomolog } from '../lib/tasksHomologAccess'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { canAccessProjects } from '../lib/projectsAccess'
 import { isBemAvivOnlyUser } from '../lib/userAccess'
+import { CompanyProvider, useCompany } from '../context/CompanyContext'
 
 type MenuItem = {
   label: string
@@ -79,6 +81,14 @@ const hubBrand = {
 }
 
 export function AppLayout() {
+  return (
+    <CompanyProvider>
+      <AppLayoutShell />
+    </CompanyProvider>
+  )
+}
+
+function AppLayoutShell() {
   const { user } = useUser()
   const location = useLocation()
   const navigate = useNavigate()
@@ -88,6 +98,7 @@ export function AppLayout() {
   const [openTreeGroupKeys, setOpenTreeGroupKeys] = useState<string[]>([])
 
   const emails = clerkEmailCandidates(user)
+  const { companies, activeCompanyId, setActiveCompanyId, loading: companiesLoading } = useCompany()
   const bemAvivOnlyUser = isBemAvivOnlyUser(emails)
   const hideAgendaTasks = bemAvivOnlyUser
   const tasksHomologEnabled = !hideAgendaTasks && canAccessTasksHomolog(user?.primaryEmailAddress?.emailAddress)
@@ -144,13 +155,14 @@ export function AppLayout() {
 
     sections.push({
       key: 'comercial',
-      title: 'BEM-AVIV',
+      title: "EKO'7",
       system: 'bem-aviv',
       items: [
         { kind: 'link', key: '/bem-aviv', label: 'Visão geral', to: '/bem-aviv', icon: LayoutGrid },
         { kind: 'link', key: '/bem-aviv/clientes', label: 'Clientes', to: '/bem-aviv/clientes', icon: UserCircle },
         { kind: 'link', key: '/bem-aviv/follow-up', label: 'Follow-up', to: '/bem-aviv/follow-up', icon: MessageCircleMore },
         { kind: 'link', key: '/bem-aviv/pedidos', label: 'Pedidos e orçamentos', to: '/bem-aviv/pedidos', icon: ShoppingCart },
+        { kind: 'link', key: '/bem-aviv/empresas', label: 'Dados da empresa', to: '/bem-aviv/empresas', icon: Building2 },
         {
           kind: 'group',
           key: 'bem-aviv-catalogo',
@@ -390,9 +402,26 @@ export function AppLayout() {
           >
             <Menu size={16} />
           </button>
-          <p className="truncate text-xs text-slate-500">
+          <p className="min-w-0 truncate text-xs text-slate-500">
             {breadcrumb.segment} / <span className="font-medium text-slate-900">{breadcrumb.current}</span>
           </p>
+          {location.pathname.startsWith('/bem-aviv') && companies.length > 1 ? (
+            <label className="hidden min-w-0 shrink sm:flex sm:max-w-[220px] sm:items-center sm:gap-2">
+              <span className="sr-only">Empresa ativa</span>
+              <select
+                className="max-w-full truncate rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-800"
+                value={activeCompanyId ?? ''}
+                disabled={companiesLoading}
+                onChange={(e) => setActiveCompanyId(e.target.value)}
+              >
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.trade_name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <div className="ml-auto flex items-center gap-2">
             <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-1.5 py-1 sm:px-2">
               <div

@@ -95,7 +95,7 @@ export function LshStartPage() {
               <Building2 size={20} className="text-[color:var(--color-text-muted)]" aria-hidden />
             </span>
             <div>
-              <h2 className="text-lg font-semibold tracking-tight text-[color:var(--color-text)]">Bem Aviv</h2>
+              <h2 className="text-lg font-semibold tracking-tight text-[color:var(--color-text)]">{"EKO'7"}</h2>
               <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">Clientes, produtos e pedidos.</p>
             </div>
             <span className="text-xs font-semibold text-[color:var(--color-primary)]">Entrar</span>

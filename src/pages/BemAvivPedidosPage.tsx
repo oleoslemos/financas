@@ -14,6 +14,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
+import { useCompany } from '../context/CompanyContext'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { normalizePayload, type OfferProduct } from '../lib/bemAvivOfferProduct'
@@ -161,6 +162,7 @@ export function BemAvivPedidosPage() {
   const supabase = useSupabase()
   const location = useLocation()
   const navigate = useNavigate()
+  const { activeCompanyId } = useCompany()
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const [rows, setRows] = useState<Pedido[]>([])
   const [clients, setClients] = useState<ClienteOpt[]>([])
@@ -223,17 +225,30 @@ export function BemAvivPedidosPage() {
   }, [rows, typeTab, clientTableFilterId, search, statusFilter, sortBy, sortDir, clientNameById])
 
   const load = useCallback(async () => {
-    if (!supabase || !ownerUserId) return
+    if (!supabase || !ownerUserId || !activeCompanyId) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
     const [{ data: orders }, { data: cl }] = await Promise.all([
-      supabase.from('bem_aviv_sales_orders').select('*').eq('user_id', ownerUserId).order('order_date', { ascending: false }),
-      supabase.from('bem_aviv_clients').select('id, full_name').eq('user_id', ownerUserId).order('full_name'),
+      supabase
+        .from('bem_aviv_sales_orders')
+        .select('*')
+        .eq('user_id', ownerUserId)
+        .eq('company_id', activeCompanyId)
+        .order('order_date', { ascending: false }),
+      supabase
+        .from('bem_aviv_clients')
+        .select('id, full_name')
+        .eq('user_id', ownerUserId)
+        .eq('company_id', activeCompanyId)
+        .order('full_name'),
     ])
     const ordersList = (orders as Pedido[]) ?? []
     setRows(ordersList)
     setClients((cl as ClienteOpt[]) ?? [])
     setLoading(false)
-  }, [ownerUserId, supabase])
+  }, [ownerUserId, supabase, activeCompanyId])
 
   useEffect(() => {
     void load()
@@ -250,7 +265,7 @@ export function BemAvivPedidosPage() {
   }, [location.state, navigate])
 
   async function closeQuoteAndCreateOrder(quote: Pedido) {
-    if (!supabase || !ownerUserId) return
+    if (!supabase || !ownerUserId || !activeCompanyId) return
     if (quote.document_type !== 'ORCAMENTO') return
     if (quote.converted_order_id) {
       alert('ESTE ORÇAMENTO JÁ FOI CONVERTIDO EM PEDIDO.')
@@ -283,6 +298,7 @@ export function BemAvivPedidosPage() {
       .from('bem_aviv_sales_orders')
       .insert({
         user_id: ownerUserId,
+        company_id: activeCompanyId,
         client_id: quote.client_id,
         order_date: new Date().toISOString().slice(0, 10),
         document_type: 'PEDIDO',
@@ -461,6 +477,7 @@ export function BemAvivPedidosPage() {
         converted_order_id: newOrder.id,
       })
       .eq('id', quote.id)
+      .eq('company_id', activeCompanyId)
 
     if (updError) {
       alert(updError.message)
@@ -472,7 +489,7 @@ export function BemAvivPedidosPage() {
   }
 
   async function updateOrderStatus(order: Pedido, nextStatus: string, confirmMessage: string) {
-    if (!supabase || !ownerUserId) return
+    if (!supabase || !ownerUserId || !activeCompanyId) return
     if (!confirm(confirmMessage)) return
 
     const { error } = await supabase
@@ -480,6 +497,7 @@ export function BemAvivPedidosPage() {
       .update({ status: nextStatus })
       .eq('id', order.id)
       .eq('user_id', ownerUserId)
+      .eq('company_id', activeCompanyId)
 
     if (error) {
       alert(error.message)
@@ -518,7 +536,7 @@ export function BemAvivPedidosPage() {
   }
 
   async function deleteDocumento(order: Pedido) {
-    if (!supabase || !ownerUserId) return
+    if (!supabase || !ownerUserId || !activeCompanyId) return
     if (!canExcluirDocumento(order)) return
     if (
       !confirm(
@@ -530,7 +548,12 @@ export function BemAvivPedidosPage() {
     const quoteIdToReopen =
       order.document_type === 'PEDIDO' && order.source_quote_id ? order.source_quote_id : null
 
-    const { error } = await supabase.from('bem_aviv_sales_orders').delete().eq('id', order.id).eq('user_id', ownerUserId)
+    const { error } = await supabase
+      .from('bem_aviv_sales_orders')
+      .delete()
+      .eq('id', order.id)
+      .eq('user_id', ownerUserId)
+      .eq('company_id', activeCompanyId)
     if (error) {
       alert(error.message)
       return
@@ -542,6 +565,7 @@ export function BemAvivPedidosPage() {
         .update({ status: 'ABERTO' })
         .eq('id', quoteIdToReopen)
         .eq('user_id', ownerUserId)
+        .eq('company_id', activeCompanyId)
         .eq('document_type', 'ORCAMENTO')
 
       if (reopenErr) {

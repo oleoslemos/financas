@@ -16,6 +16,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
+import { useCompany } from '../context/CompanyContext'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import {
@@ -246,6 +247,7 @@ export function BemAvivClientesPage() {
   const { user } = useUser()
   const supabase = useSupabase()
   const navigate = useNavigate()
+  const { activeCompanyId } = useCompany()
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const followupActorName = (user?.fullName || user?.primaryEmailAddress?.emailAddress || ownerUserId || 'USUÁRIO').trim().toUpperCase()
 
@@ -287,12 +289,20 @@ export function BemAvivClientesPage() {
   })
 
   const load = useCallback(async () => {
-    if (!supabase || !ownerUserId) return
+    if (!supabase || !ownerUserId || !activeCompanyId) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
-    const { data } = await supabase.from('bem_aviv_clients').select('*').eq('user_id', ownerUserId).order('full_name')
+    const { data } = await supabase
+      .from('bem_aviv_clients')
+      .select('*')
+      .eq('user_id', ownerUserId)
+      .eq('company_id', activeCompanyId)
+      .order('full_name')
     setRows((data as Cliente[]) ?? [])
     setLoading(false)
-  }, [ownerUserId, supabase])
+  }, [ownerUserId, supabase, activeCompanyId])
 
   useEffect(() => {
     void load()
@@ -383,7 +393,7 @@ export function BemAvivClientesPage() {
   }
 
   async function openHistoryModal(client: Cliente) {
-    if (!supabase || !ownerUserId) return
+    if (!supabase || !ownerUserId || !activeCompanyId) return
     setHistoryModalClient(client)
     setEditingHistoryId(null)
     setRegisterInlineOpen(false)
@@ -403,6 +413,7 @@ export function BemAvivClientesPage() {
       .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
       .is('deleted_at', null)
       .eq('user_id', ownerUserId.toUpperCase())
+      .eq('company_id', activeCompanyId)
       .eq('client_id', client.id)
       .order('contacted_at', { ascending: false })
       .limit(200)
@@ -411,6 +422,7 @@ export function BemAvivClientesPage() {
         .from('bem_aviv_client_followups')
         .select('id, client_id, contacted_at, channel, result, notes')
         .eq('user_id', ownerUserId.toUpperCase())
+        .eq('company_id', activeCompanyId)
         .eq('client_id', client.id)
         .order('contacted_at', { ascending: false })
         .limit(200)
@@ -427,12 +439,13 @@ export function BemAvivClientesPage() {
   }
 
   async function refetchHistoryModalRows(clientId: string): Promise<FollowupHistoryRow[]> {
-    if (!supabase || !ownerUserId) return []
+    if (!supabase || !ownerUserId || !activeCompanyId) return []
     let { data, error } = await supabase
       .from('bem_aviv_client_followups')
       .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
       .is('deleted_at', null)
       .eq('user_id', ownerUserId.toUpperCase())
+      .eq('company_id', activeCompanyId)
       .eq('client_id', clientId)
       .order('contacted_at', { ascending: false })
       .limit(200)
@@ -441,6 +454,7 @@ export function BemAvivClientesPage() {
         .from('bem_aviv_client_followups')
         .select('id, client_id, contacted_at, channel, result, notes')
         .eq('user_id', ownerUserId.toUpperCase())
+        .eq('company_id', activeCompanyId)
         .eq('client_id', clientId)
         .order('contacted_at', { ascending: false })
         .limit(200)
@@ -453,7 +467,7 @@ export function BemAvivClientesPage() {
 
   async function submitInlineFollowup(e: React.FormEvent) {
     e.preventDefault()
-    if (!supabase || !ownerUserId || !historyModalClient) return
+    if (!supabase || !ownerUserId || !historyModalClient || !activeCompanyId) return
     if (!registerInlineForm.contacted_at) return
 
     setRegisterInlineSaving(true)
@@ -473,6 +487,7 @@ export function BemAvivClientesPage() {
           notes: registerInlineForm.notes || null,
         })
         .eq('id', editingHistoryId)
+        .eq('company_id', activeCompanyId)
       if (updateError && isMissingAuditColumnError(updateError.message)) {
         const fallback = await supabase
           .from('bem_aviv_client_followups')
@@ -483,6 +498,7 @@ export function BemAvivClientesPage() {
             notes: registerInlineForm.notes || null,
           })
           .eq('id', editingHistoryId)
+          .eq('company_id', activeCompanyId)
         updateError = fallback.error
       }
 
@@ -494,7 +510,11 @@ export function BemAvivClientesPage() {
       const rows = await refetchHistoryModalRows(historyModalClient.id)
       setHistoryModalRows(rows)
       if (rows[0]) {
-        await supabase.from('bem_aviv_clients').update({ last_contact_at: rows[0].contacted_at }).eq('id', historyModalClient.id)
+        await supabase
+          .from('bem_aviv_clients')
+          .update({ last_contact_at: rows[0].contacted_at })
+          .eq('id', historyModalClient.id)
+          .eq('company_id', activeCompanyId)
       }
       setEditingHistoryId(null)
       setRegisterInlineOpen(false)
@@ -510,6 +530,7 @@ export function BemAvivClientesPage() {
 
     let { error: insertError } = await supabase.from('bem_aviv_client_followups').insert({
       user_id: followupUserId,
+      company_id: activeCompanyId,
       created_by_user_id: user?.id ?? null,
       created_by_name: followupActorName,
       client_id: historyModalClient.id,
@@ -521,6 +542,7 @@ export function BemAvivClientesPage() {
     if (insertError && isMissingAuditColumnError(insertError.message)) {
       const fallback = await supabase.from('bem_aviv_client_followups').insert({
         user_id: followupUserId,
+        company_id: activeCompanyId,
         client_id: historyModalClient.id,
         contacted_at: contactedAtIso,
         channel: registerInlineForm.channel,
@@ -543,6 +565,7 @@ export function BemAvivClientesPage() {
         next_followup_status: 'CONCLUIDO',
       })
       .eq('id', historyModalClient.id)
+      .eq('company_id', activeCompanyId)
 
     const rows = await refetchHistoryModalRows(historyModalClient.id)
     setHistoryModalRows(rows)
@@ -600,7 +623,7 @@ export function BemAvivClientesPage() {
 
   async function submitInlineSchedule(e: React.FormEvent) {
     e.preventDefault()
-    if (!supabase || !ownerUserId || !historyModalClient) return
+    if (!supabase || !ownerUserId || !historyModalClient || !activeCompanyId) return
     if (!scheduleInlineForm.next_followup_at) {
       alert('INFORME A DATA/HORA DO AGENDAMENTO.')
       return
@@ -617,6 +640,7 @@ export function BemAvivClientesPage() {
       })
       .eq('id', historyModalClient.id)
       .eq('user_id', ownerUserId)
+      .eq('company_id', activeCompanyId)
     if (error) {
       alert(error.message)
       setScheduleInlineSaving(false)
@@ -629,7 +653,7 @@ export function BemAvivClientesPage() {
   }
 
   async function removeHistoryRow(rowId: string) {
-    if (!supabase || !ownerUserId || !historyModalClient) return
+    if (!supabase || !ownerUserId || !historyModalClient || !activeCompanyId) return
     if (!confirm('EXCLUIR ESTE REGISTRO DE CONTATO?')) return
     let { error } = await supabase
       .from('bem_aviv_client_followups')
@@ -640,12 +664,14 @@ export function BemAvivClientesPage() {
       })
       .eq('id', rowId)
       .eq('user_id', ownerUserId.toUpperCase())
+      .eq('company_id', activeCompanyId)
     if (error && isMissingAuditColumnError(error.message)) {
       const fallback = await supabase
         .from('bem_aviv_client_followups')
         .delete()
         .eq('id', rowId)
         .eq('user_id', ownerUserId.toUpperCase())
+        .eq('company_id', activeCompanyId)
       error = fallback.error
     }
     if (error) {
@@ -660,12 +686,13 @@ export function BemAvivClientesPage() {
     setPedidosModalClient(client)
     setPedidosModalRows([])
     setPedidosModalItemsByOrder({})
-    if (!supabase || !ownerUserId) return
+    if (!supabase || !ownerUserId || !activeCompanyId) return
     setPedidosModalLoading(true)
     const { data, error } = await supabase
       .from('bem_aviv_sales_orders')
       .select('id, order_date, document_type, document_number, status, total_amount')
       .eq('user_id', ownerUserId)
+      .eq('company_id', activeCompanyId)
       .eq('client_id', client.id)
       .order('order_date', { ascending: false })
       .order('document_number', { ascending: false })
@@ -735,7 +762,7 @@ export function BemAvivClientesPage() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!supabase || !ownerUserId) return
+    if (!supabase || !ownerUserId || !activeCompanyId) return
     const fullAddress = [
       form.address_street,
       form.address_number,
@@ -750,6 +777,7 @@ export function BemAvivClientesPage() {
       .join(' - ')
     const payload = {
       user_id: ownerUserId,
+      ...(editing ? {} : { company_id: activeCompanyId }),
       full_name: toUpperTrim(form.full_name),
       cpf: onlyDigits(form.cpf),
       birth_date: form.birth_date || null,
@@ -767,7 +795,11 @@ export function BemAvivClientesPage() {
       client_status: editing ? toUpperTrim(editing.client_status ?? 'PROSPECÇÃO') : 'PROSPECÇÃO',
     }
     if (editing) {
-      const { error } = await supabase.from('bem_aviv_clients').update(payload).eq('id', editing.id)
+      const { error } = await supabase
+        .from('bem_aviv_clients')
+        .update(payload)
+        .eq('id', editing.id)
+        .eq('company_id', activeCompanyId)
       if (error) alert(error.message)
     } else {
       const { error } = await supabase.from('bem_aviv_clients').insert(payload)
@@ -810,8 +842,12 @@ export function BemAvivClientesPage() {
   }
 
   async function remove(id: string) {
-    if (!supabase || !confirm('EXCLUIR CLIENTE?')) return
-    const { error } = await supabase.from('bem_aviv_clients').delete().eq('id', id)
+    if (!supabase || !activeCompanyId || !confirm('EXCLUIR CLIENTE?')) return
+    const { error } = await supabase
+      .from('bem_aviv_clients')
+      .delete()
+      .eq('id', id)
+      .eq('company_id', activeCompanyId)
     if (error) alert(error.message)
     else void load()
   }

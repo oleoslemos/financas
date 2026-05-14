@@ -6,6 +6,7 @@ import { Bar, BarChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } 
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Progress } from '../components/ui/Progress'
 import { useSupabase } from '../hooks/useSupabase'
+import { useCompany } from '../context/CompanyContext'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { cn } from '../lib/cn'
@@ -217,6 +218,7 @@ export function BemAvivHomePage() {
   const { user } = useUser()
   const supabase = useSupabase()
   const navigate = useNavigate()
+  const { activeCompanyId } = useCompany()
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const followupActorName = (user?.fullName || user?.primaryEmailAddress?.emailAddress || ownerUserId || 'USUÁRIO').trim().toUpperCase()
   const [loading, setLoading] = useState(true)
@@ -245,7 +247,7 @@ export function BemAvivHomePage() {
   })
 
   const load = useCallback(async () => {
-    if (!supabase || !ownerUserId) {
+    if (!supabase || !ownerUserId || !activeCompanyId) {
       setLoading(false)
       return
     }
@@ -256,12 +258,14 @@ export function BemAvivHomePage() {
         .from('bem_aviv_sales_orders')
         .select('order_date, total_amount, document_type, status, converted_order_id')
         .eq('user_id', ownerUserId)
+        .eq('company_id', activeCompanyId)
         .in('document_type', ['ORCAMENTO', 'PEDIDO'])
         .in('status', ['ABERTO', 'FINALIZADO', 'ENTREGA PENDENTE', 'ENTREGUE', 'CANCELADO']),
       supabase
         .from('bem_aviv_clients')
         .select('id, full_name, cpf, last_contact_at, next_followup_at, next_followup_status, phone_1, phone_2, next_followup_note')
-        .eq('user_id', ownerUserId),
+        .eq('user_id', ownerUserId)
+        .eq('company_id', activeCompanyId),
     ])
 
     if (ordersRes.error) console.error(ordersRes.error)
@@ -324,7 +328,7 @@ export function BemAvivHomePage() {
     setClients(((clientsRes.data ?? []) as ClientRow[]) ?? [])
 
     setLoading(false)
-  }, [ownerUserId, supabase, metricsPeriod])
+  }, [ownerUserId, supabase, metricsPeriod, activeCompanyId])
 
   useEffect(() => {
     void load()
@@ -353,7 +357,7 @@ export function BemAvivHomePage() {
   const agendaRows = selectedDay ? tasksForSelectedDay : tasksForViewMonth
 
   useEffect(() => {
-    if (!supabase || !ownerUserId) return
+    if (!supabase || !ownerUserId || !activeCompanyId) return
     const ids = Array.from(new Set(clients.map((r) => r.id)))
     if (ids.length === 0) {
       setLatestHistoryByClient({})
@@ -366,6 +370,7 @@ export function BemAvivHomePage() {
         .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
         .is('deleted_at', null)
         .eq('user_id', ownerUserId.toUpperCase())
+        .eq('company_id', activeCompanyId)
         .in('client_id', ids)
         .order('contacted_at', { ascending: false })
       if (cancelled) return
@@ -383,7 +388,7 @@ export function BemAvivHomePage() {
     return () => {
       cancelled = true
     }
-  }, [clients, ownerUserId, supabase])
+  }, [clients, ownerUserId, supabase, activeCompanyId])
 
   const criticalTimelineClients = useMemo(() => {
     const now = Date.now()
@@ -555,7 +560,7 @@ export function BemAvivHomePage() {
   }
 
   async function openHistoryModal(client: ClientRow) {
-    if (!supabase || !ownerUserId) return
+    if (!supabase || !ownerUserId || !activeCompanyId) return
     setHistoryModalClient(client)
     setEditingHistoryId(null)
     setRegisterInlineOpen(false)
@@ -573,6 +578,7 @@ export function BemAvivHomePage() {
       .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
       .is('deleted_at', null)
       .eq('user_id', ownerUserId.toUpperCase())
+      .eq('company_id', activeCompanyId)
       .eq('client_id', client.id)
       .order('contacted_at', { ascending: false })
       .limit(200)
@@ -586,12 +592,13 @@ export function BemAvivHomePage() {
   }
 
   async function refetchHistoryModalRows(client: ClientRow): Promise<FollowupHistoryRow[]> {
-    if (!supabase || !ownerUserId) return []
+    if (!supabase || !ownerUserId || !activeCompanyId) return []
     const { data, error } = await supabase
       .from('bem_aviv_client_followups')
       .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
       .is('deleted_at', null)
       .eq('user_id', ownerUserId.toUpperCase())
+      .eq('company_id', activeCompanyId)
       .eq('client_id', client.id)
       .order('contacted_at', { ascending: false })
       .limit(200)
@@ -601,7 +608,7 @@ export function BemAvivHomePage() {
 
   async function submitInlineFollowup(e: React.FormEvent) {
     e.preventDefault()
-    if (!supabase || !ownerUserId || !historyModalClient) return
+    if (!supabase || !ownerUserId || !historyModalClient || !activeCompanyId) return
     if (!registerInlineForm.contacted_at) return
 
     setRegisterInlineSaving(true)
@@ -621,6 +628,7 @@ export function BemAvivHomePage() {
           notes: registerInlineForm.notes || null,
         })
         .eq('id', editingHistoryId)
+        .eq('company_id', activeCompanyId)
 
       if (updateError) {
         setRegisterInlineSaving(false)
@@ -631,7 +639,11 @@ export function BemAvivHomePage() {
       setHistoryModalRows(rows)
       const latest = rows[0]
       if (latest) {
-        await supabase.from('bem_aviv_clients').update({ last_contact_at: latest.contacted_at }).eq('id', historyModalClient.id)
+        await supabase
+          .from('bem_aviv_clients')
+          .update({ last_contact_at: latest.contacted_at })
+          .eq('id', historyModalClient.id)
+          .eq('company_id', activeCompanyId)
         setLatestHistoryByClient((prev) => ({ ...prev, [historyModalClient.id]: latest }))
         setClients((prev) =>
           prev.map((c) => (c.id === historyModalClient.id ? { ...c, last_contact_at: latest.contacted_at } : c)),
@@ -652,6 +664,7 @@ export function BemAvivHomePage() {
 
     const { error: insertError } = await supabase.from('bem_aviv_client_followups').insert({
       user_id: followupUserId,
+      company_id: activeCompanyId,
       created_by_user_id: user?.id ?? null,
       created_by_name: followupActorName,
       client_id: historyModalClient.id,
@@ -673,6 +686,7 @@ export function BemAvivHomePage() {
         next_followup_status: 'CONCLUIDO',
       })
       .eq('id', historyModalClient.id)
+      .eq('company_id', activeCompanyId)
 
     setClients((prev) =>
       prev.map((c) =>
@@ -703,7 +717,7 @@ export function BemAvivHomePage() {
           <Building2 size={26} strokeWidth={1.75} aria-hidden />
         </div>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Bem Aviv — Dashboard</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{"EKO'7 — Dashboard"}</h1>
           <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-600">
             Meta de distribuição, vendas e prioridades de follow-up.
           </p>
@@ -712,6 +726,8 @@ export function BemAvivHomePage() {
 
       {!supabase || !ownerUserId ? (
         <p className="text-sm text-slate-600">Conectando ao Supabase…</p>
+      ) : !activeCompanyId ? (
+        <p className="text-sm text-slate-600">Carregando empresa…</p>
       ) : loading ? (
         <p className="text-sm text-slate-500">Carregando indicadores…</p>
       ) : (

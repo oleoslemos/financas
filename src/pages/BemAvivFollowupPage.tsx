@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
+import { useCompany } from '../context/CompanyContext'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { buildWhatsappUrl } from '../lib/whatsapp'
@@ -145,6 +146,7 @@ export function BemAvivFollowupPage() {
   const supabase = useSupabase()
   const location = useLocation()
   const navigate = useNavigate()
+  const { activeCompanyId } = useCompany()
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const followupUserId = ownerUserId ? ownerUserId.toUpperCase() : null
   const followupActorName = (user?.fullName || user?.primaryEmailAddress?.emailAddress || ownerUserId || 'USUÁRIO').trim().toUpperCase()
@@ -178,12 +180,16 @@ export function BemAvivFollowupPage() {
   const [latestFollowupsReady, setLatestFollowupsReady] = useState(false)
 
   const load = useCallback(async () => {
-    if (!supabase || !ownerUserId) return
+    if (!supabase || !ownerUserId || !activeCompanyId) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
     const { data, error } = await supabase
       .from('bem_aviv_clients')
       .select('id, full_name, phone_1, phone_2, client_status, commercial_stage, last_contact_at, next_followup_at, next_followup_note, next_followup_status')
       .eq('user_id', ownerUserId)
+      .eq('company_id', activeCompanyId)
       .order('full_name')
 
     if (error) {
@@ -193,7 +199,7 @@ export function BemAvivFollowupPage() {
       setRows((data as Cliente[]) ?? [])
     }
     setLoading(false)
-  }, [ownerUserId, supabase])
+  }, [ownerUserId, supabase, activeCompanyId])
 
   useEffect(() => {
     void load()
@@ -201,13 +207,14 @@ export function BemAvivFollowupPage() {
 
   const loadHistory = useCallback(
     async (clientId: string) => {
-      if (!supabase || !followupUserId) return
+      if (!supabase || !followupUserId || !activeCompanyId) return
       setLoadingHistory(true)
       const { data, error } = await supabase
         .from('bem_aviv_client_followups')
         .select('id, contacted_at, channel, created_by_name, result, notes')
         .is('deleted_at', null)
         .eq('user_id', followupUserId)
+        .eq('company_id', activeCompanyId)
         .eq('client_id', clientId)
         .order('contacted_at', { ascending: false })
         .limit(8)
@@ -219,7 +226,7 @@ export function BemAvivFollowupPage() {
       }
       setLoadingHistory(false)
     },
-    [followupUserId, supabase],
+    [followupUserId, supabase, activeCompanyId],
   )
 
   useEffect(() => {
@@ -270,7 +277,7 @@ export function BemAvivFollowupPage() {
   }, [location.state, rows, navigate, loadHistory])
 
   async function removeHistoryEntry(entryId: string) {
-    if (!supabase || !registeringClient) return
+    if (!supabase || !registeringClient || !activeCompanyId) return
     if (!confirm('EXCLUIR ESTE REGISTRO DE CONTATO?')) return
 
     const { error } = await supabase
@@ -281,6 +288,7 @@ export function BemAvivFollowupPage() {
         deleted_by_name: followupActorName,
       })
       .eq('id', entryId)
+      .eq('company_id', activeCompanyId)
     if (error) {
       alert(error.message)
       return
@@ -400,7 +408,7 @@ export function BemAvivFollowupPage() {
   }, [rows, latestFollowupByClientId, latestFollowupsReady])
 
   useEffect(() => {
-    if (!supabase || !followupUserId) {
+    if (!supabase || !followupUserId || !activeCompanyId) {
       setLatestFollowupByClientId({})
       setLatestFollowupsReady(true)
       return
@@ -424,6 +432,7 @@ export function BemAvivFollowupPage() {
           .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
           .is('deleted_at', null)
           .eq('user_id', followupUserId)
+          .eq('company_id', activeCompanyId)
           .in('client_id', chunk)
           .order('contacted_at', { ascending: false })
         if (cancelled) return
@@ -454,7 +463,7 @@ export function BemAvivFollowupPage() {
     return () => {
       cancelled = true
     }
-  }, [supabase, followupUserId, rows])
+  }, [supabase, followupUserId, rows, activeCompanyId])
 
   const startFollowupClientOptions = useMemo(() => {
     const source = startFollowupForm.onlyWithoutSchedule ? rows.filter((r) => !r.next_followup_at) : rows
@@ -463,7 +472,7 @@ export function BemAvivFollowupPage() {
 
   async function submitRegisterContact(e: React.FormEvent) {
     e.preventDefault()
-    if (!supabase || !followupUserId || !registeringClient) return
+    if (!supabase || !followupUserId || !registeringClient || !activeCompanyId) return
     if (!registerForm.contacted_at) {
       alert('INFORME A DATA/HORA DO CONTATO.')
       return
@@ -483,6 +492,7 @@ export function BemAvivFollowupPage() {
           notes: registerForm.notes || null,
         })
         .eq('id', editingHistoryId)
+        .eq('company_id', activeCompanyId)
 
       if (updateError) {
         alert(updateError.message)
@@ -491,6 +501,7 @@ export function BemAvivFollowupPage() {
     } else {
       const { error: insertError } = await supabase.from('bem_aviv_client_followups').insert({
         user_id: followupUserId,
+        company_id: activeCompanyId,
         created_by_user_id: user?.id ?? null,
         created_by_name: followupActorName,
         client_id: registeringClient.id,
@@ -513,6 +524,7 @@ export function BemAvivFollowupPage() {
         next_followup_status: 'CONCLUIDO',
       })
       .eq('id', registeringClient.id)
+      .eq('company_id', activeCompanyId)
 
     if (clientUpdateError) {
       alert(clientUpdateError.message)

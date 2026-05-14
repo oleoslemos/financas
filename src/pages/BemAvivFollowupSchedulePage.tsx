@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useCallback, useEffect, useState } from 'react'
 import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
+import { useCompany } from '../context/CompanyContext'
 import { BEM_AVIV_CLIENT_COMMERCIAL_STAGE_OPTIONS } from '../lib/bemAvivClientStatus'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { resolveDataOwnerId } from '../lib/dataOwner'
@@ -58,6 +59,7 @@ export function BemAvivFollowupSchedulePage() {
   const { user } = useUser()
   const supabase = useSupabase()
   const navigate = useNavigate()
+  const { activeCompanyId } = useCompany()
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
 
   const [loading, setLoading] = useState(true)
@@ -71,12 +73,16 @@ export function BemAvivFollowupSchedulePage() {
   })
 
   const loadClient = useCallback(async () => {
-    if (!supabase || !ownerUserId || !clientId) return
+    if (!supabase || !ownerUserId || !clientId || !activeCompanyId) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
     const { data, error } = await supabase
       .from('bem_aviv_clients')
       .select('id, full_name, commercial_stage, last_contact_at, next_followup_at, next_followup_note, next_followup_status')
       .eq('user_id', ownerUserId)
+      .eq('company_id', activeCompanyId)
       .eq('id', clientId)
       .maybeSingle()
 
@@ -98,7 +104,7 @@ export function BemAvivFollowupSchedulePage() {
       setClient(null)
     }
     setLoading(false)
-  }, [clientId, ownerUserId, supabase])
+  }, [clientId, ownerUserId, supabase, activeCompanyId])
 
   useEffect(() => {
     void loadClient()
@@ -106,7 +112,7 @@ export function BemAvivFollowupSchedulePage() {
 
   async function submitScheduleFollowup(e: React.FormEvent) {
     e.preventDefault()
-    if (!supabase || !client) return
+    if (!supabase || !client || !activeCompanyId) return
     if (!scheduleForm.next_followup_at) {
       alert('INFORME A DATA/HORA DO PRÓXIMO FOLLOW-UP.')
       return
@@ -123,6 +129,7 @@ export function BemAvivFollowupSchedulePage() {
         commercial_stage: scheduleForm.commercial_stage,
       })
       .eq('id', client.id)
+      .eq('company_id', activeCompanyId)
 
     if (error) {
       alert(error.message)
@@ -133,7 +140,7 @@ export function BemAvivFollowupSchedulePage() {
   }
 
   async function clearScheduledFollowup() {
-    if (!supabase || !client) return
+    if (!supabase || !client || !activeCompanyId) return
     if (!confirm('EXCLUIR O AGENDAMENTO DESTE CLIENTE?')) return
 
     const { error } = await supabase
@@ -144,6 +151,7 @@ export function BemAvivFollowupSchedulePage() {
         next_followup_status: 'PENDENTE',
       })
       .eq('id', client.id)
+      .eq('company_id', activeCompanyId)
 
     if (error) {
       alert(error.message)

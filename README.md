@@ -48,6 +48,10 @@ Defina no `.env` e na Vercel a variável:
 (separados por vírgula ou `;`, maiúsculas/minúsculas ignoradas). Quem entrar com outro e-mail vê “Acesso restrito” e pode sair.  
 Se `VITE_ALLOWED_EMAILS` estiver vazia, **não** há esse filtro no front.
 
+**Lista por host (um único build)** — defina `VITE_ALLOWED_EMAILS_BY_HOST` como JSON: chave = hostname (ex.: `bemaviv.vercel.app`), valor = mesma lista CSV de e-mails. Se o host não existir no JSON, vale `VITE_ALLOWED_EMAILS`. Opcional: `VITE_DEFAULT_COMPANY_SLUG_BY_HOST` para sobrescrever a empresa padrão por host (slugs em `public.companies`).
+
+**Clerk + RLS multi-empresa:** as policies usam `public.auth_jwt_email_lower()` para casar com `company_members.email`. No Clerk, inclua o **e-mail** no **Session token** (Customize session token → claims), por exemplo `{"email": "{{user.primary_email_address.email_address}}"}` ou o formato recomendado na documentação atual do Clerk + Supabase, para que o Postgres receba o e-mail no JWT.
+
 ### Workspace compartilhado (mesmos dados para todos)
 
 Defina `VITE_SHARED_DATA_OWNER_ID` com o `user.id` (Clerk) do usuário dono dos dados (ex.: conta do Léo).  

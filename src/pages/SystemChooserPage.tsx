@@ -76,7 +76,7 @@ export function SystemChooserPage() {
             <Building2 size={22} strokeWidth={2} aria-hidden />
           </span>
           <span>
-            <span className="block font-hub text-lg font-semibold text-slate-900">Bem Aviv</span>
+            <span className="block font-hub text-lg font-semibold text-slate-900">{"EKO'7"}</span>
             <span className="mt-1 block text-sm text-slate-600">Clientes, follow-up, pedidos e catálogo.</span>
           </span>
         </button>
