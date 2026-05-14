@@ -29,3 +29,15 @@ export function getDefaultCompanySlugForHostname(hostname: string | undefined | 
   }
   return BUILT_IN_DEFAULT_SLUG_BY_HOST[host] ?? 'bem-aviv'
 }
+
+/** UUIDs seed em `supabase/migrations/20260511120000_companies_tenant_rls_catalog.sql` (slug → id). */
+const SEEDED_COMPANY_ID_BY_SLUG: Partial<Record<string, string>> = {
+  'bem-aviv': '10000000-0000-4000-8000-000000000001',
+  comfortcare: '10000000-0000-4000-8000-000000000002',
+}
+
+/** Permite hidratar `company_id` antes do fetch de `company_members` (percepção de carregamento). */
+export function getSeededCompanyIdForHostname(hostname: string | undefined | null): string | null {
+  const slug = getDefaultCompanySlugForHostname(hostname)
+  return SEEDED_COMPANY_ID_BY_SLUG[slug] ?? null
+}

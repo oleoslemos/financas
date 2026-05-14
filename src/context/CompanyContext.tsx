@@ -11,7 +11,7 @@ import {
 } from 'react'
 import { useSupabase } from '../hooks/useSupabase'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
-import { getDefaultCompanySlugForHostname } from '../lib/defaultCompanyByHost'
+import { getDefaultCompanySlugForHostname, getSeededCompanyIdForHostname } from '../lib/defaultCompanyByHost'
 
 export type CompanyRow = {
   id: string
@@ -43,13 +43,18 @@ function storageKey(userId: string | undefined) {
   return userId ? `sistema-financeiro.activeCompanyId.${userId}` : ''
 }
 
+function initialActiveCompanyIdFromHost(): string | null {
+  if (typeof window === 'undefined') return null
+  return getSeededCompanyIdForHostname(window.location.hostname)
+}
+
 export function CompanyProvider({ children }: { children: ReactNode }) {
   const { user, isLoaded } = useUser()
   const supabase = useSupabase()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [companies, setCompanies] = useState<CompanyRow[]>([])
-  const [activeCompanyId, setActiveCompanyIdState] = useState<string | null>(null)
+  const [activeCompanyId, setActiveCompanyIdState] = useState<string | null>(initialActiveCompanyIdFromHost)
   const activeCompanyIdRef = useRef<string | null>(null)
   useEffect(() => {
     activeCompanyIdRef.current = activeCompanyId
@@ -59,13 +64,24 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
 
   const loadMemberships = useCallback(
     async (preferredActiveId?: string | null) => {
-      if (!isLoaded || !supabase || emails.length === 0) {
+      if (!isLoaded) {
+        setLoading(true)
+        return
+      }
+      if (!supabase) {
+        setCompanies([])
+        setError(null)
+        setLoading(true)
+        return
+      }
+      if (emails.length === 0) {
         setCompanies([])
         setActiveCompanyIdState(null)
         setLoading(false)
         setError(null)
         return
       }
+
       setLoading(true)
       setError(null)
 
