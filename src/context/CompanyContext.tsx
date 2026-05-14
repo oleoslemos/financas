@@ -76,33 +76,56 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       }
       if (emails.length === 0) {
         setCompanies([])
-        setActiveCompanyIdState(null)
         setLoading(false)
         setError(null)
+        // Não zera activeCompanyId: e-mails do Clerk podem hidratar um instante depois; o seed por host
+        // mantém a home utilizável enquanto isso.
         return
       }
 
       setLoading(true)
       setError(null)
 
-      const { data, error: fetchError } = await supabase
-        .from('company_members')
-        .select(
-          'company_id, companies (id, slug, trade_name, legal_name, tax_id, phone, email_contact, address_street, address_city, address_state, zip_code)',
-        )
-        .in('email', emails)
+      const membershipSelect =
+        'company_id, companies (id, slug, trade_name, legal_name, tax_id, phone, email_contact, address_street, address_city, address_state, zip_code)'
+
+      let data: unknown = null
+      let fetchError: { message: string } | null = null
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (attempt > 0) {
+          await new Promise((r) => setTimeout(r, 400 * attempt))
+        }
+        const res = await supabase.from('company_members').select(membershipSelect).in('email', emails)
+        data = res.data
+        fetchError = res.error
+        if (!fetchError) break
+        const m = (fetchError.message ?? '').toLowerCase()
+        const transient =
+          m.includes('failed to fetch') ||
+          m.includes('networkerror') ||
+          m.includes('load failed') ||
+          m.includes('aborted') ||
+          m.includes('err_network')
+        if (!transient || attempt === 2) break
+      }
 
       if (fetchError) {
-        setError(fetchError.message)
+        const hint =
+          (fetchError.message ?? '').toLowerCase().includes('failed to fetch') ||
+          (fetchError.message ?? '').toLowerCase().includes('network')
+            ? ' Possível rede, bloqueador ou cache do app (atualize a página ou limpe dados do site).'
+            : ''
+        setError(`${fetchError.message ?? 'Erro desconhecido'}.${hint}`)
         setCompanies([])
-        setActiveCompanyIdState(null)
+        // Mantém activeCompanyId (ex.: seed por host) para a dashboard não ficar presa em "Carregando empresa".
         setLoading(false)
         return
       }
 
       const rows: CompanyRow[] = []
       const seen = new Set<string>()
-      for (const r of data ?? []) {
+      const membershipRows = Array.isArray(data) ? data : []
+      for (const r of membershipRows) {
         const raw = (r as unknown as { companies?: CompanyRow | CompanyRow[] | null }).companies
         const c = Array.isArray(raw) ? raw[0] : raw
         if (c?.id && !seen.has(c.id)) {

@@ -162,11 +162,12 @@ export function BemAvivPedidosPage() {
   const supabase = useSupabase()
   const location = useLocation()
   const navigate = useNavigate()
-  const { activeCompanyId } = useCompany()
+  const { activeCompanyId, loading: companyCtxLoading, error: companyCtxError } = useCompany()
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const [rows, setRows] = useState<Pedido[]>([])
   const [clients, setClients] = useState<ClienteOpt[]>([])
   const [loading, setLoading] = useState(true)
+  const [queryError, setQueryError] = useState<string | null>(null)
   const [typeTab, setTypeTab] = useState<'ORCAMENTO' | 'PEDIDO'>('PEDIDO')
   const [clientTableFilterId, setClientTableFilterId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -185,14 +186,27 @@ export function BemAvivPedidosPage() {
     return m
   }, [clients])
 
+  const dataLoadBanner = useMemo(
+    () => [companyCtxError, queryError].filter(Boolean).join(' · '),
+    [companyCtxError, queryError],
+  )
+
   const { filteredRows, countOrcamento, countPedido } = useMemo(() => {
     let o = 0
     let p = 0
     for (const r of rows) {
-      if (r.document_type === 'ORCAMENTO') o += 1
-      else if (r.document_type === 'PEDIDO') p += 1
+      const dt = String(r.document_type ?? '')
+        .trim()
+        .toUpperCase()
+      if (dt === 'ORCAMENTO') o += 1
+      else if (dt === 'PEDIDO') p += 1
     }
-    let list = rows.filter((r) => r.document_type === typeTab)
+    let list = rows.filter(
+      (r) =>
+        String(r.document_type ?? '')
+          .trim()
+          .toUpperCase() === typeTab,
+    )
     if (clientTableFilterId) {
       list = list.filter((r) => r.client_id === clientTableFilterId)
     }
@@ -225,30 +239,47 @@ export function BemAvivPedidosPage() {
   }, [rows, typeTab, clientTableFilterId, search, statusFilter, sortBy, sortDir, clientNameById])
 
   const load = useCallback(async () => {
-    if (!supabase || !ownerUserId || !activeCompanyId) {
+    if (!supabase) {
+      setLoading(false)
+      return
+    }
+    if (companyCtxLoading) {
+      setLoading(true)
+      return
+    }
+    if (!activeCompanyId) {
+      setQueryError(null)
+      setRows([])
+      setClients([])
       setLoading(false)
       return
     }
     setLoading(true)
-    const [{ data: orders }, { data: cl }] = await Promise.all([
+    setQueryError(null)
+    const [ordersRes, clientsRes] = await Promise.all([
       supabase
         .from('bem_aviv_sales_orders')
         .select('*')
-        .eq('user_id', ownerUserId)
         .eq('company_id', activeCompanyId)
         .order('order_date', { ascending: false }),
       supabase
         .from('bem_aviv_clients')
         .select('id, full_name')
-        .eq('user_id', ownerUserId)
         .eq('company_id', activeCompanyId)
         .order('full_name'),
     ])
-    const ordersList = (orders as Pedido[]) ?? []
-    setRows(ordersList)
-    setClients((cl as ClienteOpt[]) ?? [])
+    const ordersErr = ordersRes.error?.message
+    const clientsErr = clientsRes.error?.message
+    if (ordersErr || clientsErr) {
+      setQueryError([ordersErr, clientsErr].filter(Boolean).join(' · '))
+      setRows([])
+      setClients([])
+    } else {
+      setRows(((ordersRes.data ?? []) as Pedido[]) ?? [])
+      setClients(((clientsRes.data ?? []) as ClienteOpt[]) ?? [])
+    }
     setLoading(false)
-  }, [ownerUserId, supabase, activeCompanyId])
+  }, [supabase, activeCompanyId, companyCtxLoading])
 
   useEffect(() => {
     void load()
@@ -496,7 +527,6 @@ export function BemAvivPedidosPage() {
       .from('bem_aviv_sales_orders')
       .update({ status: nextStatus })
       .eq('id', order.id)
-      .eq('user_id', ownerUserId)
       .eq('company_id', activeCompanyId)
 
     if (error) {
@@ -521,7 +551,6 @@ export function BemAvivPedidosPage() {
     const { data, error } = await supabase
       .from('bem_aviv_sales_order_items')
       .select('id, item_description, quantity, unit_price, discount_amount, total_price, created_at')
-      .eq('user_id', ownerUserId)
       .eq('sales_order_id', pedido.id)
     if (error) {
       alert(error.message)
@@ -552,7 +581,6 @@ export function BemAvivPedidosPage() {
       .from('bem_aviv_sales_orders')
       .delete()
       .eq('id', order.id)
-      .eq('user_id', ownerUserId)
       .eq('company_id', activeCompanyId)
     if (error) {
       alert(error.message)
@@ -564,7 +592,6 @@ export function BemAvivPedidosPage() {
         .from('bem_aviv_sales_orders')
         .update({ status: 'ABERTO' })
         .eq('id', quoteIdToReopen)
-        .eq('user_id', ownerUserId)
         .eq('company_id', activeCompanyId)
         .eq('document_type', 'ORCAMENTO')
 
@@ -601,6 +628,22 @@ export function BemAvivPedidosPage() {
           </Link>
         </div>
       </div>
+
+      {dataLoadBanner ? (
+        <div
+          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-950"
+          role="alert"
+        >
+          <span>{dataLoadBanner}</span>
+          <button
+            type="button"
+            className="shrink-0 rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-amber-900 hover:bg-amber-100"
+            onClick={() => void load()}
+          >
+            Tentar novamente
+          </button>
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap gap-1 border-b border-slate-200" role="tablist" aria-label="Filtrar por tipo de documento">
         <button

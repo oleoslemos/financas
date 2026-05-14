@@ -218,7 +218,7 @@ export function BemAvivHomePage() {
   const { user } = useUser()
   const supabase = useSupabase()
   const navigate = useNavigate()
-  const { activeCompanyId } = useCompany()
+  const { activeCompanyId, loading: companyLoading } = useCompany()
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const followupActorName = (user?.fullName || user?.primaryEmailAddress?.emailAddress || ownerUserId || 'USUÁRIO').trim().toUpperCase()
   const [loading, setLoading] = useState(true)
@@ -247,7 +247,7 @@ export function BemAvivHomePage() {
   })
 
   const load = useCallback(async () => {
-    if (!supabase || !ownerUserId || !activeCompanyId) {
+    if (!supabase || !activeCompanyId) {
       setLoading(false)
       return
     }
@@ -257,14 +257,12 @@ export function BemAvivHomePage() {
       supabase
         .from('bem_aviv_sales_orders')
         .select('order_date, total_amount, document_type, status, converted_order_id')
-        .eq('user_id', ownerUserId)
         .eq('company_id', activeCompanyId)
         .in('document_type', ['ORCAMENTO', 'PEDIDO'])
         .in('status', ['ABERTO', 'FINALIZADO', 'ENTREGA PENDENTE', 'ENTREGUE', 'CANCELADO']),
       supabase
         .from('bem_aviv_clients')
         .select('id, full_name, cpf, last_contact_at, next_followup_at, next_followup_status, phone_1, phone_2, next_followup_note')
-        .eq('user_id', ownerUserId)
         .eq('company_id', activeCompanyId),
     ])
 
@@ -328,7 +326,7 @@ export function BemAvivHomePage() {
     setClients(((clientsRes.data ?? []) as ClientRow[]) ?? [])
 
     setLoading(false)
-  }, [ownerUserId, supabase, metricsPeriod, activeCompanyId])
+  }, [supabase, metricsPeriod, activeCompanyId])
 
   useEffect(() => {
     void load()
@@ -357,7 +355,7 @@ export function BemAvivHomePage() {
   const agendaRows = selectedDay ? tasksForSelectedDay : tasksForViewMonth
 
   useEffect(() => {
-    if (!supabase || !ownerUserId || !activeCompanyId) return
+    if (!supabase || !activeCompanyId) return
     const ids = Array.from(new Set(clients.map((r) => r.id)))
     if (ids.length === 0) {
       setLatestHistoryByClient({})
@@ -369,7 +367,6 @@ export function BemAvivHomePage() {
         .from('bem_aviv_client_followups')
         .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
         .is('deleted_at', null)
-        .eq('user_id', ownerUserId.toUpperCase())
         .eq('company_id', activeCompanyId)
         .in('client_id', ids)
         .order('contacted_at', { ascending: false })
@@ -388,7 +385,7 @@ export function BemAvivHomePage() {
     return () => {
       cancelled = true
     }
-  }, [clients, ownerUserId, supabase, activeCompanyId])
+  }, [clients, supabase, activeCompanyId])
 
   const criticalTimelineClients = useMemo(() => {
     const now = Date.now()
@@ -577,7 +574,6 @@ export function BemAvivHomePage() {
       .from('bem_aviv_client_followups')
       .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
       .is('deleted_at', null)
-      .eq('user_id', ownerUserId.toUpperCase())
       .eq('company_id', activeCompanyId)
       .eq('client_id', client.id)
       .order('contacted_at', { ascending: false })
@@ -597,7 +593,6 @@ export function BemAvivHomePage() {
       .from('bem_aviv_client_followups')
       .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
       .is('deleted_at', null)
-      .eq('user_id', ownerUserId.toUpperCase())
       .eq('company_id', activeCompanyId)
       .eq('client_id', client.id)
       .order('contacted_at', { ascending: false })
@@ -726,8 +721,10 @@ export function BemAvivHomePage() {
 
       {!supabase || !ownerUserId ? (
         <p className="text-sm text-slate-600">Conectando ao Supabase…</p>
-      ) : !activeCompanyId ? (
+      ) : !activeCompanyId && companyLoading ? (
         <p className="text-sm text-slate-600">Carregando empresa…</p>
+      ) : !activeCompanyId ? (
+        <p className="text-sm text-slate-600">Nenhuma empresa disponível para esta conta.</p>
       ) : loading ? (
         <p className="text-sm text-slate-500">Carregando indicadores…</p>
       ) : (

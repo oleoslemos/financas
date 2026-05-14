@@ -1,12 +1,9 @@
-import { useUser } from '@clerk/clerk-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useCallback, useEffect, useState } from 'react'
 import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
 import { useCompany } from '../context/CompanyContext'
 import { BEM_AVIV_CLIENT_COMMERCIAL_STAGE_OPTIONS } from '../lib/bemAvivClientStatus'
-import { clerkEmailCandidates } from '../lib/clerkEmails'
-import { resolveDataOwnerId } from '../lib/dataOwner'
 
 type FollowupStatus = 'PENDENTE' | 'CONCLUIDO' | 'CANCELADO'
 
@@ -56,11 +53,9 @@ function toInputDateTimeLocal(value?: string | null) {
 
 export function BemAvivFollowupSchedulePage() {
   const { clientId } = useParams<{ clientId: string }>()
-  const { user } = useUser()
   const supabase = useSupabase()
   const navigate = useNavigate()
   const { activeCompanyId } = useCompany()
-  const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
 
   const [loading, setLoading] = useState(true)
   const [client, setClient] = useState<Cliente | null>(null)
@@ -73,7 +68,7 @@ export function BemAvivFollowupSchedulePage() {
   })
 
   const loadClient = useCallback(async () => {
-    if (!supabase || !ownerUserId || !clientId || !activeCompanyId) {
+    if (!supabase || !clientId || !activeCompanyId) {
       setLoading(false)
       return
     }
@@ -81,7 +76,6 @@ export function BemAvivFollowupSchedulePage() {
     const { data, error } = await supabase
       .from('bem_aviv_clients')
       .select('id, full_name, commercial_stage, last_contact_at, next_followup_at, next_followup_note, next_followup_status')
-      .eq('user_id', ownerUserId)
       .eq('company_id', activeCompanyId)
       .eq('id', clientId)
       .maybeSingle()
@@ -104,7 +98,7 @@ export function BemAvivFollowupSchedulePage() {
       setClient(null)
     }
     setLoading(false)
-  }, [clientId, ownerUserId, supabase, activeCompanyId])
+  }, [clientId, supabase, activeCompanyId])
 
   useEffect(() => {
     void loadClient()

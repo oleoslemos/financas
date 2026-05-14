@@ -264,7 +264,6 @@ export function BemAvivNovoPedidoPage() {
       supabase
         .from('bem_aviv_clients')
         .select('id, full_name')
-        .eq('user_id', ownerUserId)
         .eq('company_id', activeCompanyId)
         .order('full_name'),
       supabase
@@ -384,7 +383,6 @@ export function BemAvivNovoPedidoPage() {
           'id, client_id, order_date, document_type, document_number, converted_order_id, status, total_amount, notes, discount_total, installments_count, payment_option, payment_method, down_payment_amount, down_payment_method, freight_amount, other_expenses',
         )
         .eq('id', editOrderId)
-        .eq('user_id', ownerUserId)
         .eq('company_id', activeCompanyId)
         .maybeSingle()
 
@@ -840,7 +838,6 @@ export function BemAvivNovoPedidoPage() {
       .from('bem_aviv_sales_orders')
       .delete()
       .eq('id', editOrderId)
-      .eq('user_id', ownerUserId)
       .eq('company_id', activeCompanyId)
     setDeletingDocument(false)
     if (error) {
@@ -927,7 +924,6 @@ export function BemAvivNovoPedidoPage() {
           .from('bem_aviv_sales_orders')
           .update(cleanUpdate)
           .eq('id', editOrderId)
-          .eq('user_id', ownerUserId)
           .eq('company_id', activeCompanyId)
 
         if (updErr) {

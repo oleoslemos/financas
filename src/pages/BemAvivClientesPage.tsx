@@ -289,7 +289,7 @@ export function BemAvivClientesPage() {
   })
 
   const load = useCallback(async () => {
-    if (!supabase || !ownerUserId || !activeCompanyId) {
+    if (!supabase || !activeCompanyId) {
       setLoading(false)
       return
     }
@@ -297,12 +297,11 @@ export function BemAvivClientesPage() {
     const { data } = await supabase
       .from('bem_aviv_clients')
       .select('*')
-      .eq('user_id', ownerUserId)
       .eq('company_id', activeCompanyId)
       .order('full_name')
     setRows((data as Cliente[]) ?? [])
     setLoading(false)
-  }, [ownerUserId, supabase, activeCompanyId])
+  }, [supabase, activeCompanyId])
 
   useEffect(() => {
     void load()
@@ -412,7 +411,6 @@ export function BemAvivClientesPage() {
       .from('bem_aviv_client_followups')
       .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
       .is('deleted_at', null)
-      .eq('user_id', ownerUserId.toUpperCase())
       .eq('company_id', activeCompanyId)
       .eq('client_id', client.id)
       .order('contacted_at', { ascending: false })
@@ -421,7 +419,6 @@ export function BemAvivClientesPage() {
       const fallback = await supabase
         .from('bem_aviv_client_followups')
         .select('id, client_id, contacted_at, channel, result, notes')
-        .eq('user_id', ownerUserId.toUpperCase())
         .eq('company_id', activeCompanyId)
         .eq('client_id', client.id)
         .order('contacted_at', { ascending: false })
@@ -444,7 +441,6 @@ export function BemAvivClientesPage() {
       .from('bem_aviv_client_followups')
       .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
       .is('deleted_at', null)
-      .eq('user_id', ownerUserId.toUpperCase())
       .eq('company_id', activeCompanyId)
       .eq('client_id', clientId)
       .order('contacted_at', { ascending: false })
@@ -453,7 +449,6 @@ export function BemAvivClientesPage() {
       const fallback = await supabase
         .from('bem_aviv_client_followups')
         .select('id, client_id, contacted_at, channel, result, notes')
-        .eq('user_id', ownerUserId.toUpperCase())
         .eq('company_id', activeCompanyId)
         .eq('client_id', clientId)
         .order('contacted_at', { ascending: false })
@@ -639,7 +634,6 @@ export function BemAvivClientesPage() {
         last_contact_at: scheduleInlineForm.contact_done ? new Date().toISOString() : historyModalClient.last_contact_at ?? null,
       })
       .eq('id', historyModalClient.id)
-      .eq('user_id', ownerUserId)
       .eq('company_id', activeCompanyId)
     if (error) {
       alert(error.message)
@@ -663,14 +657,12 @@ export function BemAvivClientesPage() {
         deleted_by_name: followupActorName,
       })
       .eq('id', rowId)
-      .eq('user_id', ownerUserId.toUpperCase())
       .eq('company_id', activeCompanyId)
     if (error && isMissingAuditColumnError(error.message)) {
       const fallback = await supabase
         .from('bem_aviv_client_followups')
         .delete()
         .eq('id', rowId)
-        .eq('user_id', ownerUserId.toUpperCase())
         .eq('company_id', activeCompanyId)
       error = fallback.error
     }
@@ -691,7 +683,6 @@ export function BemAvivClientesPage() {
     const { data, error } = await supabase
       .from('bem_aviv_sales_orders')
       .select('id, order_date, document_type, document_number, status, total_amount')
-      .eq('user_id', ownerUserId)
       .eq('company_id', activeCompanyId)
       .eq('client_id', client.id)
       .order('order_date', { ascending: false })
@@ -713,7 +704,6 @@ export function BemAvivClientesPage() {
       const { data: itemsData, error: itemsErr } = await supabase
         .from('bem_aviv_sales_order_items')
         .select('id, sales_order_id, item_description, quantity, created_at')
-        .eq('user_id', ownerUserId)
         .in('sales_order_id', chunk)
       if (itemsErr) {
         alert(itemsErr.message)

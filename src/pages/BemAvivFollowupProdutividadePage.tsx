@@ -142,7 +142,7 @@ export function BemAvivFollowupProdutividadePage() {
   const [followupStatusFilter, setFollowupStatusFilter] = useState<'TODOS' | 'PENDENTE' | 'CONCLUIDO' | 'CANCELADO'>('TODOS')
 
   const load = useCallback(async () => {
-    if (!supabase || !ownerUserId || !followupUserId || !activeCompanyId) {
+    if (!supabase || !activeCompanyId) {
       setLoading(false)
       return
     }
@@ -150,27 +150,25 @@ export function BemAvivFollowupProdutividadePage() {
     const { data, error } = await supabase
       .from('bem_aviv_clients')
       .select('id, full_name, phone_1, phone_2, client_status, commercial_stage, last_contact_at, next_followup_at, next_followup_status')
-      .eq('user_id', ownerUserId)
       .eq('company_id', activeCompanyId)
 
     if (error) alert(error.message)
     setClients((data as ClienteRow[]) ?? [])
     setLoading(false)
-  }, [ownerUserId, followupUserId, supabase, activeCompanyId])
+  }, [supabase, activeCompanyId])
 
   useEffect(() => {
     void load()
   }, [load])
 
   async function openClientHistory(client: ClientHistoryTarget) {
-    if (!supabase || !followupUserId || !activeCompanyId) return
+    if (!supabase || !activeCompanyId) return
     setHistoryTarget(client)
     setLoadingHistory(true)
     const { data, error } = await supabase
       .from('bem_aviv_client_followups')
       .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
       .is('deleted_at', null)
-      .eq('user_id', followupUserId)
       .eq('company_id', activeCompanyId)
       .eq('client_id', client.id)
       .order('contacted_at', { ascending: false })

@@ -69,7 +69,16 @@ export function BemAvivEmpresaPage() {
     return <p className="text-sm text-slate-600">Carregando empresas…</p>
   }
   if (companyError) {
-    return <p className="text-sm text-red-600">Erro ao carregar vínculos: {companyError}</p>
+    return (
+      <div className="space-y-3 rounded-lg border border-rose-200 bg-rose-50/80 p-4 text-sm text-rose-900">
+        <p>
+          <span className="font-semibold">Erro ao carregar vínculos:</span> {companyError}
+        </p>
+        <Button type="button" variant="secondary" onClick={() => void refreshCompanies()}>
+          Tentar novamente
+        </Button>
+      </div>
+    )
   }
   if (!activeCompanyId || !activeCompany) {
     return <p className="text-sm text-slate-600">Nenhuma empresa disponível para esta conta.</p>

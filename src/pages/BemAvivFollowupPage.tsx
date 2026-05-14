@@ -180,7 +180,7 @@ export function BemAvivFollowupPage() {
   const [latestFollowupsReady, setLatestFollowupsReady] = useState(false)
 
   const load = useCallback(async () => {
-    if (!supabase || !ownerUserId || !activeCompanyId) {
+    if (!supabase || !activeCompanyId) {
       setLoading(false)
       return
     }
@@ -188,7 +188,6 @@ export function BemAvivFollowupPage() {
     const { data, error } = await supabase
       .from('bem_aviv_clients')
       .select('id, full_name, phone_1, phone_2, client_status, commercial_stage, last_contact_at, next_followup_at, next_followup_note, next_followup_status')
-      .eq('user_id', ownerUserId)
       .eq('company_id', activeCompanyId)
       .order('full_name')
 
@@ -199,7 +198,7 @@ export function BemAvivFollowupPage() {
       setRows((data as Cliente[]) ?? [])
     }
     setLoading(false)
-  }, [ownerUserId, supabase, activeCompanyId])
+  }, [supabase, activeCompanyId])
 
   useEffect(() => {
     void load()
@@ -207,13 +206,12 @@ export function BemAvivFollowupPage() {
 
   const loadHistory = useCallback(
     async (clientId: string) => {
-      if (!supabase || !followupUserId || !activeCompanyId) return
+      if (!supabase || !activeCompanyId) return
       setLoadingHistory(true)
       const { data, error } = await supabase
         .from('bem_aviv_client_followups')
         .select('id, contacted_at, channel, created_by_name, result, notes')
         .is('deleted_at', null)
-        .eq('user_id', followupUserId)
         .eq('company_id', activeCompanyId)
         .eq('client_id', clientId)
         .order('contacted_at', { ascending: false })
@@ -226,7 +224,7 @@ export function BemAvivFollowupPage() {
       }
       setLoadingHistory(false)
     },
-    [followupUserId, supabase, activeCompanyId],
+    [supabase, activeCompanyId],
   )
 
   useEffect(() => {
@@ -408,7 +406,7 @@ export function BemAvivFollowupPage() {
   }, [rows, latestFollowupByClientId, latestFollowupsReady])
 
   useEffect(() => {
-    if (!supabase || !followupUserId || !activeCompanyId) {
+    if (!supabase || !activeCompanyId) {
       setLatestFollowupByClientId({})
       setLatestFollowupsReady(true)
       return
@@ -431,7 +429,6 @@ export function BemAvivFollowupPage() {
           .from('bem_aviv_client_followups')
           .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
           .is('deleted_at', null)
-          .eq('user_id', followupUserId)
           .eq('company_id', activeCompanyId)
           .in('client_id', chunk)
           .order('contacted_at', { ascending: false })
@@ -463,7 +460,7 @@ export function BemAvivFollowupPage() {
     return () => {
       cancelled = true
     }
-  }, [supabase, followupUserId, rows, activeCompanyId])
+  }, [supabase, rows, activeCompanyId])
 
   const startFollowupClientOptions = useMemo(() => {
     const source = startFollowupForm.onlyWithoutSchedule ? rows.filter((r) => !r.next_followup_at) : rows
