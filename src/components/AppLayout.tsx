@@ -98,7 +98,8 @@ function AppLayoutShell() {
   const [openTreeGroupKeys, setOpenTreeGroupKeys] = useState<string[]>([])
 
   const emails = clerkEmailCandidates(user)
-  const { companies, activeCompanyId, setActiveCompanyId, loading: companiesLoading } = useCompany()
+  const { companies, activeCompanyId, setActiveCompanyId, loading: companiesLoading, cannotListCompanyMembership } =
+    useCompany()
   const bemAvivOnlyUser = isBemAvivOnlyUser(emails)
   const hideAgendaTasks = bemAvivOnlyUser
   const tasksHomologEnabled = !hideAgendaTasks && canAccessTasksHomolog(user?.primaryEmailAddress?.emailAddress)
@@ -455,6 +456,30 @@ function AppLayoutShell() {
         </header>
 
         <main className="hub-content min-h-0 flex-1 overflow-y-auto bg-slate-100 p-3 normal-case sm:p-4 lg:p-5">
+          {location.pathname.startsWith('/bem-aviv') && cannotListCompanyMembership ? (
+            <div
+              className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm text-amber-950 shadow-sm"
+              role="alert"
+            >
+              <p className="font-semibold">Nenhuma empresa visível no Supabase (RLS).</p>
+              <p className="mt-1 leading-snug">
+                O token de sessão do Clerk costuma <strong>não incluir o e-mail</strong> por padrão; as policies comparam o
+                e-mail com <code className="rounded bg-amber-100/80 px-1">company_members</code>. Sem e-mail no JWT, a lista
+                de vínculos vem vazia e os dados do hub ficam em branco.
+              </p>
+              <p className="mt-2 leading-snug">
+                <strong>Opção 1:</strong> no Clerk → Session token → inclua o claim de e-mail (veja comentário no README,
+                secção Clerk + RLS multi-empresa).
+              </p>
+              <p className="mt-1 leading-snug">
+                <strong>Opção 2:</strong> aplique a migration mais recente e, no SQL Editor do Supabase (como admin),
+                execute:{' '}
+                <code className="break-all rounded bg-amber-100/80 px-1 text-xs">
+                  {`UPDATE public.company_members SET clerk_user_id = 'user_SEU_ID_CLERK' WHERE lower(trim(email)) = 'seu@email.com';`}
+                </code>
+              </p>
+            </div>
+          ) : null}
           <Outlet />
         </main>
       </div>

@@ -247,13 +247,14 @@ export function BemAvivClientesPage() {
   const { user } = useUser()
   const supabase = useSupabase()
   const navigate = useNavigate()
-  const { activeCompanyId } = useCompany()
+  const { activeCompanyId, loading: companyCtxLoading, error: companyCtxError } = useCompany()
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const followupActorName = (user?.fullName || user?.primaryEmailAddress?.emailAddress || ownerUserId || 'USUÁRIO').trim().toUpperCase()
 
   const [rows, setRows] = useState<Cliente[]>([])
   const [editing, setEditing] = useState<Cliente | null>(null)
   const [loading, setLoading] = useState(true)
+  const [queryError, setQueryError] = useState<string | null>(null)
   const [clientModalOpen, setClientModalOpen] = useState(false)
   const [cepLoading, setCepLoading] = useState(false)
   const [search, setSearch] = useState('')
@@ -289,23 +290,44 @@ export function BemAvivClientesPage() {
   })
 
   const load = useCallback(async () => {
-    if (!supabase || !activeCompanyId) {
+    if (!supabase) {
+      setLoading(false)
+      return
+    }
+    if (companyCtxLoading) {
+      setLoading(true)
+      return
+    }
+    if (!activeCompanyId) {
+      setQueryError(null)
+      setRows([])
       setLoading(false)
       return
     }
     setLoading(true)
-    const { data } = await supabase
+    setQueryError(null)
+    const { data, error } = await supabase
       .from('bem_aviv_clients')
       .select('*')
       .eq('company_id', activeCompanyId)
       .order('full_name')
-    setRows((data as Cliente[]) ?? [])
+    if (error) {
+      setQueryError(error.message)
+      setRows([])
+    } else {
+      setRows((data as Cliente[]) ?? [])
+    }
     setLoading(false)
-  }, [supabase, activeCompanyId])
+  }, [supabase, activeCompanyId, companyCtxLoading])
 
   useEffect(() => {
     void load()
   }, [load])
+
+  const dataLoadBanner = useMemo(
+    () => [companyCtxError, queryError].filter(Boolean).join(' · '),
+    [companyCtxError, queryError],
+  )
 
   const stats = useMemo(() => {
     const total = rows.length
@@ -880,6 +902,22 @@ export function BemAvivClientesPage() {
         <h2 className="font-hub text-xl font-bold tracking-tight text-slate-900">Clientes</h2>
         <p className="mt-0.5 text-sm text-slate-500">Base completa de clientes e prospects</p>
       </header>
+
+      {dataLoadBanner ? (
+        <div
+          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-950"
+          role="alert"
+        >
+          <span>{dataLoadBanner}</span>
+          <button
+            type="button"
+            className="shrink-0 rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-amber-900 hover:bg-amber-100"
+            onClick={() => void load()}
+          >
+            Tentar novamente
+          </button>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
         <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">

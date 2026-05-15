@@ -31,6 +31,8 @@ type CompanyContextValue = {
   loading: boolean
   error: string | null
   companies: CompanyRow[]
+  /** true quando há e-mail Clerk mas a lista de empresas veio vazia (típico: JWT sem e-mail e sem clerk_user_id no banco). */
+  cannotListCompanyMembership: boolean
   activeCompanyId: string | null
   setActiveCompanyId: (id: string) => void
   activeCompany: CompanyRow | null
@@ -171,6 +173,9 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       if (!next && rows.length > 0) {
         next = rows[0].id
       }
+      if (!next) {
+        next = getSeededCompanyIdForHostname(host)
+      }
       setActiveCompanyIdState(next)
       if (key && next) {
         try {
@@ -211,17 +216,40 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     [companies, activeCompanyId],
   )
 
+  const cannotListCompanyMembership = useMemo(
+    () =>
+      Boolean(
+        isLoaded &&
+          supabase &&
+          emails.length > 0 &&
+          !loading &&
+          error === null &&
+          companies.length === 0,
+      ),
+    [isLoaded, supabase, emails.length, loading, error, companies.length],
+  )
+
   const value = useMemo<CompanyContextValue>(
     () => ({
       loading,
       error,
       companies,
+      cannotListCompanyMembership,
       activeCompanyId,
       setActiveCompanyId,
       activeCompany,
       refreshCompanies,
     }),
-    [loading, error, companies, activeCompanyId, setActiveCompanyId, activeCompany, refreshCompanies],
+    [
+      loading,
+      error,
+      companies,
+      cannotListCompanyMembership,
+      activeCompanyId,
+      setActiveCompanyId,
+      activeCompany,
+      refreshCompanies,
+    ],
   )
 
   return <CompanyContext.Provider value={value}>{children}</CompanyContext.Provider>
