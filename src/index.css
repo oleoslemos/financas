@@ -891,10 +891,65 @@ tbody tr:hover td {
   color: #dc2626;
 }
 
-.bem-aviv-novo-pedido .np-searchable .np-select {
-  min-height: 33px;
+.bem-aviv-novo-pedido .np-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 
-.bem-aviv-novo-pedido .btn {
-  @apply min-h-11 text-base font-semibold;
+.bem-aviv-novo-pedido .np-textarea {
+  width: 100%;
+  min-height: 52px;
+  padding: 7px 10px;
+  font-size: 13px;
+  border: 1px solid var(--np-border-strong);
+  border-radius: 8px;
+  background: var(--np-surface);
+  color: var(--np-text);
+  resize: vertical;
+  outline: none;
+}
+
+.bem-aviv-novo-pedido .np-textarea:focus {
+  border-color: var(--np-blue);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.bem-aviv-novo-pedido .np-searchable input {
+  width: 100%;
+  padding: 7px 10px;
+  font-size: 13px;
+  border: 1px solid var(--np-border-strong);
+  border-radius: 8px;
+  background: var(--np-surface);
+  color: var(--np-text);
+  outline: none;
+}
+
+.bem-aviv-novo-pedido .np-searchable input:focus {
+  border-color: var(--np-blue);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.bem-aviv-novo-pedido .np-item-row .np-input {
+  padding: 5px 8px;
+  font-size: 13px;
+  text-align: center;
+}
+
+.bem-aviv-novo-pedido .np-item-row .np-input.np-price {
+  text-align: right;
+  min-width: 0;
+}
+
+.bem-aviv-novo-pedido .np-row-cols-3 {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 767px) {
+  .bem-aviv-novo-pedido .np-row-cols-3 {
+    grid-template-columns: 1fr;
+  }
 }

@@ -1,24 +1,22 @@
 import { useUser } from '@clerk/clerk-react'
 import {
-  Box,
+  Banknote,
   Check,
   ChevronLeft,
   ChevronRight,
+  Circle,
   CircleDollarSign,
   ClipboardList,
+  CreditCard,
   Home,
-  List,
+  Minus,
   Package,
+  Plus,
   Search,
-  ShoppingCart,
   Trash2,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { Badge } from '../components/ui/Badge'
-import { Button } from '../components/ui/Button'
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
-import { Input } from '../components/ui/Input'
 import { SearchableSelect } from '../components/ui/SearchableSelect'
 import { useSupabase } from '../hooks/useSupabase'
 import { useCompany } from '../context/CompanyContext'
@@ -1123,212 +1121,319 @@ export function BemAvivNovoPedidoPage() {
           </nav>
 
           <main className="np-main">
-            <div className="space-y-6 lg:col-span-5">
-              <Card className="border-0 shadow-md ring-1 ring-slate-100/90">
-                <CardHeader className="border-b border-slate-100 pb-3">
-                  <CardTitle className="flex items-center gap-2 font-hub text-lg font-bold text-slate-900">
-                    <ClipboardList size={22} className="text-[#185FA5]" aria-hidden />
-                    Dados do pedido
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4 pt-4">
-                  <div>
-                    <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Cliente</label>
+            <section id="np-sec-dados" className="np-section" aria-labelledby="np-lbl-dados">
+              <div className="np-section-header">
+                <div className="np-section-icon np-icon-blue">
+                  <ClipboardList size={15} aria-hidden />
+                </div>
+                <span className="np-section-label" id="np-lbl-dados">
+                  Dados do pedido
+                </span>
+                <span className="np-section-sub">Obrigatório</span>
+              </div>
+              <div className="np-section-body">
+                <div className="np-field">
+                  <label className="np-label" htmlFor="np-cliente">
+                    Cliente <span className="np-req">*</span>
+                  </label>
+                  <select
+                    id="np-cliente"
+                    className="np-select"
+                    value={form.client_id}
+                    onChange={(e) => setForm({ ...form, client_id: e.target.value })}
+                  >
+                    <option value="">— Selecione um cliente —</option>
+                    {clients.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.full_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="np-row-cols-3">
+                  <div className="np-field">
+                    <label className="np-label" htmlFor="np-data">
+                      Data <span className="np-req">*</span>
+                    </label>
+                    <input
+                      id="np-data"
+                      type="date"
+                      className="np-input"
+                      value={form.order_date}
+                      onChange={(e) => setForm({ ...form, order_date: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="np-field">
+                    <label className="np-label" htmlFor="np-tipo">
+                      Tipo
+                    </label>
                     <select
-                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-3 text-base"
-                      value={form.client_id}
-                      onChange={(e) => setForm({ ...form, client_id: e.target.value })}
+                      id="np-tipo"
+                      className="np-select"
+                      value={form.document_type}
+                      onChange={(e) => setForm({ ...form, document_type: e.target.value as 'ORCAMENTO' | 'PEDIDO' })}
                     >
-                      <option value="">— Selecione —</option>
-                      {clients.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.full_name}
+                      <option value="PEDIDO">Pedido</option>
+                      <option value="ORCAMENTO">Orçamento</option>
+                    </select>
+                  </div>
+                  <div className="np-field">
+                    <label className="np-label" htmlFor="np-obs">
+                      Observações
+                    </label>
+                    <input
+                      id="np-obs"
+                      type="text"
+                      className="np-input"
+                      value={form.notes}
+                      onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                      placeholder="Ex.: entrega expressa"
+                    />
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section id="np-sec-produtos" className="np-section" aria-labelledby="np-lbl-produtos">
+              <div className="np-section-header">
+                <div className="np-section-icon np-icon-green">
+                  <Package size={15} aria-hidden />
+                </div>
+                <span className="np-section-label" id="np-lbl-produtos">
+                  Produtos e kits
+                </span>
+                <span className="np-section-sub">
+                  {lineItems.length} {lineItems.length === 1 ? 'item' : 'itens'}
+                </span>
+              </div>
+              <div className="np-section-body">
+                <div className="np-field">
+                  <label className="np-label" htmlFor="np-tabela">
+                    Tabela de preço
+                  </label>
+                  <select
+                    id="np-tabela"
+                    className="np-select"
+                    value={selectedPriceTableId}
+                    onChange={(e) => setSelectedPriceTableId(e.target.value)}
+                    disabled={priceTables.length === 0}
+                  >
+                    {priceTables.length === 0 ? (
+                      <option value="">— Nenhuma tabela —</option>
+                    ) : (
+                      priceTables.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                          {t.is_default ? ' (padrão)' : ''}
                         </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Data</label>
-                      <Input
-                        type="date"
-                        value={form.order_date}
-                        onChange={(e) => setForm({ ...form, order_date: e.target.value })}
-                        required
-                        className="mt-1 h-12"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Tipo</label>
-                      <select
-                        className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-3 text-base"
-                        value={form.document_type}
-                        onChange={(e) => setForm({ ...form, document_type: e.target.value as 'ORCAMENTO' | 'PEDIDO' })}
+                      ))
+                    )}
+                  </select>
+                </div>
+
+                <div ref={comboRef} className="np-search-wrap">
+                  <div className="np-search-inner">
+                    <Search size={14} aria-hidden />
+                    <input
+                      type="text"
+                      className="np-input"
+                      value={productQuery}
+                      onChange={(e) => {
+                        setProductQuery(e.target.value)
+                        setComboOpen(true)
+                      }}
+                      onFocus={() => setComboOpen(true)}
+                      placeholder="Buscar por nome, linha ou tipo…"
+                      autoComplete="off"
+                      disabled={!selectedPriceTableId || catalogForTable.length === 0}
+                      aria-label="Buscar produto"
+                    />
+                    {comboOpen && productSuggestions.length > 0 ? (
+                      <ul
+                        className="absolute left-0 right-0 top-full z-20 mt-1 max-h-56 overflow-auto rounded-lg border border-[var(--np-border)] bg-white py-1 shadow-lg"
+                        role="listbox"
                       >
-                        <option value="ORCAMENTO">Orçamento</option>
-                        <option value="PEDIDO">Pedido</option>
-                      </select>
-                    </div>
+                        {productSuggestions.map((name) => (
+                          <li key={name}>
+                            <button
+                              type="button"
+                              className="w-full px-3 py-2 text-left text-sm hover:bg-[var(--np-bg)]"
+                              onClick={() => {
+                                setDraftProductName(name)
+                                setProductQuery(name)
+                                setComboOpen(false)
+                              }}
+                            >
+                              {name}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
                   </div>
+                  <button type="button" className="np-btn-primary shrink-0" onClick={addLineFromDraft}>
+                    <Plus size={14} aria-hidden />
+                    Adicionar
+                  </button>
+                </div>
 
-                  <div>
-                    <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Observações</label>
-                    <Input className="mt-1 h-12" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+                <div className="np-row-4">
+                  <div className="np-field np-searchable">
+                    <label className="np-label">Produto</label>
+                    <SearchableSelect
+                      value={draftProductName}
+                      onChange={(v) => {
+                        setDraftProductName(v)
+                        setProductQuery(v)
+                      }}
+                      options={productSelectOptions}
+                      placeholder="— Catálogo —"
+                      aria-label="Produto"
+                    />
                   </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-0 shadow-md ring-1 ring-slate-100/90">
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 font-hub text-base font-semibold text-slate-800">
-                    <Search size={20} className="text-[#185FA5]" aria-hidden />
-                    Adicionar produtos ou kits
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-3">
-                    <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Tabela de preço</label>
-                    <select
-                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-base"
-                      value={selectedPriceTableId}
-                      onChange={(e) => setSelectedPriceTableId(e.target.value)}
-                      disabled={priceTables.length === 0}
-                      aria-label="Tabela de preço"
-                    >
-                      {priceTables.length === 0 ? (
-                        <option value="">— Nenhuma tabela —</option>
-                      ) : (
-                        priceTables.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.name}
-                            {t.is_default ? ' (padrão)' : ''}
-                          </option>
-                        ))
-                      )}
-                    </select>
-                    <p className="mt-1.5 text-xs leading-snug text-slate-500">
-                      A lista de produtos abaixo usa apenas itens cadastrados na tabela escolhida (preços conforme a tabela).
-                    </p>
+                  <div className="np-field np-searchable">
+                    <label className="np-label">Tipo</label>
+                    <SearchableSelect
+                      value={draftProductType}
+                      onChange={setDraftProductType}
+                      options={typeSelectOptions}
+                      placeholder="—"
+                      disabled={!draftProductName}
+                      aria-label="Tipo"
+                    />
                   </div>
-
-                  <div ref={comboRef} className="relative flex flex-col gap-3 sm:flex-row sm:items-start">
-                    <div className="relative min-w-0 flex-1">
-                      <Search className="pointer-events-none absolute left-3 top-1/2 z-[1] -translate-y-1/2 text-slate-400" size={18} />
-                      <Input
-                        value={productQuery}
-                        onChange={(e) => {
-                          setProductQuery(e.target.value)
-                          setComboOpen(true)
-                        }}
-                        onFocus={() => setComboOpen(true)}
-                        placeholder="Busque por nome, linha ou tipo…"
-                        className="h-12 border-slate-200 pl-10 pr-3 shadow-sm focus-visible:ring-2 focus-visible:ring-[#185FA5]/30"
-                        autoComplete="off"
-                        disabled={!selectedPriceTableId || catalogForTable.length === 0}
-                      />
-                      {comboOpen && productSuggestions.length > 0 ? (
-                        <ul
-                          className="absolute left-0 right-0 top-full z-20 mt-1 max-h-56 overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
-                          role="listbox"
-                        >
-                          {productSuggestions.map((name) => (
-                            <li key={name}>
-                              <button
-                                type="button"
-                                className="w-full px-3 py-2.5 text-left text-sm text-slate-800 hover:bg-slate-50"
-                                onClick={() => {
-                                  setDraftProductName(name)
-                                  setProductQuery(name)
-                                  setComboOpen(false)
-                                }}
-                              >
-                                {name}
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : null}
-                    </div>
+                  <div className="np-field np-searchable">
+                    <label className="np-label">Variação</label>
+                    <SearchableSelect
+                      value={draftVariationCode}
+                      onChange={setDraftVariationCode}
+                      options={variationSelectOptions}
+                      placeholder="—"
+                      disabled={!selectedOffer || variationOptions.length === 0}
+                      aria-label="Variação"
+                    />
                   </div>
-
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <div>
-                      <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Produto</label>
-                      <SearchableSelect
-                        value={draftProductName}
-                        onChange={(v) => {
-                          setDraftProductName(v)
-                          setProductQuery(v)
-                        }}
-                        options={productSelectOptions}
-                        placeholder="— Catálogo —"
-                        aria-label="Produto"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Tipo</label>
-                      <SearchableSelect
-                        value={draftProductType}
-                        onChange={setDraftProductType}
-                        options={typeSelectOptions}
-                        placeholder="—"
-                        disabled={!draftProductName}
-                        aria-label="Tipo"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Variação</label>
-                      <SearchableSelect
-                        value={draftVariationCode}
-                        onChange={setDraftVariationCode}
-                        options={variationSelectOptions}
-                        placeholder={variationOptions.length === 0 ? '—' : '—'}
-                        disabled={!selectedOffer || variationOptions.length === 0}
-                        aria-label="Variação"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-end gap-3">
-                    <div className="w-24">
-                      <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Qtd</label>
-                      <Input
+                  <div className="np-field">
+                    <label className="np-label">Quantidade</label>
+                    <div className="np-qty-wrap">
+                      <button
+                        type="button"
+                        aria-label="Diminuir"
+                        onClick={() =>
+                          setDraftQty(String(Math.max(1, (parseInt(draftQty, 10) || 1) - 1)))
+                        }
+                      >
+                        <Minus size={14} aria-hidden />
+                      </button>
+                      <input
                         inputMode="numeric"
                         value={draftQty}
                         onChange={(e) => setDraftQty(e.target.value)}
-                        className="h-11 text-center"
+                        aria-label="Quantidade"
                       />
+                      <button
+                        type="button"
+                        aria-label="Aumentar"
+                        onClick={() =>
+                          setDraftQty(String(Math.max(1, (parseInt(draftQty, 10) || 1) + 1)))
+                        }
+                      >
+                        <Plus size={14} aria-hidden />
+                      </button>
                     </div>
-                    <Button type="button" className="h-11 px-6" onClick={addLineFromDraft}>
-                      Adicionar
-                    </Button>
                   </div>
+                </div>
 
-                  <p className="text-sm italic text-slate-500">
-                    Dica: produtos em modo kit (cadastrados em Produtos — catálogo) ao incluir no pedido geram uma linha por item do
-                    catálogo, com quantidade = (qtd do kit) × (qtd de cada item no kit).
+                <p className="np-hint">
+                  Produtos em modo <strong>kit</strong> geram uma linha por item do catálogo, com quantidade = (qtd do kit) × (qtd de
+                  cada item no kit).
+                </p>
+
+                {offerProducts.length === 0 ? (
+                  <p className="text-xs text-amber-800">
+                    Nenhum produto no catálogo.{' '}
+                    <Link className="font-medium underline" to="/bem-aviv/produtos-catalogo">
+                      Cadastre em Produtos (catálogo)
+                    </Link>
+                    .
                   </p>
+                ) : catalogForTable.length === 0 && selectedPriceTableId ? (
+                  <p className="text-xs text-amber-800">
+                    Nenhum produto vinculado a esta tabela.{' '}
+                    <Link className="font-medium underline" to="/bem-aviv/tabela-preco-catalogo">
+                      Tabela de vendas
+                    </Link>
+                    .
+                  </p>
+                ) : null}
 
-                  {offerProducts.length === 0 ? (
-                    <p className="text-sm text-amber-800">
-                      Nenhum produto no catálogo.{' '}
-                      <Link className="font-medium underline" to="/bem-aviv/produtos-catalogo">
-                        Cadastre em Produtos (catálogo)
-                      </Link>
-                      .
-                    </p>
-                  ) : catalogForTable.length === 0 && selectedPriceTableId ? (
-                    <p className="text-sm text-amber-800">
-                      Nenhum produto vinculado a esta tabela de preço. Cadastre preços em{' '}
-                      <Link className="font-medium underline" to="/bem-aviv/tabela-preco-catalogo">
-                        Tabela de vendas
-                      </Link>{' '}
-                      ou selecione outra tabela.
-                    </p>
-                  ) : null}
-                </CardContent>
-              </Card>
+                <div className="np-items-wrap">
+                  <div className="np-items-head" role="row">
+                    <span>Item</span>
+                    <span>Qtd</span>
+                    <span>Preço un.</span>
+                    <span>Total</span>
+                    <span />
+                  </div>
+                  {lineItems.length === 0 ? (
+                    <div className="np-empty-items">Nenhum item ainda — busque e adicione produtos acima</div>
+                  ) : (
+                    lineItems.map((l) => {
+                      const rowNet = clampMoney(l.quantity * l.unit_price)
+                      return (
+                        <div key={l.key} className="np-item-row" role="row">
+                          <div>
+                            <div className="np-item-name">{l.name}</div>
+                            <div className="np-item-var">
+                              {l.kind === 'KIT' ? 'Kit' : 'Catálogo'}
+                              {(lineOrderDiscountByKey[l.key] ?? 0) > 0 || downPaymentApplied > 0
+                                ? ` · Líquido ${formatBRL(lineNetByKey[l.key] ?? rowNet)}`
+                                : ''}
+                            </div>
+                          </div>
+                          <input
+                            className="np-input"
+                            inputMode="numeric"
+                            value={String(l.quantity)}
+                            onChange={(e) => updateLineQty(l.key, e.target.value)}
+                            aria-label={`Quantidade ${l.name}`}
+                          />
+                          <input
+                            className="np-input np-price"
+                            inputMode="decimal"
+                            value={unitPriceStrByKey[l.key] ?? formatMoneyInput(l.unit_price)}
+                            onChange={(e) => setUnitPriceStrByKey((p) => ({ ...p, [l.key]: e.target.value }))}
+                            onBlur={() => {
+                              const raw = unitPriceStrByKey[l.key] ?? formatMoneyInput(l.unit_price)
+                              const u = clampMoney(parseMoney(raw))
+                              if (!Number.isFinite(u) || u <= 0) {
+                                setUnitPriceStrByKey((p) => ({ ...p, [l.key]: formatMoneyInput(l.unit_price) }))
+                                return
+                              }
+                              setLineItems((prev) => prev.map((x) => (x.key === l.key ? { ...x, unit_price: u } : x)))
+                              setUnitPriceStrByKey((p) => ({ ...p, [l.key]: formatMoneyInput(u) }))
+                            }}
+                            aria-label={`Preço unitário ${l.name}`}
+                          />
+                          <span className="np-cell-r tabular-nums">{formatBRL(lineNetByKey[l.key] ?? rowNet)}</span>
+                          <button
+                            type="button"
+                            className="np-btn-remove"
+                            aria-label="Remover"
+                            onClick={() => removeLine(l.key)}
+                          >
+                            <Trash2 size={14} aria-hidden />
+                          </button>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+              </div>
+            </section>
 
-              <Card className="border-0 shadow-md ring-1 ring-slate-100/90">
+            <section id="np-sec-pagamento" className="np-section" aria-labelledby="np-lbl-pag">
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 font-hub text-base font-semibold text-slate-800">
                     <CircleDollarSign size={20} className="text-[#185FA5]" aria-hidden />
