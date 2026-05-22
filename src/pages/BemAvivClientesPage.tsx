@@ -13,7 +13,7 @@ import {
   X,
 } from 'lucide-react'
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
 import { useCompany } from '../context/CompanyContext'
@@ -66,6 +66,23 @@ function composeFollowupNote(summary: string, details: string) {
   return d
 }
 
+function splitFollowupNote(note?: string | null) {
+  const raw = (note ?? '').trim()
+  if (!raw) return { summary: '', details: '' }
+  const marker = 'RESUMO:'
+  if (raw.toUpperCase().startsWith(marker)) {
+    const firstBreak = raw.indexOf('\n')
+    if (firstBreak > -1) {
+      return {
+        summary: raw.slice(marker.length, firstBreak).trim(),
+        details: raw.slice(firstBreak + 1).trim(),
+      }
+    }
+    return { summary: raw.slice(marker.length).trim(), details: '' }
+  }
+  return { summary: '', details: raw }
+}
+
 type Cliente = {
   id: string
   full_name: string
@@ -84,6 +101,8 @@ type Cliente = {
   client_status: string | null
   commercial_stage: string | null
   last_contact_at: string | null
+  next_followup_at: string | null
+  next_followup_note: string | null
 }
 
 type SortKey = 'full_name' | 'phones' | 'client_status'
@@ -228,7 +247,6 @@ const emptyForm = {
 export function BemAvivClientesPage() {
   const { user } = useUser()
   const supabase = useSupabase()
-  const navigate = useNavigate()
   const { activeCompanyId, loading: companyCtxLoading, error: companyCtxError } = useCompany()
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const followupActorName = (user?.fullName || user?.primaryEmailAddress?.emailAddress || ownerUserId || 'USUÁRIO').trim().toUpperCase()
@@ -249,6 +267,15 @@ export function BemAvivClientesPage() {
   const [pedidosModalLoading, setPedidosModalLoading] = useState(false)
   const [pedidosModalRows, setPedidosModalRows] = useState<OrderRow[]>([])
   const [pedidosModalItemsByOrder, setPedidosModalItemsByOrder] = useState<Record<string, OrderItemRow[]>>({})
+  const [scheduleModalClient, setScheduleModalClient] = useState<Cliente | null>(null)
+  const [scheduleModalSaving, setScheduleModalSaving] = useState(false)
+  const [scheduleModalForm, setScheduleModalForm] = useState({
+    contact_done: false,
+    next_followup_at: '',
+    commercial_stage: 'CONTATO',
+    summary: '',
+    details: '',
+  })
   const [historyModalClient, setHistoryModalClient] = useState<Cliente | null>(null)
   const [historyModalRows, setHistoryModalRows] = useState<FollowupHistoryRow[]>([])
   const [historyModalLoading, setHistoryModalLoading] = useState(false)
@@ -391,8 +418,51 @@ export function BemAvivClientesPage() {
     setForm(emptyForm)
   }
 
-  function goToFollowupSchedule(client: Cliente) {
-    navigate(`/bem-aviv/follow-up/agendar/${client.id}`)
+  function closeScheduleModal() {
+    setScheduleModalClient(null)
+    setScheduleModalSaving(false)
+  }
+
+  function openScheduleModal(client: Cliente) {
+    const parsed = splitFollowupNote(client.next_followup_note)
+    setScheduleModalClient(client)
+    setScheduleModalForm({
+      contact_done: false,
+      next_followup_at: client.next_followup_at ? toInputDate(client.next_followup_at) : todayInputDate(),
+      commercial_stage: client.commercial_stage || 'CONTATO',
+      summary: parsed.summary,
+      details: parsed.details,
+    })
+  }
+
+  async function submitScheduleModal(e: React.FormEvent) {
+    e.preventDefault()
+    if (!supabase || !ownerUserId || !scheduleModalClient || !activeCompanyId) return
+    if (!scheduleModalForm.next_followup_at) {
+      alert('INFORME A DATA DO AGENDAMENTO.')
+      return
+    }
+    setScheduleModalSaving(true)
+    const { error } = await supabase
+      .from('bem_aviv_clients')
+      .update({
+        next_followup_at: dateInputToIso(scheduleModalForm.next_followup_at),
+        next_followup_note: composeFollowupNote(scheduleModalForm.summary, scheduleModalForm.details) || null,
+        next_followup_status: 'PENDENTE',
+        commercial_stage: scheduleModalForm.commercial_stage,
+        last_contact_at: scheduleModalForm.contact_done
+          ? new Date().toISOString()
+          : scheduleModalClient.last_contact_at ?? null,
+      })
+      .eq('id', scheduleModalClient.id)
+      .eq('company_id', activeCompanyId)
+    setScheduleModalSaving(false)
+    if (error) {
+      alert(error.message)
+      return
+    }
+    closeScheduleModal()
+    await load()
   }
 
   async function openHistoryModal(client: Cliente) {
@@ -1038,7 +1108,7 @@ export function BemAvivClientesPage() {
                       <button
                         type="button"
                         className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-sky-300 bg-white text-sky-700 shadow-sm hover:bg-sky-50 sm:h-10 sm:w-10"
-                        onClick={() => goToFollowupSchedule(r)}
+                        onClick={() => openScheduleModal(r)}
                         title="Agendar follow-up"
                         aria-label="Agendar follow-up"
                       >
@@ -1095,14 +1165,8 @@ export function BemAvivClientesPage() {
           role="dialog"
           aria-modal="true"
           aria-labelledby="client-modal-title"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) closeClientModal()
-          }}
         >
-          <div
-            className="flex max-h-[min(92dvh,880px)] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-xl sm:rounded-2xl"
-            onMouseDown={(e) => e.stopPropagation()}
-          >
+          <div className="flex max-h-[min(92dvh,880px)] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-xl sm:rounded-2xl">
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-5">
               <div>
                 <h3 id="client-modal-title" className="text-lg font-semibold text-slate-900">
@@ -1205,6 +1269,107 @@ export function BemAvivClientesPage() {
                 <Button variant="secondary" type="button" onClick={closeClientModal}>
                   Cancelar
                 </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {scheduleModalClient ? (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/35 p-3"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="schedule-modal-title"
+        >
+          <div className="w-full max-w-xl rounded-xl border border-slate-200 bg-white p-4 shadow-xl sm:p-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 id="schedule-modal-title" className="text-lg font-semibold text-slate-900 normal-case">
+                  Agendar follow-up
+                </h3>
+                <p className="text-sm text-slate-500 normal-case">{scheduleModalClient.full_name}</p>
+              </div>
+              <button
+                type="button"
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                onClick={closeScheduleModal}
+                aria-label="Fechar"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={submitScheduleModal} className="mt-4 rounded-lg border border-sky-200 bg-sky-50/40 p-3">
+              <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={scheduleModalForm.contact_done}
+                  onChange={(e) => setScheduleModalForm((prev) => ({ ...prev, contact_done: e.target.checked }))}
+                  className="h-4 w-4 rounded border-slate-300"
+                />
+                Contato realizado
+              </label>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                <label className="text-xs text-slate-600 sm:col-span-2">
+                  Próximo follow-up
+                  <input
+                    type="date"
+                    required
+                    value={scheduleModalForm.next_followup_at}
+                    onChange={(e) => setScheduleModalForm((prev) => ({ ...prev, next_followup_at: e.target.value }))}
+                    className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+                  />
+                </label>
+                <label className="text-xs text-slate-600 sm:col-span-2">
+                  Status relacionamento
+                  <select
+                    value={scheduleModalForm.commercial_stage}
+                    onChange={(e) => setScheduleModalForm((prev) => ({ ...prev, commercial_stage: e.target.value }))}
+                    className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+                  >
+                    {BEM_AVIV_CLIENT_COMMERCIAL_STAGE_OPTIONS.map((stage) => (
+                      <option key={stage} value={stage}>
+                        {stage}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-xs text-slate-600 sm:col-span-2">
+                  Resumo (até 60 caracteres)
+                  <input
+                    maxLength={60}
+                    value={scheduleModalForm.summary}
+                    onChange={(e) => setScheduleModalForm((prev) => ({ ...prev, summary: e.target.value }))}
+                    className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+                  />
+                  <p className="mt-1 text-[8px] text-slate-500">{scheduleModalForm.summary.length}/60</p>
+                </label>
+                <label className="text-xs text-slate-600 sm:col-span-2">
+                  Registro
+                  <textarea
+                    rows={2}
+                    value={scheduleModalForm.details}
+                    onChange={(e) => setScheduleModalForm((prev) => ({ ...prev, details: e.target.value }))}
+                    className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+                  />
+                </label>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button
+                  type="submit"
+                  disabled={scheduleModalSaving}
+                  className="rounded-md bg-[#185FA5] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#144f8f] disabled:opacity-60"
+                >
+                  {scheduleModalSaving ? 'Salvando...' : 'Confirmar agendamento'}
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  onClick={closeScheduleModal}
+                >
+                  Cancelar
+                </button>
               </div>
             </form>
           </div>
@@ -1476,14 +1641,8 @@ export function BemAvivClientesPage() {
           role="dialog"
           aria-modal="true"
           aria-labelledby="pedidos-modal-title"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) closePedidosModal()
-          }}
         >
-          <div
-            className="flex max-h-[min(92dvh,900px)] w-full max-w-7xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl"
-            onMouseDown={(e) => e.stopPropagation()}
-          >
+          <div className="flex max-h-[min(92dvh,900px)] w-full max-w-7xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl">
             <div className="flex shrink-0 flex-wrap items-start gap-3 border-b border-slate-100 bg-slate-50/90 px-4 py-3 sm:px-5">
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-2">

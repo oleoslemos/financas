@@ -17,14 +17,8 @@ export function FormDialog({ open, title, description, children, actions, onClos
       role="dialog"
       aria-modal="true"
       aria-labelledby="form-dialog-title"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose()
-      }}
     >
-      <div
-        className="max-h-[min(90dvh,720px)] w-full max-w-md overflow-y-auto rounded-t-2xl border border-slate-200 bg-white p-4 shadow-xl sm:max-h-[85vh] sm:rounded-2xl sm:p-5"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
+      <div className="max-h-[min(90dvh,720px)] w-full max-w-md overflow-y-auto rounded-t-2xl border border-slate-200 bg-white p-4 shadow-xl sm:max-h-[85vh] sm:rounded-2xl sm:p-5">
         <h3 id="form-dialog-title" className="text-lg font-semibold tracking-tight text-slate-900">
           {title}
         </h3>

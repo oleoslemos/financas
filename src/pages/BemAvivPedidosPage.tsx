@@ -930,14 +930,8 @@ export function BemAvivPedidosPage() {
           role="dialog"
           aria-modal="true"
           aria-labelledby="pedido-detail-modal-title"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) closePedidoDetailModal()
-          }}
         >
-          <div
-            className="flex max-h-[min(92dvh,900px)] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl"
-            onMouseDown={(e) => e.stopPropagation()}
-          >
+          <div className="flex max-h-[min(92dvh,900px)] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl">
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 bg-slate-50/90 px-4 py-3 sm:px-5">
               <div className="min-w-0">
                 <h3 id="pedido-detail-modal-title" className="font-hub text-lg font-semibold text-slate-900 normal-case">

@@ -32,11 +32,19 @@ createRoot(document.getElementById('root')!).render(
     ) : (
       <div className="flex min-h-screen items-center justify-center bg-white p-4 text-center text-slate-800 sm:p-6">
         {clerkPub && !hasValidClerkPrefix ? (
-          <p>
-            Chave do Clerk invalida no <code className="text-sky-700">.env</code>. Use{' '}
-            <code className="text-sky-700">VITE_CLERK_PUBLISHABLE_KEY=pk_test_...</code> ou{' '}
-            <code className="text-sky-700">pk_live_...</code> (Dashboard Clerk {'->'} API Keys).
-          </p>
+          <div className="max-w-md space-y-2 text-sm">
+            <p>
+              A variável <code className="text-sky-700">VITE_CLERK_PUBLISHABLE_KEY</code> está definida, mas o valor
+              não é uma <strong>Publishable key</strong> válida (deve começar com <code className="text-sky-700">pk_</code>
+              ).
+            </p>
+            <p className="text-slate-600">
+              No Clerk → API Keys, use <strong>Publishable key</strong> (<code className="text-sky-700">pk_test_</code> ou{' '}
+              <code className="text-sky-700">pk_live_</code>), não a Secret key (<code className="text-sky-700">sk_</code>
+              ). Pode ser a <strong>mesma</strong> chave no <code className="text-sky-700">.env</code> local e na Vercel — sem
+              aspas no valor. Depois de corrigir, faça <strong>Redeploy</strong>.
+            </p>
+          </div>
         ) : (
           <div className="max-w-md space-y-2 text-sm">
             <p>
