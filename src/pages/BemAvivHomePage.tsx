@@ -3,17 +3,27 @@ import { Building2, ChevronLeft, ChevronRight, History, Target, TrendingUp } fro
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bar, BarChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { SalesGoalsEditor } from '../components/bemAviv/SalesGoalsEditor'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Progress } from '../components/ui/Progress'
 import { useSupabase } from '../hooks/useSupabase'
 import { useCompany } from '../context/CompanyContext'
+import { companyKindLabel } from '../lib/companyKind'
+import {
+  emptyMonthlyGoals,
+  formatGoalMoneyInput,
+  monthlyGoalsToDraft,
+  parseGoalMoneyInput,
+  parseMonthlyGoals,
+  suggestMonthGoalFromHistory,
+  sumYearToDateSold,
+} from '../lib/salesGoals'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { cn } from '../lib/cn'
 import { formatBRL } from '../lib/format'
 import { dateInputToIso, formatDateOnly, todayInputDate, toInputDate } from '../lib/dates'
 
-const DISTRIBUTION_GOAL_BRL = 100_000
 const NO_CONTACT_ALERT_DAYS = 30
 const EXCLUDED_FROM_CRITICAL_TIMELINE = new Set(['LEONARDO SILVA LEMOS', 'SUELEN JOAO ALVES'])
 const EXCLUDED_FROM_FOLLOWUP_BY_CPF = new Set(['22112195867', '00742215903'])
@@ -200,7 +210,7 @@ export function BemAvivHomePage() {
   const { user } = useUser()
   const supabase = useSupabase()
   const navigate = useNavigate()
-  const { activeCompanyId, loading: companyLoading } = useCompany()
+  const { activeCompanyId, activeCompany, loading: companyLoading } = useCompany()
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const followupActorName = (user?.fullName || user?.primaryEmailAddress?.emailAddress || ownerUserId || 'USUÁRIO').trim().toUpperCase()
   const [loading, setLoading] = useState(true)
@@ -211,6 +221,15 @@ export function BemAvivHomePage() {
   const [metricsPeriod, setMetricsPeriod] = useState<MetricsPeriod>('TODO')
   const [monthlyTotals, setMonthlyTotals] = useState<Record<string, number>>({})
   const [monthlyOpenTotals, setMonthlyOpenTotals] = useState<Record<string, number>>({})
+  const [monthlySoldAllTime, setMonthlySoldAllTime] = useState<Record<string, number>>({})
+  const [goalYear, setGoalYear] = useState(() => new Date().getFullYear())
+  const [annualGoalDraft, setAnnualGoalDraft] = useState('')
+  const [monthlyGoalsDraft, setMonthlyGoalsDraft] = useState<Record<string, string>>(() =>
+    monthlyGoalsToDraft(emptyMonthlyGoals()),
+  )
+  const [goalsLoading, setGoalsLoading] = useState(false)
+  const [goalsSaving, setGoalsSaving] = useState(false)
+  const [goalsMsg, setGoalsMsg] = useState<string | null>(null)
   const [clients, setClients] = useState<ClientRow[]>([])
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()))
   const [selectedDay, setSelectedDay] = useState<string | null>(() => formatYmd(new Date()))
@@ -276,6 +295,7 @@ export function BemAvivHomePage() {
     let soldCount = 0
     const byMonth: Record<string, number> = {}
     const byMonthOpen: Record<string, number> = {}
+    const byMonthAllTime: Record<string, number> = {}
     for (const o of orders) {
       const docType = (o.document_type ?? '').toUpperCase()
       const st = (o.status ?? '').toUpperCase()
@@ -283,21 +303,24 @@ export function BemAvivHomePage() {
       const dt = new Date(o.order_date)
       const inPeriod = !Number.isNaN(dt.getTime()) && (periodStart === null || (dt >= periodStart && dt <= now))
       if (docType !== 'PEDIDO') continue
+      const mk = monthKeyFromOrderDate(o.order_date || '')
+      if (soldStatuses.has(st) && Number.isFinite(amt) && mk.length >= 7) {
+        byMonthAllTime[mk] = (byMonthAllTime[mk] ?? 0) + amt
+      }
       if (!inPeriod) continue
       if (st === 'ABERTO') {
         openCount += 1
         if (Number.isFinite(amt)) openAmount += amt
-        const mk = monthKeyFromOrderDate(o.order_date || '')
-        if (mk && mk.length >= 7 && Number.isFinite(amt)) byMonthOpen[mk] = (byMonthOpen[mk] ?? 0) + amt
+        if (mk.length >= 7 && Number.isFinite(amt)) byMonthOpen[mk] = (byMonthOpen[mk] ?? 0) + amt
       }
       if (!soldStatuses.has(st)) continue
       if (!Number.isFinite(amt)) continue
       sum += amt
       soldCount += 1
-      const mk = monthKeyFromOrderDate(o.order_date || '')
-      if (!mk || mk.length < 7) continue
+      if (mk.length < 7) continue
       byMonth[mk] = (byMonth[mk] ?? 0) + amt
     }
+    setMonthlySoldAllTime(byMonthAllTime)
     setTotalSold(sum)
     setSoldOrdersCount(soldCount)
     setOpenOrdersCount(openCount)
@@ -313,6 +336,85 @@ export function BemAvivHomePage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  const loadGoals = useCallback(async () => {
+    if (!supabase || !activeCompanyId) return
+    setGoalsLoading(true)
+    setGoalsMsg(null)
+    const { data, error } = await supabase
+      .from('company_sales_goals')
+      .select('annual_goal, monthly_goals')
+      .eq('company_id', activeCompanyId)
+      .eq('year', goalYear)
+      .maybeSingle()
+    setGoalsLoading(false)
+    if (error) {
+      setGoalsMsg(error.message)
+      setAnnualGoalDraft('')
+      setMonthlyGoalsDraft(monthlyGoalsToDraft(emptyMonthlyGoals()))
+      return
+    }
+    if (!data) {
+      setAnnualGoalDraft('')
+      setMonthlyGoalsDraft(monthlyGoalsToDraft(emptyMonthlyGoals()))
+      return
+    }
+    const annual = Number((data as { annual_goal: number }).annual_goal ?? 0)
+    setAnnualGoalDraft(annual > 0 ? formatGoalMoneyInput(annual) : '')
+    setMonthlyGoalsDraft(monthlyGoalsToDraft(parseMonthlyGoals((data as { monthly_goals: unknown }).monthly_goals)))
+  }, [supabase, activeCompanyId, goalYear])
+
+  useEffect(() => {
+    void loadGoals()
+  }, [loadGoals])
+
+  async function saveGoals() {
+    if (!supabase || !activeCompanyId) return
+    setGoalsSaving(true)
+    setGoalsMsg(null)
+    const annual_goal = parseGoalMoneyInput(annualGoalDraft)
+    const monthly_goals: Record<string, number> = {}
+    for (let m = 1; m <= 12; m++) {
+      const key = String(m)
+      monthly_goals[key] = parseGoalMoneyInput(monthlyGoalsDraft[key] ?? '')
+    }
+    const payload = {
+      company_id: activeCompanyId,
+      year: goalYear,
+      annual_goal,
+      monthly_goals,
+      updated_at: new Date().toISOString(),
+    }
+    const { data: existing } = await supabase
+      .from('company_sales_goals')
+      .select('id')
+      .eq('company_id', activeCompanyId)
+      .eq('year', goalYear)
+      .maybeSingle()
+    const { error } = existing?.id
+      ? await supabase.from('company_sales_goals').update(payload).eq('id', existing.id)
+      : await supabase.from('company_sales_goals').insert(payload)
+    setGoalsSaving(false)
+    if (error) setGoalsMsg(error.message)
+    else setGoalsMsg('Metas salvas.')
+  }
+
+  function applySuggestionsAll() {
+    const next = { ...monthlyGoalsDraft }
+    for (let m = 1; m <= 12; m++) {
+      const key = String(m)
+      const suggestion = suggestMonthGoalFromHistory(m, monthlySoldAllTime, goalYear)
+      if (suggestion != null) next[key] = formatGoalMoneyInput(suggestion)
+    }
+    setMonthlyGoalsDraft(next)
+    setGoalsMsg('Sugestões aplicadas com base no histórico de vendas.')
+  }
+
+  const annualGoalNum = useMemo(() => parseGoalMoneyInput(annualGoalDraft), [annualGoalDraft])
+  const yearToDateSold = useMemo(
+    () => sumYearToDateSold(monthlySoldAllTime, goalYear),
+    [monthlySoldAllTime, goalYear],
+  )
 
   const pendingWithDate = useMemo(() => clients.filter(includeInFollowupTimeline), [clients])
 
@@ -456,7 +558,7 @@ export function BemAvivHomePage() {
     return out
   }, [monthlyTotals])
 
-  const progressPct = Math.min(100, DISTRIBUTION_GOAL_BRL > 0 ? (totalSold / DISTRIBUTION_GOAL_BRL) * 100 : 0)
+  const progressPct = Math.min(100, annualGoalNum > 0 ? (yearToDateSold / annualGoalNum) * 100 : 0)
   const avgTicket = soldOrdersCount > 0 ? totalSold / soldOrdersCount : 0
   const periodLabel =
     metricsPeriod === 'TODO'
@@ -694,9 +796,17 @@ export function BemAvivHomePage() {
           <Building2 size={26} strokeWidth={1.75} aria-hidden />
         </div>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{"EKO'7 — Dashboard"}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{"EKO'7 — Visão geral"}</h1>
           <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-600">
-            Meta de distribuição, vendas e prioridades de follow-up.
+            Meta anual de vendas, acompanhamento comercial e follow-up.
+            {activeCompany ? (
+              <>
+                {' '}
+                <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-800">
+                  {companyKindLabel(activeCompany.company_kind)}
+                </span>
+              </>
+            ) : null}
           </p>
         </div>
       </header>
@@ -730,35 +840,55 @@ export function BemAvivHomePage() {
           </section>
 
           <section className="grid gap-4 sm:grid-cols-2">
-            <Card className="border-0 shadow-md ring-1 ring-slate-100/90 transition-shadow hover:shadow-lg">
+            <Card className="border-0 shadow-md ring-1 ring-slate-100/90 transition-shadow hover:shadow-lg sm:col-span-2">
               <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
-                <CardTitle className="text-xs font-semibold uppercase tracking-wide text-slate-500">Meta distribuição</CardTitle>
+                <CardTitle className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Meta anual {goalYear}
+                </CardTitle>
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-50 text-[#185FA5] ring-1 ring-sky-100">
                   <Target size={18} aria-hidden />
                 </span>
               </CardHeader>
               <CardContent className="space-y-4 pt-0">
-                <div>
-                  <p className="font-hub text-2xl font-bold tracking-tight text-slate-900">{formatBRL(DISTRIBUTION_GOAL_BRL)}</p>
-                  <p className="mt-1 text-xs text-slate-500">Referência para o período comercial ({periodLabel}).</p>
-                </div>
-                <div className="border-t border-slate-100 pt-4">
+                <div className="border-b border-slate-100 pb-4">
                   <div className="mb-2 flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Progresso da meta</span>
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Progresso no ano</span>
                     <span className="text-sm font-semibold tabular-nums text-[#185FA5]">{progressPct.toFixed(1)}%</span>
                   </div>
                   <Progress value={progressPct} className="h-2.5 bg-slate-100" />
                   <p className="mt-2 text-xs text-slate-500">
-                    {totalSold >= DISTRIBUTION_GOAL_BRL ? (
-                      <span className="font-medium text-emerald-700">Meta atingida.</span>
+                    {annualGoalNum > 0 && yearToDateSold >= annualGoalNum ? (
+                      <span className="font-medium text-emerald-700">Meta anual atingida.</span>
                     ) : (
                       <>
-                        Faltam <strong className="font-semibold text-slate-700">{formatBRL(Math.max(0, DISTRIBUTION_GOAL_BRL - totalSold))}</strong> para a
-                        meta.
+                        Vendido em {goalYear} (YTD): <strong>{formatBRL(yearToDateSold)}</strong>
+                        {annualGoalNum > 0 ? (
+                          <>
+                            {' '}
+                            · Faltam <strong>{formatBRL(Math.max(0, annualGoalNum - yearToDateSold))}</strong>
+                          </>
+                        ) : null}
                       </>
                     )}
                   </p>
                 </div>
+                <SalesGoalsEditor
+                  goalYear={goalYear}
+                  onGoalYearChange={setGoalYear}
+                  annualGoalDraft={annualGoalDraft}
+                  onAnnualGoalDraftChange={setAnnualGoalDraft}
+                  monthlyGoalsDraft={monthlyGoalsDraft}
+                  onMonthlyGoalDraftChange={(month, v) =>
+                    setMonthlyGoalsDraft((prev) => ({ ...prev, [month]: v }))
+                  }
+                  monthlySoldAllTime={monthlySoldAllTime}
+                  yearToDateSold={yearToDateSold}
+                  goalsLoading={goalsLoading}
+                  goalsSaving={goalsSaving}
+                  goalsMsg={goalsMsg}
+                  onSave={() => void saveGoals()}
+                  onApplySuggestionsAll={applySuggestionsAll}
+                />
               </CardContent>
             </Card>
 

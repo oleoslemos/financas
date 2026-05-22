@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useSupabase } from '../hooks/useSupabase'
 import { useCompany } from '../context/CompanyContext'
 import { Button } from '../components/ui/Button'
+import { COMPANY_KIND_OPTIONS, parseCompanyKind, type CompanyKind } from '../lib/companyKind'
 
 export function BemAvivEmpresaPage() {
   const supabase = useSupabase()
@@ -21,6 +22,7 @@ export function BemAvivEmpresaPage() {
   const [addressCity, setAddressCity] = useState('')
   const [addressState, setAddressState] = useState('')
   const [zipCode, setZipCode] = useState('')
+  const [companyKind, setCompanyKind] = useState<CompanyKind>('DISTRIBUIDOR')
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState<string | null>(null)
 
@@ -35,6 +37,7 @@ export function BemAvivEmpresaPage() {
     setAddressCity(activeCompany.address_city ?? '')
     setAddressState(activeCompany.address_state ?? '')
     setZipCode(activeCompany.zip_code ?? '')
+    setCompanyKind(parseCompanyKind(activeCompany.company_kind))
   }, [activeCompany])
 
   async function onSubmit(e: React.FormEvent) {
@@ -54,6 +57,7 @@ export function BemAvivEmpresaPage() {
         address_city: addressCity.trim() || null,
         address_state: addressState.trim() || null,
         zip_code: zipCode.trim() || null,
+        company_kind: companyKind,
         updated_at: new Date().toISOString(),
       })
       .eq('id', activeCompanyId)
@@ -94,6 +98,26 @@ export function BemAvivEmpresaPage() {
       </div>
 
       <form onSubmit={onSubmit} className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+        <fieldset className="space-y-2">
+          <legend className="text-xs font-medium uppercase tracking-wide text-slate-500">Tipo no canal EKO&apos;7</legend>
+          <div className="flex flex-wrap gap-4">
+            {COMPANY_KIND_OPTIONS.map((opt) => (
+              <label key={opt.value} className="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-800">
+                <input
+                  type="radio"
+                  name="company_kind"
+                  value={opt.value}
+                  checked={companyKind === opt.value}
+                  onChange={() => setCompanyKind(opt.value)}
+                />
+                {opt.label}
+              </label>
+            ))}
+          </div>
+          <p className="text-xs text-slate-500">
+            Ex.: Bem Aviv como <strong>Representante</strong> e ComfortCare como <strong>Distribuidor</strong>.
+          </p>
+        </fieldset>
         <label className="block space-y-1">
           <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Nome fantasia</span>
           <input

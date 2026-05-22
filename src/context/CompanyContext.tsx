@@ -29,6 +29,7 @@ export type CompanyRow = {
   address_city: string | null
   address_state: string | null
   zip_code: string | null
+  company_kind: string | null
 }
 
 type CompanyContextValue = {
@@ -98,7 +99,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       setError(null)
 
       const membershipSelect =
-        'company_id, companies (id, slug, trade_name, legal_name, tax_id, phone, email_contact, address_street, address_city, address_state, zip_code)'
+        'company_id, companies (id, slug, trade_name, legal_name, tax_id, phone, email_contact, address_street, address_city, address_state, zip_code, company_kind)'
 
       let data: unknown = null
       let fetchError: { message: string } | null = null
