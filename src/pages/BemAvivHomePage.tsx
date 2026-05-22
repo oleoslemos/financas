@@ -1,9 +1,10 @@
 import { useUser } from '@clerk/clerk-react'
-import { Building2, ChevronLeft, ChevronRight, History, Target, TrendingUp } from 'lucide-react'
+import { Building2, ChevronLeft, ChevronRight, History, Pencil, Target, TrendingUp } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bar, BarChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { SalesGoalsEditor } from '../components/bemAviv/SalesGoalsEditor'
+import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Progress } from '../components/ui/Progress'
 import { useSupabase } from '../hooks/useSupabase'
@@ -230,6 +231,7 @@ export function BemAvivHomePage() {
   const [goalsLoading, setGoalsLoading] = useState(false)
   const [goalsSaving, setGoalsSaving] = useState(false)
   const [goalsMsg, setGoalsMsg] = useState<string | null>(null)
+  const [isGoalsModalOpen, setIsGoalsModalOpen] = useState(false)
   const [clients, setClients] = useState<ClientRow[]>([])
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()))
   const [selectedDay, setSelectedDay] = useState<string | null>(() => formatYmd(new Date()))
@@ -396,7 +398,13 @@ export function BemAvivHomePage() {
       : await supabase.from('company_sales_goals').insert(payload)
     setGoalsSaving(false)
     if (error) setGoalsMsg(error.message)
-    else setGoalsMsg('Metas salvas.')
+    else {
+      setGoalsMsg('Metas salvas.')
+      setTimeout(() => {
+        setIsGoalsModalOpen(false)
+        setGoalsMsg(null)
+      }, 1000)
+    }
   }
 
   function applySuggestionsAll() {
@@ -850,6 +858,32 @@ export function BemAvivHomePage() {
                 </span>
               </CardHeader>
               <CardContent className="space-y-4 pt-0">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-100 pb-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Valor da Meta Anual</p>
+                    <p className="mt-1 font-hub text-2xl font-bold tabular-nums text-slate-900">{formatBRL(annualGoalNum)}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Vendido no ano ({goalYear}) até agora: <strong>{formatBRL(yearToDateSold)}</strong>
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                      Ano da meta
+                      <select
+                        value={goalYear}
+                        onChange={(e) => setGoalYear(Number(e.target.value))}
+                        className="mt-1 block rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm font-medium text-slate-800"
+                      >
+                        {[goalYear - 1, goalYear, goalYear + 1].map((y) => (
+                          <option key={y} value={y}>
+                            {y}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                </div>
+
                 <div className="border-b border-slate-100 pb-4">
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Progresso no ano</span>
@@ -861,34 +895,26 @@ export function BemAvivHomePage() {
                       <span className="font-medium text-emerald-700">Meta anual atingida.</span>
                     ) : (
                       <>
-                        Vendido em {goalYear} (YTD): <strong>{formatBRL(yearToDateSold)}</strong>
-                        {annualGoalNum > 0 ? (
-                          <>
-                            {' '}
-                            · Faltam <strong>{formatBRL(Math.max(0, annualGoalNum - yearToDateSold))}</strong>
-                          </>
-                        ) : null}
+                        Faltam <strong>{formatBRL(Math.max(0, annualGoalNum - yearToDateSold))}</strong> para atingir a meta anual
                       </>
                     )}
                   </p>
                 </div>
-                <SalesGoalsEditor
-                  goalYear={goalYear}
-                  onGoalYearChange={setGoalYear}
-                  annualGoalDraft={annualGoalDraft}
-                  onAnnualGoalDraftChange={setAnnualGoalDraft}
-                  monthlyGoalsDraft={monthlyGoalsDraft}
-                  onMonthlyGoalDraftChange={(month, v) =>
-                    setMonthlyGoalsDraft((prev) => ({ ...prev, [month]: v }))
-                  }
-                  monthlySoldAllTime={monthlySoldAllTime}
-                  yearToDateSold={yearToDateSold}
-                  goalsLoading={goalsLoading}
-                  goalsSaving={goalsSaving}
-                  goalsMsg={goalsMsg}
-                  onSave={() => void saveGoals()}
-                  onApplySuggestionsAll={applySuggestionsAll}
-                />
+
+                <div className="flex justify-between items-center pt-2">
+                  <span className="text-xs text-slate-500">
+                    Metas mensais e anuais configuradas.
+                  </span>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5"
+                    onClick={() => setIsGoalsModalOpen(true)}
+                  >
+                    <Pencil size={14} />
+                    Configurar Metas
+                  </Button>
+                </div>
               </CardContent>
             </Card>
 
@@ -1330,6 +1356,47 @@ export function BemAvivHomePage() {
           </div>
         </div>
       ) : null}
+
+      {isGoalsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/35 p-3 backdrop-blur-sm">
+          <div className="w-full max-w-5xl rounded-xl border border-slate-200 bg-white p-4 shadow-xl sm:p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-4 mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Configurar Metas de Vendas</h3>
+                <p className="text-sm text-slate-500">Defina o valor da meta anual e as metas de cada mês para o ano selecionado.</p>
+              </div>
+              <button
+                type="button"
+                className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                onClick={() => {
+                  setIsGoalsModalOpen(false)
+                  loadGoals() // Descarta alterações não salvas
+                }}
+              >
+                Fechar
+              </button>
+            </div>
+            
+            <SalesGoalsEditor
+              goalYear={goalYear}
+              onGoalYearChange={setGoalYear}
+              annualGoalDraft={annualGoalDraft}
+              onAnnualGoalDraftChange={setAnnualGoalDraft}
+              monthlyGoalsDraft={monthlyGoalsDraft}
+              onMonthlyGoalDraftChange={(month, v) =>
+                setMonthlyGoalsDraft((prev) => ({ ...prev, [month]: v }))
+              }
+              monthlySoldAllTime={monthlySoldAllTime}
+              yearToDateSold={yearToDateSold}
+              goalsLoading={goalsLoading}
+              goalsSaving={goalsSaving}
+              goalsMsg={goalsMsg}
+              onSave={() => void saveGoals()}
+              onApplySuggestionsAll={applySuggestionsAll}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
