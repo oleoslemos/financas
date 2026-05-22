@@ -195,7 +195,706 @@ tbody tr:hover td {
   @apply px-4 py-3.5;
 }
 
-/* Bem Aviv — Novo pedido: formulário e botões legíveis */
+/* Bem Aviv — Novo pedido (layout ideias/novo-pedido.html) */
+.bem-aviv-novo-pedido-shell {
+  --np-bg: #f5f5f3;
+  --np-surface: #ffffff;
+  --np-border: rgba(0, 0, 0, 0.1);
+  --np-border-strong: rgba(0, 0, 0, 0.18);
+  --np-text: #1a1a1a;
+  --np-muted: #6b6b6b;
+  --np-faint: #a0a0a0;
+  --np-blue: #2563eb;
+  --np-blue-light: #eff6ff;
+  --np-blue-mid: #bfdbfe;
+  --np-green: #059669;
+  --np-green-light: #ecfdf5;
+  --np-purple: #7c3aed;
+  --np-purple-light: #f5f3ff;
+  margin: -0.75rem;
+  min-height: calc(100dvh - 3.5rem);
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-areas:
+    'topbar topbar'
+    'progress progress'
+    'main sidebar';
+  background: var(--np-bg);
+  color: var(--np-text);
+  font-size: 14px;
+}
+
+@media (max-width: 1023px) {
+  .bem-aviv-novo-pedido-shell {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      'topbar'
+      'progress'
+      'main'
+      'sidebar';
+    min-height: auto;
+  }
+}
+
+@media (min-width: 640px) {
+  .bem-aviv-novo-pedido-shell {
+    margin: -1rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .bem-aviv-novo-pedido-shell {
+    margin: -1.25rem;
+  }
+}
+
+.bem-aviv-novo-pedido .np-topbar {
+  grid-area: topbar;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 24px;
+  height: 52px;
+  background: var(--np-surface);
+  border-bottom: 1px solid var(--np-border);
+}
+
+.bem-aviv-novo-pedido .np-back-btn {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--np-border-strong);
+  border-radius: 8px;
+  color: var(--np-muted);
+  transition: background 0.15s;
+}
+
+.bem-aviv-novo-pedido .np-back-btn:hover {
+  background: var(--np-bg);
+}
+
+.bem-aviv-novo-pedido .np-page-title {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.bem-aviv-novo-pedido .np-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--np-blue-light);
+  color: var(--np-blue);
+  border: 1px solid var(--np-blue-mid);
+}
+
+.bem-aviv-novo-pedido .np-breadcrumb {
+  margin-left: auto;
+  display: none;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--np-faint);
+}
+
+@media (min-width: 768px) {
+  .bem-aviv-novo-pedido .np-breadcrumb {
+    display: flex;
+  }
+}
+
+.bem-aviv-novo-pedido .np-breadcrumb .current {
+  color: var(--np-text);
+  font-weight: 500;
+}
+
+.bem-aviv-novo-pedido .np-progress {
+  grid-area: progress;
+  display: flex;
+  overflow-x: auto;
+  padding: 0 24px;
+  background: var(--np-surface);
+  border-bottom: 1px solid var(--np-border);
+}
+
+.bem-aviv-novo-pedido .np-tab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 13px 0;
+  margin-right: 28px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--np-faint);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  background: none;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+}
+
+.bem-aviv-novo-pedido .np-tab.active {
+  color: var(--np-blue);
+  border-bottom-color: var(--np-blue);
+}
+
+.bem-aviv-novo-pedido .np-tab.done {
+  color: var(--np-green);
+}
+
+.bem-aviv-novo-pedido .np-tab-num {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--np-bg);
+  border: 1px solid var(--np-border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.bem-aviv-novo-pedido .np-tab.active .np-tab-num {
+  background: var(--np-blue);
+  border-color: var(--np-blue);
+  color: #fff;
+}
+
+.bem-aviv-novo-pedido .np-tab.done .np-tab-num {
+  background: var(--np-green);
+  border-color: var(--np-green);
+  color: #fff;
+}
+
+.bem-aviv-novo-pedido .np-main {
+  grid-area: main;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border-right: 1px solid var(--np-border);
+}
+
+@media (max-width: 1023px) {
+  .bem-aviv-novo-pedido .np-main {
+    border-right: none;
+  }
+}
+
+.bem-aviv-novo-pedido .np-sidebar {
+  grid-area: sidebar;
+  display: flex;
+  flex-direction: column;
+  background: var(--np-surface);
+}
+
+.bem-aviv-novo-pedido .np-section {
+  background: var(--np-surface);
+  border: 1px solid var(--np-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.bem-aviv-novo-pedido .np-section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--np-border);
+}
+
+.bem-aviv-novo-pedido .np-section-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.bem-aviv-novo-pedido .np-icon-blue {
+  background: var(--np-blue-light);
+  color: var(--np-blue);
+}
+
+.bem-aviv-novo-pedido .np-icon-green {
+  background: var(--np-green-light);
+  color: var(--np-green);
+}
+
+.bem-aviv-novo-pedido .np-icon-purple {
+  background: var(--np-purple-light);
+  color: var(--np-purple);
+}
+
+.bem-aviv-novo-pedido .np-section-label {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.bem-aviv-novo-pedido .np-section-sub {
+  font-size: 11px;
+  color: var(--np-faint);
+  margin-left: auto;
+}
+
+.bem-aviv-novo-pedido .np-section-body {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bem-aviv-novo-pedido .np-field label,
+.bem-aviv-novo-pedido .np-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--np-muted);
+  letter-spacing: 0.02em;
+  margin-bottom: 5px;
+}
+
+.bem-aviv-novo-pedido .np-req {
+  color: #dc2626;
+}
+
+.bem-aviv-novo-pedido .np-input,
+.bem-aviv-novo-pedido .np-select {
+  width: 100%;
+  padding: 7px 10px;
+  font-size: 13px;
+  border: 1px solid var(--np-border-strong);
+  border-radius: 8px;
+  background: var(--np-surface);
+  color: var(--np-text);
+  outline: none;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+
+.bem-aviv-novo-pedido .np-input:focus,
+.bem-aviv-novo-pedido .np-select:focus {
+  border-color: var(--np-blue);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.bem-aviv-novo-pedido .np-row-2 {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.bem-aviv-novo-pedido .np-row-3 {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.bem-aviv-novo-pedido .np-row-4 {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 100px;
+}
+
+@media (max-width: 767px) {
+  .bem-aviv-novo-pedido .np-row-3,
+  .bem-aviv-novo-pedido .np-row-4 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.bem-aviv-novo-pedido .np-search-wrap {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.bem-aviv-novo-pedido .np-search-inner {
+  position: relative;
+  flex: 1;
+}
+
+.bem-aviv-novo-pedido .np-search-inner svg {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--np-faint);
+  pointer-events: none;
+}
+
+.bem-aviv-novo-pedido .np-search-inner .np-input {
+  padding-left: 32px;
+}
+
+.bem-aviv-novo-pedido .np-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--np-blue);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.bem-aviv-novo-pedido .np-btn-primary:hover {
+  opacity: 0.9;
+}
+
+.bem-aviv-novo-pedido .np-btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.bem-aviv-novo-pedido .np-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  background: transparent;
+  border: 1px solid var(--np-border-strong);
+  color: var(--np-muted);
+  cursor: pointer;
+}
+
+.bem-aviv-novo-pedido .np-btn-ghost:hover {
+  background: var(--np-bg);
+}
+
+.bem-aviv-novo-pedido .np-qty-wrap {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--np-border-strong);
+  border-radius: 8px;
+  overflow: hidden;
+  height: 33px;
+}
+
+.bem-aviv-novo-pedido .np-qty-wrap button {
+  width: 28px;
+  border: none;
+  background: var(--np-bg);
+  cursor: pointer;
+  font-size: 16px;
+  color: var(--np-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bem-aviv-novo-pedido .np-qty-wrap input {
+  border: none;
+  border-left: 1px solid var(--np-border);
+  border-right: 1px solid var(--np-border);
+  border-radius: 0;
+  text-align: center;
+  width: 36px;
+  padding: 0;
+  height: 100%;
+  box-shadow: none;
+}
+
+.bem-aviv-novo-pedido .np-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  font-size: 11px;
+  color: var(--np-faint);
+  line-height: 1.55;
+  padding: 8px 10px;
+  background: var(--np-bg);
+  border-radius: 8px;
+}
+
+.bem-aviv-novo-pedido .np-items-wrap {
+  border: 1px solid var(--np-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.bem-aviv-novo-pedido .np-items-head,
+.bem-aviv-novo-pedido .np-item-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 60px 90px 90px 36px;
+  align-items: center;
+}
+
+.bem-aviv-novo-pedido .np-items-head {
+  background: var(--np-bg);
+  border-bottom: 1px solid var(--np-border);
+}
+
+.bem-aviv-novo-pedido .np-items-head span {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--np-faint);
+  padding: 7px 10px;
+  letter-spacing: 0.03em;
+}
+
+.bem-aviv-novo-pedido .np-items-head span:not(:first-child) {
+  text-align: right;
+}
+
+.bem-aviv-novo-pedido .np-item-row {
+  border-bottom: 1px solid var(--np-border);
+  font-size: 13px;
+}
+
+.bem-aviv-novo-pedido .np-item-row:last-child {
+  border-bottom: none;
+}
+
+.bem-aviv-novo-pedido .np-item-row > * {
+  padding: 8px 10px;
+}
+
+.bem-aviv-novo-pedido .np-item-row .np-cell-r {
+  text-align: right;
+}
+
+.bem-aviv-novo-pedido .np-item-name {
+  font-weight: 500;
+}
+
+.bem-aviv-novo-pedido .np-item-var {
+  font-size: 11px;
+  color: var(--np-faint);
+}
+
+.bem-aviv-novo-pedido .np-empty-items {
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--np-faint);
+  font-size: 13px;
+}
+
+.bem-aviv-novo-pedido .np-pay-opts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (max-width: 639px) {
+  .bem-aviv-novo-pedido .np-pay-opts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.bem-aviv-novo-pedido .np-pay-opt {
+  border: 1px solid var(--np-border-strong);
+  border-radius: 8px;
+  padding: 10px 8px;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.12s, background 0.12s;
+  background: var(--np-surface);
+}
+
+.bem-aviv-novo-pedido .np-pay-opt:hover {
+  background: var(--np-bg);
+}
+
+.bem-aviv-novo-pedido .np-pay-opt.sel {
+  border-color: var(--np-blue);
+  border-width: 1.5px;
+  background: var(--np-blue-light);
+}
+
+.bem-aviv-novo-pedido .np-pay-opt svg {
+  display: block;
+  margin: 0 auto 5px;
+  color: var(--np-muted);
+}
+
+.bem-aviv-novo-pedido .np-pay-opt.sel svg {
+  color: var(--np-blue);
+}
+
+.bem-aviv-novo-pedido .np-pay-opt span {
+  font-size: 11px;
+  color: var(--np-muted);
+  font-weight: 500;
+}
+
+.bem-aviv-novo-pedido .np-pay-opt.sel span {
+  color: var(--np-blue);
+}
+
+.bem-aviv-novo-pedido .np-divider {
+  height: 1px;
+  background: var(--np-border);
+}
+
+.bem-aviv-novo-pedido .np-sidebar-head {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--np-border);
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bem-aviv-novo-pedido .np-sidebar-body {
+  padding: 16px 18px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.bem-aviv-novo-pedido .np-sum-line {
+  display: flex;
+  justify-content: space-between;
+  padding: 7px 0;
+  font-size: 13px;
+  border-bottom: 1px solid var(--np-border);
+}
+
+.bem-aviv-novo-pedido .np-sum-line .lbl {
+  color: var(--np-muted);
+}
+
+.bem-aviv-novo-pedido .np-sum-line.disc .val {
+  color: var(--np-green);
+}
+
+.bem-aviv-novo-pedido .np-sum-total {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 0 14px;
+  border-top: 1px solid var(--np-border-strong);
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+.bem-aviv-novo-pedido .np-sum-total .val {
+  font-size: 18px;
+}
+
+.bem-aviv-novo-pedido .np-checklist-section {
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+.bem-aviv-novo-pedido .np-checklist-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--np-faint);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.bem-aviv-novo-pedido .np-checklist-box {
+  background: var(--np-bg);
+  border-radius: 8px;
+  padding: 11px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-bottom: 14px;
+}
+
+.bem-aviv-novo-pedido .np-cl-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.bem-aviv-novo-pedido .np-cl-item.ok {
+  color: var(--np-green);
+}
+
+.bem-aviv-novo-pedido .np-cl-item.pend {
+  color: var(--np-faint);
+}
+
+.bem-aviv-novo-pedido .np-btn-fin {
+  width: 100%;
+  padding: 11px;
+  border-radius: 8px;
+  background: var(--np-blue);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.bem-aviv-novo-pedido .np-btn-fin:hover {
+  background: #1d4ed8;
+}
+
+.bem-aviv-novo-pedido .np-btn-fin:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.bem-aviv-novo-pedido .np-btn-pdf {
+  width: 100%;
+  padding: 9px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid var(--np-border-strong);
+  color: var(--np-muted);
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.bem-aviv-novo-pedido .np-btn-pdf:hover {
+  background: var(--np-bg);
+}
+
+.bem-aviv-novo-pedido .np-btn-remove {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--np-faint);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin: 0 auto;
+}
+
+.bem-aviv-novo-pedido .np-btn-remove:hover {
+  color: #dc2626;
+}
+
+.bem-aviv-novo-pedido .np-searchable .np-select {
+  min-height: 33px;
+}
+
 .bem-aviv-novo-pedido .btn {
   @apply min-h-11 text-base font-semibold;
 }

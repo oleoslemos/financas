@@ -1,5 +1,18 @@
 import { useUser } from '@clerk/clerk-react'
-import { Box, ChevronLeft, CircleDollarSign, ClipboardList, List, Package, Search, ShoppingCart, Trash2 } from 'lucide-react'
+import {
+  Box,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  CircleDollarSign,
+  ClipboardList,
+  Home,
+  List,
+  Package,
+  Search,
+  ShoppingCart,
+  Trash2,
+} from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Badge } from '../components/ui/Badge'
@@ -183,12 +196,14 @@ function formatDiscountPercentInput(n: number) {
   return clampOrderDiscountPercent(n).toFixed(6).replace('.', ',')
 }
 
+type OrderStep = 'dados' | 'produtos' | 'pagamento' | 'revisao'
+
 export function BemAvivNovoPedidoPage() {
   const { user } = useUser()
   const supabase = useSupabase()
   const navigate = useNavigate()
   const location = useLocation()
-  const { activeCompanyId } = useCompany()
+  const { activeCompanyId, activeCompany } = useCompany()
   const { orderId: editOrderId } = useParams<{ orderId: string }>()
   const isEditMode = Boolean(editOrderId)
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
@@ -1021,51 +1036,93 @@ export function BemAvivNovoPedidoPage() {
   )
   const checklistOk = Object.values(checklist).every(Boolean)
 
-  return (
-    <div className="normal-case">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <Link
-            to="/bem-aviv/pedidos"
-            title="Voltar para lista"
-            aria-label="Voltar para lista"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-[#185FA5] shadow-sm transition-colors hover:bg-slate-50"
-          >
-            <ChevronLeft size={16} aria-hidden />
-          </Link>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-              {isEditMode ? 'Editar orçamento / pedido' : 'Novo pedido'}
-            </h1>
-            {isEditMode && loadedDocumentLabel ? (
-              <div className="mt-0.5 flex items-center gap-2">
-                <p className="text-sm text-slate-500">{loadedDocumentLabel}</p>
-                <button
-                  type="button"
-                  onClick={() => void deleteCurrentDocument()}
-                  disabled={deletingDocument}
-                  className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-red-600 disabled:opacity-50"
-                  title="Excluir documento"
-                  aria-label="Excluir documento"
-                >
-                  <Trash2 size={13} />
-                  {deletingDocument ? 'Excluindo...' : 'Excluir'}
-                </button>
-              </div>
-            ) : null}
-          </div>
-        </div>
-      </div>
+  const [activeStep, setActiveStep] = useState<OrderStep>('produtos')
+  const stepDadosDone = checklist.hasClient && checklist.hasOrderDate
+  const stepProdutosDone = checklist.hasItems
+  const stepPagamentoDone = checklist.hasValidInstallments && checklist.hasValidDownPayment
+  const companyBadge = activeCompany?.trade_name ?? 'Bem Aviv'
 
+  function scrollToStep(step: OrderStep) {
+    setActiveStep(step)
+    const id =
+      step === 'dados' ? 'np-sec-dados' : step === 'produtos' ? 'np-sec-produtos' : step === 'pagamento' ? 'np-sec-pagamento' : 'np-sec-revisao'
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  function tabClass(step: OrderStep, done: boolean) {
+    if (activeStep === step) return 'np-tab active'
+    if (done) return 'np-tab done'
+    return 'np-tab'
+  }
+
+  return (
+    <div className="bem-aviv-novo-pedido bem-aviv-novo-pedido-shell normal-case">
       {!supabase || !ownerUserId ? (
-        <p className="text-sm text-slate-600">Conectando…</p>
+        <p className="col-span-full p-6 text-sm text-slate-600">Conectando…</p>
       ) : loading || orderBootstrapping ? (
-        <p className="text-sm text-slate-500">{orderBootstrapping ? 'Carregando documento…' : 'Carregando catálogo…'}</p>
+        <p className="col-span-full p-6 text-sm text-slate-500">
+          {orderBootstrapping ? 'Carregando documento…' : 'Carregando catálogo…'}
+        </p>
       ) : orderLoadError ? (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">{orderLoadError}</div>
+        <div className="col-span-full m-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          {orderLoadError}
+        </div>
       ) : (
-        <form onSubmit={submit}>
-          <div className="bem-aviv-novo-pedido grid grid-cols-1 gap-6 lg:grid-cols-12 lg:gap-8">
+        <form onSubmit={submit} className="contents">
+          <header className="np-topbar">
+            <Link to="/bem-aviv/pedidos" className="np-back-btn" title="Voltar" aria-label="Voltar">
+              <ChevronLeft size={16} aria-hidden />
+            </Link>
+            <span className="np-page-title">{isEditMode ? 'Editar pedido' : 'Novo pedido'}</span>
+            {isEditMode && loadedDocumentLabel ? (
+              <span className="text-xs text-[var(--np-faint)]">({loadedDocumentLabel})</span>
+            ) : null}
+            <span className="np-badge">
+              <Home size={10} aria-hidden />
+              {companyBadge}
+            </span>
+            <nav className="np-breadcrumb" aria-label="Navegação">
+              <span>Hub</span>
+              <ChevronRight size={10} aria-hidden />
+              <Link to="/bem-aviv/pedidos" className="hover:text-[var(--np-text)]">
+                Pedidos e orçamentos
+              </Link>
+              <ChevronRight size={10} aria-hidden />
+              <span className="current">{isEditMode ? 'Editar' : 'Novo'}</span>
+            </nav>
+            {isEditMode ? (
+              <button
+                type="button"
+                onClick={() => void deleteCurrentDocument()}
+                disabled={deletingDocument}
+                className="ml-2 text-xs text-[var(--np-faint)] hover:text-red-600 disabled:opacity-50"
+                title="Excluir documento"
+              >
+                <Trash2 size={13} className="inline" /> {deletingDocument ? 'Excluindo…' : 'Excluir'}
+              </button>
+            ) : null}
+          </header>
+
+          <nav className="np-progress" aria-label="Progresso do pedido">
+            <button type="button" className={tabClass('dados', stepDadosDone)} onClick={() => scrollToStep('dados')}>
+              <span className="np-tab-num">{stepDadosDone ? <Check size={10} strokeWidth={3} /> : '1'}</span>
+              Dados gerais
+            </button>
+            <button type="button" className={tabClass('produtos', stepProdutosDone)} onClick={() => scrollToStep('produtos')}>
+              <span className="np-tab-num">{stepProdutosDone ? <Check size={10} strokeWidth={3} /> : '2'}</span>
+              Produtos
+            </button>
+            <button type="button" className={tabClass('pagamento', stepPagamentoDone)} onClick={() => scrollToStep('pagamento')}>
+              <span className="np-tab-num">{stepPagamentoDone ? <Check size={10} strokeWidth={3} /> : '3'}</span>
+              Pagamento
+            </button>
+            <button type="button" className={tabClass('revisao', checklistOk)} onClick={() => scrollToStep('revisao')}>
+              <span className="np-tab-num">{checklistOk ? <Check size={10} strokeWidth={3} /> : '4'}</span>
+              Revisão
+            </button>
+          </nav>
+
+          <main className="np-main">
             <div className="space-y-6 lg:col-span-5">
               <Card className="border-0 shadow-md ring-1 ring-slate-100/90">
                 <CardHeader className="border-b border-slate-100 pb-3">
@@ -1192,19 +1249,6 @@ export function BemAvivNovoPedidoPage() {
                         </ul>
                       ) : null}
                     </div>
-                    <Button
-                      type="button"
-                      className="h-12 shrink-0 px-6 sm:px-8"
-                      onClick={() => {
-                        if (!draftProductName) {
-                          alert('SELECIONE UM PRODUTO NA LISTA DE SUGESTÕES.')
-                          return
-                        }
-                        addLineFromDraft()
-                      }}
-                    >
-                      Adicionar
-                    </Button>
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-3">
@@ -1254,8 +1298,8 @@ export function BemAvivNovoPedidoPage() {
                         className="h-11 text-center"
                       />
                     </div>
-                    <Button type="button" variant="secondary" className="h-11" onClick={addLineFromDraft}>
-                      Incluir linha
+                    <Button type="button" className="h-11 px-6" onClick={addLineFromDraft}>
+                      Adicionar
                     </Button>
                   </div>
 
@@ -1602,7 +1646,7 @@ export function BemAvivNovoPedidoPage() {
                 </CardContent>
               </Card>
             </div>
-          </div>
+          </main>
         </form>
       )}
     </div>

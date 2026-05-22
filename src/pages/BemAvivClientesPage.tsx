@@ -91,7 +91,12 @@ function parseAgendamentoResult(result: string | null) {
   if (pipe > 0) {
     const status = raw.slice(0, pipe).toUpperCase()
     const summary = raw.slice(pipe + 1).trim()
-    if (status === 'PENDENTE' || status === 'CONCLUIDO' || status === 'CANCELADO') {
+    if (
+      status === 'PENDENTE' ||
+      status === 'CONCLUIDO' ||
+      status === 'CANCELADO' ||
+      status === 'REAGENDADO'
+    ) {
       return { status, summary }
     }
   }
@@ -559,7 +564,7 @@ export function BemAvivClientesPage() {
     }
     setScheduleModalSaving(true)
     try {
-      await cancelPendingAgendamentoRecords(scheduleModalClient.id)
+      await markPendingAgendamentoAsReagendado(scheduleModalClient.id)
       const { error } = await supabase
         .from('bem_aviv_clients')
         .update({
@@ -710,7 +715,7 @@ export function BemAvivClientesPage() {
     if (insertError) throw new Error(insertError.message)
   }
 
-  async function cancelPendingAgendamentoRecords(clientId: string) {
+  async function markPendingAgendamentoAsReagendado(clientId: string) {
     if (!supabase || !activeCompanyId) return
     const rows = await refetchHistoryModalRows(clientId)
     for (const r of rows) {
@@ -720,7 +725,7 @@ export function BemAvivClientesPage() {
       let { error } = await supabase
         .from('bem_aviv_client_followups')
         .update({
-          result: encodeAgendamentoResult('CANCELADO', parsed.summary),
+          result: encodeAgendamentoResult('REAGENDADO', parsed.summary),
           updated_by_user_id: user?.id ?? null,
           updated_by_name: followupActorName,
         })
@@ -729,7 +734,7 @@ export function BemAvivClientesPage() {
       if (error && isMissingAuditColumnError(error.message)) {
         const fallback = await supabase
           .from('bem_aviv_client_followups')
-          .update({ result: encodeAgendamentoResult('CANCELADO', parsed.summary) })
+          .update({ result: encodeAgendamentoResult('REAGENDADO', parsed.summary) })
           .eq('id', r.id)
           .eq('company_id', activeCompanyId)
         error = fallback.error
@@ -1057,7 +1062,7 @@ export function BemAvivClientesPage() {
         }
       } else {
         if (scheduleInlineTarget === 'new') {
-          await cancelPendingAgendamentoRecords(historyModalClient.id)
+          await markPendingAgendamentoAsReagendado(historyModalClient.id)
         }
         const { error: clientError } = await supabase
           .from('bem_aviv_clients')
@@ -2126,10 +2131,11 @@ export function BemAvivClientesPage() {
                                 'rounded-full px-2 py-0.5 text-xs font-semibold',
                                 item.status === 'PENDENTE' && 'bg-amber-100 text-amber-800',
                                 item.status === 'CONCLUIDO' && 'bg-emerald-100 text-emerald-800',
+                                item.status === 'REAGENDADO' && 'bg-sky-100 text-sky-800',
                                 item.status === 'CANCELADO' && 'bg-slate-100 text-slate-600',
                               )}
                             >
-                              {item.status}
+                              {item.status === 'REAGENDADO' ? 'Reagendado' : item.status}
                             </span>
                           </td>
                           <td className="px-3 py-2 text-slate-700">{r.created_by_name || '—'}</td>
