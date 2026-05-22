@@ -197,6 +197,409 @@ function formatDiscountPercentInput(n: number) {
 
 type OrderStep = 'dados' | 'produtos' | 'pagamento' | 'revisao'
 
+interface LocalInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> {
+  value: string
+  onValueChange: (val: string) => void
+}
+
+function LocalInput({ value, onValueChange, className, ...props }: LocalInputProps) {
+  const [localVal, setLocalVal] = useState(value)
+
+  useEffect(() => {
+    setLocalVal(value)
+  }, [value])
+
+  const handleBlur = () => {
+    if (localVal !== value) {
+      onValueChange(localVal)
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      e.currentTarget.blur()
+    }
+    props.onKeyDown?.(e)
+  }
+
+  return (
+    <input
+      {...props}
+      className={className}
+      value={localVal}
+      onChange={(e) => setLocalVal(e.target.value)}
+      onBlur={handleBlur}
+      onKeyDown={handleKeyDown}
+    />
+  )
+}
+
+interface OrderItemRowProps {
+  item: LinhaItem
+  rowNet: number
+  netPrice: number
+  hasDiscountOrDownPayment: boolean
+  onRemove: () => void
+  onUpdateQty: (qty: number) => void
+  onUpdateUnitPrice: (price: number) => void
+}
+
+function OrderItemRow({
+  item,
+  rowNet,
+  netPrice,
+  hasDiscountOrDownPayment,
+  onRemove,
+  onUpdateQty,
+  onUpdateUnitPrice,
+}: OrderItemRowProps) {
+  const [localQty, setLocalQty] = useState(String(item.quantity))
+  const [localPrice, setLocalPrice] = useState(formatMoneyInput(item.unit_price))
+
+  useEffect(() => {
+    setLocalQty(String(item.quantity))
+  }, [item.quantity])
+
+  useEffect(() => {
+    setLocalPrice(formatMoneyInput(item.unit_price))
+  }, [item.unit_price])
+
+  const handleQtyBlur = () => {
+    const qty = Math.max(1, parseInt(localQty.replace(/\D/g, ''), 10) || 1)
+    onUpdateQty(qty)
+    setLocalQty(String(qty))
+  }
+
+  const handlePriceBlur = () => {
+    const u = clampMoney(parseMoney(localPrice))
+    if (!Number.isFinite(u) || u <= 0) {
+      setLocalPrice(formatMoneyInput(item.unit_price))
+      return
+    }
+    onUpdateUnitPrice(u)
+    setLocalPrice(formatMoneyInput(u))
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      e.currentTarget.blur()
+    }
+  }
+
+  return (
+    <div className="np-item-row" role="row">
+      <div>
+        <div className="np-item-name">{item.name}</div>
+        <div className="np-item-var">
+          {item.kind === 'KIT' ? 'Kit' : 'Catálogo'}
+          {hasDiscountOrDownPayment
+            ? ` · Bruto ${formatBRL(rowNet)} · Líquido ${formatBRL(netPrice)}`
+            : ''}
+        </div>
+      </div>
+      <input
+        className="np-input"
+        inputMode="numeric"
+        value={localQty}
+        onChange={(e) => setLocalQty(e.target.value)}
+        onBlur={handleQtyBlur}
+        onKeyDown={handleKeyDown}
+        aria-label={`Quantidade ${item.name}`}
+      />
+      <input
+        className="np-input np-price"
+        inputMode="decimal"
+        value={localPrice}
+        onChange={(e) => setLocalPrice(e.target.value)}
+        onBlur={handlePriceBlur}
+        onKeyDown={handleKeyDown}
+        aria-label={`Preço unitário ${item.name}`}
+      />
+      <span className="np-cell-r tabular-nums">{formatBRL(netPrice)}</span>
+      <button
+        type="button"
+        className="np-btn-remove"
+        aria-label="Remover"
+        onClick={onRemove}
+      >
+        <Trash2 size={14} aria-hidden />
+      </button>
+    </div>
+  )
+}
+
+
+interface ProductSelectorProps {
+  catalogForTable: OfferProduct[]
+  selectedPriceTableId: string
+  priceLookup: Map<string, number>
+  onAdd: (product: OfferProduct, variationCode: string, qty: number) => void
+}
+
+function ProductSelector({
+  catalogForTable,
+  selectedPriceTableId,
+  priceLookup,
+  onAdd,
+}: ProductSelectorProps) {
+  const [draftProductName, setDraftProductName] = useState('')
+  const [draftProductType, setDraftProductType] = useState('')
+  const [draftVariationCode, setDraftVariationCode] = useState('')
+  const [draftQty, setDraftQty] = useState('1')
+  const [productQuery, setProductQuery] = useState('')
+  const [comboOpen, setComboOpen] = useState(false)
+  const comboRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (!comboRef.current?.contains(e.target as Node)) setComboOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [])
+
+  const prevPriceTableRef = useRef(selectedPriceTableId)
+  useEffect(() => {
+    if (prevPriceTableRef.current !== selectedPriceTableId) {
+      prevPriceTableRef.current = selectedPriceTableId
+      setDraftProductName('')
+      setDraftProductType('')
+      setDraftVariationCode('')
+      setProductQuery('')
+      setDraftQty('1')
+    }
+  }, [selectedPriceTableId])
+
+  const uniqueProductNames = useMemo(() => {
+    const byKey = new Map<string, string>()
+    for (const p of catalogForTable) {
+      const name = (p.name ?? '').trim()
+      if (!name) continue
+      const key = normalizeTextKey(name)
+      if (!byKey.has(key)) byKey.set(key, name)
+    }
+    return [...byKey.values()].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }))
+  }, [catalogForTable])
+
+  const productSuggestions = useMemo(() => {
+    const q = normalizeTextKey(productQuery)
+    if (!q) return uniqueProductNames.slice(0, 12)
+    return uniqueProductNames.filter((n) => normalizeTextKey(n).includes(q)).slice(0, 12)
+  }, [productQuery, uniqueProductNames])
+
+  const productTypeOptions = useMemo(() => {
+    if (!draftProductName) return [] as string[]
+    const types = new Set<string>()
+    const selectedNameKey = normalizeTextKey(draftProductName)
+    for (const p of catalogForTable) {
+      if (normalizeTextKey(p.name) !== selectedNameKey) continue
+      types.add((p.product_type ?? '').trim() || '—')
+    }
+    return [...types].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }))
+  }, [catalogForTable, draftProductName])
+
+  const selectedOffer = useMemo(
+    () =>
+      catalogForTable.find((p) => {
+        if (normalizeTextKey(p.name) !== normalizeTextKey(draftProductName)) return false
+        const t = (p.product_type ?? '').trim() || '—'
+        return t === draftProductType
+      }) ?? null,
+    [draftProductName, draftProductType, catalogForTable],
+  )
+
+  const variationOptions = useMemo(() => {
+    if (!selectedOffer || !selectedPriceTableId) return [] as OfferVariation[]
+    const vars = normalizePayload(selectedOffer.payload).variations ?? []
+    return vars.map((v) => ({
+      ...v,
+      price: resolveTableUnitPrice(selectedPriceTableId, selectedOffer.id, v.code, v.price, priceLookup),
+    }))
+  }, [selectedOffer, selectedPriceTableId, priceLookup])
+
+  const productSelectOptions = useMemo(
+    () => uniqueProductNames.map((name) => ({ value: name, label: name })),
+    [uniqueProductNames],
+  )
+  const typeSelectOptions = useMemo(
+    () => productTypeOptions.map((t) => ({ value: t, label: t })),
+    [productTypeOptions],
+  )
+  const variationSelectOptions = useMemo(
+    () =>
+      variationOptions.map((v) => ({
+        value: v.code,
+        label: `[${v.code}] ${v.dimensions || '—'} — ${formatBRL(v.price)}`,
+      })),
+    [variationOptions],
+  )
+
+  useEffect(() => {
+    setDraftProductType('')
+    setDraftVariationCode('')
+  }, [draftProductName])
+
+  useEffect(() => {
+    if (productTypeOptions.length === 1) {
+      setDraftProductType(productTypeOptions[0])
+    }
+  }, [productTypeOptions])
+
+  useEffect(() => {
+    setDraftVariationCode('')
+  }, [draftProductType])
+
+  useEffect(() => {
+    if (variationOptions.length === 1) {
+      setDraftVariationCode(variationOptions[0].code)
+    }
+  }, [variationOptions])
+
+  const handleAdd = () => {
+    if (!selectedPriceTableId) {
+      alert('SELECIONE UMA TABELA DE PREÇO.')
+      return
+    }
+    const p = selectedOffer
+    if (!p) {
+      alert('SELECIONE PRODUTO E TIPO DO CATÁLOGO.')
+      return
+    }
+    const qty = Math.max(1, parseInt(draftQty.replace(/\D/g, ''), 10) || 1)
+    const vars = variationOptions
+    const v = vars.find((x) => x.code === draftVariationCode)
+    if (vars.length > 0 && !v) {
+      alert('SELECIONE A VARIAÇÃO (CÓDIGO / DIMENSÕES).')
+      return
+    }
+    onAdd(p, draftVariationCode, qty)
+    setDraftProductName('')
+    setDraftProductType('')
+    setDraftVariationCode('')
+    setDraftQty('1')
+    setProductQuery('')
+  }
+
+  return (
+    <>
+      <div ref={comboRef} className="np-search-wrap">
+        <div className="np-search-inner">
+          <Search size={14} aria-hidden />
+          <input
+            type="text"
+            className="np-input"
+            value={productQuery}
+            onChange={(e) => {
+              setProductQuery(e.target.value)
+              setComboOpen(true)
+            }}
+            onFocus={() => setComboOpen(true)}
+            placeholder="Buscar por nome, linha ou tipo…"
+            autoComplete="off"
+            disabled={!selectedPriceTableId || catalogForTable.length === 0}
+            aria-label="Buscar produto"
+          />
+          {comboOpen && productSuggestions.length > 0 ? (
+            <ul
+              className="absolute left-0 right-0 top-full z-20 mt-1 max-h-56 overflow-auto rounded-lg border border-[var(--np-border)] bg-white py-1 shadow-lg"
+              role="listbox"
+            >
+              {productSuggestions.map((name) => (
+                <li key={name}>
+                  <button
+                    type="button"
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-[var(--np-bg)]"
+                    onClick={() => {
+                      setDraftProductName(name)
+                      setProductQuery(name)
+                      setComboOpen(false)
+                    }}
+                  >
+                    {name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+        <button type="button" className="np-btn-primary shrink-0" onClick={handleAdd}>
+          <Plus size={14} aria-hidden />
+          Adicionar
+        </button>
+      </div>
+
+      <div className="np-row-4">
+        <div className="np-field np-searchable">
+          <label className="np-label">Produto</label>
+          <SearchableSelect
+            value={draftProductName}
+            onChange={(v) => {
+              setDraftProductName(v)
+              setProductQuery(v)
+            }}
+            options={productSelectOptions}
+            placeholder="— Catálogo —"
+            aria-label="Produto"
+          />
+        </div>
+        <div className="np-field np-searchable">
+          <label className="np-label">Tipo</label>
+          <SearchableSelect
+            value={draftProductType}
+            onChange={setDraftProductType}
+            options={typeSelectOptions}
+            placeholder="—"
+            disabled={!draftProductName}
+            aria-label="Tipo"
+          />
+        </div>
+        <div className="np-field np-searchable">
+          <label className="np-label">Variação</label>
+          <SearchableSelect
+            value={draftVariationCode}
+            onChange={setDraftVariationCode}
+            options={variationSelectOptions}
+            placeholder="—"
+            disabled={!selectedOffer || variationOptions.length === 0}
+            aria-label="Variação"
+          />
+        </div>
+        <div className="np-field">
+          <label className="np-label">Quantidade</label>
+          <div className="np-qty-wrap">
+            <button
+              type="button"
+              aria-label="Diminuir"
+              onClick={() =>
+                setDraftQty(String(Math.max(1, (parseInt(draftQty, 10) || 1) - 1)))
+              }
+            >
+              <Minus size={14} aria-hidden />
+            </button>
+            <input
+              inputMode="numeric"
+              value={draftQty}
+              onChange={(e) => setDraftQty(e.target.value)}
+              aria-label="Quantidade"
+            />
+            <button
+              type="button"
+              aria-label="Aumentar"
+              onClick={() =>
+                setDraftQty(String(Math.max(1, (parseInt(draftQty, 10) || 1) + 1)))
+              }
+            >
+              <Plus size={14} aria-hidden />
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
 export function BemAvivNovoPedidoPage() {
   const { user } = useUser()
   const supabase = useSupabase()
@@ -220,7 +623,6 @@ export function BemAvivNovoPedidoPage() {
   const [tableItems, setTableItems] = useState<OfferPriceTableItemRow[]>([])
   const [selectedPriceTableId, setSelectedPriceTableId] = useState('')
   const editTableInferredRef = useRef(false)
-  const prevPriceTableForDraftResetRef = useRef<string | null>(null)
 
   const [form, setForm] = useState(() => {
     const st = location.state as NovoPedidoNavState | null
@@ -243,30 +645,8 @@ export function BemAvivNovoPedidoPage() {
     }
   })
 
-  const [draftProductName, setDraftProductName] = useState('')
-  const [draftProductType, setDraftProductType] = useState('')
-  const [draftVariationCode, setDraftVariationCode] = useState('')
-  const [draftQty, setDraftQty] = useState('1')
-  const [productQuery, setProductQuery] = useState('')
-  const [comboOpen, setComboOpen] = useState(false)
-  const comboRef = useRef<HTMLDivElement>(null)
-
   const [lineItems, setLineItems] = useState<LinhaItem[]>([])
-  const [unitPriceStrByKey, setUnitPriceStrByKey] = useState<Record<string, string>>({})
   const [liquidTotalDraft, setLiquidTotalDraft] = useState('')
-
-  useEffect(() => {
-    setUnitPriceStrByKey((prev) => {
-      const next: Record<string, string> = { ...prev }
-      for (const l of lineItems) {
-        if (next[l.key] === undefined) next[l.key] = formatMoneyInput(l.unit_price)
-      }
-      for (const k of Object.keys(next)) {
-        if (!lineItems.some((li) => li.key === k)) delete next[k]
-      }
-      return next
-    })
-  }, [lineItems])
 
   const load = useCallback(async () => {
     if (!supabase || !ownerUserId || !activeCompanyId) {
@@ -361,22 +741,6 @@ export function BemAvivNovoPedidoPage() {
     editTableInferredRef.current = true
     if (inferred) setSelectedPriceTableId(inferred)
   }, [isEditMode, orderBootstrapping, lineItems, priceTables, productIdsByTable])
-
-  useEffect(() => {
-    if (!selectedPriceTableId) return
-    if (prevPriceTableForDraftResetRef.current === null) {
-      prevPriceTableForDraftResetRef.current = selectedPriceTableId
-      return
-    }
-    if (prevPriceTableForDraftResetRef.current !== selectedPriceTableId) {
-      prevPriceTableForDraftResetRef.current = selectedPriceTableId
-      setDraftProductName('')
-      setDraftProductType('')
-      setDraftVariationCode('')
-      setProductQuery('')
-      setDraftQty('1')
-    }
-  }, [selectedPriceTableId])
 
   useEffect(() => {
     if (!editOrderId || !supabase || !ownerUserId || !activeCompanyId) {
@@ -498,99 +862,6 @@ export function BemAvivNovoPedidoPage() {
     }
   }, [editOrderId, supabase, ownerUserId, loading, activeCompanyId])
 
-  useEffect(() => {
-    function onDocClick(e: MouseEvent) {
-      if (!comboRef.current?.contains(e.target as Node)) setComboOpen(false)
-    }
-    document.addEventListener('mousedown', onDocClick)
-    return () => document.removeEventListener('mousedown', onDocClick)
-  }, [])
-
-  const uniqueProductNames = useMemo(() => {
-    const byKey = new Map<string, string>()
-    for (const p of catalogForTable) {
-      const name = (p.name ?? '').trim()
-      if (!name) continue
-      const key = normalizeTextKey(name)
-      if (!byKey.has(key)) byKey.set(key, name)
-    }
-    return [...byKey.values()].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }))
-  }, [catalogForTable])
-
-  const productSuggestions = useMemo(() => {
-    const q = normalizeTextKey(productQuery)
-    if (!q) return uniqueProductNames.slice(0, 12)
-    return uniqueProductNames.filter((n) => normalizeTextKey(n).includes(q)).slice(0, 12)
-  }, [productQuery, uniqueProductNames])
-
-  const productTypeOptions = useMemo(() => {
-    if (!draftProductName) return [] as string[]
-    const types = new Set<string>()
-    const selectedNameKey = normalizeTextKey(draftProductName)
-    for (const p of catalogForTable) {
-      if (normalizeTextKey(p.name) !== selectedNameKey) continue
-      types.add((p.product_type ?? '').trim() || '—')
-    }
-    return [...types].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }))
-  }, [catalogForTable, draftProductName])
-
-  const selectedOffer = useMemo(
-    () =>
-      catalogForTable.find((p) => {
-        if (normalizeTextKey(p.name) !== normalizeTextKey(draftProductName)) return false
-        const t = (p.product_type ?? '').trim() || '—'
-        return t === draftProductType
-      }) ?? null,
-    [draftProductName, draftProductType, catalogForTable],
-  )
-
-  const variationOptions = useMemo(() => {
-    if (!selectedOffer || !selectedPriceTableId) return [] as OfferVariation[]
-    const vars = normalizePayload(selectedOffer.payload).variations ?? []
-    return vars.map((v) => ({
-      ...v,
-      price: resolveTableUnitPrice(selectedPriceTableId, selectedOffer.id, v.code, v.price, priceLookup),
-    }))
-  }, [selectedOffer, selectedPriceTableId, priceLookup])
-
-  const productSelectOptions = useMemo(
-    () => uniqueProductNames.map((name) => ({ value: name, label: name })),
-    [uniqueProductNames],
-  )
-  const typeSelectOptions = useMemo(
-    () => productTypeOptions.map((t) => ({ value: t, label: t })),
-    [productTypeOptions],
-  )
-  const variationSelectOptions = useMemo(
-    () =>
-      variationOptions.map((v) => ({
-        value: v.code,
-        label: `[${v.code}] ${v.dimensions || '—'} — ${formatBRL(v.price)}`,
-      })),
-    [variationOptions],
-  )
-
-  useEffect(() => {
-    setDraftProductType('')
-    setDraftVariationCode('')
-  }, [draftProductName])
-
-  useEffect(() => {
-    if (productTypeOptions.length === 1) {
-      setDraftProductType(productTypeOptions[0])
-    }
-  }, [productTypeOptions])
-
-  useEffect(() => {
-    setDraftVariationCode('')
-  }, [draftProductType])
-
-  useEffect(() => {
-    if (variationOptions.length === 1) {
-      setDraftVariationCode(variationOptions[0].code)
-    }
-  }, [variationOptions])
-
   const sumLinesNet = useMemo(
     () => lineItems.reduce((acc, l) => acc + l.quantity * l.unit_price, 0),
     [lineItems],
@@ -605,7 +876,6 @@ export function BemAvivNovoPedidoPage() {
   const freightAmountNum = useMemo(() => clampMoney(parseMoney(form.freight_amount || '0')), [form.freight_amount])
   const otherExpensesNum = useMemo(() => clampMoney(parseMoney(form.other_expenses || '0')), [form.other_expenses])
   const linesGrossTotal = sumLinesNet
-  /** Entrada pode ser usada também em «À vista» (ex.: parte no ato, saldo na entrega da mercadoria). */
   const downPaymentApplied = downPaymentNum
 
   const orderDiscount = useMemo(() => {
@@ -661,7 +931,7 @@ export function BemAvivNovoPedidoPage() {
     form.discount_percent,
   ])
 
-  function applyLiquidRawToDiscount(raw: string) {
+  const applyLiquidRawToDiscount = useCallback((raw: string) => {
     if (lineItems.length === 0 || sumLinesNet <= 0) return
     const targetLiquid = clampMoney(parseMoney(raw))
     if (targetLiquid < 0) return
@@ -669,7 +939,6 @@ export function BemAvivNovoPedidoPage() {
     const F = freightAmountNum
     const O = otherExpensesNum
     const entrada = downPaymentNum
-    /** Desconto em R$ necessário para atingir o líquido, mantendo frete e outras despesas atuais. */
     const discNeeded = roundMoneySigned(G + F + O - entrada - targetLiquid)
     if (discNeeded > G + 0.000_001) {
       alert('Valor líquido alvo é inválido para os itens e encargos atuais.')
@@ -684,7 +953,6 @@ export function BemAvivNovoPedidoPage() {
       setLiquidTotalDraft(formatMoneyInput(targetLiquid))
       return
     }
-    /** Total desejado acima do subtotal + frete − entrada: não usar desconto negativo — usar outras despesas. */
     const newOther = roundMoneySigned(targetLiquid - G - F + entrada)
     if (newOther < -0.000_001) {
       alert('Não foi possível ajustar com outras despesas e desconto zerado.')
@@ -696,19 +964,18 @@ export function BemAvivNovoPedidoPage() {
       other_expenses: newOther > 0 ? formatMoneyInput(newOther) : '',
     }))
     setLiquidTotalDraft(formatMoneyInput(targetLiquid))
-  }
+  }, [lineItems.length, sumLinesNet, freightAmountNum, otherExpensesNum, downPaymentNum])
 
-  function addLineFromDraft() {
-    if (!selectedPriceTableId) {
-      alert('SELECIONE UMA TABELA DE PREÇO.')
+  const handleAddProductLine = useCallback((p: OfferProduct, variationCode: string, qty: number) => {
+    const vars = normalizePayload(p.payload).variations ?? []
+    const v = vars.find((x) => x.code === variationCode)
+    if (!v) return
+
+    const unit = resolveTableUnitPrice(selectedPriceTableId, p.id, variationCode, v.price, priceLookup)
+    if (!Number.isFinite(unit) || unit <= 0) {
+      alert('PREÇO INVÁLIDO NO CATÁLOGO.')
       return
     }
-    const p = selectedOffer
-    if (!p) {
-      alert('SELECIONE PRODUTO E TIPO DO CATÁLOGO.')
-      return
-    }
-    const qty = Math.max(1, parseInt(draftQty.replace(/\D/g, ''), 10) || 1)
 
     if (p.pricing_mode === 'KIT') {
       const payload = normalizePayload(p.payload)
@@ -717,43 +984,22 @@ export function BemAvivNovoPedidoPage() {
         alert('ESTE KIT NÃO TEM ITENS VÁLIDOS NO CADASTRO.')
         return
       }
-      const vars = variationOptions
-      const v = vars.find((x) => x.code === draftVariationCode)
-      if (vars.length > 0 && !v) {
-        alert('SELECIONE A VARIAÇÃO (CÓDIGO / DIMENSÕES).')
-        return
-      }
-      if (vars.length === 0) {
-        alert('ESTE KIT NÃO TEM PREÇO VÁLIDO CADASTRADO.')
-        return
-      }
-      const kitUnit = Number(v!.price)
-      if (!Number.isFinite(kitUnit) || kitUnit <= 0) {
-        alert('PREÇO DO KIT INVÁLIDO.')
-        return
-      }
 
-      // Em ORÇAMENTO, mostrar o KIT como item único para facilitar simulações ao cliente.
       if (form.document_type === 'ORCAMENTO') {
-        const dimPart = v!.dimensions ? ` — ${v!.dimensions}` : ''
-        const descName = `${p.name} [${v!.code}]${dimPart}`
+        const dimPart = v.dimensions ? ` — ${v.dimensions}` : ''
+        const descName = `${p.name} [${v.code}]${dimPart}`
         setLineItems((prev) => [
           ...prev,
           {
             key: newLineKey(),
             kind: 'KIT',
             offer_product_id: p.id,
-            variation_code: v!.code,
+            variation_code: v.code,
             name: descName,
-            unit_price: kitUnit,
+            unit_price: unit,
             quantity: qty,
           },
         ])
-        setDraftProductName('')
-        setDraftProductType('')
-        setDraftVariationCode('')
-        setDraftQty('1')
-        setProductQuery('')
         return
       }
 
@@ -769,8 +1015,8 @@ export function BemAvivNovoPedidoPage() {
           )
           return
         }
-        const unit = resolveTableUnitPrice(selectedPriceTableId, comp.id, kl.variation_code, vRaw.price, priceLookup)
-        if (!Number.isFinite(unit) || unit <= 0) {
+        const compUnit = resolveTableUnitPrice(selectedPriceTableId, comp.id, kl.variation_code, vRaw.price, priceLookup)
+        if (!Number.isFinite(compUnit) || compUnit <= 0) {
           alert(
             `KIT COM ITEM INVÁLIDO (${comp?.name ?? 'PRODUTO REMOVIDO'}). ABRA O CADASTRO DO KIT EM PRODUTOS (CATÁLOGO) E CORRIJA.`,
           )
@@ -785,58 +1031,41 @@ export function BemAvivNovoPedidoPage() {
           offer_product_id: comp.id,
           variation_code: vRaw.code,
           name: descName,
-          unit_price: unit,
+          unit_price: compUnit,
           quantity: lineQty,
         })
       }
       setLineItems((prev) => [...prev, ...exploded])
-      setDraftProductName('')
-      setDraftProductType('')
-      setDraftVariationCode('')
-      setDraftQty('1')
-      setProductQuery('')
       return
     }
 
-    const vars = variationOptions
-    const v = vars.find((x) => x.code === draftVariationCode)
-    if (vars.length > 0 && !v) {
-      alert('SELECIONE A VARIAÇÃO (CÓDIGO / DIMENSÕES).')
-      return
-    }
-    if (vars.length === 0) {
-      alert('ESTE PRODUTO NÃO TEM VARIAÇÕES CADASTRADAS.')
-      return
-    }
-    const unit = Number(v!.price)
-    if (!Number.isFinite(unit) || unit <= 0) {
-      alert('PREÇO DA VARIAÇÃO INVÁLIDO.')
-      return
-    }
-    const dimPart = v!.dimensions ? ` — ${v!.dimensions}` : ''
-    const descName = `${p.name} [${v!.code}]${dimPart}`
+    const dimPart = v.dimensions ? ` — ${v.dimensions}` : ''
+    const descName = `${p.name} [${v.code}]${dimPart}`
     setLineItems((prev) => [
       ...prev,
       {
         key: newLineKey(),
         kind: 'PRODUCT',
         offer_product_id: p.id,
-        variation_code: v!.code,
+        variation_code: v.code,
         name: descName,
         unit_price: unit,
         quantity: qty,
       },
     ])
-    setDraftProductName('')
-    setDraftProductType('')
-    setDraftVariationCode('')
-    setDraftQty('1')
-    setProductQuery('')
-  }
+  }, [selectedPriceTableId, priceLookup, form.document_type, catalogForTable])
 
-  function removeLine(key: string) {
+  const removeLine = useCallback((key: string) => {
     setLineItems((prev) => prev.filter((l) => l.key !== key))
-  }
+  }, [])
+
+  const handleUpdateLineQty = useCallback((key: string, qty: number) => {
+    setLineItems((prev) => prev.map((l) => (l.key !== key ? l : { ...l, quantity: qty })))
+  }, [])
+
+  const handleUpdateLineUnitPrice = useCallback((key: string, price: number) => {
+    setLineItems((prev) => prev.map((l) => (l.key !== key ? l : { ...l, unit_price: price })))
+  }, [])
 
   async function deleteCurrentDocument() {
     if (!supabase || !ownerUserId || !activeCompanyId || !editOrderId || !isEditMode || deletingDocument) return
@@ -859,11 +1088,6 @@ export function BemAvivNovoPedidoPage() {
       return
     }
     navigate('/bem-aviv/pedidos')
-  }
-
-  function updateLineQty(key: string, qtyStr: string) {
-    const qty = Math.max(1, parseInt(qtyStr.replace(/\D/g, ''), 10) || 1)
-    setLineItems((prev) => prev.map((l) => (l.key !== key ? l : { ...l, quantity: qty })))
   }
 
   async function submit(e: React.FormEvent) {
@@ -1183,12 +1407,12 @@ export function BemAvivNovoPedidoPage() {
                     <label className="np-label" htmlFor="np-obs">
                       Observações
                     </label>
-                    <input
+                    <LocalInput
                       id="np-obs"
                       type="text"
                       className="np-input"
                       value={form.notes}
-                      onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                      onValueChange={(val) => setForm((f) => ({ ...f, notes: val }))}
                       placeholder="Ex.: entrega expressa"
                     />
                   </div>
@@ -1233,118 +1457,12 @@ export function BemAvivNovoPedidoPage() {
                   </select>
                 </div>
 
-                <div ref={comboRef} className="np-search-wrap">
-                  <div className="np-search-inner">
-                    <Search size={14} aria-hidden />
-                    <input
-                      type="text"
-                      className="np-input"
-                      value={productQuery}
-                      onChange={(e) => {
-                        setProductQuery(e.target.value)
-                        setComboOpen(true)
-                      }}
-                      onFocus={() => setComboOpen(true)}
-                      placeholder="Buscar por nome, linha ou tipo…"
-                      autoComplete="off"
-                      disabled={!selectedPriceTableId || catalogForTable.length === 0}
-                      aria-label="Buscar produto"
-                    />
-                    {comboOpen && productSuggestions.length > 0 ? (
-                      <ul
-                        className="absolute left-0 right-0 top-full z-20 mt-1 max-h-56 overflow-auto rounded-lg border border-[var(--np-border)] bg-white py-1 shadow-lg"
-                        role="listbox"
-                      >
-                        {productSuggestions.map((name) => (
-                          <li key={name}>
-                            <button
-                              type="button"
-                              className="w-full px-3 py-2 text-left text-sm hover:bg-[var(--np-bg)]"
-                              onClick={() => {
-                                setDraftProductName(name)
-                                setProductQuery(name)
-                                setComboOpen(false)
-                              }}
-                            >
-                              {name}
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </div>
-                  <button type="button" className="np-btn-primary shrink-0" onClick={addLineFromDraft}>
-                    <Plus size={14} aria-hidden />
-                    Adicionar
-                  </button>
-                </div>
-
-                <div className="np-row-4">
-                  <div className="np-field np-searchable">
-                    <label className="np-label">Produto</label>
-                    <SearchableSelect
-                      value={draftProductName}
-                      onChange={(v) => {
-                        setDraftProductName(v)
-                        setProductQuery(v)
-                      }}
-                      options={productSelectOptions}
-                      placeholder="— Catálogo —"
-                      aria-label="Produto"
-                    />
-                  </div>
-                  <div className="np-field np-searchable">
-                    <label className="np-label">Tipo</label>
-                    <SearchableSelect
-                      value={draftProductType}
-                      onChange={setDraftProductType}
-                      options={typeSelectOptions}
-                      placeholder="—"
-                      disabled={!draftProductName}
-                      aria-label="Tipo"
-                    />
-                  </div>
-                  <div className="np-field np-searchable">
-                    <label className="np-label">Variação</label>
-                    <SearchableSelect
-                      value={draftVariationCode}
-                      onChange={setDraftVariationCode}
-                      options={variationSelectOptions}
-                      placeholder="—"
-                      disabled={!selectedOffer || variationOptions.length === 0}
-                      aria-label="Variação"
-                    />
-                  </div>
-                  <div className="np-field">
-                    <label className="np-label">Quantidade</label>
-                    <div className="np-qty-wrap">
-                      <button
-                        type="button"
-                        aria-label="Diminuir"
-                        onClick={() =>
-                          setDraftQty(String(Math.max(1, (parseInt(draftQty, 10) || 1) - 1)))
-                        }
-                      >
-                        <Minus size={14} aria-hidden />
-                      </button>
-                      <input
-                        inputMode="numeric"
-                        value={draftQty}
-                        onChange={(e) => setDraftQty(e.target.value)}
-                        aria-label="Quantidade"
-                      />
-                      <button
-                        type="button"
-                        aria-label="Aumentar"
-                        onClick={() =>
-                          setDraftQty(String(Math.max(1, (parseInt(draftQty, 10) || 1) + 1)))
-                        }
-                      >
-                        <Plus size={14} aria-hidden />
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                <ProductSelector
+                  catalogForTable={catalogForTable}
+                  selectedPriceTableId={selectedPriceTableId}
+                  priceLookup={priceLookup}
+                  onAdd={handleAddProductLine}
+                />
 
                 <p className="np-hint">
                   Produtos em modo <strong>kit</strong> geram uma linha por item do catálogo, com quantidade = (qtd do kit) × (qtd de
@@ -1382,51 +1500,19 @@ export function BemAvivNovoPedidoPage() {
                   ) : (
                     lineItems.map((l) => {
                       const rowNet = clampMoney(l.quantity * l.unit_price)
+                      const netPrice = lineNetByKey[l.key] ?? rowNet
+                      const hasDiscountOrDownPayment = (lineOrderDiscountByKey[l.key] ?? 0) > 0 || downPaymentApplied > 0
                       return (
-                        <div key={l.key} className="np-item-row" role="row">
-                          <div>
-                            <div className="np-item-name">{l.name}</div>
-                            <div className="np-item-var">
-                              {l.kind === 'KIT' ? 'Kit' : 'Catálogo'}
-                              {(lineOrderDiscountByKey[l.key] ?? 0) > 0 || downPaymentApplied > 0
-                                ? ` · Líquido ${formatBRL(lineNetByKey[l.key] ?? rowNet)}`
-                                : ''}
-                            </div>
-                          </div>
-                          <input
-                            className="np-input"
-                            inputMode="numeric"
-                            value={String(l.quantity)}
-                            onChange={(e) => updateLineQty(l.key, e.target.value)}
-                            aria-label={`Quantidade ${l.name}`}
-                          />
-                          <input
-                            className="np-input np-price"
-                            inputMode="decimal"
-                            value={unitPriceStrByKey[l.key] ?? formatMoneyInput(l.unit_price)}
-                            onChange={(e) => setUnitPriceStrByKey((p) => ({ ...p, [l.key]: e.target.value }))}
-                            onBlur={() => {
-                              const raw = unitPriceStrByKey[l.key] ?? formatMoneyInput(l.unit_price)
-                              const u = clampMoney(parseMoney(raw))
-                              if (!Number.isFinite(u) || u <= 0) {
-                                setUnitPriceStrByKey((p) => ({ ...p, [l.key]: formatMoneyInput(l.unit_price) }))
-                                return
-                              }
-                              setLineItems((prev) => prev.map((x) => (x.key === l.key ? { ...x, unit_price: u } : x)))
-                              setUnitPriceStrByKey((p) => ({ ...p, [l.key]: formatMoneyInput(u) }))
-                            }}
-                            aria-label={`Preço unitário ${l.name}`}
-                          />
-                          <span className="np-cell-r tabular-nums">{formatBRL(lineNetByKey[l.key] ?? rowNet)}</span>
-                          <button
-                            type="button"
-                            className="np-btn-remove"
-                            aria-label="Remover"
-                            onClick={() => removeLine(l.key)}
-                          >
-                            <Trash2 size={14} aria-hidden />
-                          </button>
-                        </div>
+                        <OrderItemRow
+                          key={l.key}
+                          item={l}
+                          rowNet={rowNet}
+                          netPrice={netPrice}
+                          hasDiscountOrDownPayment={hasDiscountOrDownPayment}
+                          onRemove={() => removeLine(l.key)}
+                          onUpdateQty={(qty) => handleUpdateLineQty(l.key, qty)}
+                          onUpdateUnitPrice={(price) => handleUpdateLineUnitPrice(l.key, price)}
+                        />
                       )
                     })
                   )}
@@ -1450,7 +1536,7 @@ export function BemAvivNovoPedidoPage() {
                     <button
                       type="button"
                       className={cn('np-pay-opt', form.payment_option === 'A_VISTA' && 'sel')}
-                      onClick={() => setForm({ ...form, payment_option: 'A_VISTA' })}
+                      onClick={() => setForm((f) => ({ ...f, payment_option: 'A_VISTA' }))}
                     >
                       <Banknote size={20} aria-hidden />
                       <span>À vista</span>
@@ -1458,7 +1544,7 @@ export function BemAvivNovoPedidoPage() {
                     <button
                       type="button"
                       className={cn('np-pay-opt', form.payment_option === 'A_PRAZO' && 'sel')}
-                      onClick={() => setForm({ ...form, payment_option: 'A_PRAZO' })}
+                      onClick={() => setForm((f) => ({ ...f, payment_option: 'A_PRAZO' }))}
                     >
                       <CreditCard size={20} aria-hidden />
                       <span>À prazo</span>
@@ -1488,24 +1574,24 @@ export function BemAvivNovoPedidoPage() {
                     <label className="np-label" htmlFor="np-parcelas">
                       Parcelas
                     </label>
-                    <input
+                    <LocalInput
                       id="np-parcelas"
                       className="np-input"
                       inputMode="numeric"
                       min={1}
                       value={form.installments_count}
-                      onChange={(e) => setForm({ ...form, installments_count: e.target.value })}
+                      onValueChange={(val) => setForm((f) => ({ ...f, installments_count: val }))}
                     />
                   </div>
                   <div className="np-field">
                     <label className="np-label" htmlFor="np-frete">
                       Frete (R$)
                     </label>
-                    <input
+                    <LocalInput
                       id="np-frete"
                       className="np-input"
                       value={form.freight_amount}
-                      onChange={(e) => setForm({ ...form, freight_amount: e.target.value })}
+                      onValueChange={(val) => setForm((f) => ({ ...f, freight_amount: val }))}
                       inputMode="decimal"
                     />
                   </div>
@@ -1516,11 +1602,11 @@ export function BemAvivNovoPedidoPage() {
                     <label className="np-label" htmlFor="np-entrada">
                       Entrada (R$)
                     </label>
-                    <input
+                    <LocalInput
                       id="np-entrada"
                       className="np-input"
                       value={form.down_payment}
-                      onChange={(e) => setForm({ ...form, down_payment: e.target.value })}
+                      onValueChange={(val) => setForm((f) => ({ ...f, down_payment: val }))}
                       inputMode="decimal"
                     />
                   </div>
@@ -1550,11 +1636,11 @@ export function BemAvivNovoPedidoPage() {
                     <label className="np-label" htmlFor="np-despesas">
                       Outras despesas (R$)
                     </label>
-                    <input
+                    <LocalInput
                       id="np-despesas"
                       className="np-input"
                       value={form.other_expenses}
-                      onChange={(e) => setForm({ ...form, other_expenses: e.target.value })}
+                      onValueChange={(val) => setForm((f) => ({ ...f, other_expenses: val }))}
                       inputMode="decimal"
                     />
                   </div>
@@ -1562,11 +1648,11 @@ export function BemAvivNovoPedidoPage() {
                     <label className="np-label" htmlFor="np-desconto">
                       Desconto no pedido (%)
                     </label>
-                    <input
+                    <LocalInput
                       id="np-desconto"
                       className="np-input"
                       value={form.discount_percent}
-                      onChange={(e) => setForm({ ...form, discount_percent: e.target.value })}
+                      onValueChange={(val) => setForm((f) => ({ ...f, discount_percent: val }))}
                       inputMode="decimal"
                     />
                   </div>
@@ -1577,18 +1663,11 @@ export function BemAvivNovoPedidoPage() {
                     <label className="np-label" htmlFor="np-liquido">
                       Valor líquido (ajuste fino)
                     </label>
-                    <input
+                    <LocalInput
                       id="np-liquido"
                       className="np-input"
                       value={liquidTotalDraft}
-                      onChange={(e) => setLiquidTotalDraft(e.target.value)}
-                      onBlur={(e) => applyLiquidRawToDiscount(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault()
-                          applyLiquidRawToDiscount((e.target as HTMLInputElement).value)
-                        }
-                      }}
+                      onValueChange={applyLiquidRawToDiscount}
                       inputMode="decimal"
                     />
                   </div>

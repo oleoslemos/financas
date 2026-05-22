@@ -80,3 +80,19 @@ export function sumYearToDateSold(monthlySoldAllTime: Record<string, number>, ye
 export function sumMonthlyGoals(map: MonthlyGoalsMap): number {
   return Object.values(map).reduce((acc, v) => acc + (Number.isFinite(v) ? v : 0), 0)
 }
+
+/**
+ * Representante: progresso e card usam só a meta global (annual_goal).
+ * Distribuidor: mantém annual_goal; se zero, pode considerar soma das metas mensais.
+ */
+export function effectiveAnnualGoalBrl(
+  annualGoal: number,
+  monthlyGoals: MonthlyGoalsMap,
+  companyKind: string | null | undefined,
+): number {
+  const annual = Number.isFinite(annualGoal) && annualGoal > 0 ? annualGoal : 0
+  const kind = (companyKind ?? '').toUpperCase()
+  if (kind === 'REPRESENTANTE') return annual
+  const monthlySum = sumMonthlyGoals(monthlyGoals)
+  return annual > 0 ? annual : monthlySum
+}

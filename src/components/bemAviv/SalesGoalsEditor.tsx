@@ -1,6 +1,7 @@
 import { Sparkles } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { formatBRL } from '../../lib/format'
+import { isRepresentante } from '../../lib/companyKind'
 import {
   formatGoalMoneyInput,
   monthLabels,
@@ -11,6 +12,7 @@ import {
 } from '../../lib/salesGoals'
 
 type Props = {
+  companyKind?: string | null
   goalYear: number
   onGoalYearChange: (year: number) => void
   annualGoalDraft: string
@@ -27,6 +29,7 @@ type Props = {
 }
 
 export function SalesGoalsEditor({
+  companyKind,
   goalYear,
   onGoalYearChange,
   annualGoalDraft,
@@ -41,6 +44,7 @@ export function SalesGoalsEditor({
   onSave,
   onApplySuggestionsAll,
 }: Props) {
+  const representante = isRepresentante(companyKind)
   const annualNum = parseGoalMoneyInput(annualGoalDraft)
   const monthlySum = sumMonthlyGoals(
     Object.fromEntries(
@@ -54,14 +58,17 @@ export function SalesGoalsEditor({
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Meta anual</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            {representante ? 'Meta global' : 'Meta anual'}
+          </p>
           <p className="mt-1 font-hub text-2xl font-bold tabular-nums text-slate-900">{formatBRL(annualNum)}</p>
           <p className="mt-1 text-xs text-slate-500">
             Vendido no ano ({goalYear}) até agora: <strong>{formatBRL(yearToDateSold)}</strong>
             {annualNum > 0 ? (
               <>
                 {' '}
-                · Progresso: <strong className="text-[#185FA5]">{progressPct.toFixed(1)}%</strong>
+                · Progresso{representante ? ' na meta global' : ''}:{' '}
+                <strong className="text-[#185FA5]">{progressPct.toFixed(1)}%</strong>
               </>
             ) : null}
           </p>
@@ -83,8 +90,17 @@ export function SalesGoalsEditor({
         </label>
       </div>
 
+      {representante ? (
+        <p className="rounded-lg border border-sky-100 bg-sky-50/80 px-3 py-2 text-xs leading-relaxed text-sky-900">
+          Para <strong>representantes</strong>, a meta principal é a <strong>meta global</strong> (valor único do ano). As metas
+          mensais abaixo servem apenas para planejamento — o progresso do dashboard usa somente a meta global.
+        </p>
+      ) : null}
+
       <label className="block space-y-1">
-        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Valor da meta anual (R$)</span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+          {representante ? 'Valor da meta global (R$)' : 'Valor da meta anual (R$)'}
+        </span>
         <input
           className="w-full max-w-xs rounded-md border border-slate-300 px-3 py-2 text-sm tabular-nums"
           value={annualGoalDraft}
@@ -110,7 +126,11 @@ export function SalesGoalsEditor({
         </div>
         <p className="mb-3 text-xs text-slate-500">
           Sugestão = média das vendas do mesmo mês em anos anteriores (pedidos finalizados / entrega pendente / entregues).
-          Soma das metas mensais: <strong>{formatBRL(monthlySum)}</strong>
+          {representante ? (
+            <> Soma das metas mensais (referência): <strong>{formatBRL(monthlySum)}</strong></>
+          ) : (
+            <> Soma das metas mensais: <strong>{formatBRL(monthlySum)}</strong></>
+          )}
         </p>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {monthLabels().map((label, idx) => {

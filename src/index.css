@@ -317,50 +317,65 @@ tbody tr:hover td {
 .bem-aviv-novo-pedido .np-progress {
   grid-area: progress;
   display: flex;
+  align-items: center;
+  gap: 16px;
   overflow-x: auto;
-  padding: 0 24px;
+  padding: 12px 24px;
   background: var(--np-surface);
   border-bottom: 1px solid var(--np-border);
+  scrollbar-width: none;
+}
+
+.bem-aviv-novo-pedido .np-progress::-webkit-scrollbar {
+  display: none;
 }
 
 .bem-aviv-novo-pedido .np-tab {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 13px 0;
-  margin-right: 28px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--np-faint);
-  border-bottom: 2px solid transparent;
+  gap: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--np-muted);
+  border: 1.5px solid transparent;
+  border-radius: 99px;
   cursor: pointer;
   white-space: nowrap;
-  background: none;
-  border-top: none;
-  border-left: none;
-  border-right: none;
+  background: transparent;
+  transition: all 0.2s ease-in-out;
+}
+
+.bem-aviv-novo-pedido .np-tab:hover {
+  background: var(--np-bg);
+  color: var(--np-text);
 }
 
 .bem-aviv-novo-pedido .np-tab.active {
   color: var(--np-blue);
-  border-bottom-color: var(--np-blue);
+  background: var(--np-blue-light);
+  border-color: var(--np-blue-mid);
+  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.08);
 }
 
 .bem-aviv-novo-pedido .np-tab.done {
   color: var(--np-green);
+  background: var(--np-green-light);
+  border-color: rgba(5, 150, 105, 0.15);
 }
 
 .bem-aviv-novo-pedido .np-tab-num {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background: var(--np-bg);
   border: 1px solid var(--np-border-strong);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 600;
+  transition: all 0.2s ease-in-out;
 }
 
 .bem-aviv-novo-pedido .np-tab.active .np-tab-num {
@@ -689,50 +704,55 @@ tbody tr:hover td {
 
 .bem-aviv-novo-pedido .np-pay-opts {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-}
-
-@media (max-width: 639px) {
-  .bem-aviv-novo-pedido .np-pay-opts {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .bem-aviv-novo-pedido .np-pay-opt {
-  border: 1px solid var(--np-border-strong);
-  border-radius: 8px;
-  padding: 10px 8px;
+  border: 2px solid var(--np-border);
+  border-radius: 12px;
+  padding: 16px 12px;
   cursor: pointer;
   text-align: center;
-  transition: border-color 0.12s, background 0.12s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   background: var(--np-surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 
 .bem-aviv-novo-pedido .np-pay-opt:hover {
   background: var(--np-bg);
+  border-color: var(--np-border-strong);
+  transform: translateY(-1px);
 }
 
 .bem-aviv-novo-pedido .np-pay-opt.sel {
   border-color: var(--np-blue);
-  border-width: 1.5px;
   background: var(--np-blue-light);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.08);
 }
 
 .bem-aviv-novo-pedido .np-pay-opt svg {
   display: block;
-  margin: 0 auto 5px;
+  margin: 0;
   color: var(--np-muted);
+  transition: color 0.2s ease, transform 0.2s ease;
 }
 
 .bem-aviv-novo-pedido .np-pay-opt.sel svg {
   color: var(--np-blue);
+  transform: scale(1.1);
 }
 
 .bem-aviv-novo-pedido .np-pay-opt span {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--np-muted);
-  font-weight: 500;
+  font-weight: 600;
+  transition: color 0.2s ease;
 }
 
 .bem-aviv-novo-pedido .np-pay-opt.sel span {
@@ -780,14 +800,16 @@ tbody tr:hover td {
 .bem-aviv-novo-pedido .np-sum-total {
   display: flex;
   justify-content: space-between;
-  padding: 12px 0 14px;
+  align-items: baseline;
+  padding: 16px 0;
   border-top: 1px solid var(--np-border-strong);
-  margin-top: 4px;
-  font-weight: 500;
+  margin-top: 8px;
+  font-weight: 600;
 }
 
 .bem-aviv-novo-pedido .np-sum-total .val {
-  font-size: 18px;
+  font-size: 22px;
+  color: var(--np-blue);
 }
 
 .bem-aviv-novo-pedido .np-checklist-section {
@@ -806,27 +828,36 @@ tbody tr:hover td {
 
 .bem-aviv-novo-pedido .np-checklist-box {
   background: var(--np-bg);
-  border-radius: 8px;
-  padding: 11px 13px;
+  border: 1px solid var(--np-border);
+  border-radius: 10px;
+  padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  margin-bottom: 14px;
+  gap: 9px;
+  margin-bottom: 16px;
 }
 
 .bem-aviv-novo-pedido .np-cl-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 12px;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--np-muted);
+  transition: all 0.2s ease;
 }
 
 .bem-aviv-novo-pedido .np-cl-item.ok {
   color: var(--np-green);
+  font-weight: 500;
 }
 
-.bem-aviv-novo-pedido .np-cl-item.pend {
-  color: var(--np-faint);
+.bem-aviv-novo-pedido .np-cl-item svg {
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.bem-aviv-novo-pedido .np-cl-item.ok svg {
+  transform: scale(1.1);
 }
 
 .bem-aviv-novo-pedido .np-btn-fin {

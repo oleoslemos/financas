@@ -10,6 +10,12 @@ import {
   Trash2,
   X,
   XCircle,
+  TrendingUp,
+  Clock,
+  Truck,
+  Search,
+  Sparkles,
+  FileText,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
@@ -82,7 +88,6 @@ function parsePaymentMethod(v: string | null | undefined): PaymentMethod {
   return 'DINHEIRO'
 }
 
-/** Valor total gravado: subtotal dos itens após desconto do pedido + frete + outras despesas (sem abater entrada). */
 function netTotal(r: Pedido) {
   return clampMoney(Number(r.total_amount))
 }
@@ -91,7 +96,6 @@ function downVal(r: Pedido) {
   return clampMoney(Number(r.down_payment_amount ?? 0))
 }
 
-/** Total do pedido/orçamento gravado em `total_amount`: itens − desconto % + frete + outras despesas (antes da entrada). */
 function displayTotalPedido(r: Pedido) {
   return netTotal(r)
 }
@@ -100,10 +104,9 @@ function installmentCell(r: Pedido) {
   const net = netTotal(r)
   const inst = Math.min(120, Math.max(1, r.installments_count ?? 1))
   const entrada = downVal(r)
-  /** Saldo após entrada — tanto à prazo quanto à vista com entrada parcial. */
   const financed = clampMoney(net - entrada)
   const each = inst > 0 ? financed / inst : financed
-  return `${inst}x ${formatBRL(each)}`
+  return `${inst}x de ${formatBRL(each)}`
 }
 
 function canEditOrcamento(r: Pedido) {
@@ -138,19 +141,84 @@ function canReopenPedido(r: Pedido) {
   )
 }
 
-/** Detalhe do pedido após pagamento (entrega pendente), entregue ou legado finalizado. */
 function canVerDetalhePedido(r: Pedido) {
   const s = r.status
   return r.document_type === 'PEDIDO' && (s === 'ENTREGUE' || s === 'ENTREGA PENDENTE' || s === 'FINALIZADO')
 }
 
-/** Exclusão definitiva somente após cancelamento explícito. */
 function canExcluirDocumento(r: Pedido) {
   return r.status === 'CANCELADO'
 }
 
+function renderStatusBadge(status: string, docType: 'ORCAMENTO' | 'PEDIDO') {
+  const s = String(status ?? '').trim().toUpperCase()
+  if (docType === 'ORCAMENTO') {
+    if (s === 'ABERTO') {
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 border border-blue-100">
+          <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
+          Aberto
+        </span>
+      )
+    }
+    if (s === 'FECHADO' || s === 'CONVERTIDO') {
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-100">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          Convertido
+        </span>
+      )
+    }
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600 border border-slate-200">
+        <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+        {status}
+      </span>
+    )
+  } else {
+    if (s === 'ABERTO') {
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 border border-blue-100">
+          <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+          Aberto
+        </span>
+      )
+    }
+    if (s === 'ENTREGA PENDENTE') {
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 border border-amber-100">
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+          Entrega Pendente
+        </span>
+      )
+    }
+    if (s === 'ENTREGUE' || s === 'FINALIZADO') {
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-100">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          Entregue
+        </span>
+      )
+    }
+    if (s === 'CANCELADO') {
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 border border-rose-100">
+          <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+          Cancelado
+        </span>
+      )
+    }
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600 border border-slate-200">
+        <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+        {status}
+      </span>
+    )
+  }
+}
+
 const iconBtn =
-  'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-40'
+  'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition-all duration-150 hover:bg-slate-50 hover:scale-105 active:scale-95 disabled:pointer-events-none disabled:opacity-40'
 
 type PedidosLocationState = {
   bemAvivPedidosClient?: { id: string }
@@ -237,6 +305,70 @@ export function BemAvivPedidosPage() {
     })
     return { filteredRows: list, countOrcamento: o, countPedido: p }
   }, [rows, typeTab, clientTableFilterId, search, statusFilter, sortBy, sortDir, clientNameById])
+
+  // KPIs dinâmicos para a aba selecionada
+  const kpis = useMemo(() => {
+    let totalCount = 0
+    let totalValue = 0
+    let openCount = 0
+    let openValue = 0
+    let pendingCount = 0
+    let pendingValue = 0
+    let completedCount = 0
+    let completedValue = 0
+    let convertedCount = 0
+    let convertedValue = 0
+
+    const currentRows = rows.filter(
+      (r) =>
+        String(r.document_type ?? '')
+          .trim()
+          .toUpperCase() === typeTab,
+    )
+
+    for (const r of currentRows) {
+      const val = displayTotalPedido(r)
+      totalCount++
+      totalValue += val
+
+      const status = String(r.status ?? '').trim().toUpperCase()
+      const isConverted = !!r.converted_order_id || status === 'FECHADO'
+
+      if (typeTab === 'ORCAMENTO') {
+        if (isConverted) {
+          convertedCount++
+          convertedValue += val
+        } else if (status === 'ABERTO') {
+          openCount++
+          openValue += val
+        }
+      } else {
+        if (status === 'ABERTO') {
+          openCount++
+          openValue += val
+        } else if (status === 'ENTREGA PENDENTE') {
+          pendingCount++
+          pendingValue += val
+        } else if (status === 'ENTREGUE' || status === 'FINALIZADO') {
+          completedCount++
+          completedValue += val
+        }
+      }
+    }
+
+    return {
+      totalCount,
+      totalValue,
+      openCount,
+      openValue,
+      pendingCount,
+      pendingValue,
+      completedCount,
+      completedValue,
+      convertedCount,
+      convertedValue,
+    }
+  }, [rows, typeTab])
 
   const load = useCallback(async () => {
     if (!supabase) {
@@ -386,7 +518,6 @@ export function BemAvivPedidosPage() {
         }
       }
 
-      // Se houver kits, carregar também os componentes para explosão na conversão para pedido.
       const missingComponentIds = new Set<string>()
       for (const it of items) {
         if (!it.offer_product_id) continue
@@ -607,123 +738,248 @@ export function BemAvivPedidosPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      {/* Top Header Section */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold">PEDIDOS DE VENDAS</h2>
-          <p className="mt-1 max-w-2xl text-sm font-normal normal-case text-slate-600">
-            Itens usam o cadastro <strong>Produtos (catálogo)</strong>. Tipo padrão: <strong>orçamento</strong>.{' '}
-            <Link className="font-medium text-emerald-800 underline-offset-2 hover:underline" to="/bem-aviv/produtos-catalogo">
-              Abrir cadastro de produtos
+          <div className="flex items-center gap-2">
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100 shadow-sm">
+              <Sparkles size={18} />
+            </span>
+            <h2 className="text-2xl font-bold tracking-tight text-slate-900">PEDIDOS DE VENDAS</h2>
+          </div>
+          <p className="mt-1 text-sm font-normal text-slate-500 normal-case leading-relaxed">
+            Gerencie orçamentos e vendas vinculados ao cadastro do{' '}
+            <strong className="font-semibold text-slate-700">Catálogo de Produtos</strong>.{' '}
+            <Link className="font-semibold text-emerald-600 hover:text-emerald-700 underline underline-offset-4 decoration-emerald-200 transition-colors" to="/bem-aviv/produtos-catalogo">
+              Abrir catálogo de produtos
             </Link>
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2">
           <Link
             to="/bem-aviv/pedidos/novo"
             state={{ document_type: typeTab }}
-            className="btn btn-primary inline-flex items-center gap-2 font-medium normal-case"
+            className="inline-flex h-11 items-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-semibold tracking-wide text-white hover:bg-slate-800 transition-all duration-150 shadow-sm hover:scale-[1.02] active:scale-95"
           >
-            <Plus size={18} aria-hidden />
+            <Plus size={18} strokeWidth={2.5} />
             {typeTab === 'PEDIDO' ? 'ADICIONAR PEDIDO' : 'ADICIONAR ORÇAMENTO'}
           </Link>
         </div>
       </div>
 
-      {dataLoadBanner ? (
+      {dataLoadBanner && (
         <div
-          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-950"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-sm"
           role="alert"
         >
-          <span>{dataLoadBanner}</span>
+          <span className="font-medium">{dataLoadBanner}</span>
           <button
             type="button"
-            className="shrink-0 rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-amber-900 hover:bg-amber-100"
+            className="shrink-0 rounded-lg border border-amber-300 bg-white px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-amber-900 hover:bg-amber-100 transition-all shadow-sm"
             onClick={() => void load()}
           >
             Tentar novamente
           </button>
         </div>
-      ) : null}
+      )}
 
+      {/* KPI Dashboard Cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* KPI 1: Faturamento/Total */}
+        <div className="relative overflow-hidden rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              {typeTab === 'ORCAMENTO' ? 'Total Orçado' : 'Faturamento Geral'}
+            </span>
+            <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50 text-slate-600">
+              <TrendingUp size={16} />
+            </div>
+          </div>
+          <div className="mt-3">
+            <h3 className="text-2xl font-bold tabular-nums text-slate-900">
+              {formatBRL(kpis.totalValue)}
+            </h3>
+            <p className="mt-1 text-xs text-slate-500 font-medium normal-case">
+              {kpis.totalCount} {kpis.totalCount === 1 ? 'documento' : 'documentos'} registrados
+            </p>
+          </div>
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-slate-100" />
+        </div>
+
+        {/* KPI 2: Abertos */}
+        <div className="relative overflow-hidden rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              {typeTab === 'ORCAMENTO' ? 'Em Negociação' : 'Aguardando Pagamento'}
+            </span>
+            <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+              <Clock size={16} />
+            </div>
+          </div>
+          <div className="mt-3">
+            <h3 className="text-2xl font-bold tabular-nums text-slate-900">
+              {formatBRL(kpis.openValue)}
+            </h3>
+            <p className="mt-1 text-xs text-slate-500 font-medium normal-case">
+              {kpis.openCount} no status <span className="font-semibold text-blue-600">ABERTO</span>
+            </p>
+          </div>
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-400" />
+        </div>
+
+        {/* KPI 3: Entregas Pendentes ou Convertidos */}
+        <div className="relative overflow-hidden rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              {typeTab === 'ORCAMENTO' ? 'Convertidos em Pedido' : 'Envios Pendentes'}
+            </span>
+            <div className={`inline-flex h-8 w-8 items-center justify-center rounded-lg ${typeTab === 'ORCAMENTO' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+              {typeTab === 'ORCAMENTO' ? <PackageCheck size={16} /> : <Truck size={16} />}
+            </div>
+          </div>
+          <div className="mt-3">
+            <h3 className="text-2xl font-bold tabular-nums text-slate-900">
+              {typeTab === 'ORCAMENTO' ? formatBRL(kpis.convertedValue) : formatBRL(kpis.pendingValue)}
+            </h3>
+            <p className="mt-1 text-xs text-slate-500 font-medium normal-case">
+              {typeTab === 'ORCAMENTO' ? (
+                <>
+                  {kpis.convertedCount} fechados e <span className="font-semibold text-emerald-600">gerados</span>
+                </>
+              ) : (
+                <>
+                  {kpis.pendingCount} com envio <span className="font-semibold text-amber-600">pendente</span>
+                </>
+              )}
+            </p>
+          </div>
+          <div className={`absolute bottom-0 left-0 right-0 h-1 ${typeTab === 'ORCAMENTO' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+        </div>
+
+        {/* KPI 4: Entregues / Concluídos */}
+        <div className="relative overflow-hidden rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              {typeTab === 'ORCAMENTO' ? 'Taxa de Conversão' : 'Entregues'}
+            </span>
+            <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+              <CheckCircle2 size={16} />
+            </div>
+          </div>
+          <div className="mt-3">
+            <h3 className="text-2xl font-bold tabular-nums text-slate-900">
+              {typeTab === 'ORCAMENTO' ? (
+                kpis.totalCount > 0 ? `${Math.round((kpis.convertedCount / kpis.totalCount) * 100)}%` : '0%'
+              ) : (
+                formatBRL(kpis.completedValue)
+              )}
+            </h3>
+            <p className="mt-1 text-xs text-slate-500 font-medium normal-case">
+              {typeTab === 'ORCAMENTO' ? (
+                <>De {kpis.totalCount} propostas criadas</>
+              ) : (
+                <><span className="font-semibold text-emerald-600">Entregues com sucesso</span></>
+              )}
+            </p>
+          </div>
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-emerald-500" />
+        </div>
+      </div>
+
+      {/* Tabs Menu */}
       <div className="flex flex-wrap gap-1 border-b border-slate-200" role="tablist" aria-label="Filtrar por tipo de documento">
         <button
           type="button"
           role="tab"
           aria-selected={typeTab === 'ORCAMENTO'}
-          className={`rounded-t-md border border-b-0 px-4 py-2 text-sm font-medium transition-colors ${
+          className={`flex items-center gap-2 rounded-t-xl border border-b-0 px-5 py-3 text-sm font-semibold tracking-wide transition-all duration-150 ${
             typeTab === 'ORCAMENTO'
-              ? 'border-emerald-300 bg-emerald-50 text-emerald-900 shadow-[0_-1px_0_0_white]'
-              : 'border-transparent bg-slate-50 text-slate-600 hover:bg-slate-100'
+              ? 'border-slate-200 bg-white text-slate-950 shadow-[0_2px_0_0_#fff] translate-y-[1px]'
+              : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-800'
           }`}
           onClick={() => setTypeTab('ORCAMENTO')}
         >
           Orçamentos
-          <span className="ml-1.5 rounded-full bg-slate-200/80 px-2 py-0.5 text-xs font-semibold text-slate-700">{countOrcamento}</span>
+          <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold transition-all ${
+            typeTab === 'ORCAMENTO' ? 'bg-slate-100 text-slate-900' : 'bg-slate-100 text-slate-500'
+          }`}>
+            {countOrcamento}
+          </span>
         </button>
         <button
           type="button"
           role="tab"
           aria-selected={typeTab === 'PEDIDO'}
-          className={`rounded-t-md border border-b-0 px-4 py-2 text-sm font-medium transition-colors ${
+          className={`flex items-center gap-2 rounded-t-xl border border-b-0 px-5 py-3 text-sm font-semibold tracking-wide transition-all duration-150 ${
             typeTab === 'PEDIDO'
-              ? 'border-emerald-300 bg-emerald-50 text-emerald-900 shadow-[0_-1px_0_0_white]'
-              : 'border-transparent bg-slate-50 text-slate-600 hover:bg-slate-100'
+              ? 'border-slate-200 bg-white text-slate-950 shadow-[0_2px_0_0_#fff] translate-y-[1px]'
+              : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-800'
           }`}
           onClick={() => setTypeTab('PEDIDO')}
         >
           Pedidos
-          <span className="ml-1.5 rounded-full bg-slate-200/80 px-2 py-0.5 text-xs font-semibold text-slate-700">{countPedido}</span>
+          <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold transition-all ${
+            typeTab === 'PEDIDO' ? 'bg-slate-100 text-slate-900' : 'bg-slate-100 text-slate-500'
+          }`}>
+            {countPedido}
+          </span>
         </button>
       </div>
 
-      {clientTableFilterId ? (
+      {clientTableFilterId && (
         <div
-          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2.5 text-sm text-slate-800"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-slate-800 shadow-sm"
           role="status"
         >
-          <span>
-            Exibindo apenas orçamentos e pedidos de{' '}
-            <strong className="font-semibold text-slate-900">
-              {clientNameById.get(clientTableFilterId) ?? 'este cliente'}
-            </strong>
-            .
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-sky-500" />
+            <span>
+              Exibindo apenas documentos do cliente{' '}
+              <strong className="font-semibold text-slate-900">
+                {clientNameById.get(clientTableFilterId) ?? 'este cliente'}
+              </strong>
+            </span>
+          </div>
           <button
             type="button"
-            className="shrink-0 font-medium text-[#185FA5] underline-offset-2 hover:underline"
+            className="text-sm font-bold text-sky-700 hover:text-sky-800 hover:underline transition-colors"
             onClick={() => setClientTableFilterId(null)}
           >
             Mostrar todos
           </button>
         </div>
-      ) : null}
+      )}
 
-      <div className="grid gap-2 rounded-lg border border-slate-200 bg-white p-3 sm:grid-cols-4">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar por documento, cliente, status ou data"
-          className="rounded-md border border-slate-300 px-2 py-2 text-sm sm:col-span-2"
-        />
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-          className="rounded-md border border-slate-300 px-2 py-2 text-sm"
-        >
-          <option value="TODOS">Status: todos</option>
-          <option value="ABERTO">Aberto</option>
-          <option value="ENTREGA PENDENTE">Entrega pendente</option>
-          <option value="ENTREGUE">Entregue</option>
-          <option value="CANCELADO">Cancelado</option>
-        </select>
-        <div className="grid grid-cols-2 gap-2">
+      {/* Filter and Search Bar */}
+      <div className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm md:flex-row md:items-center">
+        <div className="relative flex-1">
+          <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por documento, cliente, status ou data..."
+            className="w-full rounded-xl border border-slate-200 bg-slate-50/50 pl-10 pr-4 py-2.5 text-sm uppercase placeholder-slate-400 outline-none focus:border-slate-300 focus:bg-white focus:ring-2 focus:ring-slate-100 transition-all"
+          />
+        </div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 md:w-auto md:flex md:items-center">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+            className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-600 outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-100 transition-all cursor-pointer"
+          >
+            <option value="TODOS">Status: Todos</option>
+            <option value="ABERTO">Aberto</option>
+            <option value="ENTREGA PENDENTE">Entrega pendente</option>
+            <option value="ENTREGUE">Entregue</option>
+            <option value="CANCELADO">Cancelado</option>
+          </select>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-            className="rounded-md border border-slate-300 px-2 py-2 text-sm"
+            className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-600 outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-100 transition-all cursor-pointer"
           >
-            <option value="DATA">Ordenar: data</option>
-            <option value="DOCUMENTO">Documento</option>
+            <option value="DATA">Ordenar: Data</option>
+            <option value="DOCUMENTO">Nº Documento</option>
             <option value="CLIENTE">Cliente</option>
             <option value="STATUS">Status</option>
             <option value="VALOR">Valor</option>
@@ -731,306 +987,398 @@ export function BemAvivPedidosPage() {
           <select
             value={sortDir}
             onChange={(e) => setSortDir(e.target.value as typeof sortDir)}
-            className="rounded-md border border-slate-300 px-2 py-2 text-sm"
+            className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-600 outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-100 transition-all cursor-pointer"
           >
-            <option value="DESC">Desc</option>
-            <option value="ASC">Asc</option>
+            <option value="DESC">Decrescente (Z-A)</option>
+            <option value="ASC">Crescente (A-Z)</option>
           </select>
         </div>
       </div>
 
-      <div className="table-wrap">
+      {/* Grid List Table */}
+      <div className="table-wrap rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
         {loading ? (
-          <p className="p-4 text-slate-500">CARREGANDO...</p>
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-emerald-600" />
+            <p className="text-sm font-semibold tracking-wider text-slate-500 uppercase">Carregando registros...</p>
+          </div>
         ) : (
-          <table className="text-sm">
-            <thead>
-              <tr>
-                <th>Nº DOCUMENTO</th>
-                <th>DATA</th>
-                <th>CLIENTE</th>
-                <th>STATUS</th>
-                <th className="text-right">VALOR TOTAL</th>
-                <th className="text-right">ENTRADA</th>
-                <th className="text-right">PARCELAS (VALOR)</th>
-                <th className="text-right">AÇÕES</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRows.map((r) => {
-                const downMethod = parsePaymentMethod(r.down_payment_method ?? r.payment_method)
-                return (
-                  <tr key={r.id}>
-                    <td className="whitespace-nowrap font-medium">{r.document_number || '—'}</td>
-                    <td className="whitespace-nowrap">{r.order_date}</td>
-                    <td className="max-w-[14rem] truncate" title={r.client_id ? clientNameById.get(r.client_id) : undefined}>
-                      {r.client_id ? clientNameById.get(r.client_id) ?? '—' : '—'}
-                    </td>
-                    <td>{r.status}</td>
-                    <td className="text-right whitespace-nowrap">{formatBRL(displayTotalPedido(r))}</td>
-                    <td className="text-right whitespace-nowrap">
-                      {downVal(r) > 0 ? (
-                        <span className="inline-flex flex-col items-end">
-                          <span>{formatBRL(downVal(r))}</span>
-                          <span className="text-[9px] text-slate-500">{PAYMENT_METHOD_LABEL[downMethod]}</span>
-                        </span>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td className="text-right whitespace-nowrap text-xs sm:text-sm">{installmentCell(r)}</td>
-                    <td className="text-right">
-                      <div className="flex flex-wrap items-center justify-end gap-1">
-                        {canEditOrcamento(r) ? (
-                          <button
-                            type="button"
-                            className={iconBtn}
-                            title="Editar orçamento"
-                            aria-label="Editar orçamento"
-                            onClick={() => navigate(`/bem-aviv/pedidos/editar/${r.id}`)}
-                          >
-                            <Pencil size={18} aria-hidden />
-                          </button>
-                        ) : null}
-                        {canFecharGerarPedido(r) ? (
-                          <button
-                            type="button"
-                            className={`${iconBtn} text-emerald-800 border-emerald-200 hover:bg-emerald-50`}
-                            title="Fechar e gerar pedido"
-                            aria-label="Fechar e gerar pedido"
-                            disabled={!!r.converted_order_id}
-                            onClick={() => void closeQuoteAndCreateOrder(r)}
-                          >
-                            <CheckCircle2 size={18} aria-hidden />
-                          </button>
-                        ) : null}
-                        {canEditPedido(r) ? (
-                          <button
-                            type="button"
-                            className={iconBtn}
-                            title="Alterar pedido"
-                            aria-label="Alterar pedido"
-                            onClick={() => navigate(`/bem-aviv/pedidos/editar/${r.id}`)}
-                          >
-                            <Pencil size={18} aria-hidden />
-                          </button>
-                        ) : null}
-                        {canConfirmPayment(r) ? (
-                          <button
-                            type="button"
-                            className={`${iconBtn} border-emerald-200 text-emerald-800 hover:bg-emerald-50`}
-                            title="Confirmar pagamento"
-                            aria-label="Confirmar pagamento"
-                            onClick={() =>
-                              void updateOrderStatus(
-                                r,
-                                'ENTREGA PENDENTE',
-                                `CONFIRMAR PAGAMENTO DO PEDIDO ${r.document_number ?? ''}? O STATUS SERÁ ENTREGA PENDENTE ATÉ CONFIRMAR A ENTREGA.`,
-                              )
-                            }
-                          >
-                            <CircleDollarSign size={18} aria-hidden />
-                          </button>
-                        ) : null}
-                        {canConfirmDelivery(r) ? (
-                          <button
-                            type="button"
-                            className={`${iconBtn} border-blue-200 text-blue-700 hover:bg-blue-50`}
-                            title="Confirmar entrega"
-                            aria-label="Confirmar entrega"
-                            onClick={() =>
-                              void updateOrderStatus(
-                                r,
-                                'ENTREGUE',
-                                `CONFIRMAR ENTREGA DO PEDIDO ${r.document_number ?? ''}?`,
-                              )
-                            }
-                          >
-                            <PackageCheck size={18} aria-hidden />
-                          </button>
-                        ) : null}
-                        {canVerDetalhePedido(r) ? (
-                          <button
-                            type="button"
-                            className={`${iconBtn} border-sky-200 text-[#185FA5] hover:bg-sky-50`}
-                            title="Ver detalhes do pedido"
-                            aria-label="Ver detalhes do pedido"
-                            onClick={() => void openPedidoDetailModal(r)}
-                          >
-                            <Eye size={18} aria-hidden />
-                          </button>
-                        ) : null}
-                        {canReopenPedido(r) ? (
-                          <button
-                            type="button"
-                            className={`${iconBtn} border-amber-200 text-amber-700 hover:bg-amber-50`}
-                            title="Reabrir pedido"
-                            aria-label="Reabrir pedido"
-                            onClick={() =>
-                              void updateOrderStatus(
-                                r,
-                                'ABERTO',
-                                `REABRIR O PEDIDO ${r.document_number ?? ''}? O STATUS VOLTARÁ PARA ABERTO.`,
-                              )
-                            }
-                          >
-                            <RotateCcw size={18} aria-hidden />
-                          </button>
-                        ) : null}
-                        {canExcluirDocumento(r) ? (
-                          <button
-                            type="button"
-                            className={`${iconBtn} border-red-200 text-red-700 hover:bg-red-50`}
-                            title="Excluir documento"
-                            aria-label="Excluir documento"
-                            onClick={() => void deleteDocumento(r)}
-                          >
-                            <Trash2 size={18} aria-hidden />
-                          </button>
-                        ) : null}
-                        {canCancelPedido(r) ? (
-                          <button
-                            type="button"
-                            className={`${iconBtn} ml-2 border-red-200 text-red-700 hover:bg-red-50`}
-                            title="Cancelar pedido"
-                            aria-label="Cancelar pedido"
-                            onClick={() =>
-                              void updateOrderStatus(
-                                r,
-                                'CANCELADO',
-                                `CONFIRMAR CANCELAMENTO DO PEDIDO ${r.document_number ?? ''}?`,
-                              )
-                            }
-                          >
-                            <XCircle size={18} aria-hidden />
-                          </button>
-                        ) : null}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-slate-700">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/50">
+                  <th className="px-4 py-3.5 text-xs font-bold tracking-wider text-slate-400 uppercase">Nº Documento</th>
+                  <th className="px-4 py-3.5 text-xs font-bold tracking-wider text-slate-400 uppercase">Data</th>
+                  <th className="px-4 py-3.5 text-xs font-bold tracking-wider text-slate-400 uppercase">Cliente</th>
+                  <th className="px-4 py-3.5 text-xs font-bold tracking-wider text-slate-400 uppercase">Status</th>
+                  <th className="px-4 py-3.5 text-xs font-bold tracking-wider text-slate-400 uppercase text-right">Valor Total</th>
+                  <th className="px-4 py-3.5 text-xs font-bold tracking-wider text-slate-400 uppercase text-right">Entrada</th>
+                  <th className="px-4 py-3.5 text-xs font-bold tracking-wider text-slate-400 uppercase text-right">Parcelas (Valor)</th>
+                  <th className="px-4 py-3.5 text-xs font-bold tracking-wider text-slate-400 uppercase text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredRows.map((r) => {
+                  const downMethod = parsePaymentMethod(r.down_payment_method ?? r.payment_method)
+                  return (
+                    <tr key={r.id} className="hover:bg-slate-50/80 transition-colors duration-150">
+                      <td className="whitespace-nowrap px-4 py-4 font-bold text-slate-900 tabular-nums">
+                        {r.document_number || '—'}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-500 font-medium">
+                        {r.order_date ? r.order_date.split('-').reverse().join('/') : '—'}
+                      </td>
+                      <td className="max-w-[15rem] truncate px-4 py-4 text-sm font-semibold text-slate-800" title={r.client_id ? clientNameById.get(r.client_id) : undefined}>
+                        {r.client_id ? clientNameById.get(r.client_id) ?? '—' : '—'}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-4">
+                        {renderStatusBadge(r.status, r.document_type)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-4 text-right font-bold text-slate-900 tabular-nums">
+                        {formatBRL(displayTotalPedido(r))}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-4 text-right tabular-nums text-sm">
+                        {downVal(r) > 0 ? (
+                          <div className="flex flex-col items-end">
+                            <span className="font-semibold text-slate-800">{formatBRL(downVal(r))}</span>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase">{PAYMENT_METHOD_LABEL[downMethod]}</span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-4 text-right text-xs font-semibold tabular-nums text-slate-600 sm:text-sm">
+                        {installmentCell(r)}
+                      </td>
+                      <td className="px-4 py-4 text-right">
+                        <div className="flex flex-wrap items-center justify-end gap-1.5">
+                          {canEditOrcamento(r) && (
+                            <button
+                              type="button"
+                              className={iconBtn}
+                              title="Editar orçamento"
+                              aria-label="Editar orçamento"
+                              onClick={() => navigate(`/bem-aviv/pedidos/editar/${r.id}`)}
+                            >
+                              <Pencil size={16} className="text-slate-500" />
+                            </button>
+                          )}
+                          {canFecharGerarPedido(r) && (
+                            <button
+                              type="button"
+                              className={`${iconBtn} border-emerald-100 text-emerald-700 hover:bg-emerald-50`}
+                              title="Fechar e gerar pedido"
+                              aria-label="Fechar e gerar pedido"
+                              disabled={!!r.converted_order_id}
+                              onClick={() => void closeQuoteAndCreateOrder(r)}
+                            >
+                              <CheckCircle2 size={16} />
+                            </button>
+                          )}
+                          {canEditPedido(r) && (
+                            <button
+                              type="button"
+                              className={iconBtn}
+                              title="Alterar pedido"
+                              aria-label="Alterar pedido"
+                              onClick={() => navigate(`/bem-aviv/pedidos/editar/${r.id}`)}
+                            >
+                              <Pencil size={16} className="text-slate-500" />
+                            </button>
+                          )}
+                          {canConfirmPayment(r) && (
+                            <button
+                              type="button"
+                              className={`${iconBtn} border-emerald-100 text-emerald-700 hover:bg-emerald-50`}
+                              title="Confirmar pagamento"
+                              aria-label="Confirmar pagamento"
+                              onClick={() =>
+                                void updateOrderStatus(
+                                  r,
+                                  'ENTREGA PENDENTE',
+                                  `CONFIRMAR PAGAMENTO DO PEDIDO ${r.document_number ?? ''}? O STATUS SERÁ ENTREGA PENDENTE ATÉ CONFIRMAR A ENTREGA.`,
+                                )
+                              }
+                            >
+                              <CircleDollarSign size={16} />
+                            </button>
+                          )}
+                          {canConfirmDelivery(r) && (
+                            <button
+                              type="button"
+                              className={`${iconBtn} border-blue-100 text-blue-700 hover:bg-blue-50`}
+                              title="Confirmar entrega"
+                              aria-label="Confirmar entrega"
+                              onClick={() =>
+                                void updateOrderStatus(
+                                  r,
+                                  'ENTREGUE',
+                                  `CONFIRMAR ENTREGA DO PEDIDO ${r.document_number ?? ''}?`,
+                                )
+                              }
+                            >
+                              <PackageCheck size={16} />
+                            </button>
+                          )}
+                          {canVerDetalhePedido(r) && (
+                            <button
+                              type="button"
+                              className={`${iconBtn} border-sky-100 text-sky-700 hover:bg-sky-50`}
+                              title="Ver detalhes do pedido"
+                              aria-label="Ver detalhes do pedido"
+                              onClick={() => void openPedidoDetailModal(r)}
+                            >
+                              <Eye size={16} />
+                            </button>
+                          )}
+                          {canReopenPedido(r) && (
+                            <button
+                              type="button"
+                              className={`${iconBtn} border-amber-100 text-amber-700 hover:bg-amber-50`}
+                              title="Reabrir pedido"
+                              aria-label="Reabrir pedido"
+                              onClick={() =>
+                                void updateOrderStatus(
+                                  r,
+                                  'ABERTO',
+                                  `REABRIR O PEDIDO ${r.document_number ?? ''}? O STATUS VOLTARÁ PARA ABERTO.`,
+                                )
+                              }
+                            >
+                              <RotateCcw size={16} />
+                            </button>
+                          )}
+                          {canExcluirDocumento(r) && (
+                            <button
+                              type="button"
+                              className={`${iconBtn} border-red-100 text-red-600 hover:bg-red-50`}
+                              title="Excluir documento"
+                              aria-label="Excluir documento"
+                              onClick={() => void deleteDocumento(r)}
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
+                          {canCancelPedido(r) && (
+                            <button
+                              type="button"
+                              className={`${iconBtn} border-red-100 text-red-600 hover:bg-red-50`}
+                              title="Cancelar pedido"
+                              aria-label="Cancelar pedido"
+                              onClick={() =>
+                                void updateOrderStatus(
+                                  r,
+                                  'CANCELADO',
+                                  `CONFIRMAR CANCELAMENTO DO PEDIDO ${r.document_number ?? ''}?`,
+                                )
+                              }
+                            >
+                              <XCircle size={16} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+                {!loading && filteredRows.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="py-16 text-center">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <FileText size={32} className="text-slate-300" />
+                        <p className="text-sm font-semibold text-slate-500 uppercase">
+                          {typeTab === 'ORCAMENTO'
+                            ? 'Nenhum orçamento nesta lista.'
+                            : 'Nenhum pedido nesta lista.'}
+                        </p>
                       </div>
                     </td>
                   </tr>
-                )
-              })}
-              {!loading && filteredRows.length === 0 ? (
-                <tr>
-                  <td colSpan={10} className="py-8 text-center text-slate-500">
-                    {typeTab === 'ORCAMENTO'
-                      ? 'Nenhum orçamento nesta lista.'
-                      : 'Nenhum pedido nesta lista.'}
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
+                )}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
-      {detailModalPedido ? (
+      {/* Modern Two-Column Detail Modal */}
+      {detailModalPedido && (
         <div
-          className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-900/45 p-0 sm:items-center sm:p-4"
+          className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-sm sm:items-center sm:p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="pedido-detail-modal-title"
         >
-          <div className="flex max-h-[min(92dvh,900px)] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl">
-            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 bg-slate-50/90 px-4 py-3 sm:px-5">
+          <div className="flex max-h-[min(94dvh,920px)] w-full max-w-4xl flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white shadow-2xl transition-all sm:rounded-3xl">
+            {/* Modal Header */}
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 bg-slate-50/50 px-5 py-4 sm:px-6">
               <div className="min-w-0">
-                <h3 id="pedido-detail-modal-title" className="font-hub text-lg font-semibold text-slate-900 normal-case">
-                  Detalhe do pedido
-                </h3>
-                <p className="mt-0.5 text-sm font-medium text-slate-800">{detailModalPedido.document_number ?? '—'}</p>
-                <p className="mt-1 text-xs text-slate-500">
-                  {detailModalPedido.client_id ? clientNameById.get(detailModalPedido.client_id) ?? '—' : '—'} · Data{' '}
-                  {detailModalPedido.order_date} · {detailModalPedido.status}
+                <div className="flex items-center gap-2">
+                  <h3 id="pedido-detail-modal-title" className="text-lg font-bold text-slate-900 uppercase">
+                    Detalhes do Documento
+                  </h3>
+                  <span className="font-semibold text-xs text-slate-500 bg-slate-200/60 px-2 py-0.5 rounded-md">
+                    {detailModalPedido.document_type}
+                  </span>
+                </div>
+                <p className="mt-1 text-sm font-bold text-slate-700 tabular-nums">
+                  Nº {detailModalPedido.document_number ?? '—'}
                 </p>
               </div>
               <button
                 type="button"
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-all hover:bg-slate-100 hover:text-slate-700 active:scale-95 shadow-sm"
                 onClick={closePedidoDetailModal}
                 aria-label="Fechar"
               >
-                <X size={18} aria-hidden />
+                <X size={18} />
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-5">
-              <dl className="grid gap-2 border-b border-slate-100 pb-3 text-sm sm:grid-cols-2">
-                <div>
-                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total líquido</dt>
-                  <dd className="font-semibold tabular-nums text-slate-900">{formatBRL(netTotal(detailModalPedido))}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Desconto no pedido</dt>
-                  <dd className="tabular-nums text-slate-800">{formatBRL(Number(detailModalPedido.discount_total ?? 0))}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Frete</dt>
-                  <dd className="tabular-nums text-slate-800">{formatBRL(Number(detailModalPedido.freight_amount ?? 0))}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Outras despesas</dt>
-                  <dd className="tabular-nums text-slate-800">{formatBRL(Number(detailModalPedido.other_expenses ?? 0))}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Pagamento</dt>
-                  <dd className="text-slate-800">
-                    {parsePaymentOption(detailModalPedido.payment_option) === 'A_PRAZO' ? 'À prazo' : 'À vista'} ·{' '}
-                    {PAYMENT_METHOD_LABEL[parsePaymentMethod(detailModalPedido.payment_method)]}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Parcelas</dt>
-                  <dd className="text-slate-800">{detailModalPedido.installments_count ?? 1}x</dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Parcelas (valor)</dt>
-                  <dd className="text-xs text-slate-700">{installmentCell(detailModalPedido)}</dd>
-                </div>
-              </dl>
+            {/* Modal Body with 2-Column layout on desktop */}
+            <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-6">
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+                {/* Column 1: Financial & Payment summary (Left, spans 1 column) */}
+                <div className="space-y-4 md:col-span-1">
+                  <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4 shadow-sm space-y-3.5">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Resumo Financeiro</h4>
+                    
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs font-medium">
+                        <span className="text-slate-500">Subtotal</span>
+                        <span className="tabular-nums font-semibold text-slate-800">
+                          {formatBRL(netTotal(detailModalPedido) + Number(detailModalPedido.discount_total ?? 0) - Number(detailModalPedido.freight_amount ?? 0) - Number(detailModalPedido.other_expenses ?? 0))}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs font-medium text-emerald-600">
+                        <span>Desconto</span>
+                        <span className="tabular-nums font-semibold">
+                          - {formatBRL(Number(detailModalPedido.discount_total ?? 0))}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs font-medium text-slate-600">
+                        <span>Frete</span>
+                        <span className="tabular-nums font-semibold">
+                          + {formatBRL(Number(detailModalPedido.freight_amount ?? 0))}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs font-medium text-slate-600">
+                        <span>Outras despesas</span>
+                        <span className="tabular-nums font-semibold">
+                          + {formatBRL(Number(detailModalPedido.other_expenses ?? 0))}
+                        </span>
+                      </div>
+                      
+                      <hr className="border-slate-200/80 my-2" />
+                      
+                      <div className="flex items-center justify-between text-sm font-bold text-slate-900">
+                        <span>Total Líquido</span>
+                        <span className="tabular-nums text-lg text-emerald-700">
+                          {formatBRL(netTotal(detailModalPedido))}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
 
-              <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-600">Itens</p>
-              {detailModalLoading ? (
-                <p className="mt-2 text-sm text-slate-500">Carregando itens…</p>
-              ) : detailModalItems.length === 0 ? (
-                <p className="mt-2 text-sm text-slate-500">Nenhum item neste pedido.</p>
-              ) : (
-                <div className="mt-2 overflow-x-auto rounded-lg border border-slate-200">
-                  <table className="w-full min-w-[520px] text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
-                        <th className="px-3 py-2">Descrição</th>
-                        <th className="px-3 py-2 text-center">Qtd</th>
-                        <th className="px-3 py-2 text-right">Preço un.</th>
-                        <th className="px-3 py-2 text-right">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {detailModalItems.map((it) => (
-                        <tr key={it.id} className="border-b border-slate-100 last:border-0">
-                          <td className="px-3 py-2 text-slate-800">{it.item_description}</td>
-                          <td className="px-3 py-2 text-center tabular-nums text-slate-800">{it.quantity}</td>
-                          <td className="px-3 py-2 text-right tabular-nums text-slate-800">{formatBRL(it.unit_price)}</td>
-                          <td className="px-3 py-2 text-right font-medium tabular-nums text-slate-900">
-                            {formatBRL(it.total_price)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                  <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4 shadow-sm space-y-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Informações de Pagamento</h4>
+                    
+                    <div className="space-y-2 text-xs font-medium text-slate-600">
+                      <div>
+                        <span className="text-slate-400 block text-[10px] uppercase">Forma e Meio</span>
+                        <span className="text-slate-800 font-semibold">
+                          {parsePaymentOption(detailModalPedido.payment_option) === 'A_PRAZO' ? 'À Prazo' : 'À Vista'} ·{' '}
+                          {PAYMENT_METHOD_LABEL[parsePaymentMethod(detailModalPedido.payment_method)]}
+                        </span>
+                      </div>
+                      {downVal(detailModalPedido) > 0 && (
+                        <div>
+                          <span className="text-slate-400 block text-[10px] uppercase">Entrada no Ato</span>
+                          <span className="text-slate-800 font-semibold tabular-nums">
+                            {formatBRL(downVal(detailModalPedido))}
+                          </span>
+                        </div>
+                      )}
+                      <div>
+                        <span className="text-slate-400 block text-[10px] uppercase">Condições</span>
+                        <span className="text-slate-800 font-semibold tabular-nums">
+                          {installmentCell(detailModalPedido)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
 
-              {detailModalPedido.notes ? (
-                <div className="mt-4 rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Observações</p>
-                  <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{detailModalPedido.notes}</p>
+                  <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4 shadow-sm space-y-2">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Dados do Registro</h4>
+                    <div className="text-xs font-medium text-slate-600 space-y-1">
+                      <p><span className="text-slate-400">Cliente:</span> <span className="font-semibold text-slate-800">{detailModalPedido.client_id ? clientNameById.get(detailModalPedido.client_id) ?? '—' : '—'}</span></p>
+                      <p><span className="text-slate-400">Data de emissão:</span> <span className="font-semibold text-slate-800 tabular-nums">{detailModalPedido.order_date ? detailModalPedido.order_date.split('-').reverse().join('/') : '—'}</span></p>
+                      <p><span className="text-slate-400">Status atual:</span> <span className="font-semibold text-slate-800">{detailModalPedido.status}</span></p>
+                    </div>
+                  </div>
                 </div>
-              ) : null}
 
-              <div className="mt-4 flex justify-end">
+                {/* Column 2: Items table list (Right, spans 2 columns on desktop) */}
+                <div className="space-y-4 md:col-span-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                      <span>Itens do Documento</span>
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-600">
+                        {detailModalItems.length}
+                      </span>
+                    </h4>
+                  </div>
+
+                  {detailModalLoading ? (
+                    <div className="flex flex-col items-center justify-center py-12 gap-2 rounded-2xl border border-slate-100 bg-slate-50/50">
+                      <div className="h-6 w-6 animate-spin rounded-full border-3 border-slate-200 border-t-emerald-600" />
+                      <p className="text-xs font-semibold text-slate-400 uppercase">Carregando itens...</p>
+                    </div>
+                  ) : detailModalItems.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-slate-400 rounded-2xl border border-slate-100 bg-slate-50/50 uppercase font-medium">Nenhum item vinculado.</p>
+                  ) : (
+                    <div className="overflow-hidden rounded-xl border border-slate-100 shadow-sm bg-white">
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[480px] text-xs">
+                          <thead>
+                            <tr className="border-b border-slate-100 bg-slate-50/50 text-left">
+                              <th className="px-4 py-3 font-bold uppercase tracking-wider text-slate-400">Descrição do Produto</th>
+                              <th className="px-4 py-3 font-bold uppercase tracking-wider text-slate-400 text-center w-16">Qtd</th>
+                              <th className="px-4 py-3 font-bold uppercase tracking-wider text-slate-400 text-right w-24">Preço un.</th>
+                              <th className="px-4 py-3 font-bold uppercase tracking-wider text-slate-400 text-right w-28">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {detailModalItems.map((it) => (
+                              <tr key={it.id} className="hover:bg-slate-50/50 transition-colors">
+                                <td className="px-4 py-3 font-medium text-slate-800 leading-normal">{it.item_description}</td>
+                                <td className="px-4 py-3 text-center font-bold text-slate-800 tabular-nums">{it.quantity}</td>
+                                <td className="px-4 py-3 text-right font-medium text-slate-500 tabular-nums">{formatBRL(it.unit_price)}</td>
+                                <td className="px-4 py-3 text-right font-bold text-slate-900 tabular-nums">
+                                  {formatBRL(it.total_price)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {detailModalPedido.notes && (
+                    <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4 shadow-sm">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Observações / Notas</h4>
+                      <p className="whitespace-pre-wrap text-xs font-medium text-slate-600 leading-relaxed uppercase">{detailModalPedido.notes}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="mt-6 flex justify-end border-t border-slate-100 pt-4">
                 <button
                   type="button"
-                  className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 active:scale-95 transition-all shadow-sm"
                   onClick={closePedidoDetailModal}
                 >
                   Fechar
@@ -1039,8 +1387,7 @@ export function BemAvivPedidosPage() {
             </div>
           </div>
         </div>
-      ) : null}
-
+      )}
     </div>
   )
 }
