@@ -22,6 +22,7 @@ import { useSupabase } from '../hooks/useSupabase'
 import { useCompany } from '../context/CompanyContext'
 import { normalizePayload, type OfferProduct, type OfferVariation } from '../lib/bemAvivOfferProduct'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
+import { cn } from '../lib/cn'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { formatBRL, parseMoney } from '../lib/format'
 import { toUpperTrim } from '../lib/text'
@@ -1434,32 +1435,45 @@ export function BemAvivNovoPedidoPage() {
             </section>
 
             <section id="np-sec-pagamento" className="np-section" aria-labelledby="np-lbl-pag">
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 font-hub text-base font-semibold text-slate-800">
-                    <CircleDollarSign size={20} className="text-[#185FA5]" aria-hidden />
-                    Informações pagamento desconto e frete
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4 pt-0">
-                  <div>
-                    <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Pagamento</label>
-                    <select
-                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-3 text-base"
-                      value={form.payment_option}
-                      onChange={(e) => {
-                        const v = e.target.value as PaymentOption
-                        setForm({ ...form, payment_option: v })
-                      }}
+              <div className="np-section-header">
+                <div className="np-section-icon np-icon-purple">
+                  <CircleDollarSign size={15} aria-hidden />
+                </div>
+                <span className="np-section-label" id="np-lbl-pag">
+                  Pagamento e frete
+                </span>
+              </div>
+              <div className="np-section-body">
+                <div className="np-field">
+                  <span className="np-label">Forma de pagamento</span>
+                  <div className="np-pay-opts" role="group" aria-label="Forma de pagamento">
+                    <button
+                      type="button"
+                      className={cn('np-pay-opt', form.payment_option === 'A_VISTA' && 'sel')}
+                      onClick={() => setForm({ ...form, payment_option: 'A_VISTA' })}
                     >
-                      <option value="A_VISTA">À vista</option>
-                      <option value="A_PRAZO">À prazo</option>
-                    </select>
+                      <Banknote size={20} aria-hidden />
+                      <span>À vista</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={cn('np-pay-opt', form.payment_option === 'A_PRAZO' && 'sel')}
+                      onClick={() => setForm({ ...form, payment_option: 'A_PRAZO' })}
+                    >
+                      <CreditCard size={20} aria-hidden />
+                      <span>À prazo</span>
+                    </button>
                   </div>
+                </div>
 
-                  <div>
-                    <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Meio</label>
+                <div className="np-row-3">
+                  <div className="np-field">
+                    <label className="np-label" htmlFor="np-meio">
+                      Meio
+                    </label>
                     <select
-                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-3 text-base"
+                      id="np-meio"
+                      className="np-select"
                       value={form.payment_method}
                       onChange={(e) => setForm({ ...form, payment_method: e.target.value as PaymentMethod })}
                     >
@@ -1470,288 +1484,204 @@ export function BemAvivNovoPedidoPage() {
                       ))}
                     </select>
                   </div>
-
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Entrada (R$)</label>
-                      <Input
-                        className="mt-1 h-12"
-                        value={form.down_payment}
-                        onChange={(e) => setForm({ ...form, down_payment: e.target.value })}
-                        inputMode="decimal"
-                        title="Opcional. Valor pago no ato; o saldo entra no total e pode ser quitado na entrega (à vista ou parcelado nas parcelas abaixo)."
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Meio da entrada</label>
-                      <select
-                        className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-3 text-base"
-                        value={form.down_payment_method}
-                        onChange={(e) => setForm({ ...form, down_payment_method: e.target.value as PaymentMethod })}
-                        aria-label="Meio da entrada"
-                      >
-                        {(Object.keys(PAYMENT_METHOD_LABEL) as PaymentMethod[]).map((k) => (
-                          <option key={k} value={k}>
-                            {PAYMENT_METHOD_LABEL[k]}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                  <div className="np-field">
+                    <label className="np-label" htmlFor="np-parcelas">
+                      Parcelas
+                    </label>
+                    <input
+                      id="np-parcelas"
+                      className="np-input"
+                      inputMode="numeric"
+                      min={1}
+                      value={form.installments_count}
+                      onChange={(e) => setForm({ ...form, installments_count: e.target.value })}
+                    />
                   </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Parcelas</label>
-                      <Input
-                        className="mt-1 h-12"
-                        inputMode="numeric"
-                        min={1}
-                        value={form.installments_count}
-                        onChange={(e) => setForm({ ...form, installments_count: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Frete</label>
-                      <Input
-                        className="mt-1 h-12"
-                        value={form.freight_amount}
-                        onChange={(e) => setForm({ ...form, freight_amount: e.target.value })}
-                        inputMode="decimal"
-                        title="Frete somado ao total do pedido."
-                      />
-                    </div>
+                  <div className="np-field">
+                    <label className="np-label" htmlFor="np-frete">
+                      Frete (R$)
+                    </label>
+                    <input
+                      id="np-frete"
+                      className="np-input"
+                      value={form.freight_amount}
+                      onChange={(e) => setForm({ ...form, freight_amount: e.target.value })}
+                      inputMode="decimal"
+                    />
                   </div>
+                </div>
 
-                  <div>
-                    <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Outras despesas (R$)</label>
-                    <Input
-                      className="mt-1 h-12"
+                <div className="np-row-2">
+                  <div className="np-field">
+                    <label className="np-label" htmlFor="np-entrada">
+                      Entrada (R$)
+                    </label>
+                    <input
+                      id="np-entrada"
+                      className="np-input"
+                      value={form.down_payment}
+                      onChange={(e) => setForm({ ...form, down_payment: e.target.value })}
+                      inputMode="decimal"
+                    />
+                  </div>
+                  <div className="np-field">
+                    <label className="np-label" htmlFor="np-meio-entrada">
+                      Meio da entrada
+                    </label>
+                    <select
+                      id="np-meio-entrada"
+                      className="np-select"
+                      value={form.down_payment_method}
+                      onChange={(e) => setForm({ ...form, down_payment_method: e.target.value as PaymentMethod })}
+                    >
+                      {(Object.keys(PAYMENT_METHOD_LABEL) as PaymentMethod[]).map((k) => (
+                        <option key={k} value={k}>
+                          {PAYMENT_METHOD_LABEL[k]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="np-divider" />
+
+                <div className="np-row-2">
+                  <div className="np-field">
+                    <label className="np-label" htmlFor="np-despesas">
+                      Outras despesas (R$)
+                    </label>
+                    <input
+                      id="np-despesas"
+                      className="np-input"
                       value={form.other_expenses}
                       onChange={(e) => setForm({ ...form, other_expenses: e.target.value })}
                       inputMode="decimal"
-                      title="Taxas, extras ou acréscimos fora do catálogo. Somado ao total (não entra no desconto %). Edite também o preço unitário nas linhas, se precisar."
                     />
                   </div>
-
-                  <div>
-                    <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Desconto no pedido (%)</label>
-                    <Input
-                      className="mt-1 h-12"
+                  <div className="np-field">
+                    <label className="np-label" htmlFor="np-desconto">
+                      Desconto no pedido (%)
+                    </label>
+                    <input
+                      id="np-desconto"
+                      className="np-input"
                       value={form.discount_percent}
                       onChange={(e) => setForm({ ...form, discount_percent: e.target.value })}
                       inputMode="decimal"
-                      title="Desconto aplicado proporcionalmente nos itens."
                     />
                   </div>
+                </div>
 
-                  {lineItems.length > 0 ? (
-                    <div>
-                      <label className="text-sm font-semibold uppercase tracking-wide text-slate-600">Valor líquido (ajuste fino)</label>
-                      <Input
-                        className="mt-1 h-12"
-                        value={liquidTotalDraft}
-                        onChange={(e) => setLiquidTotalDraft(e.target.value)}
-                        onBlur={(e) => applyLiquidRawToDiscount(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault()
-                            applyLiquidRawToDiscount((e.target as HTMLInputElement).value)
-                          }
-                        }}
-                        inputMode="decimal"
-                        title="Ajuste fino do total líquido. Se o valor for maior que o subtotal + frete, o acréscimo vai para «Outras despesas» (e não para desconto negativo)."
-                      />
-                    </div>
-                  ) : null}
-                </CardContent>
-              </Card>
-
-              <Card className="border-0 shadow-md ring-1 ring-slate-100/90">
-                <CardHeader className="border-b border-slate-100 pb-3">
-                  <CardTitle className="flex items-center gap-2 font-hub text-lg font-bold text-slate-900">
-                    <ShoppingCart size={22} className="text-[#185FA5]" aria-hidden />
-                    Totais e finalização
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4 pt-4">
-                  <div className="space-y-2 text-base">
-                    <div className="flex justify-between text-slate-600">
-                      <span>Subtotal (itens)</span>
-                      <span className="tabular-nums">{formatBRL(linesGrossTotal)}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-600">
-                      <span>Descontos</span>
-                      <span className="tabular-nums text-emerald-600">− {formatBRL(discountDisplay)}</span>
-                    </div>
-                    {downPaymentApplied > 0 ? (
-                      <div className="flex justify-between text-slate-600">
-                        <span>Entrada</span>
-                        <span className="tabular-nums text-emerald-600">− {formatBRL(downPaymentApplied)}</span>
-                      </div>
-                    ) : null}
-                    <div className="flex justify-between text-slate-600">
-                      <span>Frete</span>
-                      <span className="tabular-nums">{formatBRL(freightAmountNum)}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-600">
-                      <span>Outras despesas</span>
-                      <span className="tabular-nums">{formatBRL(otherExpensesNum)}</span>
-                    </div>
-                    <div className="flex items-end justify-between border-t border-slate-100 pt-3">
-                      <span className="text-sm font-medium text-slate-900">Total</span>
-                      <span className="text-2xl font-black tabular-nums text-[#185FA5]">
-                        {lineItems.length > 0
-                          ? formatBRL(clampMoney(sumLinesNet - orderDiscount + freightAmountNum + otherExpensesNum - downPaymentApplied))
-                          : '—'}
-                      </span>
-                    </div>
-                    {previewOrderTotal != null && installmentsNum > 1 ? (
-                      <p className="text-sm text-slate-600">
-                        {installmentsNum}x de {formatBRL(previewOrderTotal / installmentsNum)}
-                      </p>
-                    ) : null}
+                {lineItems.length > 0 ? (
+                  <div className="np-field">
+                    <label className="np-label" htmlFor="np-liquido">
+                      Valor líquido (ajuste fino)
+                    </label>
+                    <input
+                      id="np-liquido"
+                      className="np-input"
+                      value={liquidTotalDraft}
+                      onChange={(e) => setLiquidTotalDraft(e.target.value)}
+                      onBlur={(e) => applyLiquidRawToDiscount(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          applyLiquidRawToDiscount((e.target as HTMLInputElement).value)
+                        }
+                      }}
+                      inputMode="decimal"
+                    />
                   </div>
-
-                  <div className="space-y-2 pt-2">
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-                      <p className="mb-2 font-semibold uppercase tracking-wide text-slate-700">Checklist pré-finalização</p>
-                      <div className="grid gap-1">
-                        <p>{checklist.hasClient ? 'OK' : 'Pendente'} Cliente selecionado</p>
-                        <p>{checklist.hasItems ? 'OK' : 'Pendente'} Itens adicionados</p>
-                        <p>{checklist.hasOrderDate ? 'OK' : 'Pendente'} Data do pedido</p>
-                        <p>{checklist.hasValidInstallments ? 'OK' : 'Pendente'} Parcelas válidas</p>
-                        <p>{checklist.hasValidDownPayment ? 'OK' : 'Pendente'} Entrada compatível com o total</p>
-                      </div>
-                    </div>
-                    <Button
-                      type="submit"
-                      className="h-12 w-full text-base font-bold shadow-md shadow-sky-100"
-                      disabled={!checklistOk}
-                    >
-                      {isEditMode
-                        ? 'Salvar alterações'
-                        : `Finalizar ${form.document_type === 'ORCAMENTO' ? 'orçamento' : 'pedido'}`}
-                    </Button>
-                    <Button type="button" variant="secondary" className="h-11 w-full text-base" disabled>
-                      Gerar PDF (em breve)
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            <div className="lg:col-span-7">
-              <Card className="sticky top-6 border-0 shadow-lg ring-1 ring-slate-100/90">
-                <CardHeader className="border-b border-slate-100 pb-3">
-                  <CardTitle className="flex items-center gap-2 font-hub text-lg font-bold text-slate-900">
-                    <List size={22} className="text-[#185FA5]" aria-hidden />
-                    Itens do pedido
-                  </CardTitle>
-                  <p className="mt-1 text-sm text-slate-500">Preço unitário editável após incluir a linha.</p>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[560px] text-left text-base">
-                      <thead className="border-b border-slate-100 bg-slate-50">
-                        <tr>
-                          <th className="p-4 text-left text-sm font-semibold uppercase tracking-wide text-slate-600">Item</th>
-                          <th className="w-24 p-4 text-center text-sm font-semibold uppercase tracking-wide text-slate-600">Qtd</th>
-                          <th className="w-36 p-4 text-sm font-semibold uppercase tracking-wide text-slate-600">Preço un.</th>
-                          <th className="p-4 text-sm font-semibold uppercase tracking-wide text-slate-600">Total</th>
-                          <th className="w-14 p-4" />
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {lineItems.length === 0 ? (
-                          <tr>
-                            <td colSpan={5} className="p-10 text-center text-base text-slate-600">
-                              Nenhum item ainda. Use a coluna à esquerda para buscar e incluir produtos ou kits.
-                            </td>
-                          </tr>
-                        ) : (
-                          lineItems.map((l) => {
-                            const rowNet = clampMoney(l.quantity * l.unit_price)
-                            return (
-                              <tr key={l.key} className="transition-colors hover:bg-slate-50/60">
-                                <td className="p-4">
-                                  <div className="flex items-start gap-3">
-                                    <div
-                                      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${
-                                        l.kind === 'KIT' ? 'bg-indigo-50 text-indigo-700' : 'bg-sky-50 text-[#185FA5]'
-                                      }`}
-                                    >
-                                      {l.kind === 'KIT' ? <Package size={20} /> : <Box size={20} />}
-                                    </div>
-                                    <div className="min-w-0">
-                                      <div className="flex flex-wrap items-center gap-2">
-                                        <p className="text-base font-semibold text-slate-900">{l.name}</p>
-                                        {l.kind === 'KIT' ? (
-                                          <Badge variant="outline" className="border-indigo-200 bg-indigo-50 text-sm text-indigo-800">
-                                            KIT
-                                          </Badge>
-                                        ) : null}
-                                      </div>
-                                      <p className="text-sm text-slate-500">{l.kind === 'KIT' ? 'Kit composto' : 'Catálogo oferta'}</p>
-                                      {(lineOrderDiscountByKey[l.key] ?? 0) > 0 || downPaymentApplied > 0 ? (
-                                        <p className="text-xs text-slate-400">
-                                          Bruto {formatBRL(rowNet)} · Abat. {formatBRL(rowNet - (lineNetByKey[l.key] ?? rowNet))} · Líquido{' '}
-                                          {formatBRL(lineNetByKey[l.key] ?? rowNet)}
-                                        </p>
-                                      ) : null}
-                                    </div>
-                                  </div>
-                                </td>
-                                <td className="p-4 text-center">
-                                  <Input
-                                    className="mx-auto h-10 w-16 border-slate-200 text-center text-base"
-                                    inputMode="numeric"
-                                    value={String(l.quantity)}
-                                    onChange={(e) => updateLineQty(l.key, e.target.value)}
-                                  />
-                                </td>
-                                <td className="p-4">
-                                  <Input
-                                    className="h-10 min-w-[8rem] border-slate-200 text-right text-base font-semibold tabular-nums text-slate-900"
-                                    inputMode="decimal"
-                                    value={unitPriceStrByKey[l.key] ?? formatMoneyInput(l.unit_price)}
-                                    onChange={(e) => setUnitPriceStrByKey((p) => ({ ...p, [l.key]: e.target.value }))}
-                                    onBlur={() => {
-                                      const raw = unitPriceStrByKey[l.key] ?? formatMoneyInput(l.unit_price)
-                                      const u = clampMoney(parseMoney(raw))
-                                      if (!Number.isFinite(u) || u <= 0) {
-                                        setUnitPriceStrByKey((p) => ({ ...p, [l.key]: formatMoneyInput(l.unit_price) }))
-                                        return
-                                      }
-                                      setLineItems((prev) => prev.map((x) => (x.key === l.key ? { ...x, unit_price: u } : x)))
-                                      setUnitPriceStrByKey((p) => ({ ...p, [l.key]: formatMoneyInput(u) }))
-                                    }}
-                                    aria-label={`Preço unitário ${l.name}`}
-                                  />
-                                </td>
-                                <td className="p-4 text-base font-semibold tabular-nums text-slate-900">
-                                  {formatBRL(lineNetByKey[l.key] ?? rowNet)}
-                                </td>
-                                <td className="p-4 text-right">
-                                  <button
-                                    type="button"
-                                    className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                                    aria-label="Remover"
-                                    onClick={() => removeLine(l.key)}
-                                  >
-                                    <Trash2 size={18} />
-                                  </button>
-                                </td>
-                              </tr>
-                            )
-                          })
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+                ) : null}
+              </div>
+            </section>
           </main>
+
+          <aside id="np-sec-revisao" className="np-sidebar" aria-label="Resumo do pedido">
+            <div className="np-sidebar-head">
+              <ClipboardList size={15} aria-hidden />
+              Resumo do pedido
+            </div>
+            <div className="np-sidebar-body">
+              <div className="np-sum-lines">
+                <div className="np-sum-line">
+                  <span className="lbl">Subtotal (itens)</span>
+                  <span className="val tabular-nums">{formatBRL(linesGrossTotal)}</span>
+                </div>
+                <div className="np-sum-line disc">
+                  <span className="lbl">Desconto</span>
+                  <span className="val tabular-nums">− {formatBRL(discountDisplay)}</span>
+                </div>
+                {downPaymentApplied > 0 ? (
+                  <div className="np-sum-line disc">
+                    <span className="lbl">Entrada</span>
+                    <span className="val tabular-nums">− {formatBRL(downPaymentApplied)}</span>
+                  </div>
+                ) : null}
+                <div className="np-sum-line">
+                  <span className="lbl">Frete</span>
+                  <span className="val tabular-nums">{formatBRL(freightAmountNum)}</span>
+                </div>
+                <div className="np-sum-line">
+                  <span className="lbl">Outras despesas</span>
+                  <span className="val tabular-nums">{formatBRL(otherExpensesNum)}</span>
+                </div>
+                <div className="np-sum-total">
+                  <span className="lbl">Total</span>
+                  <span className="val tabular-nums">
+                    {lineItems.length > 0
+                      ? formatBRL(
+                          clampMoney(
+                            sumLinesNet - orderDiscount + freightAmountNum + otherExpensesNum - downPaymentApplied,
+                          ),
+                        )
+                      : '—'}
+                  </span>
+                </div>
+                {previewOrderTotal != null && installmentsNum > 1 ? (
+                  <p className="text-xs text-[var(--np-muted)]">
+                    {installmentsNum}x de {formatBRL(previewOrderTotal / installmentsNum)}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="np-checklist-section">
+                <div className="np-checklist-label">Checklist pré-finalização</div>
+                <div className="np-checklist-box">
+                  <div className={cn('np-cl-item', checklist.hasClient && 'ok')}>
+                    {checklist.hasClient ? <Check size={15} /> : <Circle size={15} />}
+                    Cliente selecionado
+                  </div>
+                  <div className={cn('np-cl-item', checklist.hasItems && 'ok')}>
+                    {checklist.hasItems ? <Check size={15} /> : <Circle size={15} />}
+                    Itens adicionados
+                  </div>
+                  <div className={cn('np-cl-item', checklist.hasOrderDate && 'ok')}>
+                    {checklist.hasOrderDate ? <Check size={15} /> : <Circle size={15} />}
+                    Data do pedido
+                  </div>
+                  <div className={cn('np-cl-item', checklist.hasValidInstallments && 'ok')}>
+                    {checklist.hasValidInstallments ? <Check size={15} /> : <Circle size={15} />}
+                    Parcelas válidas
+                  </div>
+                  <div className={cn('np-cl-item', checklist.hasValidDownPayment && 'ok')}>
+                    {checklist.hasValidDownPayment ? <Check size={15} /> : <Circle size={15} />}
+                    Entrada compatível
+                  </div>
+                </div>
+
+                <button type="submit" className="np-btn-fin" disabled={!checklistOk}>
+                  <Check size={15} aria-hidden />
+                  {isEditMode
+                    ? 'Salvar alterações'
+                    : `Finalizar ${form.document_type === 'ORCAMENTO' ? 'orçamento' : 'pedido'}`}
+                </button>
+                <button type="button" className="np-btn-pdf" disabled>
+                  Gerar PDF (em breve)
+                </button>
+              </div>
+            </div>
+          </aside>
         </form>
       )}
     </div>
