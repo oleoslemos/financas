@@ -4,6 +4,7 @@ import { Avatar, AvatarFallback } from '../ui/Avatar'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card'
 import { buildWhatsappUrl } from '../../lib/whatsapp'
 import { cn } from '../../lib/cn'
+import { formatDateOnly } from '../../lib/dates'
 
 export type FollowUpCRMClient = {
   id: string
@@ -22,16 +23,6 @@ function onlyDigits(v: string) {
 function telHref(phoneA?: string | null, phoneB?: string | null) {
   const d = onlyDigits((phoneA || phoneB) ?? '')
   return d ? `tel:${d}` : null
-}
-
-function formatShortDateTime(iso: string | null) {
-  if (!iso) return '—'
-  const dt = new Date(iso)
-  if (Number.isNaN(dt.getTime())) return '—'
-  return new Intl.DateTimeFormat('pt-BR', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  }).format(dt)
 }
 
 function initials(name: string) {
@@ -64,7 +55,7 @@ function TimelineSubtitle({ client }: { client: FollowUpCRMClient }) {
   if (at.getTime() < now) {
     return (
       <span className="text-xs font-medium italic text-red-600">
-        Atrasado: {formatShortDateTime(client.next_followup_at)}
+        Atrasado: {formatDateOnly(client.next_followup_at)}
       </span>
     )
   }
@@ -72,10 +63,9 @@ function TimelineSubtitle({ client }: { client: FollowUpCRMClient }) {
   const tomorrow = new Date(today)
   tomorrow.setDate(tomorrow.getDate() + 1)
   if (at >= today && at < tomorrow) {
-    const timeOnly = new Intl.DateTimeFormat('pt-BR', { timeStyle: 'short' }).format(at)
-    return <span className="text-xs text-slate-500">Hoje às {timeOnly}</span>
+    return <span className="text-xs text-slate-500">Hoje</span>
   }
-  return <span className="text-xs text-slate-500">{formatShortDateTime(client.next_followup_at)}</span>
+  return <span className="text-xs text-slate-500">{formatDateOnly(client.next_followup_at)}</span>
 }
 
 const avatarRing: Record<'rose' | 'sky' | 'slate', { ring: string; fallback: string }> = {

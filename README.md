@@ -52,6 +52,8 @@ Se `VITE_ALLOWED_EMAILS` estiver vazia, **não** há esse filtro no front.
 
 **Clerk + RLS multi-empresa:** as policies usam `public.auth_jwt_email_lower()` para casar com `company_members.email`. No Clerk, inclua o **e-mail** no **Session token** (Customize session token → claims), por exemplo `{"email": "{{user.primary_email_address.email_address}}"}` ou o formato recomendado na documentação atual do Clerk + Supabase, para que o Postgres receba o e-mail no JWT.
 
+**Empresas (Bem Aviv / ComfortCare):** quais empresas o usuário vê vêm de `company_members` (e-mail). O hostname só sugere o padrão (`bemaviv.vercel.app` → `bem-aviv`, `distribuidoreko7.vercel.app` → `comfortcare`). Se o e-mail estiver em **duas** empresas, o app pede para escolher a empresa **antes** do menu (por sessão do navegador); depois pode trocar no seletor do topo.
+
 ### Workspace compartilhado (mesmos dados para todos)
 
 Defina `VITE_SHARED_DATA_OWNER_ID` com o `user.id` (Clerk) do usuário dono dos dados (ex.: conta do Léo).  

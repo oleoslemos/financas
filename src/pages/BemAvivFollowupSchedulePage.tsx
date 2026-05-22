@@ -4,6 +4,7 @@ import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
 import { useCompany } from '../context/CompanyContext'
 import { BEM_AVIV_CLIENT_COMMERCIAL_STAGE_OPTIONS } from '../lib/bemAvivClientStatus'
+import { dateInputToIso, toInputDate } from '../lib/dates'
 
 type FollowupStatus = 'PENDENTE' | 'CONCLUIDO' | 'CANCELADO'
 
@@ -40,15 +41,6 @@ function composeFollowupNote(summary: string, details: string) {
   if (s && d) return `RESUMO: ${s}\n${d}`
   if (s) return `RESUMO: ${s}`
   return d
-}
-
-function toInputDateTimeLocal(value?: string | null) {
-  if (!value) return ''
-  const dt = new Date(value)
-  if (Number.isNaN(dt.getTime())) return ''
-  const tz = dt.getTimezoneOffset() * 60_000
-  const local = new Date(dt.getTime() - tz)
-  return local.toISOString().slice(0, 16)
 }
 
 export function BemAvivFollowupSchedulePage() {
@@ -88,7 +80,7 @@ export function BemAvivFollowupSchedulePage() {
       const parsed = splitFollowupNote(c.next_followup_note)
       setClient(c)
       setScheduleForm({
-        next_followup_at: toInputDateTimeLocal(c.next_followup_at),
+        next_followup_at: toInputDate(c.next_followup_at),
         next_followup_summary: parsed.summary,
         next_followup_note: parsed.details,
         contact_done: false,
@@ -108,14 +100,14 @@ export function BemAvivFollowupSchedulePage() {
     e.preventDefault()
     if (!supabase || !client || !activeCompanyId) return
     if (!scheduleForm.next_followup_at) {
-      alert('INFORME A DATA/HORA DO PRÓXIMO FOLLOW-UP.')
+      alert('INFORME A DATA DO PRÓXIMO FOLLOW-UP.')
       return
     }
 
     const { error } = await supabase
       .from('bem_aviv_clients')
       .update({
-        next_followup_at: new Date(scheduleForm.next_followup_at).toISOString(),
+        next_followup_at: dateInputToIso(scheduleForm.next_followup_at),
         next_followup_note: composeFollowupNote(scheduleForm.next_followup_summary, scheduleForm.next_followup_note) || null,
         // Agendamento de próximo retorno deve permanecer pendente para aparecer no calendário da Visão Geral.
         next_followup_status: 'PENDENTE',
@@ -207,7 +199,7 @@ export function BemAvivFollowupSchedulePage() {
           <div>
             <label>PRÓXIMO FOLLOW-UP</label>
             <input
-              type="datetime-local"
+              type="date"
               required
               value={scheduleForm.next_followup_at}
               onChange={(e) => setScheduleForm((prev) => ({ ...prev, next_followup_at: e.target.value }))}

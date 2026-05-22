@@ -38,10 +38,22 @@ createRoot(document.getElementById('root')!).render(
             <code className="text-sky-700">pk_live_...</code> (Dashboard Clerk {'->'} API Keys).
           </p>
         ) : (
-          <p>
-            Defina <code className="text-sky-700">VITE_CLERK_PUBLISHABLE_KEY</code> e{' '}
-            <code className="text-sky-700">VITE_SUPABASE_*</code> no arquivo <code className="text-sky-700">.env</code>.
-          </p>
+          <div className="max-w-md space-y-2 text-sm">
+            <p>
+              Faltam variáveis de ambiente para iniciar o app (
+              <code className="text-sky-700">VITE_CLERK_PUBLISHABLE_KEY</code>,{' '}
+              <code className="text-sky-700">VITE_SUPABASE_URL</code>,{' '}
+              <code className="text-sky-700">VITE_SUPABASE_ANON_KEY</code>).
+            </p>
+            <p className="text-slate-600">
+              Em desenvolvimento: arquivo <code className="text-sky-700">.env</code> na raiz (copie de{' '}
+              <code className="text-sky-700">.env.example</code>).
+            </p>
+            <p className="text-slate-600">
+              Na Vercel: projeto → <strong>Settings → Environment Variables</strong> → marque Production e Preview →
+              salve e faça <strong>Redeploy</strong>.
+            </p>
+          </div>
         )}
       </div>
     )}

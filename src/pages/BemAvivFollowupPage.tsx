@@ -8,6 +8,7 @@ import { useCompany } from '../context/CompanyContext'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { buildWhatsappUrl } from '../lib/whatsapp'
+import { dateInputToIso, formatDateOnly, todayInputDate, toInputDate } from '../lib/dates'
 
 type FollowupStatus = 'PENDENTE' | 'CONCLUIDO' | 'CANCELADO'
 type DateFilter = 'TODOS' | 'VENCIDOS' | 'HOJE' | 'PROXIMOS_7' | 'SEM_AGENDAMENTO'
@@ -52,25 +53,6 @@ function formatPhone(v?: string | null) {
   if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2)}`
   if (d.length <= 11) return `(${d.slice(0, 2)}) ${d.slice(2, d.length - 4)}-${d.slice(d.length - 4)}`
   return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7, 11)}`
-}
-
-function toInputDateTimeLocal(value?: string | null) {
-  if (!value) return ''
-  const dt = new Date(value)
-  if (Number.isNaN(dt.getTime())) return ''
-  const tz = dt.getTimezoneOffset() * 60_000
-  const local = new Date(dt.getTime() - tz)
-  return local.toISOString().slice(0, 16)
-}
-
-function formatDateTime(value?: string | null) {
-  if (!value) return '—'
-  const dt = new Date(value)
-  if (Number.isNaN(dt.getTime())) return '—'
-  return new Intl.DateTimeFormat('pt-BR', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  }).format(dt)
 }
 
 function startOfToday() {
@@ -169,7 +151,7 @@ export function BemAvivFollowupPage() {
   })
 
   const [registerForm, setRegisterForm] = useState({
-    contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+    contacted_at: todayInputDate(),
     channel: 'WHATSAPP',
     result: '',
     notes: '',
@@ -237,7 +219,7 @@ export function BemAvivFollowupPage() {
 
     setRegisteringClient(client)
     setRegisterForm({
-      contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+      contacted_at: todayInputDate(),
       channel: 'WHATSAPP',
       result: '',
       notes: '',
@@ -259,7 +241,7 @@ export function BemAvivFollowupPage() {
         return
       }
       setRegisterForm({
-        contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+        contacted_at: todayInputDate(),
         channel: 'WHATSAPP',
         result: '',
         notes: '',
@@ -299,7 +281,7 @@ export function BemAvivFollowupPage() {
   function startEditHistoryEntry(item: FollowupHistoryRow) {
     setEditingHistoryId(item.id)
     setRegisterForm({
-      contacted_at: toInputDateTimeLocal(item.contacted_at),
+      contacted_at: toInputDate(item.contacted_at),
       channel: item.channel,
       result: item.result ?? '',
       notes: item.notes ?? '',
@@ -471,11 +453,11 @@ export function BemAvivFollowupPage() {
     e.preventDefault()
     if (!supabase || !followupUserId || !registeringClient || !activeCompanyId) return
     if (!registerForm.contacted_at) {
-      alert('INFORME A DATA/HORA DO CONTATO.')
+      alert('INFORME A DATA DO CONTATO.')
       return
     }
 
-    const contactedAtIso = new Date(registerForm.contacted_at).toISOString()
+    const contactedAtIso = dateInputToIso(registerForm.contacted_at)
     if (editingHistoryId) {
       const { error: updateError } = await supabase
         .from('bem_aviv_client_followups')
@@ -529,7 +511,7 @@ export function BemAvivFollowupPage() {
     }
 
     setRegisterForm({
-      contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+      contacted_at: todayInputDate(),
       channel: 'WHATSAPP',
       result: '',
       notes: '',
@@ -590,18 +572,18 @@ export function BemAvivFollowupPage() {
                 <li key={row.id} className="rounded-xl border border-violet-200/80 bg-white p-4 shadow-sm">
                   <p className="font-semibold text-slate-900">{row.full_name}</p>
                   <p className="mt-1 text-xs text-slate-600">
-                    Último toque (referência): {formatDateTime(new Date(refMs).toISOString())} · {formatDaysSinceTouchMs(refMs)}
+                    Último toque (referência): {formatDateOnly(new Date(refMs).toISOString())} · {formatDaysSinceTouchMs(refMs)}
                   </p>
                   <p className="mt-0.5 text-[9px] text-slate-500">
-                    Cadastro: {formatDateTime(row.last_contact_at)} · Último no histórico:{' '}
-                    {lastHist ? formatDateTime(lastHist.contacted_at) : '—'}
+                    Cadastro: {formatDateOnly(row.last_contact_at)} · Último no histórico:{' '}
+                    {lastHist ? formatDateOnly(lastHist.contacted_at) : '—'}
                   </p>
                   <div className="mt-2 rounded-md border border-slate-100 bg-slate-50/80 p-2 text-xs text-slate-700">
                     <p className="font-medium text-slate-600">Último registro no histórico</p>
                     {lastHist ? (
                       <>
                         <p>
-                          {formatDateTime(lastHist.contacted_at)} · {lastHist.channel}
+                          {formatDateOnly(lastHist.contacted_at)} · {lastHist.channel}
                         </p>
                         <p className="mt-0.5">{truncateText(lastHist.result, 120)}</p>
                         {lastHist.notes ? (
@@ -660,18 +642,18 @@ export function BemAvivFollowupPage() {
                     <tr key={row.id}>
                       <td className="font-medium">{row.full_name}</td>
                       <td>
-                        <span className="text-slate-800">{formatDateTime(new Date(refMs).toISOString())}</span>
+                        <span className="text-slate-800">{formatDateOnly(new Date(refMs).toISOString())}</span>
                         <span className="ml-1 text-xs text-slate-500">({formatDaysSinceTouchMs(refMs)})</span>
                         <p className="mt-1 text-[9px] text-slate-500">
-                          Cad.: {formatDateTime(row.last_contact_at)} · Hist.:{' '}
-                          {lastHist ? formatDateTime(lastHist.contacted_at) : '—'}
+                          Cad.: {formatDateOnly(row.last_contact_at)} · Hist.:{' '}
+                          {lastHist ? formatDateOnly(lastHist.contacted_at) : '—'}
                         </p>
                       </td>
                       <td className="max-w-md text-sm">
                         {lastHist ? (
                           <div>
                             <span className="text-slate-800">
-                              {formatDateTime(lastHist.contacted_at)} · {lastHist.channel}
+                              {formatDateOnly(lastHist.contacted_at)} · {lastHist.channel}
                             </span>
                             <p className="mt-0.5 text-slate-600">{truncateText(lastHist.result, 90)}</p>
                             {lastHist.notes ? <p className="text-xs text-slate-500">{truncateText(lastHist.notes, 70)}</p> : null}
@@ -786,11 +768,11 @@ export function BemAvivFollowupPage() {
                     </div>
                     <div className="flex justify-between gap-2">
                       <dt className="text-slate-500">Próximo</dt>
-                      <dd className="text-right">{formatDateTime(row.next_followup_at)}</dd>
+                      <dd className="text-right">{formatDateOnly(row.next_followup_at)}</dd>
                     </div>
                     <div className="flex justify-between gap-2">
                       <dt className="text-slate-500">Último contato</dt>
-                      <dd className="text-right">{formatDateTime(row.last_contact_at)}</dd>
+                      <dd className="text-right">{formatDateOnly(row.last_contact_at)}</dd>
                     </div>
                   </dl>
                   <div className="mt-4 grid grid-cols-3 gap-2">
@@ -879,8 +861,8 @@ export function BemAvivFollowupPage() {
                     <td>{formatPhone(row.phone_1) || formatPhone(row.phone_2) || '—'}</td>
                     <td>{row.client_status || '—'}</td>
                     <td>{row.commercial_stage || 'CONTATO'}</td>
-                    <td>{formatDateTime(row.last_contact_at)}</td>
-                    <td>{formatDateTime(row.next_followup_at)}</td>
+                    <td>{formatDateOnly(row.last_contact_at)}</td>
+                    <td>{formatDateOnly(row.next_followup_at)}</td>
                     <td>{row.next_followup_status || 'PENDENTE'}</td>
                     <td className="whitespace-nowrap">
                       <div className="flex justify-end gap-2">
@@ -942,9 +924,9 @@ export function BemAvivFollowupPage() {
             </div>
             <form onSubmit={submitRegisterContact} className="grid gap-3 sm:grid-cols-2">
               <div>
-                <label>DATA/HORA DO CONTATO</label>
+                <label>DATA DO CONTATO</label>
                 <input
-                  type="datetime-local"
+                  type="date"
                   required
                   value={registerForm.contacted_at}
                   onChange={(e) => setRegisterForm((prev) => ({ ...prev, contacted_at: e.target.value }))}
@@ -976,7 +958,7 @@ export function BemAvivFollowupPage() {
                     onClick={() => {
                       setEditingHistoryId(null)
                       setRegisterForm({
-                        contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+                        contacted_at: todayInputDate(),
                         channel: 'WHATSAPP',
                         result: '',
                         notes: '',
@@ -1009,7 +991,7 @@ export function BemAvivFollowupPage() {
                       <div key={item.id} className="mb-2 rounded-md border border-slate-200 p-2 last:mb-0">
                         <div className="flex items-start justify-between gap-2">
                           <p className="text-xs text-slate-500">
-                            {formatDateTime(item.contacted_at)} • {item.channel} • {item.created_by_name || '—'}
+                            {formatDateOnly(item.contacted_at)} • {item.channel} • {item.created_by_name || '—'}
                           </p>
                           <button
                             type="button"

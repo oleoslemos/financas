@@ -11,6 +11,7 @@ import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { cn } from '../lib/cn'
 import { formatBRL } from '../lib/format'
+import { dateInputToIso, formatDateOnly, todayInputDate, toInputDate } from '../lib/dates'
 
 const DISTRIBUTION_GOAL_BRL = 100_000
 const NO_CONTACT_ALERT_DAYS = 30
@@ -51,25 +52,6 @@ function includeInFollowupTimeline(c: ClientRow): boolean {
   const st = (c.next_followup_status ?? 'PENDENTE').toUpperCase()
   if (st === 'CANCELADO' || st === 'CONCLUIDO') return false
   return st === 'PENDENTE'
-}
-
-function formatShortDateTime(iso: string | null) {
-  if (!iso) return '—'
-  const dt = new Date(iso)
-  if (Number.isNaN(dt.getTime())) return '—'
-  return new Intl.DateTimeFormat('pt-BR', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  }).format(dt)
-}
-
-function toInputDateTimeLocal(value?: string | null) {
-  if (!value) return ''
-  const dt = new Date(value)
-  if (Number.isNaN(dt.getTime())) return ''
-  const tz = dt.getTimezoneOffset() * 60_000
-  const local = new Date(dt.getTime() - tz)
-  return local.toISOString().slice(0, 16)
 }
 
 /** Chave local YYYY-MM-DD para comparar com dia do calendário. */
@@ -240,7 +222,7 @@ export function BemAvivHomePage() {
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null)
   const [registerInlineSaving, setRegisterInlineSaving] = useState(false)
   const [registerInlineForm, setRegisterInlineForm] = useState({
-    contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+    contacted_at: todayInputDate(),
     channel: 'WHATSAPP',
     result: '',
     notes: '',
@@ -563,7 +545,7 @@ export function BemAvivHomePage() {
     setRegisterInlineOpen(false)
     setRegisterInlineSaving(false)
     setRegisterInlineForm({
-      contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+      contacted_at: todayInputDate(),
       channel: 'WHATSAPP',
       result: '',
       notes: '',
@@ -607,7 +589,7 @@ export function BemAvivHomePage() {
     if (!registerInlineForm.contacted_at) return
 
     setRegisterInlineSaving(true)
-    const contactedAtIso = new Date(registerInlineForm.contacted_at).toISOString()
+    const contactedAtIso = dateInputToIso(registerInlineForm.contacted_at)
     const followupUserId = ownerUserId.toUpperCase()
 
     if (editingHistoryId) {
@@ -648,7 +630,7 @@ export function BemAvivHomePage() {
       setEditingHistoryId(null)
       setRegisterInlineOpen(false)
       setRegisterInlineForm({
-        contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+        contacted_at: todayInputDate(),
         channel: 'WHATSAPP',
         result: '',
         notes: '',
@@ -951,7 +933,7 @@ export function BemAvivHomePage() {
                       {agendaRows.map((c) => (
                         <li key={c.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-3 py-2.5 text-sm">
                         <span className="min-w-0 truncate font-medium text-slate-900">{c.full_name}</span>
-                          <span className="text-right text-xs text-slate-500">{formatShortDateTime(c.next_followup_at)}</span>
+                          <span className="text-right text-xs text-slate-500">{formatDateOnly(c.next_followup_at)}</span>
                           <button
                             type="button"
                             onClick={() => void openHistoryModal(c)}
@@ -989,8 +971,8 @@ export function BemAvivHomePage() {
                           <p className="truncate text-sm font-semibold text-slate-900">{client.full_name}</p>
                           <p className="text-xs text-slate-500">
                             {reason}
-                            {client.next_followup_at ? ` • Próximo: ${formatShortDateTime(client.next_followup_at)}` : ''}
-                            {lastTouchIso ? ` • Último contato: ${formatShortDateTime(lastTouchIso)}` : ''}
+                            {client.next_followup_at ? ` • Próximo: ${formatDateOnly(client.next_followup_at)}` : ''}
+                            {lastTouchIso ? ` • Último contato: ${formatDateOnly(lastTouchIso)}` : ''}
                           </p>
                         </div>
                         <button
@@ -1028,7 +1010,7 @@ export function BemAvivHomePage() {
                     if (registerInlineOpen && editingHistoryId) {
                       setEditingHistoryId(null)
                       setRegisterInlineForm({
-                        contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+                        contacted_at: todayInputDate(),
                         channel: 'WHATSAPP',
                         result: '',
                         notes: '',
@@ -1040,7 +1022,7 @@ export function BemAvivHomePage() {
                       if (next) {
                         setEditingHistoryId(null)
                         setRegisterInlineForm({
-                          contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+                          contacted_at: todayInputDate(),
                           channel: 'WHATSAPP',
                           result: '',
                           notes: '',
@@ -1090,9 +1072,9 @@ export function BemAvivHomePage() {
                 </p>
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
                   <label className="text-xs text-slate-600">
-                    Data/Hora
+                    Data
                     <input
-                      type="datetime-local"
+                      type="date"
                       required
                       value={registerInlineForm.contacted_at}
                       onChange={(e) => setRegisterInlineForm((prev) => ({ ...prev, contacted_at: e.target.value }))}
@@ -1146,7 +1128,7 @@ export function BemAvivHomePage() {
                         setEditingHistoryId(null)
                         setRegisterInlineOpen(false)
                         setRegisterInlineForm({
-                          contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+                          contacted_at: todayInputDate(),
                           channel: 'WHATSAPP',
                           result: '',
                           notes: '',
@@ -1169,7 +1151,7 @@ export function BemAvivHomePage() {
                 <table className="min-w-full text-sm">
                   <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                     <tr>
-                      <th className="px-3 py-2 text-left">Data/Hora</th>
+                      <th className="px-3 py-2 text-left">Data</th>
                       <th className="px-3 py-2 text-left">Canal</th>
                       <th className="px-3 py-2 text-left">Usuário</th>
                       <th className="px-3 py-2 text-left">Resumo</th>
@@ -1186,7 +1168,7 @@ export function BemAvivHomePage() {
                           editingHistoryId === r.id && 'bg-sky-50/80',
                         )}
                       >
-                        <td className="px-3 py-2 text-slate-700">{formatShortDateTime(r.contacted_at)}</td>
+                        <td className="px-3 py-2 text-slate-700">{formatDateOnly(r.contacted_at)}</td>
                         <td className="px-3 py-2 text-slate-700">{r.channel}</td>
                         <td className="px-3 py-2 text-slate-700">{r.created_by_name || '—'}</td>
                         <td className="px-3 py-2 text-slate-700">{r.result || '—'}</td>
@@ -1198,7 +1180,7 @@ export function BemAvivHomePage() {
                             onClick={() => {
                               setEditingHistoryId(r.id)
                               setRegisterInlineForm({
-                                contacted_at: toInputDateTimeLocal(r.contacted_at),
+                                contacted_at: toInputDate(r.contacted_at),
                                 channel: r.channel,
                                 result: r.result ?? '',
                                 notes: r.notes ?? '',

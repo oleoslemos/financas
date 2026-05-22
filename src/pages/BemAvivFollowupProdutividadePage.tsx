@@ -9,6 +9,7 @@ import { BEM_AVIV_CLIENT_COMMERCIAL_STAGE_OPTIONS } from '../lib/bemAvivClientSt
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { buildWhatsappUrl } from '../lib/whatsapp'
+import { dateInputToIso, formatDateOnly, todayInputDate } from '../lib/dates'
 
 type ClienteRow = {
   id: string
@@ -46,26 +47,10 @@ type HistoryFormState = {
   notes: string
 }
 
-function formatDateTime(value?: string | null) {
-  if (!value) return '—'
-  const dt = new Date(value)
-  if (Number.isNaN(dt.getTime())) return '—'
-  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(dt)
-}
-
 function startOfToday() {
   const d = new Date()
   d.setHours(0, 0, 0, 0)
   return d
-}
-
-function toInputDateTimeLocal(value?: string | null) {
-  if (!value) return ''
-  const dt = new Date(value)
-  if (Number.isNaN(dt.getTime())) return ''
-  const tz = dt.getTimezoneOffset() * 60_000
-  const local = new Date(dt.getTime() - tz)
-  return local.toISOString().slice(0, 16)
 }
 
 function isSameDay(a: Date, b: Date) {
@@ -131,7 +116,7 @@ export function BemAvivFollowupProdutividadePage() {
   const [historyTarget, setHistoryTarget] = useState<ClientHistoryTarget | null>(null)
   const [historyFormOpen, setHistoryFormOpen] = useState(false)
   const [historyForm, setHistoryForm] = useState<HistoryFormState>({
-    contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+    contacted_at: todayInputDate(),
     channel: 'WHATSAPP',
     result: '',
     notes: '',
@@ -196,11 +181,11 @@ export function BemAvivFollowupProdutividadePage() {
     e.preventDefault()
     if (!supabase || !followupUserId || !historyTarget || !activeCompanyId) return
     if (!historyForm.contacted_at) {
-      alert('INFORME A DATA/HORA DO CONTATO.')
+      alert('INFORME A DATA DO CONTATO.')
       return
     }
 
-    const contactedAtIso = new Date(historyForm.contacted_at).toISOString()
+    const contactedAtIso = dateInputToIso(historyForm.contacted_at)
     const { error } = await supabase.from('bem_aviv_client_followups').insert({
       user_id: followupUserId,
       company_id: activeCompanyId,
@@ -230,7 +215,7 @@ export function BemAvivFollowupProdutividadePage() {
     }
 
     setHistoryForm({
-      contacted_at: toInputDateTimeLocal(new Date().toISOString()),
+      contacted_at: todayInputDate(),
       channel: 'WHATSAPP',
       result: '',
       notes: '',
@@ -395,7 +380,7 @@ export function BemAvivFollowupProdutividadePage() {
                   <td>{item.full_name}</td>
                   <td>{item.client_status || 'PROSPECÇÃO'}</td>
                   <td>{item.commercial_stage || 'CONTATO'}</td>
-                  <td>{formatDateTime(item.next_followup_at)}</td>
+                  <td>{formatDateOnly(item.next_followup_at)}</td>
                   <td>{item.next_followup_status || 'PENDENTE'}</td>
                   <td className="text-right">
                     <Button
@@ -434,9 +419,9 @@ export function BemAvivFollowupProdutividadePage() {
               {historyFormOpen ? (
                 <form onSubmit={submitHistoryEntry} className="mb-3 grid gap-2 rounded-md border border-slate-200 p-3">
                   <div>
-                    <label>DATA/HORA DO CONTATO</label>
+                    <label>DATA DO CONTATO</label>
                     <input
-                      type="datetime-local"
+                      type="date"
                       required
                       value={historyForm.contacted_at}
                       onChange={(e) => setHistoryForm((prev) => ({ ...prev, contacted_at: e.target.value }))}
@@ -473,7 +458,7 @@ export function BemAvivFollowupProdutividadePage() {
                 ? historyRows.map((item) => (
                     <div key={item.id} className="rounded-md border border-slate-200 p-2">
                       <p className="text-xs text-slate-500">
-                        {formatDateTime(item.contacted_at)} • {item.channel ?? 'OUTRO'} • {item.created_by_name || '—'}
+                        {formatDateOnly(item.contacted_at)} • {item.channel ?? 'OUTRO'} • {item.created_by_name || '—'}
                       </p>
                       <p>{item.result || 'SEM RESULTADO'}</p>
                       {item.notes ? <p className="text-xs text-slate-500">{item.notes}</p> : null}

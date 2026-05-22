@@ -12,6 +12,10 @@ import {
 import { useSupabase } from '../hooks/useSupabase'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { getDefaultCompanySlugForHostname, getSeededCompanyIdForHostname } from '../lib/defaultCompanyByHost'
+import {
+  isCompanyPickerConfirmed,
+  markCompanyPickerConfirmed,
+} from '../lib/companySelectionSession'
 
 export type CompanyRow = {
   id: string
@@ -33,6 +37,11 @@ type CompanyContextValue = {
   companies: CompanyRow[]
   /** true quando há e-mail Clerk mas a lista de empresas veio vazia (típico: JWT sem e-mail e sem clerk_user_id no banco). */
   cannotListCompanyMembership: boolean
+  /** Com 2+ empresas no e-mail e sem confirmação nesta sessão, bloqueia o hub até escolher. */
+  needsCompanySelection: boolean
+  /** Empresa sugerida pelo hostname (ex.: distribuidoreko7 → comfortcare), se o usuário tiver vínculo. */
+  suggestedCompanyId: string | null
+  confirmCompanySelection: (id: string) => void
   activeCompanyId: string | null
   setActiveCompanyId: (id: string) => void
   activeCompany: CompanyRow | null
@@ -45,22 +54,22 @@ function storageKey(userId: string | undefined) {
   return userId ? `sistema-financeiro.activeCompanyId.${userId}` : ''
 }
 
-function initialActiveCompanyIdFromHost(): string | null {
-  if (typeof window === 'undefined') return null
-  return getSeededCompanyIdForHostname(window.location.hostname)
-}
-
 export function CompanyProvider({ children }: { children: ReactNode }) {
   const { user, isLoaded } = useUser()
   const supabase = useSupabase()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [companies, setCompanies] = useState<CompanyRow[]>([])
-  const [activeCompanyId, setActiveCompanyIdState] = useState<string | null>(initialActiveCompanyIdFromHost)
+  const [activeCompanyId, setActiveCompanyIdState] = useState<string | null>(null)
+  const [pickerConfirmed, setPickerConfirmed] = useState(() => isCompanyPickerConfirmed(user?.id))
   const activeCompanyIdRef = useRef<string | null>(null)
   useEffect(() => {
     activeCompanyIdRef.current = activeCompanyId
   }, [activeCompanyId])
+
+  useEffect(() => {
+    setPickerConfirmed(isCompanyPickerConfirmed(user?.id))
+  }, [user?.id])
 
   const emails = useMemo(() => clerkEmailCandidates(user), [user])
 
@@ -142,40 +151,40 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       const host = typeof window !== 'undefined' ? window.location.hostname : ''
       const hostSlug = getDefaultCompanySlugForHostname(host)
       const hostCompany = rows.find((c) => c.slug === hostSlug) ?? null
+      const multiCompany = rows.length > 1
+      const sessionOk = isCompanyPickerConfirmed(user?.id)
 
-      let next: string | null =
-        preferredActiveId && rows.some((c) => c.id === preferredActiveId) ? preferredActiveId : null
-      if (next && hostCompany) {
-        const prefRow = rows.find((c) => c.id === next)
-        if (prefRow && prefRow.slug !== hostCompany.slug) {
-          next = null
-        }
-      }
+      let next: string | null = null
 
-      // Preferência salva só vale se for compatível com o host (ex.: bemaviv.vercel.app → empresa
-      // slug bem-aviv). Caso contrário, um localStorage antigo com outra empresa zerava o hub.
-      if (!next && key) {
-        try {
-          const stored = localStorage.getItem(key)
-          const storedRow = stored ? rows.find((c) => c.id === stored) : undefined
-          if (storedRow) {
-            if (!hostCompany || storedRow.slug === hostCompany.slug) {
-              next = storedRow.id
-            }
-          }
-        } catch {
-          /* ignore */
-        }
-      }
-      if (!next && hostCompany) {
-        next = hostCompany.id
-      }
-      if (!next && rows.length > 0) {
+      if (rows.length === 1) {
         next = rows[0].id
-      }
-      if (!next) {
+        markCompanyPickerConfirmed(user?.id)
+        setPickerConfirmed(true)
+      } else if (multiCompany && sessionOk) {
+        if (preferredActiveId && rows.some((c) => c.id === preferredActiveId)) {
+          next = preferredActiveId
+        }
+        if (!next && key) {
+          try {
+            const stored = localStorage.getItem(key)
+            const storedRow = stored ? rows.find((c) => c.id === stored) : undefined
+            if (storedRow) next = storedRow.id
+          } catch {
+            /* ignore */
+          }
+        }
+        if (!next && hostCompany) {
+          next = hostCompany.id
+        }
+        if (!next) {
+          next = rows[0].id
+        }
+      } else if (multiCompany) {
+        next = null
+      } else if (rows.length === 0) {
         next = getSeededCompanyIdForHostname(host)
       }
+
       setActiveCompanyIdState(next)
       if (key && next) {
         try {
@@ -197,9 +206,12 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     await loadMemberships(activeCompanyIdRef.current)
   }, [loadMemberships])
 
-  const setActiveCompanyId = useCallback(
+  const confirmCompanySelection = useCallback(
     (id: string) => {
+      if (!companies.some((c) => c.id === id)) return
       setActiveCompanyIdState(id)
+      markCompanyPickerConfirmed(user?.id)
+      setPickerConfirmed(true)
       const key = storageKey(user?.id)
       if (!key) return
       try {
@@ -208,7 +220,14 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
         /* ignore */
       }
     },
-    [user?.id],
+    [companies, user?.id],
+  )
+
+  const setActiveCompanyId = useCallback(
+    (id: string) => {
+      confirmCompanySelection(id)
+    },
+    [confirmCompanySelection],
   )
 
   const activeCompany = useMemo(
@@ -229,12 +248,26 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     [isLoaded, supabase, emails.length, loading, error, companies.length],
   )
 
+  const suggestedCompanyId = useMemo(() => {
+    if (typeof window === 'undefined') return null
+    const hostSlug = getDefaultCompanySlugForHostname(window.location.hostname)
+    return companies.find((c) => c.slug === hostSlug)?.id ?? null
+  }, [companies])
+
+  const needsCompanySelection = useMemo(
+    () => companies.length > 1 && !pickerConfirmed,
+    [companies.length, pickerConfirmed],
+  )
+
   const value = useMemo<CompanyContextValue>(
     () => ({
       loading,
       error,
       companies,
       cannotListCompanyMembership,
+      needsCompanySelection,
+      suggestedCompanyId,
+      confirmCompanySelection,
       activeCompanyId,
       setActiveCompanyId,
       activeCompany,
@@ -245,6 +278,9 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       error,
       companies,
       cannotListCompanyMembership,
+      needsCompanySelection,
+      suggestedCompanyId,
+      confirmCompanySelection,
       activeCompanyId,
       setActiveCompanyId,
       activeCompany,

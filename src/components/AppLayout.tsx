@@ -31,6 +31,7 @@ import { canAccessTasksHomolog } from '../lib/tasksHomologAccess'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { canAccessProjects } from '../lib/projectsAccess'
 import { isBemAvivOnlyUser } from '../lib/userAccess'
+import { CompanySelectionGate } from './CompanySelectionGate'
 import { CompanyProvider, useCompany } from '../context/CompanyContext'
 
 type MenuItem = {
@@ -97,8 +98,16 @@ function AppLayoutShell() {
   const [openTreeGroupKeys, setOpenTreeGroupKeys] = useState<string[]>([])
 
   const emails = clerkEmailCandidates(user)
-  const { companies, activeCompanyId, setActiveCompanyId, loading: companiesLoading, cannotListCompanyMembership } =
-    useCompany()
+  const {
+    companies,
+    activeCompanyId,
+    setActiveCompanyId,
+    loading: companiesLoading,
+    cannotListCompanyMembership,
+    needsCompanySelection,
+  } = useCompany()
+  const hideBemAvivChrome =
+    location.pathname.startsWith('/bem-aviv') && needsCompanySelection && !cannotListCompanyMembership
   const bemAvivOnlyUser = isBemAvivOnlyUser(emails)
   const hideAgendaTasks = bemAvivOnlyUser
   const tasksHomologEnabled = !hideAgendaTasks && canAccessTasksHomolog(user?.primaryEmailAddress?.emailAddress)
@@ -239,6 +248,7 @@ function AppLayoutShell() {
           'fixed inset-y-0 left-0 z-50 flex h-dvh max-h-dvh w-[272px] shrink-0 flex-col border-r border-slate-200 bg-white transition-transform duration-200 ease-out lg:static lg:z-auto lg:h-full lg:w-auto lg:max-h-none lg:translate-x-0',
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full',
           sidebarCollapsed ? 'lg:w-[56px]' : 'lg:w-[220px]',
+          hideBemAvivChrome && 'hidden',
         )}
         aria-label="Menu lateral"
       >
@@ -404,7 +414,7 @@ function AppLayoutShell() {
           <p className="min-w-0 truncate text-xs text-slate-500">
             {breadcrumb.segment} / <span className="font-medium text-slate-900">{breadcrumb.current}</span>
           </p>
-          {location.pathname.startsWith('/bem-aviv') && companies.length > 1 ? (
+          {location.pathname.startsWith('/bem-aviv') && companies.length > 1 && !needsCompanySelection ? (
             <label className="hidden min-w-0 shrink sm:flex sm:max-w-[220px] sm:items-center sm:gap-2">
               <span className="sr-only">Empresa ativa</span>
               <select
@@ -478,7 +488,9 @@ function AppLayoutShell() {
               </p>
             </div>
           ) : null}
-          <Outlet />
+          <CompanySelectionGate>
+            <Outlet />
+          </CompanySelectionGate>
         </main>
       </div>
     </div>
