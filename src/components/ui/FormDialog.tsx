@@ -9,7 +9,7 @@ type FormDialogProps = {
   onClose: () => void
 }
 
-export function FormDialog({ open, title, description, children, actions, onClose }: FormDialogProps) {
+export function FormDialog({ open, title, description, children, actions, onClose: _onClose }: FormDialogProps) {
   if (!open) return null
   return (
     <div

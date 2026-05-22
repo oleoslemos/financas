@@ -4,6 +4,7 @@ import {
   ArrowUp,
   ArrowUpDown,
   CalendarPlus,
+  CheckCircle2,
   ClipboardList,
   History,
   MessageCircle,
@@ -48,6 +49,8 @@ type OrderItemRow = {
   created_at: string
 }
 
+const CHANNEL_AGENDAMENTO = 'AGENDAMENTO'
+
 type FollowupHistoryRow = {
   id: string
   client_id: string
@@ -56,6 +59,110 @@ type FollowupHistoryRow = {
   created_by_name?: string | null
   result: string | null
   notes: string | null
+}
+
+type HistoryTimelineItem =
+  | { key: string; kind: 'contact'; row: FollowupHistoryRow }
+  | {
+      key: string
+      kind: 'schedule-active'
+      status: string
+      at: string
+      summary: string
+      details: string
+      commercialStage: string
+    }
+  | {
+      key: string
+      kind: 'schedule-record'
+      row: FollowupHistoryRow
+      status: string
+      summary: string
+      details: string
+    }
+
+function encodeAgendamentoResult(status: string, summary: string) {
+  return `${status.toUpperCase()}|${summary.trim()}`
+}
+
+function parseAgendamentoResult(result: string | null) {
+  const raw = (result ?? '').trim()
+  const pipe = raw.indexOf('|')
+  if (pipe > 0) {
+    const status = raw.slice(0, pipe).toUpperCase()
+    const summary = raw.slice(pipe + 1).trim()
+    if (status === 'PENDENTE' || status === 'CONCLUIDO' || status === 'CANCELADO') {
+      return { status, summary }
+    }
+  }
+  return { status: 'CONCLUIDO', summary: raw }
+}
+
+function sameCalendarDay(a: string | null | undefined, b: string | null | undefined) {
+  if (!a || !b) return false
+  return toInputDate(a) === toInputDate(b)
+}
+
+function buildHistoryTimeline(client: Cliente, rows: FollowupHistoryRow[]): HistoryTimelineItem[] {
+  const items: HistoryTimelineItem[] = []
+  const contacts = rows.filter((r) => r.channel !== CHANNEL_AGENDAMENTO)
+  const schedules = rows.filter((r) => r.channel === CHANNEL_AGENDAMENTO)
+
+  for (const r of contacts) {
+    items.push({ key: `contact-${r.id}`, kind: 'contact', row: r })
+  }
+
+  for (const r of schedules) {
+    const parsed = parseAgendamentoResult(r.result)
+    items.push({
+      key: `schedule-${r.id}`,
+      kind: 'schedule-record',
+      row: r,
+      status: parsed.status,
+      summary: parsed.summary,
+      details: (r.notes ?? '').trim(),
+    })
+  }
+
+  const pendingOnClient =
+    client.next_followup_at && (client.next_followup_status ?? 'PENDENTE').toUpperCase() === 'PENDENTE'
+  if (pendingOnClient) {
+    const note = splitFollowupNote(client.next_followup_note)
+    const duplicateInRows = schedules.some(
+      (r) =>
+        sameCalendarDay(r.contacted_at, client.next_followup_at) &&
+        parseAgendamentoResult(r.result).status === 'PENDENTE',
+    )
+    if (!duplicateInRows) {
+      items.push({
+        key: 'schedule-active',
+        kind: 'schedule-active',
+        status: 'PENDENTE',
+        at: client.next_followup_at!,
+        summary: note.summary,
+        details: note.details,
+        commercialStage: client.commercial_stage || 'CONTATO',
+      })
+    }
+  }
+
+  items.sort((a, b) => {
+    const ta =
+      a.kind === 'contact'
+        ? new Date(a.row.contacted_at).getTime()
+        : a.kind === 'schedule-active'
+          ? new Date(a.at).getTime()
+          : new Date(a.row.contacted_at).getTime()
+    const tb =
+      b.kind === 'contact'
+        ? new Date(b.row.contacted_at).getTime()
+        : b.kind === 'schedule-active'
+          ? new Date(b.at).getTime()
+          : new Date(b.row.contacted_at).getTime()
+    return tb - ta
+  })
+
+  return items
 }
 
 function composeFollowupNote(summary: string, details: string) {
@@ -103,6 +210,7 @@ type Cliente = {
   last_contact_at: string | null
   next_followup_at: string | null
   next_followup_note: string | null
+  next_followup_status: string | null
 }
 
 type SortKey = 'full_name' | 'phones' | 'client_status'
@@ -281,6 +389,8 @@ export function BemAvivClientesPage() {
   const [historyModalLoading, setHistoryModalLoading] = useState(false)
   const [registerInlineOpen, setRegisterInlineOpen] = useState(false)
   const [scheduleInlineOpen, setScheduleInlineOpen] = useState(false)
+  const [scheduleInlineTarget, setScheduleInlineTarget] = useState<'new' | 'client' | 'followup'>('new')
+  const [editingScheduleFollowupId, setEditingScheduleFollowupId] = useState<string | null>(null)
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null)
   const [registerInlineSaving, setRegisterInlineSaving] = useState(false)
   const [scheduleInlineSaving, setScheduleInlineSaving] = useState(false)
@@ -349,6 +459,11 @@ export function BemAvivClientesPage() {
       clienteColchaoDiversos: byStatus('CLIENTE - COLCHÃO/DIVERSOS'),
     }
   }, [rows])
+
+  const historyTimeline = useMemo(() => {
+    if (!historyModalClient) return []
+    return buildHistoryTimeline(historyModalClient, historyModalRows)
+  }, [historyModalClient, historyModalRows])
 
   const displayedRows = useMemo(() => {
     const filtered = rows.filter((r) => {
@@ -443,26 +558,36 @@ export function BemAvivClientesPage() {
       return
     }
     setScheduleModalSaving(true)
-    const { error } = await supabase
-      .from('bem_aviv_clients')
-      .update({
-        next_followup_at: dateInputToIso(scheduleModalForm.next_followup_at),
-        next_followup_note: composeFollowupNote(scheduleModalForm.summary, scheduleModalForm.details) || null,
-        next_followup_status: 'PENDENTE',
-        commercial_stage: scheduleModalForm.commercial_stage,
-        last_contact_at: scheduleModalForm.contact_done
-          ? new Date().toISOString()
-          : scheduleModalClient.last_contact_at ?? null,
-      })
-      .eq('id', scheduleModalClient.id)
-      .eq('company_id', activeCompanyId)
-    setScheduleModalSaving(false)
-    if (error) {
-      alert(error.message)
-      return
+    try {
+      await cancelPendingAgendamentoRecords(scheduleModalClient.id)
+      const { error } = await supabase
+        .from('bem_aviv_clients')
+        .update({
+          next_followup_at: dateInputToIso(scheduleModalForm.next_followup_at),
+          next_followup_note: composeFollowupNote(scheduleModalForm.summary, scheduleModalForm.details) || null,
+          next_followup_status: 'PENDENTE',
+          commercial_stage: scheduleModalForm.commercial_stage,
+          last_contact_at: scheduleModalForm.contact_done
+            ? new Date().toISOString()
+            : scheduleModalClient.last_contact_at ?? null,
+        })
+        .eq('id', scheduleModalClient.id)
+        .eq('company_id', activeCompanyId)
+      if (error) throw new Error(error.message)
+      await insertAgendamentoFollowup(
+        scheduleModalClient.id,
+        scheduleModalForm.next_followup_at,
+        'PENDENTE',
+        scheduleModalForm.summary,
+        scheduleModalForm.details,
+      )
+      closeScheduleModal()
+      await load()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erro ao agendar.')
+    } finally {
+      setScheduleModalSaving(false)
     }
-    closeScheduleModal()
-    await load()
   }
 
   async function openHistoryModal(client: Cliente) {
@@ -532,6 +657,181 @@ export function BemAvivClientesPage() {
     }
     if (error) return []
     return (data ?? []) as FollowupHistoryRow[]
+  }
+
+  async function refreshHistoryModalClient() {
+    if (!supabase || !historyModalClient || !activeCompanyId) return
+    const [{ data: clientRow }, rows] = await Promise.all([
+      supabase
+        .from('bem_aviv_clients')
+        .select('*')
+        .eq('id', historyModalClient.id)
+        .eq('company_id', activeCompanyId)
+        .maybeSingle(),
+      refetchHistoryModalRows(historyModalClient.id),
+    ])
+    if (clientRow) setHistoryModalClient(clientRow as Cliente)
+    setHistoryModalRows(rows)
+  }
+
+  async function insertAgendamentoFollowup(
+    clientId: string,
+    at: string,
+    status: string,
+    summary: string,
+    details: string,
+  ) {
+    if (!supabase || !ownerUserId || !activeCompanyId) return
+    const followupUserId = ownerUserId.toUpperCase()
+    const contactedAtIso = dateInputToIso(at)
+    let { error: insertError } = await supabase.from('bem_aviv_client_followups').insert({
+      user_id: followupUserId,
+      company_id: activeCompanyId,
+      created_by_user_id: user?.id ?? null,
+      created_by_name: followupActorName,
+      client_id: clientId,
+      contacted_at: contactedAtIso,
+      channel: CHANNEL_AGENDAMENTO,
+      result: encodeAgendamentoResult(status, summary),
+      notes: details || null,
+    })
+    if (insertError && isMissingAuditColumnError(insertError.message)) {
+      const fallback = await supabase.from('bem_aviv_client_followups').insert({
+        user_id: followupUserId,
+        company_id: activeCompanyId,
+        client_id: clientId,
+        contacted_at: contactedAtIso,
+        channel: CHANNEL_AGENDAMENTO,
+        result: encodeAgendamentoResult(status, summary),
+        notes: details || null,
+      })
+      insertError = fallback.error
+    }
+    if (insertError) throw new Error(insertError.message)
+  }
+
+  async function cancelPendingAgendamentoRecords(clientId: string) {
+    if (!supabase || !activeCompanyId) return
+    const rows = await refetchHistoryModalRows(clientId)
+    for (const r of rows) {
+      if (r.channel !== CHANNEL_AGENDAMENTO) continue
+      const parsed = parseAgendamentoResult(r.result)
+      if (parsed.status !== 'PENDENTE') continue
+      let { error } = await supabase
+        .from('bem_aviv_client_followups')
+        .update({
+          result: encodeAgendamentoResult('CANCELADO', parsed.summary),
+          updated_by_user_id: user?.id ?? null,
+          updated_by_name: followupActorName,
+        })
+        .eq('id', r.id)
+        .eq('company_id', activeCompanyId)
+      if (error && isMissingAuditColumnError(error.message)) {
+        const fallback = await supabase
+          .from('bem_aviv_client_followups')
+          .update({ result: encodeAgendamentoResult('CANCELADO', parsed.summary) })
+          .eq('id', r.id)
+          .eq('company_id', activeCompanyId)
+        error = fallback.error
+      }
+      if (error) throw new Error(error.message)
+    }
+  }
+
+  async function markPendingAgendamentoRecordsConcluido(clientId: string, at: string | null) {
+    if (!supabase || !activeCompanyId) return
+    const rows = await refetchHistoryModalRows(clientId)
+    for (const r of rows) {
+      if (r.channel !== CHANNEL_AGENDAMENTO) continue
+      const parsed = parseAgendamentoResult(r.result)
+      if (parsed.status !== 'PENDENTE') continue
+      if (at && !sameCalendarDay(r.contacted_at, at)) continue
+      let { error } = await supabase
+        .from('bem_aviv_client_followups')
+        .update({
+          result: encodeAgendamentoResult('CONCLUIDO', parsed.summary),
+          updated_by_user_id: user?.id ?? null,
+          updated_by_name: followupActorName,
+        })
+        .eq('id', r.id)
+        .eq('company_id', activeCompanyId)
+      if (error && isMissingAuditColumnError(error.message)) {
+        const fallback = await supabase
+          .from('bem_aviv_client_followups')
+          .update({ result: encodeAgendamentoResult('CONCLUIDO', parsed.summary) })
+          .eq('id', r.id)
+          .eq('company_id', activeCompanyId)
+        error = fallback.error
+      }
+      if (error) throw new Error(error.message)
+    }
+  }
+
+  async function confirmScheduleDone(at?: string | null) {
+    if (!supabase || !ownerUserId || !historyModalClient || !activeCompanyId) return
+    const doneAt = new Date().toISOString()
+    const { error } = await supabase
+      .from('bem_aviv_clients')
+      .update({
+        next_followup_status: 'CONCLUIDO',
+        last_contact_at: doneAt,
+      })
+      .eq('id', historyModalClient.id)
+      .eq('company_id', activeCompanyId)
+    if (error) {
+      alert(error.message)
+      return
+    }
+    try {
+      await markPendingAgendamentoRecordsConcluido(
+        historyModalClient.id,
+        at ?? historyModalClient.next_followup_at,
+      )
+      await refreshHistoryModalClient()
+      await load()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erro ao atualizar histórico.')
+    }
+  }
+
+  function openEditScheduleActive() {
+    if (!historyModalClient) return
+    const parsed = splitFollowupNote(historyModalClient.next_followup_note)
+    setRegisterInlineOpen(false)
+    setEditingHistoryId(null)
+    setScheduleInlineTarget('client')
+    setEditingScheduleFollowupId(null)
+    setScheduleInlineForm({
+      contact_done: false,
+      next_followup_at: historyModalClient.next_followup_at
+        ? toInputDate(historyModalClient.next_followup_at)
+        : todayInputDate(),
+      commercial_stage: historyModalClient.commercial_stage || 'CONTATO',
+      summary: parsed.summary,
+      details: parsed.details,
+    })
+    setScheduleInlineOpen(true)
+  }
+
+  function openReagendarSchedule() {
+    openEditScheduleActive()
+    setScheduleInlineTarget('new')
+  }
+
+  function openEditScheduleRecord(row: FollowupHistoryRow) {
+    const parsed = parseAgendamentoResult(row.result)
+    setRegisterInlineOpen(false)
+    setEditingHistoryId(null)
+    setScheduleInlineTarget('followup')
+    setEditingScheduleFollowupId(row.id)
+    setScheduleInlineForm({
+      contact_done: false,
+      next_followup_at: toInputDate(row.contacted_at),
+      commercial_stage: historyModalClient?.commercial_stage || 'CONTATO',
+      summary: parsed.summary,
+      details: (row.notes ?? '').trim(),
+    })
+    setScheduleInlineOpen(true)
   }
 
   async function submitInlineFollowup(e: React.FormEvent) {
@@ -629,10 +929,7 @@ export function BemAvivClientesPage() {
 
     await supabase
       .from('bem_aviv_clients')
-      .update({
-        last_contact_at: contactedAtIso,
-        next_followup_status: 'CONCLUIDO',
-      })
+      .update({ last_contact_at: contactedAtIso })
       .eq('id', historyModalClient.id)
       .eq('company_id', activeCompanyId)
 
@@ -680,13 +977,23 @@ export function BemAvivClientesPage() {
   function toggleInlineScheduleForm() {
     setRegisterInlineOpen(false)
     setEditingHistoryId(null)
-    setScheduleInlineOpen((prev) => !prev)
-    setScheduleInlineForm({
-      contact_done: false,
-      next_followup_at: todayInputDate(),
-      commercial_stage: historyModalClient?.commercial_stage || 'CONTATO',
-      summary: '',
-      details: '',
+    setScheduleInlineOpen((prev) => {
+      const next = !prev
+      if (next) {
+        setScheduleInlineTarget('new')
+        setEditingScheduleFollowupId(null)
+        setScheduleInlineForm({
+          contact_done: false,
+          next_followup_at: todayInputDate(),
+          commercial_stage: historyModalClient?.commercial_stage || 'CONTATO',
+          summary: '',
+          details: '',
+        })
+      } else {
+        setScheduleInlineTarget('new')
+        setEditingScheduleFollowupId(null)
+      }
+      return next
     })
   }
 
@@ -698,26 +1005,138 @@ export function BemAvivClientesPage() {
       return
     }
     setScheduleInlineSaving(true)
-    const { error } = await supabase
-      .from('bem_aviv_clients')
-      .update({
-        next_followup_at: dateInputToIso(scheduleInlineForm.next_followup_at),
-        next_followup_note: composeFollowupNote(scheduleInlineForm.summary, scheduleInlineForm.details) || null,
-        next_followup_status: 'PENDENTE',
-        commercial_stage: scheduleInlineForm.commercial_stage,
-        last_contact_at: scheduleInlineForm.contact_done ? new Date().toISOString() : historyModalClient.last_contact_at ?? null,
-      })
-      .eq('id', historyModalClient.id)
-      .eq('company_id', activeCompanyId)
-    if (error) {
-      alert(error.message)
+    const note = composeFollowupNote(scheduleInlineForm.summary, scheduleInlineForm.details)
+    const contactedAtIso = dateInputToIso(scheduleInlineForm.next_followup_at)
+
+    try {
+      if (scheduleInlineTarget === 'followup' && editingScheduleFollowupId) {
+        let { error: updateError } = await supabase
+          .from('bem_aviv_client_followups')
+          .update({
+            contacted_at: contactedAtIso,
+            channel: CHANNEL_AGENDAMENTO,
+            result: encodeAgendamentoResult('PENDENTE', scheduleInlineForm.summary),
+            notes: scheduleInlineForm.details || null,
+            updated_by_user_id: user?.id ?? null,
+            updated_by_name: followupActorName,
+          })
+          .eq('id', editingScheduleFollowupId)
+          .eq('company_id', activeCompanyId)
+        if (updateError && isMissingAuditColumnError(updateError.message)) {
+          const fallback = await supabase
+            .from('bem_aviv_client_followups')
+            .update({
+              contacted_at: contactedAtIso,
+              channel: CHANNEL_AGENDAMENTO,
+              result: encodeAgendamentoResult('PENDENTE', scheduleInlineForm.summary),
+              notes: scheduleInlineForm.details || null,
+            })
+            .eq('id', editingScheduleFollowupId)
+            .eq('company_id', activeCompanyId)
+          updateError = fallback.error
+        }
+        if (updateError) throw new Error(updateError.message)
+
+        const isActiveOnClient =
+          historyModalClient.next_followup_status?.toUpperCase() === 'PENDENTE' &&
+          sameCalendarDay(historyModalClient.next_followup_at, contactedAtIso)
+        if (isActiveOnClient) {
+          const { error: clientError } = await supabase
+            .from('bem_aviv_clients')
+            .update({
+              next_followup_at: contactedAtIso,
+              next_followup_note: note || null,
+              commercial_stage: scheduleInlineForm.commercial_stage,
+              last_contact_at: scheduleInlineForm.contact_done
+                ? new Date().toISOString()
+                : historyModalClient.last_contact_at ?? null,
+            })
+            .eq('id', historyModalClient.id)
+            .eq('company_id', activeCompanyId)
+          if (clientError) throw new Error(clientError.message)
+        }
+      } else {
+        if (scheduleInlineTarget === 'new') {
+          await cancelPendingAgendamentoRecords(historyModalClient.id)
+        }
+        const { error: clientError } = await supabase
+          .from('bem_aviv_clients')
+          .update({
+            next_followup_at: contactedAtIso,
+            next_followup_note: note || null,
+            next_followup_status: 'PENDENTE',
+            commercial_stage: scheduleInlineForm.commercial_stage,
+            last_contact_at: scheduleInlineForm.contact_done
+              ? new Date().toISOString()
+              : historyModalClient.last_contact_at ?? null,
+          })
+          .eq('id', historyModalClient.id)
+          .eq('company_id', activeCompanyId)
+        if (clientError) throw new Error(clientError.message)
+
+        if (scheduleInlineTarget === 'new') {
+          await insertAgendamentoFollowup(
+            historyModalClient.id,
+            scheduleInlineForm.next_followup_at,
+            'PENDENTE',
+            scheduleInlineForm.summary,
+            scheduleInlineForm.details,
+          )
+        } else if (scheduleInlineTarget === 'client') {
+          const rows = await refetchHistoryModalRows(historyModalClient.id)
+          const match = rows.find(
+            (r) =>
+              r.channel === CHANNEL_AGENDAMENTO &&
+              parseAgendamentoResult(r.result).status === 'PENDENTE' &&
+              sameCalendarDay(r.contacted_at, historyModalClient.next_followup_at),
+          )
+          if (match) {
+            let { error: updateError } = await supabase
+              .from('bem_aviv_client_followups')
+              .update({
+                contacted_at: contactedAtIso,
+                result: encodeAgendamentoResult('PENDENTE', scheduleInlineForm.summary),
+                notes: scheduleInlineForm.details || null,
+                updated_by_user_id: user?.id ?? null,
+                updated_by_name: followupActorName,
+              })
+              .eq('id', match.id)
+              .eq('company_id', activeCompanyId)
+            if (updateError && isMissingAuditColumnError(updateError.message)) {
+              const fallback = await supabase
+                .from('bem_aviv_client_followups')
+                .update({
+                  contacted_at: contactedAtIso,
+                  result: encodeAgendamentoResult('PENDENTE', scheduleInlineForm.summary),
+                  notes: scheduleInlineForm.details || null,
+                })
+                .eq('id', match.id)
+                .eq('company_id', activeCompanyId)
+              updateError = fallback.error
+            }
+            if (updateError) throw new Error(updateError.message)
+          } else {
+            await insertAgendamentoFollowup(
+              historyModalClient.id,
+              scheduleInlineForm.next_followup_at,
+              'PENDENTE',
+              scheduleInlineForm.summary,
+              scheduleInlineForm.details,
+            )
+          }
+        }
+      }
+
+      setScheduleInlineOpen(false)
+      setScheduleInlineTarget('new')
+      setEditingScheduleFollowupId(null)
+      await refreshHistoryModalClient()
+      await load()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erro ao salvar agendamento.')
+    } finally {
       setScheduleInlineSaving(false)
-      return
     }
-    setScheduleInlineOpen(false)
-    setScheduleInlineSaving(false)
-    await load()
-    alert('PRÓXIMO FOLLOW-UP AGENDADO COM SUCESSO.')
   }
 
   async function removeHistoryRow(rowId: string) {
@@ -1495,7 +1914,13 @@ export function BemAvivClientesPage() {
 
             {scheduleInlineOpen ? (
               <form onSubmit={submitInlineSchedule} className="mt-4 rounded-lg border border-sky-200 bg-sky-50/40 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Agendar próximo follow-up</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                  {scheduleInlineTarget === 'followup'
+                    ? 'Editar agendamento'
+                    : scheduleInlineTarget === 'client'
+                      ? 'Editar agendamento ativo'
+                      : 'Agendar próximo follow-up'}
+                </p>
                 <label className="mt-2 inline-flex items-center gap-2 text-xs font-semibold text-slate-700">
                   <input
                     type="checkbox"
@@ -1565,68 +1990,202 @@ export function BemAvivClientesPage() {
             <div className="mt-4 max-h-[65vh] overflow-auto rounded-lg border border-slate-200">
               {historyModalLoading ? (
                 <p className="p-4 text-sm text-slate-500">Carregando histórico...</p>
-              ) : historyModalRows.length === 0 ? (
-                <p className="p-4 text-sm text-slate-500">Nenhum contato registrado para este cliente.</p>
+              ) : historyTimeline.length === 0 ? (
+                <p className="p-4 text-sm text-slate-500">Nenhum contato ou agendamento registrado para este cliente.</p>
               ) : (
                 <table className="min-w-full text-sm">
                   <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                     <tr>
                       <th className="px-3 py-2 text-left">Data</th>
-                      <th className="px-3 py-2 text-left">Canal</th>
+                      <th className="px-3 py-2 text-left">Tipo</th>
+                      <th className="px-3 py-2 text-left">Status</th>
                       <th className="px-3 py-2 text-left">Usuário</th>
                       <th className="px-3 py-2 text-left">Resumo</th>
                       <th className="px-3 py-2 text-left">Detalhe</th>
-                      <th className="px-3 py-2 text-right">Ação</th>
+                      <th className="px-3 py-2 text-right">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {historyModalRows.map((r) => (
-                      <tr
-                        key={r.id}
-                        className={cn(
-                          'border-t border-slate-100',
-                          editingHistoryId === r.id && 'bg-sky-50/80',
-                        )}
-                      >
-                        <td className="px-3 py-2 text-slate-700">{formatDateOnly(r.contacted_at)}</td>
-                        <td className="px-3 py-2 text-slate-700">{r.channel}</td>
-                        <td className="px-3 py-2 text-slate-700">{r.created_by_name || '—'}</td>
-                        <td className="px-3 py-2 text-slate-700">{r.result || '—'}</td>
-                        <td className="px-3 py-2 text-slate-700">{r.notes || '—'}</td>
-                        <td className="px-3 py-2 text-right">
-                          <div className="inline-flex items-center gap-1">
-                            <button
-                              type="button"
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
-                              onClick={() => {
-                                setScheduleInlineOpen(false)
-                                setEditingHistoryId(r.id)
-                                setRegisterInlineForm({
-                                  contacted_at: toInputDate(r.contacted_at),
-                                  channel: r.channel,
-                                  result: r.result ?? '',
-                                  notes: r.notes ?? '',
-                                })
-                                setRegisterInlineOpen(true)
-                              }}
-                              title="Editar registro"
-                              aria-label="Editar registro"
+                    {historyTimeline.map((item) => {
+                      if (item.kind === 'contact') {
+                        const r = item.row
+                        return (
+                          <tr
+                            key={item.key}
+                            className={cn(
+                              'border-t border-slate-100',
+                              editingHistoryId === r.id && 'bg-sky-50/80',
+                            )}
+                          >
+                            <td className="px-3 py-2 text-slate-700">{formatDateOnly(r.contacted_at)}</td>
+                            <td className="px-3 py-2 text-slate-700">Contato · {r.channel}</td>
+                            <td className="px-3 py-2 text-slate-500">—</td>
+                            <td className="px-3 py-2 text-slate-700">{r.created_by_name || '—'}</td>
+                            <td className="px-3 py-2 text-slate-700">{r.result || '—'}</td>
+                            <td className="px-3 py-2 text-slate-700">{r.notes || '—'}</td>
+                            <td className="px-3 py-2 text-right">
+                              <div className="inline-flex flex-wrap items-center justify-end gap-1">
+                                <button
+                                  type="button"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
+                                  onClick={() => {
+                                    setScheduleInlineOpen(false)
+                                    setEditingHistoryId(r.id)
+                                    setRegisterInlineForm({
+                                      contacted_at: toInputDate(r.contacted_at),
+                                      channel: r.channel,
+                                      result: r.result ?? '',
+                                      notes: r.notes ?? '',
+                                    })
+                                    setRegisterInlineOpen(true)
+                                  }}
+                                  title="Editar contato"
+                                  aria-label="Editar contato"
+                                >
+                                  <Pencil size={15} strokeWidth={2.2} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-300 bg-white text-red-700 shadow-sm hover:bg-red-50"
+                                  onClick={() => void removeHistoryRow(r.id)}
+                                  title="Excluir contato"
+                                  aria-label="Excluir contato"
+                                >
+                                  <Trash2 size={15} strokeWidth={2.2} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      }
+
+                      if (item.kind === 'schedule-active') {
+                        return (
+                          <tr key={item.key} className="border-t border-amber-100 bg-amber-50/50">
+                            <td className="px-3 py-2 font-medium text-slate-800">{formatDateOnly(item.at)}</td>
+                            <td className="px-3 py-2 text-slate-700">Agendamento</td>
+                            <td className="px-3 py-2">
+                              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                                {item.status}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-slate-500">—</td>
+                            <td className="px-3 py-2 text-slate-700">{item.summary || '—'}</td>
+                            <td className="px-3 py-2 text-slate-700">{item.details || '—'}</td>
+                            <td className="px-3 py-2 text-right">
+                              <div className="inline-flex flex-wrap items-center justify-end gap-1">
+                                <button
+                                  type="button"
+                                  className="inline-flex h-8 items-center gap-1 rounded-md border border-emerald-300 bg-white px-2 text-xs font-semibold text-emerald-800 shadow-sm hover:bg-emerald-50"
+                                  onClick={() => void confirmScheduleDone(item.at)}
+                                  title="Confirmar realizado"
+                                >
+                                  <CheckCircle2 size={14} strokeWidth={2.2} />
+                                  Feito
+                                </button>
+                                <button
+                                  type="button"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
+                                  onClick={openEditScheduleActive}
+                                  title="Editar agendamento"
+                                  aria-label="Editar agendamento"
+                                >
+                                  <Pencil size={15} strokeWidth={2.2} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="inline-flex h-8 items-center gap-1 rounded-md border border-sky-300 bg-white px-2 text-xs font-semibold text-sky-800 shadow-sm hover:bg-sky-50"
+                                  onClick={openReagendarSchedule}
+                                  title="Reagendar"
+                                >
+                                  <CalendarPlus size={14} strokeWidth={2.2} />
+                                  Reagendar
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      }
+
+                      const r = item.row
+                      const isPending = item.status === 'PENDENTE'
+                      return (
+                        <tr
+                          key={item.key}
+                          className={cn(
+                            'border-t border-slate-100',
+                            isPending && 'bg-amber-50/30',
+                            editingScheduleFollowupId === r.id && 'bg-sky-50/80',
+                          )}
+                        >
+                          <td className="px-3 py-2 text-slate-700">{formatDateOnly(r.contacted_at)}</td>
+                          <td className="px-3 py-2 text-slate-700">Agendamento</td>
+                          <td className="px-3 py-2">
+                            <span
+                              className={cn(
+                                'rounded-full px-2 py-0.5 text-xs font-semibold',
+                                item.status === 'PENDENTE' && 'bg-amber-100 text-amber-800',
+                                item.status === 'CONCLUIDO' && 'bg-emerald-100 text-emerald-800',
+                                item.status === 'CANCELADO' && 'bg-slate-100 text-slate-600',
+                              )}
                             >
-                              <Pencil size={15} strokeWidth={2.2} />
-                            </button>
-                            <button
-                              type="button"
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-300 bg-white text-red-700 shadow-sm hover:bg-red-50"
-                              onClick={() => void removeHistoryRow(r.id)}
-                              title="Excluir registro"
-                              aria-label="Excluir registro"
-                            >
-                              <Trash2 size={15} strokeWidth={2.2} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                              {item.status}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-slate-700">{r.created_by_name || '—'}</td>
+                          <td className="px-3 py-2 text-slate-700">{item.summary || '—'}</td>
+                          <td className="px-3 py-2 text-slate-700">{item.details || '—'}</td>
+                          <td className="px-3 py-2 text-right">
+                            <div className="inline-flex flex-wrap items-center justify-end gap-1">
+                              {isPending ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="inline-flex h-8 items-center gap-1 rounded-md border border-emerald-300 bg-white px-2 text-xs font-semibold text-emerald-800 shadow-sm hover:bg-emerald-50"
+                                    onClick={() => void confirmScheduleDone(r.contacted_at)}
+                                    title="Confirmar realizado"
+                                  >
+                                    <CheckCircle2 size={14} strokeWidth={2.2} />
+                                    Feito
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
+                                    onClick={() => openEditScheduleRecord(r)}
+                                    title="Editar agendamento"
+                                    aria-label="Editar agendamento"
+                                  >
+                                    <Pencil size={15} strokeWidth={2.2} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="inline-flex h-8 items-center gap-1 rounded-md border border-sky-300 bg-white px-2 text-xs font-semibold text-sky-800 shadow-sm hover:bg-sky-50"
+                                    onClick={() => {
+                                      openEditScheduleRecord(r)
+                                      setScheduleInlineTarget('new')
+                                    }}
+                                    title="Reagendar"
+                                  >
+                                    <CalendarPlus size={14} strokeWidth={2.2} />
+                                    Reagendar
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
+                                  onClick={() => openEditScheduleRecord(r)}
+                                  title="Editar registro"
+                                  aria-label="Editar registro"
+                                >
+                                  <Pencil size={15} strokeWidth={2.2} />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               )}
