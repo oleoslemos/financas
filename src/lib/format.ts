@@ -35,3 +35,14 @@ export function formatBRLFromCentsDigits(digits: string): string {
   if (!digits.replace(/\D/g, '')) return ''
   return formatBRL(n)
 }
+
+/** Máscara 0,00% — mesma precisão de centésimos (ex.: dígitos "1050" → 10,50%). */
+export function formatPercentFromDigits(digits: string): string {
+  const n = parseDigitsCentsToNumber(digits)
+  if (!digits.replace(/\D/g, '')) return ''
+  return `${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`
+}
+
+export function onlyDigits(raw: string): string {
+  return raw.replace(/\D/g, '')
+}

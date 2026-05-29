@@ -24,7 +24,15 @@ import { normalizePayload, type OfferProduct, type OfferVariation } from '../lib
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { cn } from '../lib/cn'
 import { resolveDataOwnerId } from '../lib/dataOwner'
-import { formatBRL, parseMoney } from '../lib/format'
+import {
+  formatBRL,
+  formatBRLFromCentsDigits,
+  formatPercentFromDigits,
+  numberToCentsDigits,
+  onlyDigits,
+  parseDigitsCentsToNumber,
+  parseMoney,
+} from '../lib/format'
 import { toUpperTrim } from '../lib/text'
 
 type PaymentOption = 'A_VISTA' | 'A_PRAZO'
@@ -73,8 +81,8 @@ function roundMoneySigned(n: number) {
   return Math.round(n * 100) / 100
 }
 
-function formatMoneyInput(n: number) {
-  return clampMoney(n).toFixed(2).replace('.', ',')
+function moneyDigitsFromNumber(n: number) {
+  return numberToCentsDigits(clampMoney(n))
 }
 
 function splitSignedAmountProportionally(baseValues: number[], totalToSplit: number) {
@@ -141,8 +149,10 @@ function clampOrderDiscountPercent(n: number) {
   return Math.max(-999, Math.min(100, Math.round(n * 1e6) / 1e6))
 }
 
-/** Percentual no campo livre: aceita `10`, `10,5`, `10 %`, valores gerados com vírgula decimal. */
+/** Percentual mascarado (dígitos) ou texto legado ao carregar documentos antigos. */
 function parseOrderDiscountPercent(raw: string) {
+  const digits = onlyDigits(raw ?? '')
+  if (digits) return clampOrderDiscountPercent(parseDigitsCentsToNumber(digits))
   const cleaned = (raw ?? '')
     .replace(/\u00a0/g, ' ')
     .replace(/%/g, '')
@@ -192,7 +202,7 @@ function canEditSalesDocument(o: Pick<SalesOrderHeaderRow, 'document_type' | 'st
 }
 
 function formatDiscountPercentInput(n: number) {
-  return clampOrderDiscountPercent(n).toFixed(6).replace('.', ',')
+  return numberToCentsDigits(clampOrderDiscountPercent(n))
 }
 
 type OrderStep = 'dados' | 'produtos' | 'pagamento' | 'revisao'
@@ -235,6 +245,50 @@ function LocalInput({ value, onValueChange, className, ...props }: LocalInputPro
   )
 }
 
+function MoneyMaskedInput({ value, onValueChange, className, ...props }: LocalInputProps) {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      e.currentTarget.blur()
+    }
+    props.onKeyDown?.(e)
+  }
+
+  return (
+    <input
+      {...props}
+      className={className}
+      inputMode="numeric"
+      placeholder="R$ 0,00"
+      value={formatBRLFromCentsDigits(value)}
+      onChange={(e) => onValueChange(onlyDigits(e.target.value))}
+      onKeyDown={handleKeyDown}
+    />
+  )
+}
+
+function PercentMaskedInput({ value, onValueChange, className, ...props }: LocalInputProps) {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      e.currentTarget.blur()
+    }
+    props.onKeyDown?.(e)
+  }
+
+  return (
+    <input
+      {...props}
+      className={className}
+      inputMode="numeric"
+      placeholder="0,00%"
+      value={formatPercentFromDigits(value)}
+      onChange={(e) => onValueChange(onlyDigits(e.target.value))}
+      onKeyDown={handleKeyDown}
+    />
+  )
+}
+
 interface OrderItemRowProps {
   item: LinhaItem
   rowNet: number
@@ -255,14 +309,14 @@ function OrderItemRow({
   onUpdateUnitPrice,
 }: OrderItemRowProps) {
   const [localQty, setLocalQty] = useState(String(item.quantity))
-  const [localPrice, setLocalPrice] = useState(formatMoneyInput(item.unit_price))
+  const [localPriceDigits, setLocalPriceDigits] = useState(moneyDigitsFromNumber(item.unit_price))
 
   useEffect(() => {
     setLocalQty(String(item.quantity))
   }, [item.quantity])
 
   useEffect(() => {
-    setLocalPrice(formatMoneyInput(item.unit_price))
+    setLocalPriceDigits(moneyDigitsFromNumber(item.unit_price))
   }, [item.unit_price])
 
   const handleQtyBlur = () => {
@@ -272,13 +326,13 @@ function OrderItemRow({
   }
 
   const handlePriceBlur = () => {
-    const u = clampMoney(parseMoney(localPrice))
+    const u = clampMoney(parseDigitsCentsToNumber(localPriceDigits))
     if (!Number.isFinite(u) || u <= 0) {
-      setLocalPrice(formatMoneyInput(item.unit_price))
+      setLocalPriceDigits(moneyDigitsFromNumber(item.unit_price))
       return
     }
     onUpdateUnitPrice(u)
-    setLocalPrice(formatMoneyInput(u))
+    setLocalPriceDigits(moneyDigitsFromNumber(u))
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -310,9 +364,10 @@ function OrderItemRow({
       />
       <input
         className="np-input np-price"
-        inputMode="decimal"
-        value={localPrice}
-        onChange={(e) => setLocalPrice(e.target.value)}
+        inputMode="numeric"
+        placeholder="R$ 0,00"
+        value={formatBRLFromCentsDigits(localPriceDigits)}
+        onChange={(e) => setLocalPriceDigits(onlyDigits(e.target.value))}
         onBlur={handlePriceBlur}
         onKeyDown={handleKeyDown}
         aria-label={`Preço unitário ${item.name}`}
@@ -646,7 +701,7 @@ export function BemAvivNovoPedidoPage() {
   })
 
   const [lineItems, setLineItems] = useState<LinhaItem[]>([])
-  const [liquidTotalDraft, setLiquidTotalDraft] = useState('')
+  const [liquidTotalDigits, setLiquidTotalDigits] = useState('')
 
   const load = useCallback(async () => {
     if (!supabase || !ownerUserId || !activeCompanyId) {
@@ -840,16 +895,16 @@ export function BemAvivNovoPedidoPage() {
         payment_method: parsePaymentMethodNav(quote.payment_method),
         down_payment:
           quote.down_payment_amount != null && Number(quote.down_payment_amount) > 0
-            ? String(Number(quote.down_payment_amount)).replace('.', ',')
+            ? moneyDigitsFromNumber(Number(quote.down_payment_amount))
             : '',
         down_payment_method: parsePaymentMethodNav(quote.down_payment_method ?? quote.payment_method),
         freight_amount:
           quote.freight_amount != null && Number(quote.freight_amount) > 0
-            ? String(Number(quote.freight_amount)).replace('.', ',')
+            ? moneyDigitsFromNumber(Number(quote.freight_amount))
             : '',
         other_expenses:
           quote.other_expenses != null && Number(quote.other_expenses) > 0
-            ? String(Number(quote.other_expenses)).replace('.', ',')
+            ? moneyDigitsFromNumber(Number(quote.other_expenses))
             : '',
       })
       setLineItems(mapped)
@@ -872,9 +927,18 @@ export function BemAvivNovoPedidoPage() {
     [form.installments_count],
   )
 
-  const downPaymentNum = useMemo(() => clampMoney(parseMoney(form.down_payment || '0')), [form.down_payment])
-  const freightAmountNum = useMemo(() => clampMoney(parseMoney(form.freight_amount || '0')), [form.freight_amount])
-  const otherExpensesNum = useMemo(() => clampMoney(parseMoney(form.other_expenses || '0')), [form.other_expenses])
+  const downPaymentNum = useMemo(
+    () => clampMoney(parseDigitsCentsToNumber(form.down_payment || '')),
+    [form.down_payment],
+  )
+  const freightAmountNum = useMemo(
+    () => clampMoney(parseDigitsCentsToNumber(form.freight_amount || '')),
+    [form.freight_amount],
+  )
+  const otherExpensesNum = useMemo(
+    () => clampMoney(parseDigitsCentsToNumber(form.other_expenses || '')),
+    [form.other_expenses],
+  )
   const linesGrossTotal = sumLinesNet
   const downPaymentApplied = downPaymentNum
 
@@ -915,13 +979,13 @@ export function BemAvivNovoPedidoPage() {
 
   useEffect(() => {
     if (lineItems.length === 0) {
-      setLiquidTotalDraft('')
+      setLiquidTotalDigits('')
       return
     }
     const p = parseOrderDiscountPercent(form.discount_percent)
     const entrada = downPaymentNum
     const net = clampMoney(sumLinesNet - (sumLinesNet * p) / 100 + freightAmountNum + otherExpensesNum - entrada)
-    setLiquidTotalDraft(formatMoneyInput(net))
+    setLiquidTotalDigits(moneyDigitsFromNumber(net))
   }, [
     lineItems.length,
     sumLinesNet,
@@ -933,7 +997,7 @@ export function BemAvivNovoPedidoPage() {
 
   const applyLiquidRawToDiscount = useCallback((raw: string) => {
     if (lineItems.length === 0 || sumLinesNet <= 0) return
-    const targetLiquid = clampMoney(parseMoney(raw))
+    const targetLiquid = clampMoney(parseDigitsCentsToNumber(raw))
     if (targetLiquid < 0) return
     const G = sumLinesNet
     const F = freightAmountNum
@@ -948,9 +1012,9 @@ export function BemAvivNovoPedidoPage() {
       const p = G > 0 ? (discNeeded / G) * 100 : 0
       setForm((f) => ({
         ...f,
-        discount_percent: clampOrderDiscountPercent(p).toFixed(6).replace('.', ','),
+        discount_percent: formatDiscountPercentInput(p),
       }))
-      setLiquidTotalDraft(formatMoneyInput(targetLiquid))
+      setLiquidTotalDigits(moneyDigitsFromNumber(targetLiquid))
       return
     }
     const newOther = roundMoneySigned(targetLiquid - G - F + entrada)
@@ -961,9 +1025,9 @@ export function BemAvivNovoPedidoPage() {
     setForm((f) => ({
       ...f,
       discount_percent: '',
-      other_expenses: newOther > 0 ? formatMoneyInput(newOther) : '',
+      other_expenses: newOther > 0 ? moneyDigitsFromNumber(newOther) : '',
     }))
-    setLiquidTotalDraft(formatMoneyInput(targetLiquid))
+    setLiquidTotalDigits(moneyDigitsFromNumber(targetLiquid))
   }, [lineItems.length, sumLinesNet, freightAmountNum, otherExpensesNum, downPaymentNum])
 
   const handleAddProductLine = useCallback((p: OfferProduct, variationCode: string, qty: number) => {
@@ -1587,12 +1651,11 @@ export function BemAvivNovoPedidoPage() {
                     <label className="np-label" htmlFor="np-frete">
                       Frete (R$)
                     </label>
-                    <LocalInput
+                    <MoneyMaskedInput
                       id="np-frete"
                       className="np-input"
                       value={form.freight_amount}
                       onValueChange={(val) => setForm((f) => ({ ...f, freight_amount: val }))}
-                      inputMode="decimal"
                     />
                   </div>
                 </div>
@@ -1602,12 +1665,11 @@ export function BemAvivNovoPedidoPage() {
                     <label className="np-label" htmlFor="np-entrada">
                       Entrada (R$)
                     </label>
-                    <LocalInput
+                    <MoneyMaskedInput
                       id="np-entrada"
                       className="np-input"
                       value={form.down_payment}
                       onValueChange={(val) => setForm((f) => ({ ...f, down_payment: val }))}
-                      inputMode="decimal"
                     />
                   </div>
                   <div className="np-field">
@@ -1636,24 +1698,22 @@ export function BemAvivNovoPedidoPage() {
                     <label className="np-label" htmlFor="np-despesas">
                       Outras despesas (R$)
                     </label>
-                    <LocalInput
+                    <MoneyMaskedInput
                       id="np-despesas"
                       className="np-input"
                       value={form.other_expenses}
                       onValueChange={(val) => setForm((f) => ({ ...f, other_expenses: val }))}
-                      inputMode="decimal"
                     />
                   </div>
                   <div className="np-field">
                     <label className="np-label" htmlFor="np-desconto">
                       Desconto no pedido (%)
                     </label>
-                    <LocalInput
+                    <PercentMaskedInput
                       id="np-desconto"
                       className="np-input"
                       value={form.discount_percent}
                       onValueChange={(val) => setForm((f) => ({ ...f, discount_percent: val }))}
-                      inputMode="decimal"
                     />
                   </div>
                 </div>
@@ -1663,12 +1723,11 @@ export function BemAvivNovoPedidoPage() {
                     <label className="np-label" htmlFor="np-liquido">
                       Valor líquido (ajuste fino)
                     </label>
-                    <LocalInput
+                    <MoneyMaskedInput
                       id="np-liquido"
                       className="np-input"
-                      value={liquidTotalDraft}
+                      value={liquidTotalDigits}
                       onValueChange={applyLiquidRawToDiscount}
-                      inputMode="decimal"
                     />
                   </div>
                 ) : null}
