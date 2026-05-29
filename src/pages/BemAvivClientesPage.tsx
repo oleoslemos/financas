@@ -10,6 +10,7 @@ import {
   History,
   MessageCircle,
   Pencil,
+  Presentation,
   Search,
   Trash2,
   X,
@@ -26,7 +27,10 @@ import {
   BEM_AVIV_CLIENT_COMMERCIAL_STAGE_OPTIONS,
   BEM_AVIV_CLIENT_STATUS_OPTIONS,
   bemAvivClientStatusShortLabel,
+  clientHadEko7Presentation,
+  clientMatchesEko7Filter,
   type BemAvivClientStatusFilter,
+  type BemAvivEko7Filter,
 } from '../lib/bemAvivClientStatus'
 import { cn } from '../lib/cn'
 import { formatBRL } from '../lib/format'
@@ -213,6 +217,7 @@ type Cliente = {
   next_followup_at: string | null
   next_followup_note: string | null
   next_followup_status: string | null
+  eko7_presentation_at: string | null
 }
 
 type SortKey = 'full_name' | 'phones' | 'client_status'
@@ -352,6 +357,8 @@ const emptyForm = {
   address_state: '',
   email: '',
   client_status: 'PROSPECÇÃO',
+  eko7_presentation_done: false,
+  eko7_presentation_at: todayInputDate(),
 }
 
 export function BemAvivClientesPage() {
@@ -369,6 +376,7 @@ export function BemAvivClientesPage() {
   const [cepLoading, setCepLoading] = useState(false)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<BemAvivClientStatusFilter>('TODOS')
+  const [eko7Filter, setEko7Filter] = useState<BemAvivEko7Filter>('TODOS')
   const [sortKey, setSortKey] = useState<SortKey>('full_name')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [form, setForm] = useState(emptyForm)
@@ -459,6 +467,7 @@ export function BemAvivClientesPage() {
       clienteColchao: byStatus('CLIENTE - COLCHÃO'),
       clienteDiversos: byStatus('CLIENTE - DIVERSOS'),
       clienteColchaoDiversos: byStatus('CLIENTE - COLCHÃO/DIVERSOS'),
+      eko7Apresentado: rows.filter((r) => clientHadEko7Presentation(r)).length,
     }
   }, [rows])
 
@@ -472,7 +481,7 @@ export function BemAvivClientesPage() {
       if (!clientMatchesSearch(r, search)) return false
       if (statusFilter === 'TODOS') return true
       return (r.client_status ?? '').trim() === statusFilter
-    })
+    }).filter((r) => clientMatchesEko7Filter(r, eko7Filter))
     const mul = sortDir === 'asc' ? 1 : -1
     return [...filtered].sort((a, b) => {
       let cmp = 0
@@ -491,7 +500,7 @@ export function BemAvivClientesPage() {
       }
       return cmp * mul
     })
-  }, [rows, search, statusFilter, sortKey, sortDir])
+  }, [rows, search, statusFilter, eko7Filter, sortKey, sortDir])
 
   function toggleSort(key: SortKey) {
     if (sortKey !== key) {
@@ -525,6 +534,8 @@ export function BemAvivClientesPage() {
       address_state: r.address_state ?? '',
       email: r.email ?? '',
       client_status: r.client_status ?? 'PROSPECÇÃO',
+      eko7_presentation_done: clientHadEko7Presentation(r),
+      eko7_presentation_at: r.eko7_presentation_at ? toInputDate(r.eko7_presentation_at) : todayInputDate(),
     })
     setClientModalOpen(true)
   }
@@ -1220,6 +1231,22 @@ export function BemAvivClientesPage() {
     window.open(url, '_blank', 'noopener,noreferrer')
   }
 
+  async function toggleEko7Presentation(client: Cliente) {
+    if (!supabase || !activeCompanyId) return
+    const has = clientHadEko7Presentation(client)
+    const nextAt = has ? null : new Date().toISOString()
+    const { error } = await supabase
+      .from('bem_aviv_clients')
+      .update({ eko7_presentation_at: nextAt })
+      .eq('id', client.id)
+      .eq('company_id', activeCompanyId)
+    if (error) {
+      alert(error.message)
+      return
+    }
+    await load()
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!supabase || !ownerUserId || !activeCompanyId) return
@@ -1253,6 +1280,9 @@ export function BemAvivClientesPage() {
       full_address: fullAddress,
       email: toUpperTrim(form.email),
       client_status: editing ? toUpperTrim(editing.client_status ?? 'PROSPECÇÃO') : 'PROSPECÇÃO',
+      eko7_presentation_at: form.eko7_presentation_done
+        ? dateInputToIso(form.eko7_presentation_at) || new Date().toISOString()
+        : null,
     }
     if (editing) {
       const { error } = await supabase
@@ -1367,7 +1397,7 @@ export function BemAvivClientesPage() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-6">
         <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
           <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Total</p>
           <p className="font-hub mt-1 text-[20px] font-bold text-slate-900">{stats.total}</p>
@@ -1392,6 +1422,11 @@ export function BemAvivClientesPage() {
           <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Colchão + diversos</p>
           <p className="font-hub mt-1 text-[20px] font-bold text-slate-900">{stats.clienteColchaoDiversos}</p>
           <span className="mt-1 inline-block rounded-full bg-[#EEEDFE] px-2 py-0.5 text-[8px] font-medium text-[#3C3489]">Mix</span>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
+          <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Apresentação EKO7</p>
+          <p className="font-hub mt-1 text-[20px] font-bold text-slate-900">{stats.eko7Apresentado}</p>
+          <span className="mt-1 inline-block rounded-full bg-[#F3E8FF] px-2 py-0.5 text-[8px] font-medium text-[#6B21A8]">Para repique</span>
         </div>
       </div>
 
@@ -1426,6 +1461,23 @@ export function BemAvivClientesPage() {
               <span className="sm:hidden">{bemAvivClientStatusShortLabel(opt)}</span>
             </button>
           ))}
+          <span className="mx-1 hidden h-6 w-px self-center bg-slate-200 sm:inline" aria-hidden />
+          <button
+            type="button"
+            className={cn(pillBase, eko7Filter === 'APRESENTADO' ? 'border-violet-200 bg-violet-50 text-violet-800' : pillIdle)}
+            onClick={() => setEko7Filter((f) => (f === 'APRESENTADO' ? 'TODOS' : 'APRESENTADO'))}
+            title="Clientes que já receberam apresentação EKO7"
+          >
+            EKO7 apresentado
+          </button>
+          <button
+            type="button"
+            className={cn(pillBase, eko7Filter === 'PENDENTE' ? 'border-slate-300 bg-slate-100 text-slate-800' : pillIdle)}
+            onClick={() => setEko7Filter((f) => (f === 'PENDENTE' ? 'TODOS' : 'PENDENTE'))}
+            title="Clientes ainda sem apresentação EKO7"
+          >
+            Sem EKO7
+          </button>
         </div>
         <button
           type="button"
@@ -1464,7 +1516,17 @@ export function BemAvivClientesPage() {
                         {initialsFromName(r.full_name)}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium normal-case text-slate-900">{r.full_name}</p>
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <p className="truncate text-sm font-medium normal-case text-slate-900">{r.full_name}</p>
+                          {clientHadEko7Presentation(r) ? (
+                            <span
+                              className="shrink-0 rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-800"
+                              title={`Apresentação EKO7 em ${formatDateOnly(r.eko7_presentation_at)}`}
+                            >
+                              EKO7
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                   </td>
@@ -1509,6 +1571,26 @@ export function BemAvivClientesPage() {
                         aria-label="Agendar follow-up"
                       >
                         <CalendarPlus size={16} strokeWidth={2.2} />
+                      </button>
+                      <button
+                        type="button"
+                        className={cn(
+                          'inline-flex h-9 w-9 items-center justify-center rounded-md border shadow-sm sm:h-10 sm:w-10',
+                          clientHadEko7Presentation(r)
+                            ? 'border-violet-400 bg-violet-600 text-white hover:bg-violet-700'
+                            : 'border-violet-200 bg-white text-violet-700 hover:bg-violet-50',
+                        )}
+                        onClick={() => void toggleEko7Presentation(r)}
+                        title={
+                          clientHadEko7Presentation(r)
+                            ? `EKO7 apresentado em ${formatDateOnly(r.eko7_presentation_at)} — clique para desmarcar`
+                            : 'Marcar apresentação EKO7 realizada'
+                        }
+                        aria-label={
+                          clientHadEko7Presentation(r) ? 'Desmarcar apresentação EKO7' : 'Marcar apresentação EKO7'
+                        }
+                      >
+                        <Presentation size={16} strokeWidth={2.2} />
                       </button>
                       <button
                         type="button"
@@ -1640,6 +1722,38 @@ export function BemAvivClientesPage() {
               <div className="sm:col-span-3">
                 <label>ESTADO</label>
                 <input value={form.address_state} onChange={(e) => setForm({ ...form, address_state: e.target.value })} />
+              </div>
+              <div className="sm:col-span-12 rounded-xl border border-violet-100 bg-violet-50/40 p-3">
+                <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-800">
+                  <input
+                    type="checkbox"
+                    checked={form.eko7_presentation_done}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        eko7_presentation_done: e.target.checked,
+                        eko7_presentation_at: e.target.checked && !prev.eko7_presentation_at ? todayInputDate() : prev.eko7_presentation_at,
+                      }))
+                    }
+                    className="h-4 w-4 rounded border-slate-300"
+                  />
+                  Apresentação do projeto EKO7 realizada
+                </label>
+                {form.eko7_presentation_done ? (
+                  <div className="mt-2 max-w-xs">
+                    <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Data da apresentação</label>
+                    <input
+                      type="date"
+                      className="mt-1 w-full"
+                      value={form.eko7_presentation_at}
+                      onChange={(e) => setForm((prev) => ({ ...prev, eko7_presentation_at: e.target.value }))}
+                    />
+                  </div>
+                ) : (
+                  <p className="mt-1 text-[10px] leading-snug text-slate-500">
+                    Marque para identificar clientes que já viram o EKO7 e facilitar repiques de comunicação.
+                  </p>
+                )}
               </div>
               <div className="sm:col-span-8">
                 <label>E-MAIL</label>

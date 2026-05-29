@@ -13,7 +13,6 @@ import {
   XCircle,
   TrendingUp,
   Clock,
-  Truck,
   Search,
   Sparkles,
   FileText,

@@ -9,6 +9,11 @@ import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { buildWhatsappUrl } from '../lib/whatsapp'
 import { dateInputToIso, formatDateOnly, todayInputDate, toInputDate } from '../lib/dates'
+import {
+  clientHadEko7Presentation,
+  clientMatchesEko7Filter,
+  type BemAvivEko7Filter,
+} from '../lib/bemAvivClientStatus'
 
 type FollowupStatus = 'PENDENTE' | 'CONCLUIDO' | 'CANCELADO'
 type DateFilter = 'TODOS' | 'VENCIDOS' | 'HOJE' | 'PROXIMOS_7' | 'SEM_AGENDAMENTO'
@@ -26,6 +31,7 @@ type Cliente = {
   next_followup_at: string | null
   next_followup_note: string | null
   next_followup_status: FollowupStatus | null
+  eko7_presentation_at: string | null
 }
 
 type FollowupHistoryRow = {
@@ -138,6 +144,7 @@ export function BemAvivFollowupPage() {
   const [search, setSearch] = useState('')
   const [dateFilter, setDateFilter] = useState<DateFilter>('TODOS')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('TODOS')
+  const [eko7Filter, setEko7Filter] = useState<BemAvivEko7Filter>('TODOS')
   const [sortKey, setSortKey] = useState<SortKey>('full_name')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [registeringClient, setRegisteringClient] = useState<Cliente | null>(null)
@@ -169,7 +176,7 @@ export function BemAvivFollowupPage() {
     setLoading(true)
     const { data, error } = await supabase
       .from('bem_aviv_clients')
-      .select('id, full_name, phone_1, phone_2, client_status, commercial_stage, last_contact_at, next_followup_at, next_followup_note, next_followup_status')
+      .select('id, full_name, phone_1, phone_2, client_status, commercial_stage, last_contact_at, next_followup_at, next_followup_note, next_followup_status, eko7_presentation_at')
       .eq('company_id', activeCompanyId)
       .order('full_name')
 
@@ -328,7 +335,7 @@ export function BemAvivFollowupPage() {
       if (dateFilter === 'HOJE') return nextDate >= todayStart && nextDate <= todayEnd
       if (dateFilter === 'PROXIMOS_7') return nextDate >= todayStart && nextDate <= nextSevenEnd
       return true
-    })
+    }).filter((row) => clientMatchesEko7Filter(row, eko7Filter))
     const safeTime = (v: string | null) => {
       if (!v) return 0
       const n = new Date(v).getTime()
@@ -365,7 +372,7 @@ export function BemAvivFollowupPage() {
       }
       return cmp * mul
     })
-  }, [rows, search, dateFilter, statusFilter, sortKey, sortDir])
+  }, [rows, search, dateFilter, statusFilter, eko7Filter, sortKey, sortDir])
 
   function toggleSort(key: SortKey) {
     if (sortKey !== key) {
@@ -697,7 +704,7 @@ export function BemAvivFollowupPage() {
         </div>
       ) : null}
 
-      <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-2 lg:grid-cols-5">
         <div>
           <label>BUSCA</label>
           <div className="relative">
@@ -725,6 +732,14 @@ export function BemAvivFollowupPage() {
             <option value="VISITA_AGENDADA">Visita agendada</option>
           </select>
         </div>
+        <div>
+          <label>EKO7</label>
+          <select value={eko7Filter} onChange={(e) => setEko7Filter(e.target.value as BemAvivEko7Filter)}>
+            <option value="TODOS">Todos</option>
+            <option value="APRESENTADO">Apresentação realizada</option>
+            <option value="PENDENTE">Sem apresentação</option>
+          </select>
+        </div>
         <div className="flex items-end">
           <Button
             variant="secondary"
@@ -733,6 +748,7 @@ export function BemAvivFollowupPage() {
               setSearch('')
               setDateFilter('TODOS')
               setStatusFilter('TODOS')
+              setEko7Filter('TODOS')
             }}
           >
             Limpar filtros
@@ -754,7 +770,17 @@ export function BemAvivFollowupPage() {
                 <li key={row.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="font-semibold text-slate-900">{row.full_name}</p>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <p className="font-semibold text-slate-900">{row.full_name}</p>
+                        {clientHadEko7Presentation(row) ? (
+                          <span
+                            className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-violet-800"
+                            title={`EKO7 em ${formatDateOnly(row.eko7_presentation_at)}`}
+                          >
+                            EKO7
+                          </span>
+                        ) : null}
+                      </div>
                       <p className="mt-0.5 text-sm text-slate-600">{formatPhone(row.phone_1) || formatPhone(row.phone_2) || '—'}</p>
                     </div>
                     <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
@@ -857,7 +883,14 @@ export function BemAvivFollowupPage() {
               <tbody>
                 {filteredRows.map((row) => (
                   <tr key={row.id}>
-                    <td>{row.full_name}</td>
+                    <td>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span>{row.full_name}</span>
+                        {clientHadEko7Presentation(row) ? (
+                          <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-violet-800">EKO7</span>
+                        ) : null}
+                      </div>
+                    </td>
                     <td>{formatPhone(row.phone_1) || formatPhone(row.phone_2) || '—'}</td>
                     <td>{row.client_status || '—'}</td>
                     <td>{row.commercial_stage || 'CONTATO'}</td>

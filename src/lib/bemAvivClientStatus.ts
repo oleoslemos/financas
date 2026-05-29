@@ -29,3 +29,18 @@ export function bemAvivClientStatusShortLabel(status: string | null | undefined)
   return s || '—'
 }
 export type BemAvivClientCommercialStage = (typeof BEM_AVIV_CLIENT_COMMERCIAL_STAGE_OPTIONS)[number]
+
+export type BemAvivEko7Filter = 'TODOS' | 'APRESENTADO' | 'PENDENTE'
+
+export function clientHadEko7Presentation(client: { eko7_presentation_at?: string | null }): boolean {
+  return Boolean(client.eko7_presentation_at)
+}
+
+export function clientMatchesEko7Filter(
+  client: { eko7_presentation_at?: string | null },
+  filter: BemAvivEko7Filter,
+): boolean {
+  if (filter === 'TODOS') return true
+  const presented = clientHadEko7Presentation(client)
+  return filter === 'APRESENTADO' ? presented : !presented
+}
