@@ -882,8 +882,8 @@ export function BemAvivHomePage() {
             </label>
           </section>
 
-          <section className="grid gap-4 sm:grid-cols-2">
-            <Card className="border-0 shadow-md ring-1 ring-slate-100/90 transition-shadow hover:shadow-lg sm:col-span-2">
+          <section className="grid gap-4 md:grid-cols-2">
+            <Card className="border-0 shadow-md ring-1 ring-slate-100/90 transition-shadow hover:shadow-lg min-w-0">
               <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
                 <CardTitle className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                   {representante ? 'Meta global' : `Meta anual ${goalYear}`}
@@ -980,7 +980,7 @@ export function BemAvivHomePage() {
               </CardContent>
             </Card>
 
-            <Card className="border-0 shadow-md ring-1 ring-slate-100/90 transition-shadow hover:shadow-lg">
+            <Card className="border-0 shadow-md ring-1 ring-slate-100/90 transition-shadow hover:shadow-lg min-w-0">
               <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
                 <CardTitle className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total vendido (pedidos)</CardTitle>
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100">
