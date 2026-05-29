@@ -64,6 +64,12 @@ export function BemAvivEmpresaPage() {
     setSaving(false)
     if (error) setSaveMsg(error.message)
     else {
+      if (companyKind === 'REPRESENTANTE') {
+        await supabase
+          .from('company_sales_goals')
+          .update({ monthly_goals: {}, updated_at: new Date().toISOString() })
+          .eq('company_id', activeCompanyId)
+      }
       setSaveMsg('Dados salvos.')
       await refreshCompanies()
     }
@@ -115,7 +121,8 @@ export function BemAvivEmpresaPage() {
             ))}
           </div>
           <p className="text-xs text-slate-500">
-            Ex.: Bem Aviv como <strong>Representante</strong> e ComfortCare como <strong>Distribuidor</strong>.
+            Ex.: Bem Aviv como <strong>Representante</strong> (meta global única; ao atingir, pode virar distribuidor) e
+            ComfortCare como <strong>Distribuidor</strong> (metas anuais e mensais de planejamento).
           </p>
         </fieldset>
         <label className="block space-y-1">

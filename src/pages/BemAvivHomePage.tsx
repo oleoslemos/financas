@@ -1,7 +1,7 @@
 import { useUser } from '@clerk/clerk-react'
 import { Building2, ChevronLeft, ChevronRight, History, Pencil, Target, TrendingUp } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Bar, BarChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { SalesGoalsEditor } from '../components/bemAviv/SalesGoalsEditor'
 import { Button } from '../components/ui/Button'
@@ -18,6 +18,7 @@ import {
   parseGoalMoneyInput,
   parseMonthlyGoals,
   suggestMonthGoalFromHistory,
+  sumAllTimeSold,
   sumYearToDateSold,
 } from '../lib/salesGoals'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
@@ -364,11 +365,15 @@ export function BemAvivHomePage() {
       return
     }
     const annual = Number((data as { annual_goal: number }).annual_goal ?? 0)
-    const monthlyParsed = parseMonthlyGoals((data as { monthly_goals: unknown }).monthly_goals)
     const fallback = defaultGlobalAnnualGoal(activeCompany?.slug, activeCompany?.company_kind)
     const effectiveAnnual = annual > 0 ? annual : fallback
     setAnnualGoalDraft(effectiveAnnual > 0 ? formatGoalMoneyInput(effectiveAnnual) : '')
-    setMonthlyGoalsDraft(monthlyGoalsToDraft(monthlyParsed))
+    if (isRepresentante(activeCompany?.company_kind)) {
+      setMonthlyGoalsDraft(monthlyGoalsToDraft(emptyMonthlyGoals()))
+    } else {
+      const monthlyParsed = parseMonthlyGoals((data as { monthly_goals: unknown }).monthly_goals)
+      setMonthlyGoalsDraft(monthlyGoalsToDraft(monthlyParsed))
+    }
   }, [supabase, activeCompanyId, goalYear, activeCompany?.slug, activeCompany?.company_kind])
 
   useEffect(() => {
@@ -380,10 +385,13 @@ export function BemAvivHomePage() {
     setGoalsSaving(true)
     setGoalsMsg(null)
     const annual_goal = parseGoalMoneyInput(annualGoalDraft)
+    const representanteSave = isRepresentante(activeCompany?.company_kind)
     const monthly_goals: Record<string, number> = {}
-    for (let m = 1; m <= 12; m++) {
-      const key = String(m)
-      monthly_goals[key] = parseGoalMoneyInput(monthlyGoalsDraft[key] ?? '')
+    if (!representanteSave) {
+      for (let m = 1; m <= 12; m++) {
+        const key = String(m)
+        monthly_goals[key] = parseGoalMoneyInput(monthlyGoalsDraft[key] ?? '')
+      }
     }
     const payload = {
       company_id: activeCompanyId,
@@ -424,6 +432,11 @@ export function BemAvivHomePage() {
   }
 
   const representante = isRepresentante(activeCompany?.company_kind)
+
+  useEffect(() => {
+    if (representante) setGoalYear(new Date().getFullYear())
+  }, [representante, activeCompanyId])
+
   const monthlyGoalsParsed = useMemo(
     () =>
       Object.fromEntries(
@@ -440,6 +453,11 @@ export function BemAvivHomePage() {
     () => sumYearToDateSold(monthlySoldAllTime, goalYear),
     [monthlySoldAllTime, goalYear],
   )
+  const soldForProgress = useMemo(
+    () => (representante ? sumAllTimeSold(monthlySoldAllTime) : yearToDateSold),
+    [representante, monthlySoldAllTime, yearToDateSold],
+  )
+  const globalGoalReached = representante && annualGoalNum > 0 && soldForProgress >= annualGoalNum
 
   const pendingWithDate = useMemo(() => clients.filter(includeInFollowupTimeline), [clients])
 
@@ -583,7 +601,7 @@ export function BemAvivHomePage() {
     return out
   }, [monthlyTotals])
 
-  const progressPct = Math.min(100, annualGoalNum > 0 ? (yearToDateSold / annualGoalNum) * 100 : 0)
+  const progressPct = Math.min(100, annualGoalNum > 0 ? (soldForProgress / annualGoalNum) * 100 : 0)
   const avgTicket = soldOrdersCount > 0 ? totalSold / soldOrdersCount : 0
   const periodLabel =
     metricsPeriod === 'TODO'
@@ -868,7 +886,7 @@ export function BemAvivHomePage() {
             <Card className="border-0 shadow-md ring-1 ring-slate-100/90 transition-shadow hover:shadow-lg sm:col-span-2">
               <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
                 <CardTitle className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  {representante ? `Meta global ${goalYear}` : `Meta anual ${goalYear}`}
+                  {representante ? 'Meta global' : `Meta anual ${goalYear}`}
                 </CardTitle>
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-50 text-[#185FA5] ring-1 ring-sky-100">
                   <Target size={18} aria-hidden />
@@ -882,25 +900,35 @@ export function BemAvivHomePage() {
                     </p>
                     <p className="mt-1 font-hub text-2xl font-bold tabular-nums text-slate-900">{formatBRL(annualGoalNum)}</p>
                     <p className="mt-1 text-xs text-slate-500">
-                      Vendido no ano ({goalYear}) até agora: <strong>{formatBRL(yearToDateSold)}</strong>
+                      {representante ? (
+                        <>
+                          Vendido acumulado (todo o histórico): <strong>{formatBRL(soldForProgress)}</strong>
+                        </>
+                      ) : (
+                        <>
+                          Vendido no ano ({goalYear}) até agora: <strong>{formatBRL(soldForProgress)}</strong>
+                        </>
+                      )}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                      Ano da meta
-                      <select
-                        value={goalYear}
-                        onChange={(e) => setGoalYear(Number(e.target.value))}
-                        className="mt-1 block rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm font-medium text-slate-800"
-                      >
-                        {[goalYear - 1, goalYear, goalYear + 1].map((y) => (
-                          <option key={y} value={y}>
-                            {y}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
+                  {!representante ? (
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                        Ano da meta
+                        <select
+                          value={goalYear}
+                          onChange={(e) => setGoalYear(Number(e.target.value))}
+                          className="mt-1 block rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm font-medium text-slate-800"
+                        >
+                          {[goalYear - 1, goalYear, goalYear + 1].map((y) => (
+                            <option key={y} value={y}>
+                              {y}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="border-b border-slate-100 pb-4">
@@ -910,24 +938,34 @@ export function BemAvivHomePage() {
                   </div>
                   <Progress value={progressPct} className="h-2.5 bg-slate-100" />
                   <p className="mt-2 text-xs text-slate-500">
-                    {annualGoalNum > 0 && yearToDateSold >= annualGoalNum ? (
+                    {annualGoalNum > 0 && soldForProgress >= annualGoalNum ? (
                       <span className="font-medium text-emerald-700">
                         {representante ? 'Meta global atingida.' : 'Meta anual atingida.'}
                       </span>
                     ) : (
                       <>
-                        Faltam <strong>{formatBRL(Math.max(0, annualGoalNum - yearToDateSold))}</strong> para atingir a{' '}
+                        Faltam <strong>{formatBRL(Math.max(0, annualGoalNum - soldForProgress))}</strong> para atingir a{' '}
                         {representante ? 'meta global' : 'meta anual'}
                       </>
                     )}
                   </p>
+                  {globalGoalReached ? (
+                    <p className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50/90 px-3 py-2 text-xs leading-relaxed text-emerald-900">
+                      Parabéns — meta global concluída. Para operar como distribuidor (com metas mensais de
+                      planejamento), altere o tipo em{' '}
+                      <Link to="/bem-aviv/empresa" className="font-semibold text-emerald-800 underline">
+                        Dados da empresa
+                      </Link>
+                      .
+                    </p>
+                  ) : null}
                 </div>
 
                 <div className="flex justify-between items-center pt-2">
                   <span className="text-xs text-slate-500">
                     {representante
-                      ? 'Meta global + metas mensais de planejamento.'
-                      : 'Metas mensais e anuais configuradas.'}
+                      ? 'Representante: apenas meta global (sem divisão por ano ou por mês).'
+                      : 'Distribuidor: meta anual e metas mensais de planejamento.'}
                   </span>
                   <Button
                     type="button"
@@ -1389,7 +1427,7 @@ export function BemAvivHomePage() {
                 <h3 className="text-lg font-semibold text-slate-900">Configurar Metas de Vendas</h3>
                 <p className="text-sm text-slate-500">
                   {representante
-                    ? 'Defina a meta global do ano (valor principal) e, se quiser, metas mensais para planejamento.'
+                    ? 'Defina o valor da meta global (única). Metas por mês e por ano são só para distribuidores.'
                     : 'Defina o valor da meta anual e as metas de cada mês para o ano selecionado.'}
                 </p>
               </div>
@@ -1416,7 +1454,7 @@ export function BemAvivHomePage() {
                 setMonthlyGoalsDraft((prev) => ({ ...prev, [month]: v }))
               }
               monthlySoldAllTime={monthlySoldAllTime}
-              yearToDateSold={yearToDateSold}
+              soldForProgress={soldForProgress}
               goalsLoading={goalsLoading}
               goalsSaving={goalsSaving}
               goalsMsg={goalsMsg}

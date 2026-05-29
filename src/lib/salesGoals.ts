@@ -66,6 +66,10 @@ export function suggestMonthGoalFromHistory(
   return Math.round((sum / amounts.length) * 100) / 100
 }
 
+export function sumAllTimeSold(monthlySoldAllTime: Record<string, number>): number {
+  return Object.values(monthlySoldAllTime).reduce((acc, v) => acc + (Number.isFinite(v) ? v : 0), 0)
+}
+
 export function sumYearToDateSold(monthlySoldAllTime: Record<string, number>, year: number, throughMonth?: number) {
   const now = new Date()
   const endMonth = throughMonth ?? (year < now.getFullYear() ? 12 : year === now.getFullYear() ? now.getMonth() + 1 : 0)
