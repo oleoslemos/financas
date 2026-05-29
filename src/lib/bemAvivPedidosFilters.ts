@@ -1,4 +1,4 @@
-export type PedidosStatusFilter = 'TODOS' | 'ABERTO' | 'ENTREGA PENDENTE' | 'ENTREGUE' | 'CANCELADO'
+export type PedidosStatusFilter = 'TODOS' | 'ABERTO' | 'ENTREGA PENDENTE' | 'ENTREGA PARCIAL' | 'ENTREGUE' | 'CANCELADO'
 
 export type PedidosListFilters = {
   typeTab: 'ORCAMENTO' | 'PEDIDO'

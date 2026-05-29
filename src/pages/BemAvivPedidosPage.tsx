@@ -8,6 +8,7 @@ import {
   Plus,
   RotateCcw,
   Trash2,
+  Truck,
   X,
   XCircle,
   TrendingUp,
@@ -32,6 +33,8 @@ import {
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { normalizePayload, type OfferProduct } from '../lib/bemAvivOfferProduct'
+import { isDeliveryPendingStatus, remainingQty } from '../lib/bemAvivOrderDelivery'
+import { PartialDeliveryModal } from '../components/bemAviv/PartialDeliveryModal'
 import { formatBRL } from '../lib/format'
 
 type PaymentOption = 'A_VISTA' | 'A_PRAZO'
@@ -72,6 +75,7 @@ type OrderItemDetailRow = {
   id: string
   item_description: string
   quantity: number
+  quantity_delivered: number
   unit_price: number
   discount_amount: number
   total_price: number
@@ -138,14 +142,18 @@ function canConfirmPayment(r: Pedido) {
 }
 
 function canConfirmDelivery(r: Pedido) {
-  return r.document_type === 'PEDIDO' && r.status === 'ENTREGA PENDENTE'
+  return r.document_type === 'PEDIDO' && isDeliveryPendingStatus(r.status)
+}
+
+function canPartialDelivery(r: Pedido) {
+  return r.document_type === 'PEDIDO' && isDeliveryPendingStatus(r.status)
 }
 
 function canReopenPedido(r: Pedido) {
   const s = r.status
   return (
     r.document_type === 'PEDIDO' &&
-    (s === 'ENTREGUE' || s === 'ENTREGA PENDENTE' || s === 'FINALIZADO')
+    (s === 'ENTREGUE' || s === 'ENTREGA PENDENTE' || s === 'ENTREGA PARCIAL' || s === 'FINALIZADO')
   )
 }
 
@@ -153,7 +161,7 @@ function canVerDetalhePedido(r: Pedido) {
   const s = r.status
   return (
     r.document_type === 'PEDIDO' &&
-    (s === 'ABERTO' || s === 'ENTREGUE' || s === 'ENTREGA PENDENTE' || s === 'FINALIZADO')
+    (s === 'ABERTO' || s === 'ENTREGUE' || s === 'ENTREGA PENDENTE' || s === 'ENTREGA PARCIAL' || s === 'FINALIZADO')
   )
 }
 
@@ -200,6 +208,14 @@ function renderStatusBadge(status: string, docType: 'ORCAMENTO' | 'PEDIDO') {
         <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 border border-amber-100">
           <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
           Entrega Pendente
+        </span>
+      )
+    }
+    if (s === 'ENTREGA PARCIAL') {
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700 border border-violet-100">
+          <span className="h-1.5 w-1.5 rounded-full bg-violet-500 animate-pulse" />
+          Entrega Parcial
         </span>
       )
     }
@@ -277,6 +293,7 @@ export function BemAvivPedidosPage() {
   const [detailModalPedido, setDetailModalPedido] = useState<Pedido | null>(null)
   const [detailModalItems, setDetailModalItems] = useState<OrderItemDetailRow[]>([])
   const [detailModalLoading, setDetailModalLoading] = useState(false)
+  const [partialDeliveryOrder, setPartialDeliveryOrder] = useState<Pedido | null>(null)
 
   const clientNameById = useMemo(() => {
     const m = new Map<string, string>()
@@ -376,7 +393,7 @@ export function BemAvivPedidosPage() {
         if (status === 'ABERTO') {
           openCount++
           openValue += val
-        } else if (status === 'ENTREGA PENDENTE') {
+        } else if (status === 'ENTREGA PENDENTE' || status === 'ENTREGA PARCIAL') {
           pendingCount++
           pendingValue += val
         } else if (status === 'ENTREGUE' || status === 'FINALIZADO') {
@@ -754,9 +771,66 @@ export function BemAvivPedidosPage() {
     await load()
   }
 
+  async function confirmFullDelivery(order: Pedido) {
+    if (!supabase || !activeCompanyId) return
+    if (
+      !confirm(
+        `CONFIRMAR ENTREGA TOTAL DO PEDIDO ${order.document_number ?? ''}?\n\nTodos os itens pendentes serão marcados como entregues.`,
+      )
+    ) {
+      return
+    }
+
+    const { data: items, error: itemsErr } = await supabase
+      .from('bem_aviv_sales_order_items')
+      .select('id, quantity, quantity_delivered')
+      .eq('sales_order_id', order.id)
+
+    if (itemsErr) {
+      alert(itemsErr.message)
+      return
+    }
+
+    const rows = (items ?? []) as Array<{ id: string; quantity: number; quantity_delivered: number }>
+    for (const item of rows) {
+      const { error } = await supabase
+        .from('bem_aviv_sales_order_items')
+        .update({ quantity_delivered: item.quantity })
+        .eq('id', item.id)
+      if (error) {
+        alert(error.message)
+        return
+      }
+    }
+
+    const { error } = await supabase
+      .from('bem_aviv_sales_orders')
+      .update({ status: 'ENTREGUE' })
+      .eq('id', order.id)
+      .eq('company_id', activeCompanyId)
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    await load()
+  }
+
   async function updateOrderStatus(order: Pedido, nextStatus: string, confirmMessage: string) {
     if (!supabase || !ownerUserId || !activeCompanyId) return
     if (!confirm(confirmMessage)) return
+
+    if (nextStatus === 'ABERTO' && order.document_type === 'PEDIDO') {
+      const { error: resetErr } = await supabase
+        .from('bem_aviv_sales_order_items')
+        .update({ quantity_delivered: 0 })
+        .eq('sales_order_id', order.id)
+      if (resetErr) {
+        alert(resetErr.message)
+        return
+      }
+    }
 
     const { error } = await supabase
       .from('bem_aviv_sales_orders')
@@ -785,7 +859,7 @@ export function BemAvivPedidosPage() {
     setDetailModalLoading(true)
     const { data, error } = await supabase
       .from('bem_aviv_sales_order_items')
-      .select('id, item_description, quantity, unit_price, discount_amount, total_price, created_at')
+      .select('id, item_description, quantity, quantity_delivered, unit_price, discount_amount, total_price, created_at')
       .eq('sales_order_id', pedido.id)
     if (error) {
       alert(error.message)
@@ -1074,6 +1148,7 @@ export function BemAvivPedidosPage() {
             <option value="TODOS">Status: Todos</option>
             <option value="ABERTO">Aberto</option>
             <option value="ENTREGA PENDENTE">Entrega pendente</option>
+            <option value="ENTREGA PARCIAL">Entrega parcial</option>
             <option value="ENTREGUE">Entregue</option>
             <option value="CANCELADO">Cancelado</option>
           </select>
@@ -1207,19 +1282,24 @@ export function BemAvivPedidosPage() {
                               <CircleDollarSign size={16} />
                             </button>
                           )}
+                          {canPartialDelivery(r) && (
+                            <button
+                              type="button"
+                              className={`${iconBtn} border-violet-100 text-violet-700 hover:bg-violet-50`}
+                              title="Entrega parcial"
+                              aria-label="Entrega parcial"
+                              onClick={() => setPartialDeliveryOrder(r)}
+                            >
+                              <Truck size={16} />
+                            </button>
+                          )}
                           {canConfirmDelivery(r) && (
                             <button
                               type="button"
                               className={`${iconBtn} border-blue-100 text-blue-700 hover:bg-blue-50`}
-                              title="Confirmar entrega"
-                              aria-label="Confirmar entrega"
-                              onClick={() =>
-                                void updateOrderStatus(
-                                  r,
-                                  'ENTREGUE',
-                                  `CONFIRMAR ENTREGA DO PEDIDO ${r.document_number ?? ''}?`,
-                                )
-                              }
+                              title="Confirmar entrega total"
+                              aria-label="Confirmar entrega total"
+                              onClick={() => void confirmFullDelivery(r)}
                             >
                               <PackageCheck size={16} />
                             </button>
@@ -1448,6 +1528,18 @@ export function BemAvivPedidosPage() {
                             <tr className="border-b border-slate-100 bg-slate-50/50 text-left">
                               <th className="px-4 py-3 font-bold uppercase tracking-wider text-slate-400">Descrição do Produto</th>
                               <th className="px-4 py-3 font-bold uppercase tracking-wider text-slate-400 text-center w-16">Qtd</th>
+                              {detailModalPedido.document_type === 'PEDIDO' &&
+                              isDeliveryPendingStatus(detailModalPedido.status) ? (
+                                <>
+                                  <th className="px-4 py-3 font-bold uppercase tracking-wider text-slate-400 text-center w-16">Entregue</th>
+                                  <th className="px-4 py-3 font-bold uppercase tracking-wider text-slate-400 text-center w-16">Pendente</th>
+                                </>
+                              ) : detailModalPedido.document_type === 'PEDIDO' &&
+                                (detailModalPedido.status ?? '').toUpperCase() === 'ENTREGUE' ? (
+                                <>
+                                  <th className="px-4 py-3 font-bold uppercase tracking-wider text-slate-400 text-center w-16">Entregue</th>
+                                </>
+                              ) : null}
                               <th className="px-4 py-3 font-bold uppercase tracking-wider text-slate-400 text-right w-24">Preço un.</th>
                               <th className="px-4 py-3 font-bold uppercase tracking-wider text-slate-400 text-right w-28">Total</th>
                             </tr>
@@ -1457,6 +1549,16 @@ export function BemAvivPedidosPage() {
                               <tr key={it.id} className="hover:bg-slate-50/50 transition-colors">
                                 <td className="px-4 py-3 font-medium text-slate-800 leading-normal">{it.item_description}</td>
                                 <td className="px-4 py-3 text-center font-bold text-slate-800 tabular-nums">{it.quantity}</td>
+                                {detailModalPedido.document_type === 'PEDIDO' &&
+                                isDeliveryPendingStatus(detailModalPedido.status) ? (
+                                  <>
+                                    <td className="px-4 py-3 text-center font-semibold text-emerald-700 tabular-nums">{it.quantity_delivered}</td>
+                                    <td className="px-4 py-3 text-center font-semibold text-amber-700 tabular-nums">{remainingQty(it)}</td>
+                                  </>
+                                ) : detailModalPedido.document_type === 'PEDIDO' &&
+                                  (detailModalPedido.status ?? '').toUpperCase() === 'ENTREGUE' ? (
+                                  <td className="px-4 py-3 text-center font-semibold text-emerald-700 tabular-nums">{it.quantity_delivered}</td>
+                                ) : null}
                                 <td className="px-4 py-3 text-right font-medium text-slate-500 tabular-nums">{formatBRL(it.unit_price)}</td>
                                 <td className="px-4 py-3 text-right font-bold text-slate-900 tabular-nums">
                                   {formatBRL(it.total_price)}
@@ -1492,6 +1594,12 @@ export function BemAvivPedidosPage() {
           </div>
         </div>
       )}
+      <PartialDeliveryModal
+        order={partialDeliveryOrder}
+        companyId={activeCompanyId}
+        onClose={() => setPartialDeliveryOrder(null)}
+        onSaved={() => void load()}
+      />
     </div>
   )
 }
