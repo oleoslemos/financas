@@ -17,10 +17,18 @@ import {
   Sparkles,
   FileText,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
 import { useCompany } from '../context/CompanyContext'
+import {
+  clearPedidosFiltersSession,
+  isPedidosPageReload,
+  readPedidosFiltersFromSession,
+  writePedidosFiltersToSession,
+  type PedidosListFilters,
+  type PedidosStatusFilter,
+} from '../lib/bemAvivPedidosFilters'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { normalizePayload, type OfferProduct } from '../lib/bemAvivOfferProduct'
@@ -143,7 +151,10 @@ function canReopenPedido(r: Pedido) {
 
 function canVerDetalhePedido(r: Pedido) {
   const s = r.status
-  return r.document_type === 'PEDIDO' && (s === 'ENTREGUE' || s === 'ENTREGA PENDENTE' || s === 'FINALIZADO')
+  return (
+    r.document_type === 'PEDIDO' &&
+    (s === 'ABERTO' || s === 'ENTREGUE' || s === 'ENTREGA PENDENTE' || s === 'FINALIZADO')
+  )
 }
 
 function canExcluirDocumento(r: Pedido) {
@@ -223,6 +234,26 @@ const iconBtn =
 type PedidosLocationState = {
   bemAvivPedidosClient?: { id: string }
   bemAvivPedidosTab?: 'ORCAMENTO' | 'PEDIDO'
+  bemAvivPedidosFilters?: PedidosListFilters
+}
+
+function applyPedidosListFilters(
+  filters: PedidosListFilters,
+  setters: {
+    setTypeTab: (v: 'ORCAMENTO' | 'PEDIDO') => void
+    setStatusFilter: (v: PedidosStatusFilter) => void
+    setSearch: (v: string) => void
+    setSortBy: (v: PedidosListFilters['sortBy']) => void
+    setSortDir: (v: PedidosListFilters['sortDir']) => void
+    setClientTableFilterId: (v: string | null) => void
+  },
+) {
+  setters.setTypeTab(filters.typeTab)
+  setters.setStatusFilter(filters.statusFilter)
+  setters.setSearch(filters.search)
+  setters.setSortBy(filters.sortBy)
+  setters.setSortDir(filters.sortDir)
+  setters.setClientTableFilterId(filters.clientTableFilterId)
 }
 
 export function BemAvivPedidosPage() {
@@ -239,11 +270,10 @@ export function BemAvivPedidosPage() {
   const [typeTab, setTypeTab] = useState<'ORCAMENTO' | 'PEDIDO'>('PEDIDO')
   const [clientTableFilterId, setClientTableFilterId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<
-    'TODOS' | 'ABERTO' | 'ENTREGA PENDENTE' | 'ENTREGUE' | 'CANCELADO'
-  >('TODOS')
+  const [statusFilter, setStatusFilter] = useState<PedidosStatusFilter>('TODOS')
   const [sortBy, setSortBy] = useState<'DATA' | 'DOCUMENTO' | 'CLIENTE' | 'STATUS' | 'VALOR'>('DATA')
   const [sortDir, setSortDir] = useState<'DESC' | 'ASC'>('DESC')
+  const filtersReadyRef = useRef(false)
   const [detailModalPedido, setDetailModalPedido] = useState<Pedido | null>(null)
   const [detailModalItems, setDetailModalItems] = useState<OrderItemDetailRow[]>([])
   const [detailModalLoading, setDetailModalLoading] = useState(false)
@@ -419,13 +449,87 @@ export function BemAvivPedidosPage() {
 
   useEffect(() => {
     const st = location.state as PedidosLocationState | null
-    if (!st) return
-    const tab = st?.bemAvivPedidosTab
-    const id = st?.bemAvivPedidosClient?.id
-    if (tab) setTypeTab(tab)
-    if (id) setClientTableFilterId(id)
-    navigate('.', { replace: true, state: {} })
+
+    if (isPedidosPageReload()) {
+      clearPedidosFiltersSession()
+      filtersReadyRef.current = true
+      if (st) navigate('.', { replace: true, state: {} })
+      return
+    }
+
+    let shouldClearNav = false
+
+    if (st?.bemAvivPedidosFilters) {
+      applyPedidosListFilters(st.bemAvivPedidosFilters, {
+        setTypeTab,
+        setStatusFilter,
+        setSearch,
+        setSortBy,
+        setSortDir,
+        setClientTableFilterId,
+      })
+      shouldClearNav = true
+    } else {
+      const saved = readPedidosFiltersFromSession()
+      if (saved) {
+        applyPedidosListFilters(saved, {
+          setTypeTab,
+          setStatusFilter,
+          setSearch,
+          setSortBy,
+          setSortDir,
+          setClientTableFilterId,
+        })
+      }
+    }
+
+    if (st?.bemAvivPedidosTab) {
+      setTypeTab(st.bemAvivPedidosTab)
+      shouldClearNav = true
+    }
+    if (st?.bemAvivPedidosClient?.id) {
+      setClientTableFilterId(st.bemAvivPedidosClient.id)
+      shouldClearNav = true
+    }
+
+    filtersReadyRef.current = true
+    if (shouldClearNav) navigate('.', { replace: true, state: {} })
   }, [location.state, navigate])
+
+  useEffect(() => {
+    if (!filtersReadyRef.current) return
+    writePedidosFiltersToSession({
+      typeTab,
+      statusFilter,
+      search,
+      sortBy,
+      sortDir,
+      clientTableFilterId,
+    })
+  }, [typeTab, statusFilter, search, sortBy, sortDir, clientTableFilterId])
+
+  const snapshotPedidosFilters = useCallback(
+    (): PedidosListFilters => ({
+      typeTab,
+      statusFilter,
+      search,
+      sortBy,
+      sortDir,
+      clientTableFilterId,
+    }),
+    [typeTab, statusFilter, search, sortBy, sortDir, clientTableFilterId],
+  )
+
+  const goToEditOrder = useCallback(
+    (orderId: string) => {
+      const filters = snapshotPedidosFilters()
+      writePedidosFiltersToSession(filters)
+      navigate(`/bem-aviv/pedidos/editar/${orderId}`, {
+        state: { bemAvivPedidosReturnFilters: filters },
+      })
+    },
+    [navigate, snapshotPedidosFilters],
+  )
 
   async function closeQuoteAndCreateOrder(quote: Pedido) {
     if (!supabase || !ownerUserId || !activeCompanyId) return
@@ -1058,7 +1162,7 @@ export function BemAvivPedidosPage() {
                               className={iconBtn}
                               title="Editar orçamento"
                               aria-label="Editar orçamento"
-                              onClick={() => navigate(`/bem-aviv/pedidos/editar/${r.id}`)}
+                              onClick={() => goToEditOrder(r.id)}
                             >
                               <Pencil size={16} className="text-slate-500" />
                             </button>
@@ -1081,7 +1185,7 @@ export function BemAvivPedidosPage() {
                               className={iconBtn}
                               title="Alterar pedido"
                               aria-label="Alterar pedido"
-                              onClick={() => navigate(`/bem-aviv/pedidos/editar/${r.id}`)}
+                              onClick={() => goToEditOrder(r.id)}
                             >
                               <Pencil size={16} className="text-slate-500" />
                             </button>

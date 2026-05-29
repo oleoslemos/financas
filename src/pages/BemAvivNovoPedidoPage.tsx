@@ -21,6 +21,7 @@ import { SearchableSelect } from '../components/ui/SearchableSelect'
 import { useSupabase } from '../hooks/useSupabase'
 import { useCompany } from '../context/CompanyContext'
 import { normalizePayload, type OfferProduct, type OfferVariation } from '../lib/bemAvivOfferProduct'
+import { type PedidosListFilters } from '../lib/bemAvivPedidosFilters'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { cn } from '../lib/cn'
 import { resolveDataOwnerId } from '../lib/dataOwner'
@@ -161,7 +162,21 @@ function parseOrderDiscountPercent(raw: string) {
   return clampOrderDiscountPercent(parseMoney(cleaned === '' ? '0' : cleaned))
 }
 
-type NovoPedidoNavState = { document_type?: 'ORCAMENTO' | 'PEDIDO' }
+type NovoPedidoNavState = {
+  document_type?: 'ORCAMENTO' | 'PEDIDO'
+  bemAvivPedidosReturnFilters?: PedidosListFilters
+}
+
+function pedidosListReturnState(
+  documentType: 'ORCAMENTO' | 'PEDIDO',
+  locationState: unknown,
+): { bemAvivPedidosTab: 'ORCAMENTO' | 'PEDIDO'; bemAvivPedidosFilters?: PedidosListFilters } {
+  const st = locationState as NovoPedidoNavState | null
+  return {
+    bemAvivPedidosTab: documentType,
+    bemAvivPedidosFilters: st?.bemAvivPedidosReturnFilters,
+  }
+}
 
 type SalesOrderHeaderRow = {
   id: string
@@ -723,6 +738,11 @@ export function BemAvivNovoPedidoPage() {
   const [lineItems, setLineItems] = useState<LinhaItem[]>([])
   const [liquidTotalDigits, setLiquidTotalDigits] = useState('')
 
+  const pedidosReturnLinkState = useMemo(
+    () => pedidosListReturnState(form.document_type, location.state),
+    [form.document_type, location.state],
+  )
+
   const load = useCallback(async () => {
     if (!supabase || !ownerUserId || !activeCompanyId) {
       setLoading(false)
@@ -1171,7 +1191,7 @@ export function BemAvivNovoPedidoPage() {
       alert(error.message)
       return
     }
-    navigate('/bem-aviv/pedidos')
+    navigate('/bem-aviv/pedidos', { state: pedidosReturnLinkState })
   }
 
   async function submit(e: React.FormEvent) {
@@ -1273,7 +1293,7 @@ export function BemAvivNovoPedidoPage() {
           return
         }
 
-        navigate('/bem-aviv/pedidos', { state: { bemAvivPedidosTab: form.document_type } })
+        navigate('/bem-aviv/pedidos', { state: pedidosReturnLinkState })
         return
       }
 
@@ -1313,7 +1333,7 @@ export function BemAvivNovoPedidoPage() {
         return
       }
 
-      navigate('/bem-aviv/pedidos', { state: { bemAvivPedidosTab: form.document_type } })
+      navigate('/bem-aviv/pedidos', { state: pedidosReturnLinkState })
     } finally {
       submitLockRef.current = false
     }
@@ -1377,7 +1397,7 @@ export function BemAvivNovoPedidoPage() {
       ) : (
         <form onSubmit={submit} className="contents">
           <header className="np-topbar">
-            <Link to="/bem-aviv/pedidos" className="np-back-btn" title="Voltar" aria-label="Voltar">
+            <Link to="/bem-aviv/pedidos" state={pedidosReturnLinkState} className="np-back-btn" title="Voltar" aria-label="Voltar">
               <ChevronLeft size={16} aria-hidden />
             </Link>
             <span className="np-page-title">{isEditMode ? 'Editar pedido' : 'Novo pedido'}</span>
@@ -1391,7 +1411,7 @@ export function BemAvivNovoPedidoPage() {
             <nav className="np-breadcrumb" aria-label="Navegação">
               <span>Hub</span>
               <ChevronRight size={10} aria-hidden />
-              <Link to="/bem-aviv/pedidos" className="hover:text-[var(--np-text)]">
+              <Link to="/bem-aviv/pedidos" state={pedidosReturnLinkState} className="hover:text-[var(--np-text)]">
                 Pedidos e orçamentos
               </Link>
               <ChevronRight size={10} aria-hidden />
