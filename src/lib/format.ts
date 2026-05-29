@@ -46,3 +46,16 @@ export function formatPercentFromDigits(digits: string): string {
 export function onlyDigits(raw: string): string {
   return raw.replace(/\D/g, '')
 }
+
+/** Backspace/Delete em máscara monetária ou percentual: remove o último dígito (centésimos). */
+export function handleCentsMaskKeyDown(
+  e: React.KeyboardEvent<HTMLInputElement>,
+  digits: string,
+  onDigitsChange: (next: string) => void,
+): void {
+  if (e.key !== 'Backspace' && e.key !== 'Delete') return
+  const el = e.currentTarget
+  if (el.selectionStart !== el.selectionEnd) return
+  e.preventDefault()
+  if (digits.length > 0) onDigitsChange(digits.slice(0, -1))
+}

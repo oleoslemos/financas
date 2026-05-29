@@ -28,6 +28,7 @@ import {
   formatBRL,
   formatBRLFromCentsDigits,
   formatPercentFromDigits,
+  handleCentsMaskKeyDown,
   numberToCentsDigits,
   onlyDigits,
   parseDigitsCentsToNumber,
@@ -247,6 +248,7 @@ function LocalInput({ value, onValueChange, className, ...props }: LocalInputPro
 
 function MoneyMaskedInput({ value, onValueChange, className, ...props }: LocalInputProps) {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    handleCentsMaskKeyDown(e, value, onValueChange)
     if (e.key === 'Enter') {
       e.preventDefault()
       e.currentTarget.blur()
@@ -261,7 +263,10 @@ function MoneyMaskedInput({ value, onValueChange, className, ...props }: LocalIn
       inputMode="numeric"
       placeholder="R$ 0,00"
       value={formatBRLFromCentsDigits(value)}
-      onChange={(e) => onValueChange(onlyDigits(e.target.value))}
+      onChange={(e) => {
+        const next = onlyDigits(e.target.value)
+        if (next !== value) onValueChange(next)
+      }}
       onKeyDown={handleKeyDown}
     />
   )
@@ -269,6 +274,7 @@ function MoneyMaskedInput({ value, onValueChange, className, ...props }: LocalIn
 
 function PercentMaskedInput({ value, onValueChange, className, ...props }: LocalInputProps) {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    handleCentsMaskKeyDown(e, value, onValueChange)
     if (e.key === 'Enter') {
       e.preventDefault()
       e.currentTarget.blur()
@@ -283,7 +289,10 @@ function PercentMaskedInput({ value, onValueChange, className, ...props }: Local
       inputMode="numeric"
       placeholder="0,00%"
       value={formatPercentFromDigits(value)}
-      onChange={(e) => onValueChange(onlyDigits(e.target.value))}
+      onChange={(e) => {
+        const next = onlyDigits(e.target.value)
+        if (next !== value) onValueChange(next)
+      }}
       onKeyDown={handleKeyDown}
     />
   )
@@ -335,6 +344,14 @@ function OrderItemRow({
     setLocalPriceDigits(moneyDigitsFromNumber(u))
   }
 
+  const handlePriceKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    handleCentsMaskKeyDown(e, localPriceDigits, setLocalPriceDigits)
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      e.currentTarget.blur()
+    }
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault()
@@ -367,9 +384,12 @@ function OrderItemRow({
         inputMode="numeric"
         placeholder="R$ 0,00"
         value={formatBRLFromCentsDigits(localPriceDigits)}
-        onChange={(e) => setLocalPriceDigits(onlyDigits(e.target.value))}
+        onChange={(e) => {
+          const next = onlyDigits(e.target.value)
+          if (next !== localPriceDigits) setLocalPriceDigits(next)
+        }}
         onBlur={handlePriceBlur}
-        onKeyDown={handleKeyDown}
+        onKeyDown={handlePriceKeyDown}
         aria-label={`Preço unitário ${item.name}`}
       />
       <span className="np-cell-r tabular-nums">{formatBRL(netPrice)}</span>
