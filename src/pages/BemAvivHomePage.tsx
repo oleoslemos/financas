@@ -1,5 +1,16 @@
 import { useUser } from '@clerk/clerk-react'
-import { Building2, ChevronLeft, ChevronRight, History, Pencil, Target, TrendingUp } from 'lucide-react'
+import {
+  AlertCircle,
+  Building2,
+  CalendarPlus,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  History,
+  Pencil,
+  Target,
+  TrendingUp,
+} from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Bar, BarChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
@@ -26,6 +37,11 @@ import { resolveDataOwnerId } from '../lib/dataOwner'
 import { cn } from '../lib/cn'
 import { formatBRL } from '../lib/format'
 import { dateInputToIso, formatDateOnly, todayInputDate, toInputDate } from '../lib/dates'
+import {
+  buildCriticalFollowupEntries,
+  type ClientFollowupRow,
+  fetchLatestFollowupsByClientIds,
+} from '../lib/bemAvivClientFollowups'
 
 const NO_CONTACT_ALERT_DAYS = 30
 const EXCLUDED_FROM_CRITICAL_TIMELINE = new Set(['LEONARDO SILVA LEMOS', 'SUELEN JOAO ALVES'])
@@ -45,15 +61,7 @@ type ClientRow = {
   next_followup_note?: string | null
 }
 
-type FollowupHistoryRow = {
-  id: string
-  client_id: string
-  contacted_at: string
-  channel: string
-  created_by_name?: string | null
-  result: string | null
-  notes: string | null
-}
+type FollowupHistoryRow = ClientFollowupRow
 
 type MetricsPeriod = 'TODO' | 'MES_ATUAL' | 'ULT_30' | 'ULT_90' | 'ULT_180' | 'ULT_365'
 
@@ -240,7 +248,8 @@ export function BemAvivHomePage() {
   const [historyModalClient, setHistoryModalClient] = useState<ClientRow | null>(null)
   const [historyModalRows, setHistoryModalRows] = useState<FollowupHistoryRow[]>([])
   const [historyModalLoading, setHistoryModalLoading] = useState(false)
-  const [latestHistoryByClient, setLatestHistoryByClient] = useState<Record<string, FollowupHistoryRow>>({})
+  const [latestContactByClient, setLatestContactByClient] = useState<Record<string, ClientFollowupRow>>({})
+  const [latestFollowupsReady, setLatestFollowupsReady] = useState(false)
   const [registerInlineOpen, setRegisterInlineOpen] = useState(false)
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null)
   const [registerInlineSaving, setRegisterInlineSaving] = useState(false)
@@ -482,32 +491,29 @@ export function BemAvivHomePage() {
   const agendaRows = selectedDay ? tasksForSelectedDay : tasksForViewMonth
 
   useEffect(() => {
-    if (!supabase || !activeCompanyId) return
+    if (!supabase || !activeCompanyId) {
+      setLatestContactByClient({})
+      setLatestFollowupsReady(true)
+      return
+    }
     const ids = Array.from(new Set(clients.map((r) => r.id)))
     if (ids.length === 0) {
-      setLatestHistoryByClient({})
+      setLatestContactByClient({})
+      setLatestFollowupsReady(true)
       return
     }
     let cancelled = false
+    setLatestFollowupsReady(false)
     void (async () => {
-      const { data, error } = await supabase
-        .from('bem_aviv_client_followups')
-        .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
-        .is('deleted_at', null)
-        .eq('company_id', activeCompanyId)
-        .in('client_id', ids)
-        .order('contacted_at', { ascending: false })
-      if (cancelled) return
-      if (error) {
-        setLatestHistoryByClient({})
-        return
+      try {
+        const { latestContact } = await fetchLatestFollowupsByClientIds(supabase, activeCompanyId, ids)
+        if (cancelled) return
+        setLatestContactByClient(latestContact)
+      } catch {
+        if (!cancelled) setLatestContactByClient({})
+      } finally {
+        if (!cancelled) setLatestFollowupsReady(true)
       }
-      const rows = (data ?? []) as FollowupHistoryRow[]
-      const map: Record<string, FollowupHistoryRow> = {}
-      for (const r of rows) {
-        if (!map[r.client_id]) map[r.client_id] = r
-      }
-      setLatestHistoryByClient(map)
     })()
     return () => {
       cancelled = true
@@ -515,58 +521,25 @@ export function BemAvivHomePage() {
   }, [clients, supabase, activeCompanyId])
 
   const criticalTimelineClients = useMemo(() => {
-    const now = Date.now()
-    const staleMs = NO_CONTACT_ALERT_DAYS * 86_400_000
-    return clients
-      .filter((c) => !EXCLUDED_FROM_CRITICAL_TIMELINE.has(c.full_name.trim().toUpperCase()))
-      .filter((c) => {
-        const cpf = (c.cpf ?? '').replace(/\D/g, '')
-        return !cpf || !EXCLUDED_FROM_FOLLOWUP_BY_CPF.has(cpf)
-      })
-      .map((c) => {
-        const latestHistory = latestHistoryByClient[c.id]
-        const lastTouchIso = latestHistory?.contacted_at ?? c.last_contact_at ?? null
-        const lastTouchMs = lastTouchIso ? new Date(lastTouchIso).getTime() : 0
-        const isNoContact = !lastTouchMs
-        const isNoContact30 = !!lastTouchMs && now - lastTouchMs >= staleMs
-        const followupStatus = (c.next_followup_status ?? 'PENDENTE').toUpperCase()
-        const nextFollowupMs = c.next_followup_at ? new Date(c.next_followup_at).getTime() : 0
-        // Só é "atrasado" se a data já venceu e não houve contato após aquele agendamento.
-        const isOverdue =
-          !!nextFollowupMs &&
-          nextFollowupMs < now &&
-          followupStatus !== 'CANCELADO' &&
-          (lastTouchMs === 0 || lastTouchMs <= nextFollowupMs)
-        const reason = isOverdue
-          ? 'Atrasado'
-          : isNoContact
-            ? 'Sem contato'
-            : isNoContact30
-              ? `Sem contato há ${NO_CONTACT_ALERT_DAYS}+ dias`
-              : 'Atenção'
-        return { client: c, isNoContact, isNoContact30, isOverdue, reason, lastTouchIso }
-      })
-      .filter((x) => {
-        if (!x.isNoContact && !x.isNoContact30 && !x.isOverdue) return false
-        const st = (x.client.next_followup_status ?? 'PENDENTE').toUpperCase()
-        const nf = x.client.next_followup_at
-        // Já há follow-up agendado no futuro: não entra na timeline crítica (aparece no calendário).
-        if (nf && st !== 'CANCELADO' && st !== 'CONCLUIDO') {
-          const nfMs = new Date(nf).getTime()
-          if (nfMs >= now) return false
-        }
-        return true
-      })
-      .sort((a, b) => {
-        const ta = a.client.next_followup_at ? new Date(a.client.next_followup_at).getTime() : Number.MAX_SAFE_INTEGER
-        const tb = b.client.next_followup_at ? new Date(b.client.next_followup_at).getTime() : Number.MAX_SAFE_INTEGER
-        if (ta !== tb) return ta - tb
-        const la = a.lastTouchIso ? new Date(a.lastTouchIso).getTime() : 0
-        const lb = b.lastTouchIso ? new Date(b.lastTouchIso).getTime() : 0
-        return la - lb
-      })
-      .slice(0, 40)
-  }, [clients, latestHistoryByClient])
+    if (!latestFollowupsReady) return []
+    return buildCriticalFollowupEntries(clients, latestContactByClient, {
+      staleDays: NO_CONTACT_ALERT_DAYS,
+      excludeNames: EXCLUDED_FROM_CRITICAL_TIMELINE,
+      excludeCpfs: EXCLUDED_FROM_FOLLOWUP_BY_CPF,
+    }).slice(0, 40)
+  }, [clients, latestContactByClient, latestFollowupsReady])
+
+  const criticalTimelineStats = useMemo(() => {
+    let overdue = 0
+    let noContact = 0
+    let stale = 0
+    for (const row of criticalTimelineClients) {
+      if (row.isOverdue) overdue++
+      else if (row.isNoContact) noContact++
+      else if (row.isStaleContact) stale++
+    }
+    return { overdue, noContact, stale, total: criticalTimelineClients.length }
+  }, [criticalTimelineClients])
 
   const countByDayInViewMonth = useMemo(() => {
     const y = calendarMonth.getFullYear()
@@ -759,16 +732,16 @@ export function BemAvivHomePage() {
 
       const rows = await refetchHistoryModalRows(historyModalClient)
       setHistoryModalRows(rows)
-      const latest = rows[0]
-      if (latest) {
+      const latestContact = rows.find((r) => r.channel !== 'AGENDAMENTO')
+      if (latestContact) {
         await supabase
           .from('bem_aviv_clients')
-          .update({ last_contact_at: latest.contacted_at })
+          .update({ last_contact_at: latestContact.contacted_at })
           .eq('id', historyModalClient.id)
           .eq('company_id', activeCompanyId)
-        setLatestHistoryByClient((prev) => ({ ...prev, [historyModalClient.id]: latest }))
+        setLatestContactByClient((prev) => ({ ...prev, [historyModalClient.id]: latestContact }))
         setClients((prev) =>
-          prev.map((c) => (c.id === historyModalClient.id ? { ...c, last_contact_at: latest.contacted_at } : c)),
+          prev.map((c) => (c.id === historyModalClient.id ? { ...c, last_contact_at: latestContact.contacted_at } : c)),
         )
       }
 
@@ -815,18 +788,20 @@ export function BemAvivHomePage() {
         c.id === historyModalClient.id ? { ...c, last_contact_at: contactedAtIso, next_followup_status: 'CONCLUIDO' } : c,
       ),
     )
-    setLatestHistoryByClient((prev) => ({
-      ...prev,
-      [historyModalClient.id]: {
-        id: `tmp-${Date.now()}`,
-        client_id: historyModalClient.id,
-        contacted_at: contactedAtIso,
-        channel: registerInlineForm.channel,
-        created_by_name: followupActorName,
-        result: registerInlineForm.result || null,
-        notes: registerInlineForm.notes || null,
-      },
-    }))
+    if (registerInlineForm.channel !== 'AGENDAMENTO') {
+      setLatestContactByClient((prev) => ({
+        ...prev,
+        [historyModalClient.id]: {
+          id: `tmp-${Date.now()}`,
+          client_id: historyModalClient.id,
+          contacted_at: contactedAtIso,
+          channel: registerInlineForm.channel,
+          created_by_name: followupActorName,
+          result: registerInlineForm.result || null,
+          notes: registerInlineForm.notes || null,
+        },
+      }))
+    }
 
     await openHistoryModal(historyModalClient)
     setRegisterInlineSaving(false)
@@ -1169,45 +1144,121 @@ export function BemAvivHomePage() {
               </div>
             </div>
 
-            <Card className="border-0 shadow-sm ring-1 ring-slate-100/90">
-              <CardHeader className="pb-2">
-                <CardTitle className="font-hub text-sm font-semibold text-slate-900">
-                  Timeline crítica de follow-up
-                </CardTitle>
-                <p className="text-xs text-slate-500">
-                  Atrasados, sem contato há {NO_CONTACT_ALERT_DAYS}+ dias e sem contato.
-                </p>
-              </CardHeader>
-              <CardContent className="pt-0">
-                {criticalTimelineClients.length === 0 ? (
-                  <p className="py-4 text-sm text-slate-600">Nenhum cliente crítico no momento.</p>
+            <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
+              <div className="border-b border-slate-100 bg-slate-50/50 px-4 py-4 sm:px-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-hub text-sm font-semibold tracking-tight text-slate-900">
+                      Timeline crítica de follow-up
+                    </h3>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Clientes sem nenhum contato registrado, com follow-up vencido ou sem retorno há{' '}
+                      {NO_CONTACT_ALERT_DAYS}+ dias.
+                    </p>
+                  </div>
+                  {!latestFollowupsReady ? (
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase text-slate-500">
+                      Atualizando…
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[10px] font-bold tabular-nums text-white">
+                      {criticalTimelineStats.total}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  <div className="rounded-xl border border-amber-100 bg-amber-50/80 px-2.5 py-2 text-center">
+                    <p className="text-[9px] font-semibold uppercase text-amber-800">Atrasados</p>
+                    <p className="font-hub text-lg font-bold text-amber-950">{criticalTimelineStats.overdue}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-center">
+                    <p className="text-[9px] font-semibold uppercase text-slate-600">Sem contato</p>
+                    <p className="font-hub text-lg font-bold text-slate-900">{criticalTimelineStats.noContact}</p>
+                  </div>
+                  <div className="rounded-xl border border-orange-100 bg-orange-50/80 px-2.5 py-2 text-center">
+                    <p className="text-[9px] font-semibold uppercase text-orange-800">{NO_CONTACT_ALERT_DAYS}+ dias</p>
+                    <p className="font-hub text-lg font-bold text-orange-950">{criticalTimelineStats.stale}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="p-3 sm:p-4">
+                {!latestFollowupsReady ? (
+                  <div className="flex flex-col items-center justify-center gap-2 py-12">
+                    <div className="h-7 w-7 animate-spin rounded-full border-4 border-slate-200 border-t-emerald-600" />
+                    <p className="text-xs font-semibold uppercase text-slate-400">Carregando histórico…</p>
+                  </div>
+                ) : criticalTimelineClients.length === 0 ? (
+                  <p className="rounded-xl border border-slate-100 bg-slate-50/80 py-8 text-center text-sm text-slate-600">
+                    Nenhum cliente crítico no momento.
+                  </p>
                 ) : (
-                  <ul className="max-h-[min(520px,62vh)] divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200 bg-white">
-                    {criticalTimelineClients.map(({ client, reason, lastTouchIso }) => (
-                      <li key={client.id} className="grid grid-cols-[1fr_auto] items-center gap-3 px-3 py-2.5">
+                  <ul className="max-h-[min(520px,62vh)] divide-y divide-slate-100 overflow-y-auto rounded-xl border border-slate-200 bg-white">
+                    {criticalTimelineClients.map(({ client, reason, lastTouchIso, isOverdue }) => (
+                      <li
+                        key={client.id}
+                        className="grid grid-cols-[1fr_auto] items-center gap-3 px-3 py-3 transition-colors hover:bg-slate-50/80 sm:px-4"
+                      >
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-slate-900">{client.full_name}</p>
-                          <p className="text-xs text-slate-500">
-                            {reason}
-                            {client.next_followup_at ? ` • Próximo: ${formatDateOnly(client.next_followup_at)}` : ''}
-                            {lastTouchIso ? ` • Último contato: ${formatDateOnly(lastTouchIso)}` : ''}
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <p className="truncate text-sm font-semibold text-slate-900">{client.full_name}</p>
+                            <span
+                              className={cn(
+                                'inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide',
+                                isOverdue
+                                  ? 'bg-amber-100 text-amber-900'
+                                  : reason === 'Sem contato'
+                                    ? 'bg-slate-100 text-slate-700'
+                                    : 'bg-orange-100 text-orange-900',
+                              )}
+                            >
+                              {isOverdue ? <Clock size={11} aria-hidden /> : <AlertCircle size={11} aria-hidden />}
+                              {reason}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {client.next_followup_at ? (
+                              <>
+                                <span className="font-medium text-slate-600">Próximo:</span>{' '}
+                                {formatDateOnly(client.next_followup_at)}
+                                {' · '}
+                              </>
+                            ) : null}
+                            {lastTouchIso ? (
+                              <>
+                                <span className="font-medium text-slate-600">Último contato:</span>{' '}
+                                {formatDateOnly(lastTouchIso)}
+                              </>
+                            ) : (
+                              <span className="font-medium text-amber-800">Nenhum contato registrado</span>
+                            )}
                           </p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => void openHistoryModal(client)}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-[#185FA5] hover:bg-sky-50"
-                          title={`Visualizar histórico — ${client.full_name}`}
-                          aria-label={`Visualizar histórico — ${client.full_name}`}
-                        >
-                          <History size={16} />
-                        </button>
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/bem-aviv/follow-up/agendar/${client.id}`)}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-700 shadow-sm hover:bg-sky-100"
+                            title={`Agendar follow-up — ${client.full_name}`}
+                            aria-label={`Agendar follow-up — ${client.full_name}`}
+                          >
+                            <CalendarPlus size={16} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void openHistoryModal(client)}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
+                            title={`Histórico — ${client.full_name}`}
+                            aria-label={`Histórico — ${client.full_name}`}
+                          >
+                            <History size={16} />
+                          </button>
+                        </div>
                       </li>
                     ))}
                   </ul>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </section>
         </>
       )}

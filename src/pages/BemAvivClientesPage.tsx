@@ -28,6 +28,7 @@ import {
   BEM_AVIV_CLIENT_STATUS_OPTIONS,
   bemAvivClientStatusShortLabel,
   clientHadEko7Presentation,
+  clientHasConfirmedPurchase,
   clientMatchesEko7Filter,
   type BemAvivClientStatusFilter,
   type BemAvivEko7Filter,
@@ -468,6 +469,8 @@ export function BemAvivClientesPage() {
       clienteDiversos: byStatus('CLIENTE - DIVERSOS'),
       clienteColchaoDiversos: byStatus('CLIENTE - COLCHÃO/DIVERSOS'),
       eko7Apresentado: rows.filter((r) => clientHadEko7Presentation(r)).length,
+      eko7NaoComprou: rows.filter((r) => clientHadEko7Presentation(r) && !clientHasConfirmedPurchase(r)).length,
+      eko7Comprou: rows.filter((r) => clientHadEko7Presentation(r) && clientHasConfirmedPurchase(r)).length,
     }
   }, [rows])
 
@@ -1397,7 +1400,7 @@ export function BemAvivClientesPage() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-7">
         <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
           <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Total</p>
           <p className="font-hub mt-1 text-[20px] font-bold text-slate-900">{stats.total}</p>
@@ -1424,9 +1427,14 @@ export function BemAvivClientesPage() {
           <span className="mt-1 inline-block rounded-full bg-[#EEEDFE] px-2 py-0.5 text-[8px] font-medium text-[#3C3489]">Mix</span>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
-          <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Apresentação EKO7</p>
-          <p className="font-hub mt-1 text-[20px] font-bold text-slate-900">{stats.eko7Apresentado}</p>
-          <span className="mt-1 inline-block rounded-full bg-[#F3E8FF] px-2 py-0.5 text-[8px] font-medium text-[#6B21A8]">Para repique</span>
+          <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">EKO7 · repique</p>
+          <p className="font-hub mt-1 text-[20px] font-bold text-slate-900">{stats.eko7NaoComprou}</p>
+          <span className="mt-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[8px] font-medium text-amber-800">Apresentado · não comprou</span>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
+          <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">EKO7 · convertidos</p>
+          <p className="font-hub mt-1 text-[20px] font-bold text-slate-900">{stats.eko7Comprou}</p>
+          <span className="mt-1 inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-[8px] font-medium text-emerald-800">Apresentado · comprou</span>
         </div>
       </div>
 
@@ -1464,9 +1472,31 @@ export function BemAvivClientesPage() {
           <span className="mx-1 hidden h-6 w-px self-center bg-slate-200 sm:inline" aria-hidden />
           <button
             type="button"
+            className={cn(
+              pillBase,
+              eko7Filter === 'APRESENTADO_NAO_COMPROU' ? 'border-amber-300 bg-amber-50 text-amber-900' : pillIdle,
+            )}
+            onClick={() => setEko7Filter((f) => (f === 'APRESENTADO_NAO_COMPROU' ? 'TODOS' : 'APRESENTADO_NAO_COMPROU'))}
+            title="Apresentação EKO7 feita e ainda sem pedido confirmado — foco para repique"
+          >
+            EKO7 · não comprou
+          </button>
+          <button
+            type="button"
+            className={cn(
+              pillBase,
+              eko7Filter === 'APRESENTADO_COMPROU' ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : pillIdle,
+            )}
+            onClick={() => setEko7Filter((f) => (f === 'APRESENTADO_COMPROU' ? 'TODOS' : 'APRESENTADO_COMPROU'))}
+            title="Apresentação EKO7 feita e já comprou (pedido confirmado)"
+          >
+            EKO7 · comprou
+          </button>
+          <button
+            type="button"
             className={cn(pillBase, eko7Filter === 'APRESENTADO' ? 'border-violet-200 bg-violet-50 text-violet-800' : pillIdle)}
             onClick={() => setEko7Filter((f) => (f === 'APRESENTADO' ? 'TODOS' : 'APRESENTADO'))}
-            title="Clientes que já receberam apresentação EKO7"
+            title="Todos com apresentação EKO7 (comprou ou não)"
           >
             EKO7 apresentado
           </button>
@@ -1519,12 +1549,29 @@ export function BemAvivClientesPage() {
                         <div className="flex min-w-0 items-center gap-1.5">
                           <p className="truncate text-sm font-medium normal-case text-slate-900">{r.full_name}</p>
                           {clientHadEko7Presentation(r) ? (
-                            <span
-                              className="shrink-0 rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-800"
-                              title={`Apresentação EKO7 em ${formatDateOnly(r.eko7_presentation_at)}`}
-                            >
-                              EKO7
-                            </span>
+                            <>
+                              <span
+                                className="shrink-0 rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-800"
+                                title={`Apresentação EKO7 em ${formatDateOnly(r.eko7_presentation_at)}`}
+                              >
+                                EKO7
+                              </span>
+                              {clientHasConfirmedPurchase(r) ? (
+                                <span
+                                  className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-800"
+                                  title="Pedido confirmado após apresentação"
+                                >
+                                  Comprou
+                                </span>
+                              ) : (
+                                <span
+                                  className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-900"
+                                  title="Ainda sem pedido confirmado — candidato a repique"
+                                >
+                                  Não comprou
+                                </span>
+                              )}
+                            </>
                           ) : null}
                         </div>
                       </div>
@@ -1740,18 +1787,31 @@ export function BemAvivClientesPage() {
                   Apresentação do projeto EKO7 realizada
                 </label>
                 {form.eko7_presentation_done ? (
-                  <div className="mt-2 max-w-xs">
-                    <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Data da apresentação</label>
-                    <input
-                      type="date"
-                      className="mt-1 w-full"
-                      value={form.eko7_presentation_at}
-                      onChange={(e) => setForm((prev) => ({ ...prev, eko7_presentation_at: e.target.value }))}
-                    />
+                  <div className="mt-2 space-y-2">
+                    <div className="max-w-xs">
+                      <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Data da apresentação</label>
+                      <input
+                        type="date"
+                        className="mt-1 w-full"
+                        value={form.eko7_presentation_at}
+                        onChange={(e) => setForm((prev) => ({ ...prev, eko7_presentation_at: e.target.value }))}
+                      />
+                    </div>
+                    {editing ? (
+                      <p className="text-[10px] leading-snug text-slate-600">
+                        Situação de compra:{' '}
+                        <strong className={clientHasConfirmedPurchase(editing) ? 'text-emerald-700' : 'text-amber-800'}>
+                          {clientHasConfirmedPurchase(editing) ? 'Comprou' : 'Não comprou'}
+                        </strong>
+                        {' '}
+                        (atualizada automaticamente pelos pedidos confirmados).
+                      </p>
+                    ) : null}
                   </div>
                 ) : (
                   <p className="mt-1 text-[10px] leading-snug text-slate-500">
-                    Marque para identificar clientes que já viram o EKO7 e facilitar repiques de comunicação.
+                    Marque quem já viu o EKO7. Quem não tiver pedido confirmado aparecerá como{' '}
+                    <strong>não comprou</strong> para facilitar repiques.
                   </p>
                 )}
               </div>

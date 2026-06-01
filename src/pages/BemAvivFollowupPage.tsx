@@ -11,6 +11,7 @@ import { buildWhatsappUrl } from '../lib/whatsapp'
 import { dateInputToIso, formatDateOnly, todayInputDate, toInputDate } from '../lib/dates'
 import {
   clientHadEko7Presentation,
+  clientHasConfirmedPurchase,
   clientMatchesEko7Filter,
   type BemAvivEko7Filter,
 } from '../lib/bemAvivClientStatus'
@@ -736,8 +737,10 @@ export function BemAvivFollowupPage() {
           <label>EKO7</label>
           <select value={eko7Filter} onChange={(e) => setEko7Filter(e.target.value as BemAvivEko7Filter)}>
             <option value="TODOS">Todos</option>
-            <option value="APRESENTADO">Apresentação realizada</option>
-            <option value="PENDENTE">Sem apresentação</option>
+            <option value="APRESENTADO_NAO_COMPROU">EKO7 · não comprou (repique)</option>
+            <option value="APRESENTADO_COMPROU">EKO7 · comprou</option>
+            <option value="APRESENTADO">EKO7 apresentado (todos)</option>
+            <option value="PENDENTE">Sem apresentação EKO7</option>
           </select>
         </div>
         <div className="flex items-end">
@@ -773,12 +776,23 @@ export function BemAvivFollowupPage() {
                       <div className="flex flex-wrap items-center gap-1.5">
                         <p className="font-semibold text-slate-900">{row.full_name}</p>
                         {clientHadEko7Presentation(row) ? (
-                          <span
-                            className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-violet-800"
-                            title={`EKO7 em ${formatDateOnly(row.eko7_presentation_at)}`}
-                          >
-                            EKO7
-                          </span>
+                          <>
+                            <span
+                              className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-violet-800"
+                              title={`EKO7 em ${formatDateOnly(row.eko7_presentation_at)}`}
+                            >
+                              EKO7
+                            </span>
+                            {clientHasConfirmedPurchase(row) ? (
+                              <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-emerald-800">
+                                Comprou
+                              </span>
+                            ) : (
+                              <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-900">
+                                Não comprou
+                              </span>
+                            )}
+                          </>
                         ) : null}
                       </div>
                       <p className="mt-0.5 text-sm text-slate-600">{formatPhone(row.phone_1) || formatPhone(row.phone_2) || '—'}</p>
@@ -887,7 +901,14 @@ export function BemAvivFollowupPage() {
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span>{row.full_name}</span>
                         {clientHadEko7Presentation(row) ? (
-                          <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-violet-800">EKO7</span>
+                          <>
+                            <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-violet-800">EKO7</span>
+                            {clientHasConfirmedPurchase(row) ? (
+                              <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-emerald-800">Comprou</span>
+                            ) : (
+                              <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-900">Não comprou</span>
+                            )}
+                          </>
                         ) : null}
                       </div>
                     </td>
