@@ -2,7 +2,9 @@ import { X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useSupabase } from '../../hooks/useSupabase'
 import { formatBRL } from '../../lib/format'
+import { formatDateOnly } from '../../lib/dates'
 import { isDeliveryPendingStatus, remainingQty } from '../../lib/bemAvivOrderDelivery'
+import { fetchOrderDeliveryHistory, type OrderDeliveryHistoryRow } from '../../lib/bemAvivOrderDeliveries'
 
 type PaymentOption = 'A_VISTA' | 'A_PRAZO'
 type PaymentMethod = 'DINHEIRO' | 'PIX' | 'CARTAO_DEBITO' | 'CARTAO_CREDITO' | 'BOLETO'
@@ -32,6 +34,8 @@ type PedidoDetail = {
   down_payment_method?: string | null
   freight_amount?: number | null
   other_expenses?: number | null
+  expected_arrival_date?: string | null
+  delivered_at?: string | null
 }
 
 type OrderItemDetailRow = {
@@ -90,12 +94,14 @@ export function PedidoDetailModal({ orderId, companyId, clientName, onClose }: P
   const supabase = useSupabase()
   const [pedido, setPedido] = useState<PedidoDetail | null>(null)
   const [items, setItems] = useState<OrderItemDetailRow[]>([])
+  const [deliveries, setDeliveries] = useState<OrderDeliveryHistoryRow[]>([])
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     if (!orderId || !supabase || !companyId) {
       setPedido(null)
       setItems([])
+      setDeliveries([])
       return
     }
 
@@ -103,12 +109,13 @@ export function PedidoDetailModal({ orderId, companyId, clientName, onClose }: P
     setLoading(true)
     setPedido(null)
     setItems([])
+    setDeliveries([])
 
     ;(async () => {
       const { data: orderData, error: orderErr } = await supabase
         .from('bem_aviv_sales_orders')
         .select(
-          'id, client_id, order_date, document_type, document_number, status, total_amount, notes, discount_total, installments_count, payment_option, payment_method, down_payment_amount, down_payment_method, freight_amount, other_expenses',
+          'id, client_id, order_date, document_type, document_number, status, total_amount, notes, discount_total, installments_count, payment_option, payment_method, down_payment_amount, down_payment_method, freight_amount, other_expenses, expected_arrival_date, delivered_at',
         )
         .eq('id', orderId)
         .eq('company_id', companyId)
@@ -140,6 +147,10 @@ export function PedidoDetailModal({ orderId, companyId, clientName, onClose }: P
         (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
       )
       setItems(rows)
+      if (orderData.document_type === 'PEDIDO') {
+        const history = await fetchOrderDeliveryHistory(supabase, orderId)
+        if (!cancelled) setDeliveries(history)
+      }
       setLoading(false)
     })()
 
@@ -272,8 +283,43 @@ export function PedidoDetailModal({ orderId, companyId, clientName, onClose }: P
                         <span className="text-slate-400">Status atual:</span>{' '}
                         <span className="font-semibold text-slate-800">{pedido.status}</span>
                       </p>
+                      {pedido.document_type === 'PEDIDO' ? (
+                        <>
+                          <p>
+                            <span className="text-slate-400">Previsão de chegada:</span>{' '}
+                            <span className="font-semibold tabular-nums text-slate-800">
+                              {pedido.expected_arrival_date ? formatDateOnly(pedido.expected_arrival_date) : '—'}
+                            </span>
+                          </p>
+                          <p>
+                            <span className="text-slate-400">Data entrega total:</span>{' '}
+                            <span className="font-semibold tabular-nums text-slate-800">
+                              {pedido.delivered_at ? formatDateOnly(pedido.delivered_at) : '—'}
+                            </span>
+                          </p>
+                        </>
+                      ) : null}
                     </div>
                   </div>
+
+                  {pedido.document_type === 'PEDIDO' && deliveries.length > 0 ? (
+                    <div className="space-y-2 rounded-2xl border border-slate-100 bg-slate-50/50 p-4 shadow-sm">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Histórico de entregas</h4>
+                      <ul className="max-h-36 space-y-2 overflow-y-auto text-xs">
+                        {deliveries.map((d) => (
+                          <li key={d.id} className="rounded-lg border border-slate-200 bg-white px-2.5 py-2">
+                            <p className="font-semibold text-slate-800">
+                              {d.kind === 'TOTAL' ? 'Entrega total' : 'Entrega parcial'}
+                            </p>
+                            <p className="text-slate-500">
+                              Previsão: {formatDateOnly(d.expected_arrival_date)}
+                              {d.delivered_at ? ` · Entrega: ${formatDateOnly(d.delivered_at)}` : ''}
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="space-y-4 md:col-span-2">

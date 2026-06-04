@@ -2,12 +2,20 @@ import { PackageCheck, Truck, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from '../ui/Button'
 import { useSupabase } from '../../hooks/useSupabase'
+import { DeliveryDateFields } from './DeliveryDateFields'
 import { computeOrderDeliveryStatus, remainingQty } from '../../lib/bemAvivOrderDelivery'
+import {
+  insertOrderDelivery,
+  toPgDateOnly,
+  validateDeliveryDates,
+} from '../../lib/bemAvivOrderDeliveries'
+import { todayInputDate } from '../../lib/dates'
 
 type OrderHeader = {
   id: string
   document_number: string | null
   status: string
+  expected_arrival_date?: string | null
 }
 
 type DeliveryItemRow = {
@@ -20,14 +28,17 @@ type DeliveryItemRow = {
 type Props = {
   order: OrderHeader | null
   companyId: string | null
+  ownerUserId: string | null
   onClose: () => void
   onSaved: () => void
 }
 
-export function PartialDeliveryModal({ order, companyId, onClose, onSaved }: Props) {
+export function PartialDeliveryModal({ order, companyId, ownerUserId, onClose, onSaved }: Props) {
   const supabase = useSupabase()
   const [items, setItems] = useState<DeliveryItemRow[]>([])
   const [deliverNowById, setDeliverNowById] = useState<Record<string, string>>({})
+  const [expectedArrivalDate, setExpectedArrivalDate] = useState(todayInputDate())
+  const [deliveredAtDate, setDeliveredAtDate] = useState(todayInputDate())
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -37,6 +48,10 @@ export function PartialDeliveryModal({ order, companyId, onClose, onSaved }: Pro
       setDeliverNowById({})
       return
     }
+
+    const prefill = order.expected_arrival_date ? String(order.expected_arrival_date).slice(0, 10) : todayInputDate()
+    setExpectedArrivalDate(prefill)
+    setDeliveredAtDate(todayInputDate())
 
     let cancelled = false
     setLoading(true)
@@ -74,10 +89,39 @@ export function PartialDeliveryModal({ order, companyId, onClose, onSaved }: Pro
 
   const pendingItems = useMemo(() => items.filter((i) => remainingQty(i) > 0), [items])
 
-  async function persistDelivery(nextDeliveredById: Record<string, number>) {
-    if (!supabase || !order || !companyId) return
+  async function persistDelivery(
+    nextDeliveredById: Record<string, number>,
+    lines: Array<{ sales_order_item_id: string; quantity: number }>,
+    kind: 'PARCIAL' | 'TOTAL',
+  ) {
+    if (!supabase || !order || !companyId || !ownerUserId) return
+
+    const dateErr = validateDeliveryDates(expectedArrivalDate, deliveredAtDate)
+    if (dateErr) {
+      alert(dateErr)
+      return
+    }
 
     setSaving(true)
+
+    const deliveredAt = deliveredAtDate.trim() ? toPgDateOnly(deliveredAtDate) : toPgDateOnly(todayInputDate())
+
+    const { error: histErr } = await insertOrderDelivery(supabase, {
+      sales_order_id: order.id,
+      company_id: companyId,
+      user_id: ownerUserId.toUpperCase(),
+      kind,
+      expected_arrival_date: expectedArrivalDate,
+      delivered_at: deliveredAt,
+      lines,
+    })
+
+    if (histErr) {
+      alert(histErr)
+      setSaving(false)
+      return
+    }
+
     const updatedItems = items.map((item) => ({
       ...item,
       quantity_delivered: nextDeliveredById[item.id] ?? item.quantity_delivered,
@@ -96,9 +140,17 @@ export function PartialDeliveryModal({ order, companyId, onClose, onSaved }: Pro
     }
 
     const nextStatus = computeOrderDeliveryStatus(updatedItems)
+    const orderPatch: Record<string, string | null> = {
+      status: nextStatus,
+      expected_arrival_date: toPgDateOnly(expectedArrivalDate),
+    }
+    if (nextStatus === 'ENTREGUE') {
+      orderPatch.delivered_at = deliveredAt
+    }
+
     const { error: orderErr } = await supabase
       .from('bem_aviv_sales_orders')
-      .update({ status: nextStatus })
+      .update(orderPatch)
       .eq('id', order.id)
       .eq('company_id', companyId)
 
@@ -116,6 +168,7 @@ export function PartialDeliveryModal({ order, companyId, onClose, onSaved }: Pro
     if (!order) return
 
     const nextDeliveredById: Record<string, number> = {}
+    const lines: Array<{ sales_order_item_id: string; quantity: number }> = []
     let hasChange = false
 
     for (const item of items) {
@@ -128,7 +181,10 @@ export function PartialDeliveryModal({ order, companyId, onClose, onSaved }: Pro
       }
       const next = item.quantity_delivered + deliverNow
       nextDeliveredById[item.id] = next
-      if (deliverNow > 0) hasChange = true
+      if (deliverNow > 0) {
+        hasChange = true
+        lines.push({ sales_order_item_id: item.id, quantity: deliverNow })
+      }
     }
 
     if (!hasChange) {
@@ -136,7 +192,7 @@ export function PartialDeliveryModal({ order, companyId, onClose, onSaved }: Pro
       return
     }
 
-    await persistDelivery(nextDeliveredById)
+    await persistDelivery(nextDeliveredById, lines, 'PARCIAL')
   }
 
   async function handleDeliverAll() {
@@ -150,7 +206,11 @@ export function PartialDeliveryModal({ order, companyId, onClose, onSaved }: Pro
     }
 
     const nextDeliveredById = Object.fromEntries(items.map((item) => [item.id, item.quantity]))
-    await persistDelivery(nextDeliveredById)
+    const lines = items
+      .filter((item) => remainingQty(item) > 0)
+      .map((item) => ({ sales_order_item_id: item.id, quantity: remainingQty(item) }))
+
+    await persistDelivery(nextDeliveredById, lines, 'TOTAL')
   }
 
   if (!order) return null
@@ -183,6 +243,14 @@ export function PartialDeliveryModal({ order, companyId, onClose, onSaved }: Pro
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+          <DeliveryDateFields
+            expectedArrivalDate={expectedArrivalDate}
+            deliveredAtDate={deliveredAtDate}
+            onExpectedChange={setExpectedArrivalDate}
+            onDeliveredChange={setDeliveredAtDate}
+            disabled={saving || loading}
+          />
+
           {loading ? (
             <p className="py-10 text-center text-sm text-slate-500">Carregando itens…</p>
           ) : items.length === 0 ? (
@@ -190,7 +258,7 @@ export function PartialDeliveryModal({ order, companyId, onClose, onSaved }: Pro
           ) : pendingItems.length === 0 ? (
             <p className="py-10 text-center text-sm text-emerald-700">Todos os itens já foram entregues.</p>
           ) : (
-            <div className="overflow-hidden rounded-xl border border-slate-200">
+            <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
               <table className="w-full min-w-[520px] text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
