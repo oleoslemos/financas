@@ -379,7 +379,7 @@ export function BemAvivClientesPage() {
   const [form, setForm] = useState(emptyForm)
 
   const [selectedClient, setSelectedClient] = useState<Cliente | null>(null)
-  const [drawerTab, setDrawerTab] = useState<'history' | 'orders' | 'info'>('history')
+  const [drawerTab, setDrawerTab] = useState<'history' | 'orders' | 'info'>('info')
   const [drawerLoading, setDrawerLoading] = useState(false)
 
   const [pedidosModalRows, setPedidosModalRows] = useState<OrderRow[]>([])
@@ -620,7 +620,7 @@ export function BemAvivClientesPage() {
 
   async function openClientDrawer(client: Cliente) {
     setSelectedClient(client)
-    setDrawerTab('history')
+    setDrawerTab('info')
     setRegisterInlineOpen(false)
     setScheduleInlineOpen(false)
     setEditingHistoryId(null)
@@ -2204,7 +2204,7 @@ export function BemAvivClientesPage() {
 
       {clientModalOpen ? (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 sm:items-center sm:p-4"
+          className="fixed inset-0 z-[60] flex items-end justify-center bg-slate-900/40 p-0 sm:items-center sm:p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="client-modal-title"
@@ -2476,6 +2476,18 @@ export function BemAvivClientesPage() {
                 type="button"
                 className={cn(
                   "border-b-2 py-3 px-3 text-sm font-semibold transition-all",
+                  drawerTab === 'info'
+                    ? "border-[#185FA5] text-[#185FA5]"
+                    : "border-transparent text-slate-500 hover:text-slate-700"
+                )}
+                onClick={() => setDrawerTab('info')}
+              >
+                Informações
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  "border-b-2 py-3 px-3 text-sm font-semibold transition-all",
                   drawerTab === 'history'
                     ? "border-[#185FA5] text-[#185FA5]"
                     : "border-transparent text-slate-500 hover:text-slate-700"
@@ -2494,19 +2506,7 @@ export function BemAvivClientesPage() {
                 )}
                 onClick={() => setDrawerTab('orders')}
               >
-                Pedidos e Orçamentos ({pedidosModalRows.length})
-              </button>
-              <button
-                type="button"
-                className={cn(
-                  "border-b-2 py-3 px-3 text-sm font-semibold transition-all",
-                  drawerTab === 'info'
-                    ? "border-[#185FA5] text-[#185FA5]"
-                    : "border-transparent text-slate-500 hover:text-slate-700"
-                )}
-                onClick={() => setDrawerTab('info')}
-              >
-                Informações
+                Pedidos/Orçamentos ({pedidosModalRows.length})
               </button>
             </div>
 
@@ -2518,14 +2518,9 @@ export function BemAvivClientesPage() {
                 </div>
               ) : (
                 <>
-                  {/* Tab 1: Histórico */}
-                  {drawerTab === 'history' && renderHistoryTab()}
-
-                  {/* Tab 2: Pedidos */}
-                  {drawerTab === 'orders' && renderOrdersTab()}
-
-                  {/* Tab 3: Informações */}
                   {drawerTab === 'info' && renderInfoTab()}
+                  {drawerTab === 'history' && renderHistoryTab()}
+                  {drawerTab === 'orders' && renderOrdersTab()}
                 </>
               )}
             </div>
