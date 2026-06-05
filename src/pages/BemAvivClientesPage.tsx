@@ -1144,9 +1144,14 @@ export function BemAvivClientesPage() {
     }
   }
 
-  async function removeHistoryRow(rowId: string) {
+  async function removeHistoryRow(rowId: string, kind: 'contact' | 'schedule' = 'contact') {
     if (!supabase || !ownerUserId || !selectedClient || !activeCompanyId) return
-    if (!confirm('EXCLUIR ESTE REGISTRO DE CONTATO?')) return
+    const confirmMessage =
+      kind === 'schedule' ? 'EXCLUIR ESTE REGISTRO DE AGENDAMENTO?' : 'EXCLUIR ESTE REGISTRO DE CONTATO?'
+    if (!confirm(confirmMessage)) return
+
+    const rowToDelete = historyModalRows.find((r) => r.id === rowId)
+
     let { error } = await supabase
       .from('bem_aviv_client_followups')
       .update({
@@ -1168,8 +1173,63 @@ export function BemAvivClientesPage() {
       alert(error.message)
       return
     }
-    const rows = await fetchHistoryData(selectedClient.id)
-    setHistoryModalRows(rows)
+
+    if (kind === 'schedule' && rowToDelete) {
+      const parsed = parseAgendamentoResult(rowToDelete.result)
+      const hasActiveSchedule =
+        selectedClient.next_followup_at &&
+        (selectedClient.next_followup_status ?? 'PENDENTE').toUpperCase() === 'PENDENTE'
+      if (
+        parsed.status === 'PENDENTE' &&
+        hasActiveSchedule &&
+        sameCalendarDay(rowToDelete.contacted_at, selectedClient.next_followup_at)
+      ) {
+        const { error: clearError } = await supabase
+          .from('bem_aviv_clients')
+          .update({
+            next_followup_at: null,
+            next_followup_note: null,
+            next_followup_status: 'PENDENTE',
+          })
+          .eq('id', selectedClient.id)
+          .eq('company_id', activeCompanyId)
+        if (clearError) {
+          alert(clearError.message)
+          return
+        }
+      }
+    }
+
+    setEditingHistoryId((prev) => (prev === rowId ? null : prev))
+    setEditingScheduleFollowupId((prev) => (prev === rowId ? null : prev))
+    await refreshSelectedClient()
+    await load()
+  }
+
+  async function removeScheduleActive() {
+    if (!supabase || !selectedClient || !activeCompanyId) return
+    if (!confirm('EXCLUIR O AGENDAMENTO ATIVO DESTE CLIENTE?')) return
+
+    const { error } = await supabase
+      .from('bem_aviv_clients')
+      .update({
+        next_followup_at: null,
+        next_followup_note: null,
+        next_followup_status: 'PENDENTE',
+      })
+      .eq('id', selectedClient.id)
+      .eq('company_id', activeCompanyId)
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    setScheduleInlineOpen(false)
+    setScheduleInlineTarget('new')
+    setEditingScheduleFollowupId(null)
+    await refreshSelectedClient()
+    await load()
   }
 
   const pedidosModalStats = useMemo(() => {
@@ -1691,8 +1751,8 @@ export function BemAvivClientesPage() {
                           </button>
                           <button
                             type="button"
-                            className="inline-flex h-6 w-6 items-center justify-center rounded border border-red-100 bg-white text-red-505 hover:bg-red-50 active:scale-95"
-                            onClick={() => void removeHistoryRow(item.row.id)}
+                            className="inline-flex h-6 w-6 items-center justify-center rounded border border-red-100 bg-white text-red-500 hover:bg-red-50 active:scale-95"
+                            onClick={() => void removeHistoryRow(item.row.id, 'contact')}
                             title="Excluir contato"
                           >
                             <Trash2 size={12} strokeWidth={2.2} />
@@ -1728,6 +1788,14 @@ export function BemAvivClientesPage() {
                             <CalendarPlus size={11} strokeWidth={2.5} />
                             Reagendar
                           </button>
+                          <button
+                            type="button"
+                            className="inline-flex h-6 w-6 items-center justify-center rounded border border-red-100 bg-white text-red-500 hover:bg-red-50 active:scale-95"
+                            onClick={() => void removeScheduleActive()}
+                            title="Excluir agendamento"
+                          >
+                            <Trash2 size={12} strokeWidth={2.2} />
+                          </button>
                         </>
                       )}
 
@@ -1762,18 +1830,36 @@ export function BemAvivClientesPage() {
                             <CalendarPlus size={11} strokeWidth={2.5} />
                             Reagendar
                           </button>
+                          <button
+                            type="button"
+                            className="inline-flex h-6 w-6 items-center justify-center rounded border border-red-100 bg-white text-red-500 hover:bg-red-50 active:scale-95"
+                            onClick={() => void removeHistoryRow(item.row.id, 'schedule')}
+                            title="Excluir agendamento"
+                          >
+                            <Trash2 size={12} strokeWidth={2.2} />
+                          </button>
                         </>
                       )}
 
                       {isScheduleRecord && item.status !== 'PENDENTE' && (
-                        <button
-                          type="button"
-                          className="inline-flex h-6 w-6 items-center justify-center rounded border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 active:scale-95"
-                          onClick={() => openEditScheduleRecord(item.row)}
-                          title="Editar registro do agendamento"
-                        >
-                          <Pencil size={12} strokeWidth={2.2} />
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            className="inline-flex h-6 w-6 items-center justify-center rounded border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 active:scale-95"
+                            onClick={() => openEditScheduleRecord(item.row)}
+                            title="Editar registro do agendamento"
+                          >
+                            <Pencil size={12} strokeWidth={2.2} />
+                          </button>
+                          <button
+                            type="button"
+                            className="inline-flex h-6 w-6 items-center justify-center rounded border border-red-100 bg-white text-red-500 hover:bg-red-50 active:scale-95"
+                            onClick={() => void removeHistoryRow(item.row.id, 'schedule')}
+                            title="Excluir agendamento"
+                          >
+                            <Trash2 size={12} strokeWidth={2.2} />
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
