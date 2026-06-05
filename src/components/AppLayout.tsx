@@ -23,7 +23,7 @@ import {
   Users,
   Workflow,
 } from 'lucide-react'
-import { type ComponentType, useEffect, useMemo, useState } from 'react'
+import { Fragment, type ComponentType, useEffect, useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { cn } from '../lib/cn'
 import { getHubBreadcrumb } from '../lib/hubBreadcrumb'
@@ -123,12 +123,11 @@ function AppLayoutShell() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [openSectionKey, setOpenSectionKey] = useState<string | null>(null)
   const [openTreeGroupKeys, setOpenTreeGroupKeys] = useState<string[]>([])
-  const [collapsedFlyout, setCollapsedFlyout] = useState<{ key: string; top: number } | null>(null)
-
   const emails = clerkEmailCandidates(user)
   const {
     companies,
     activeCompanyId,
+    activeCompany,
     setActiveCompanyId,
     loading: companiesLoading,
     cannotListCompanyMembership,
@@ -242,7 +241,6 @@ function AppLayoutShell() {
   useEffect(() => {
     setOpenSectionKey(sectionKeyForSystem(currentSystem))
     setOpenTreeGroupKeys([])
-    setCollapsedFlyout(null)
   }, [currentSystem])
 
   useEffect(() => {
@@ -251,7 +249,6 @@ function AppLayoutShell() {
     } catch {
       // ignore
     }
-    if (!sidebarCollapsed) setCollapsedFlyout(null)
   }, [sidebarCollapsed])
 
   useEffect(() => {
@@ -260,7 +257,6 @@ function AppLayoutShell() {
         prev.includes('bem-aviv-catalogo') ? prev : [...prev, 'bem-aviv-catalogo'],
       )
     }
-    setCollapsedFlyout(null)
     setMobileMenuOpen(false)
   }, [location.pathname])
 
@@ -277,25 +273,27 @@ function AppLayoutShell() {
 
   const isBemAviv = currentSystem === 'bem-aviv'
 
+  const sidebarSubtitle = useMemo(() => {
+    if (currentSystem === 'bem-aviv') return activeCompany?.trade_name ?? "EKO'7"
+    if (currentSystem === 'financeiro') return 'Financeiro'
+    if (currentSystem === 'projetos') return 'Projetos'
+    return 'Navegação'
+  }, [activeCompany?.trade_name, currentSystem])
+
   function navLinkClass(isActive: boolean, collapsed: boolean) {
     return cn(
       'flex items-center rounded-lg text-sidebar-item font-medium normal-case transition-all duration-150',
       collapsed ? 'mx-1 justify-center px-0 py-2.5' : 'gap-2.5 px-2 py-1.5',
       isActive
-        ? isBemAviv
-          ? collapsed
-            ? 'bg-sky-500/20 font-semibold text-sky-300 shadow-[inset_0_0_0_1px_rgba(56,189,248,0.35)]'
-            : 'border-l-2 border-sky-500 rounded-l-none bg-sky-500/15 pl-[6px] font-semibold text-sky-300 [&>.sb-ico]:text-sky-300'
-          : 'bg-[#E6F1FB] font-semibold text-[#185FA5] [&>.sb-ico]:bg-[#185FA5] [&>.sb-ico]:text-white'
-        : isBemAviv
-          ? 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-100'
-          : 'text-slate-600 hover:bg-slate-50',
+        ? collapsed
+          ? 'bg-[#E6F1FB] font-semibold text-[#185FA5] shadow-[inset_0_0_0_1px_rgba(24,95,165,0.2)] [&>.sb-ico]:bg-[#185FA5] [&>.sb-ico]:text-white'
+          : 'border-l-2 border-[#185FA5] rounded-l-none bg-[#E6F1FB] pl-[6px] font-semibold text-[#185FA5] [&>.sb-ico]:bg-[#185FA5] [&>.sb-ico]:text-white'
+        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
     )
   }
 
   function toggleSidebarCollapsed() {
     setSidebarCollapsed((value) => !value)
-    setCollapsedFlyout(null)
   }
 
   return (
@@ -311,19 +309,9 @@ function AppLayoutShell() {
           onClick={() => setMobileMenuOpen(false)}
         />
       ) : null}
-      {sidebarCollapsed && collapsedFlyout ? (
-        <button
-          type="button"
-          className="fixed inset-0 z-[45] hidden bg-transparent lg:block"
-          aria-label="Fechar submenu"
-          onClick={() => setCollapsedFlyout(null)}
-        />
-      ) : null}
-
       <aside
         className={cn(
-          'hub-sidebar fixed inset-y-0 left-0 z-50 flex h-dvh max-h-dvh shrink-0 flex-col overflow-hidden transition-[width,transform] duration-300 ease-in-out lg:static lg:z-auto lg:h-full lg:max-h-none lg:translate-x-0',
-          isBemAviv ? 'border-r border-slate-800 bg-slate-950 text-slate-400' : 'border-r border-slate-200 bg-white',
+          'hub-sidebar fixed inset-y-0 left-0 z-50 flex h-dvh max-h-dvh shrink-0 flex-col overflow-hidden border-r border-slate-200 bg-white text-slate-600 transition-[width,transform] duration-300 ease-in-out lg:static lg:z-auto lg:h-full lg:max-h-none lg:translate-x-0',
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full',
           sidebarCollapsed ? 'lg:w-[72px]' : 'lg:w-[240px]',
           hideBemAvivChrome && 'hidden',
@@ -336,7 +324,7 @@ function AppLayoutShell() {
           className={cn(
             'flex shrink-0 items-center gap-2 border-b py-2',
             sidebarCollapsed ? 'min-h-[72px] flex-col justify-center px-1.5' : 'min-h-[52px] px-3',
-            isBemAviv ? 'border-slate-800' : 'border-slate-200',
+            'border-slate-200',
           )}
         >
           <div
@@ -353,22 +341,13 @@ function AppLayoutShell() {
           </div>
           {!sidebarCollapsed ? (
             <div className="min-w-0 flex-1">
-              <p className={cn('truncate font-hub text-sm font-semibold normal-case', isBemAviv ? 'text-slate-100' : 'text-slate-900')}>
-                Hub Lille
-              </p>
-              <p className="truncate text-[10px] font-medium normal-case text-slate-500">
-                {currentSystem === 'bem-aviv' ? "EKO'7" : currentSystem === 'financeiro' ? 'Financeiro' : currentSystem === 'projetos' ? 'Projetos' : 'Navegação'}
-              </p>
+              <p className="truncate font-hub text-sm font-semibold normal-case text-slate-900">LSH</p>
+              <p className="truncate text-[10px] font-medium normal-case text-slate-500">{sidebarSubtitle}</p>
             </div>
           ) : null}
           <button
             type="button"
-            className={cn(
-              'hub-sidebar-trigger hidden h-7 w-7 shrink-0 items-center justify-center rounded-lg lg:flex',
-              isBemAviv
-                ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
-                : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800',
-            )}
+            className="hub-sidebar-trigger hidden h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 lg:flex"
             onClick={toggleSidebarCollapsed}
             aria-label={sidebarCollapsed ? 'Expandir menu' : 'Recolher menu'}
           >
@@ -376,12 +355,7 @@ function AppLayoutShell() {
           </button>
           <button
             type="button"
-            className={cn(
-              'hub-sidebar-trigger ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-lg lg:hidden',
-              isBemAviv
-                ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
-                : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800',
-            )}
+            className="hub-sidebar-trigger ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 lg:hidden"
             onClick={() => setMobileMenuOpen(false)}
             aria-label="Fechar menu lateral"
           >
@@ -398,14 +372,11 @@ function AppLayoutShell() {
           {sidebarSections.map((section, sectionIndex) => {
             const sectionOpen = openSectionKey === section.key || (sidebarCollapsed && section.system === currentSystem)
             return (
-              <div key={section.key} className={cn(sectionIndex > 0 && !sidebarCollapsed && 'mt-1 border-t border-slate-800/70 pt-1')}>
+              <div key={section.key} className={cn(sectionIndex > 0 && !sidebarCollapsed && 'mt-1 border-t border-slate-200 pt-1')}>
                 {!sidebarCollapsed ? (
                   <button
                     type="button"
-                    className={cn(
-                      'hub-sidebar-trigger flex w-full items-center gap-1.5 rounded-md px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wider',
-                      isBemAviv ? 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200' : 'text-slate-500 hover:bg-slate-50',
-                    )}
+                    className="hub-sidebar-trigger flex w-full items-center gap-1.5 rounded-md px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-100 hover:text-slate-700"
                     onClick={() => setOpenSectionKey((prev) => (prev === section.key ? null : section.key))}
                     aria-expanded={openSectionKey === section.key}
                     aria-controls={`sidebar-section-${section.key}`}
@@ -422,57 +393,60 @@ function AppLayoutShell() {
                   <ul id={`sidebar-section-${section.key}`} className={cn('space-y-0.5', sidebarCollapsed && 'pt-1')}>
                     {section.items.map((item) => {
                       if (item.kind === 'group') {
+                        if (sidebarCollapsed) {
+                          return (
+                            <Fragment key={`${section.title}-${item.key}`}>
+                              {item.children.map((child) => (
+                                <li key={`${section.title}-${child.key}-${child.label}`}>
+                                  <NavLink
+                                    to={child.to}
+                                    title={`${item.label} · ${child.label}`}
+                                    className={({ isActive }) => navLinkClass(isActive, true)}
+                                  >
+                                    {child.icon ? (
+                                      <span className="sb-ico flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md [&_svg]:stroke-[2]">
+                                        <child.icon size={16} aria-hidden />
+                                      </span>
+                                    ) : null}
+                                  </NavLink>
+                                </li>
+                              ))}
+                            </Fragment>
+                          )
+                        }
+
                         const isGroupOpen = openTreeGroupKeys.includes(item.key)
-                        const showInlineChildren = !sidebarCollapsed && isGroupOpen
-                        const showCollapsedFlyout = sidebarCollapsed && collapsedFlyout?.key === item.key
                         return (
-                          <li key={`${section.title}-${item.key}`} className="relative">
+                          <li key={`${section.title}-${item.key}`}>
                             <button
                               type="button"
                               className={cn(
-                                'hub-sidebar-trigger flex w-full items-center rounded-lg text-left text-sidebar-item font-medium normal-case transition-colors',
-                                sidebarCollapsed ? 'justify-center px-0 py-2.5' : 'gap-2.5 px-2 py-1.5',
-                                showCollapsedFlyout || isGroupOpen
-                                  ? isBemAviv
-                                    ? 'bg-slate-800 text-slate-100'
-                                    : 'bg-slate-100 text-slate-800'
-                                  : isBemAviv
-                                    ? 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-100'
-                                    : 'text-slate-600 hover:bg-slate-50',
+                                'hub-sidebar-trigger flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sidebar-item font-medium normal-case transition-colors',
+                                isGroupOpen
+                                  ? 'bg-slate-100 text-slate-800'
+                                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                               )}
-                              onClick={(e) => {
-                                if (sidebarCollapsed) {
-                                  const rect = e.currentTarget.getBoundingClientRect()
-                                  setCollapsedFlyout((prev) =>
-                                    prev?.key === item.key ? null : { key: item.key, top: rect.top },
-                                  )
-                                  return
-                                }
+                              onClick={() =>
                                 setOpenTreeGroupKeys((prev) =>
                                   prev.includes(item.key) ? prev.filter((k) => k !== item.key) : [...prev, item.key],
                                 )
-                              }}
-                              aria-expanded={sidebarCollapsed ? showCollapsedFlyout : isGroupOpen}
+                              }
+                              aria-expanded={isGroupOpen}
                               aria-controls={`sidebar-group-${item.key}`}
-                              title={sidebarCollapsed ? item.label : undefined}
                             >
                               {item.icon ? (
                                 <span className="sb-ico flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md [&_svg]:stroke-[2]">
-                                  <item.icon size={sidebarCollapsed ? 16 : 14} aria-hidden />
+                                  <item.icon size={14} aria-hidden />
                                 </span>
                               ) : null}
-                              {!sidebarCollapsed ? (
-                                <>
-                                  <span className="truncate">{item.label}</span>
-                                  <ChevronDown
-                                    size={12}
-                                    className={cn('ml-auto shrink-0 transition-transform', isGroupOpen ? 'rotate-0' : '-rotate-90')}
-                                    aria-hidden
-                                  />
-                                </>
-                              ) : null}
+                              <span className="truncate">{item.label}</span>
+                              <ChevronDown
+                                size={12}
+                                className={cn('ml-auto shrink-0 transition-transform', isGroupOpen ? 'rotate-0' : '-rotate-90')}
+                                aria-hidden
+                              />
                             </button>
-                            {showInlineChildren ? (
+                            {isGroupOpen ? (
                               <ul id={`sidebar-group-${item.key}`} className="mt-0.5 space-y-0.5 pl-6">
                                 {item.children.map((child) => (
                                   <li key={`${section.title}-${child.key}-${child.label}`}>
@@ -490,35 +464,6 @@ function AppLayoutShell() {
                                   </li>
                                 ))}
                               </ul>
-                            ) : null}
-                            {showCollapsedFlyout && collapsedFlyout ? (
-                              <div
-                                className={cn(
-                                  'fixed z-[60] min-w-[210px] rounded-xl border p-1.5 shadow-2xl',
-                                  isBemAviv ? 'border-slate-700 bg-slate-900 text-slate-200' : 'border-slate-200 bg-white text-slate-700',
-                                )}
-                                style={{ left: SIDEBAR_WIDTH_COLLAPSED + 8, top: collapsedFlyout.top }}
-                              >
-                                <p className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">{item.label}</p>
-                                <ul className="space-y-0.5">
-                                  {item.children.map((child) => (
-                                    <li key={`flyout-${child.key}`}>
-                                      <NavLink
-                                        to={child.to}
-                                        onClick={() => setCollapsedFlyout(null)}
-                                        className={({ isActive }) => navLinkClass(isActive, false)}
-                                      >
-                                        {child.icon ? (
-                                          <span className="sb-ico flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md [&_svg]:stroke-[2]">
-                                            <child.icon size={14} aria-hidden />
-                                          </span>
-                                        ) : null}
-                                        <span className="truncate">{child.label}</span>
-                                      </NavLink>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
                             ) : null}
                           </li>
                         )
