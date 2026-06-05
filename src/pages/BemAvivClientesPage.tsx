@@ -5,7 +5,6 @@ import {
   ArrowUpDown,
   CalendarPlus,
   CheckCircle2,
-  ClipboardList,
   Eye,
   History,
   MessageCircle,
@@ -47,10 +46,6 @@ type OrderRow = {
   status: string
   total_amount: number
 }
-
-const pedidosIconBtn =
-  'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-700 shadow-sm transition-all hover:bg-sky-100 active:scale-95'
-
 const CHANNEL_AGENDAMENTO = 'AGENDAMENTO'
 
 type FollowupHistoryRow = {
@@ -510,6 +505,30 @@ export function BemAvivClientesPage() {
     } else {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
     }
+  }
+
+  function SortHeader({ label, column }: { label: string; column: SortKey }) {
+    const active = sortKey === column
+    return (
+      <th
+        scope="col"
+        className="cursor-pointer select-none font-semibold text-slate-700 hover:text-slate-900"
+        onClick={() => toggleSort(column)}
+      >
+        <div className="flex items-center gap-1">
+          {label}
+          {active ? (
+            sortDir === 'asc' ? (
+              <ArrowUp size={14} className="text-slate-500" />
+            ) : (
+              <ArrowDown size={14} className="text-slate-500" />
+            )
+          ) : (
+            <ArrowUpDown size={14} className="text-slate-300" />
+          )}
+        </div>
+      </th>
+    )
   }
 
   function openNewClientModal() {
