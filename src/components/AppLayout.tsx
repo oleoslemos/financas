@@ -24,7 +24,7 @@ import {
   Workflow,
 } from 'lucide-react'
 import { type ComponentType, useEffect, useMemo, useState } from 'react'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { cn } from '../lib/cn'
 import { getHubBreadcrumb } from '../lib/hubBreadcrumb'
 import { canAccessTasksHomolog } from '../lib/tasksHomologAccess'
@@ -80,6 +80,34 @@ const hubBrand = {
   primary: '#185FA5',
 }
 
+const SIDEBAR_COLLAPSED_KEY = 'hub-sidebar-collapsed'
+const SIDEBAR_WIDTH_EXPANDED = 240
+const SIDEBAR_WIDTH_COLLAPSED = 72
+
+function readSidebarCollapsedPreference() {
+  try {
+    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function sectionKeyForSystem(system: SidebarSystem) {
+  if (system === 'financeiro') return 'financeiro'
+  if (system === 'bem-aviv') return 'comercial'
+  if (system === 'projetos') return 'projetos'
+  return null
+}
+
+function isCatalogPath(pathname: string) {
+  return (
+    pathname.startsWith('/bem-aviv/produtos-catalogo') ||
+    pathname.startsWith('/bem-aviv/categorias') ||
+    pathname.startsWith('/bem-aviv/tabela-preco-catalogo') ||
+    pathname.startsWith('/bem-aviv/catalogos-preco')
+  )
+}
+
 export function AppLayout() {
   return (
     <CompanyProvider>
@@ -91,11 +119,11 @@ export function AppLayout() {
 function AppLayoutShell() {
   const { user } = useUser()
   const location = useLocation()
-  const navigate = useNavigate()
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsedPreference)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [openSectionKey, setOpenSectionKey] = useState<string | null>(null)
   const [openTreeGroupKeys, setOpenTreeGroupKeys] = useState<string[]>([])
+  const [collapsedFlyout, setCollapsedFlyout] = useState<{ key: string; top: number } | null>(null)
 
   const emails = clerkEmailCandidates(user)
   const {
@@ -175,7 +203,7 @@ function AppLayoutShell() {
           kind: 'group',
           key: 'bem-aviv-catalogo',
           label: 'Catálogo',
-          icon: LayoutGrid,
+          icon: Package,
           children: [
             { kind: 'link', key: '/bem-aviv/produtos-catalogo', label: 'Produtos', to: '/bem-aviv/produtos-catalogo', icon: Package },
             { kind: 'link', key: '/bem-aviv/categorias', label: 'Categorias', to: '/bem-aviv/categorias', icon: Tags },
@@ -212,13 +240,27 @@ function AppLayoutShell() {
   }, [location.pathname])
 
   useEffect(() => {
-    // Ao trocar de sistema, recolhe qualquer menu aberto.
-    setOpenSectionKey(null)
+    setOpenSectionKey(sectionKeyForSystem(currentSystem))
     setOpenTreeGroupKeys([])
+    setCollapsedFlyout(null)
   }, [currentSystem])
 
   useEffect(() => {
-    // Em mobile, fecha o drawer ao navegar.
+    try {
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, sidebarCollapsed ? '1' : '0')
+    } catch {
+      // ignore
+    }
+    if (!sidebarCollapsed) setCollapsedFlyout(null)
+  }, [sidebarCollapsed])
+
+  useEffect(() => {
+    if (isCatalogPath(location.pathname)) {
+      setOpenTreeGroupKeys((prev) =>
+        prev.includes('bem-aviv-catalogo') ? prev : [...prev, 'bem-aviv-catalogo'],
+      )
+    }
+    setCollapsedFlyout(null)
     setMobileMenuOpen(false)
   }, [location.pathname])
 
@@ -235,6 +277,27 @@ function AppLayoutShell() {
 
   const isBemAviv = currentSystem === 'bem-aviv'
 
+  function navLinkClass(isActive: boolean, collapsed: boolean) {
+    return cn(
+      'flex items-center rounded-lg text-sidebar-item font-medium normal-case transition-all duration-150',
+      collapsed ? 'mx-1 justify-center px-0 py-2.5' : 'gap-2.5 px-2 py-1.5',
+      isActive
+        ? isBemAviv
+          ? collapsed
+            ? 'bg-sky-500/20 font-semibold text-sky-300 shadow-[inset_0_0_0_1px_rgba(56,189,248,0.35)]'
+            : 'border-l-2 border-sky-500 rounded-l-none bg-sky-500/15 pl-[6px] font-semibold text-sky-300 [&>.sb-ico]:text-sky-300'
+          : 'bg-[#E6F1FB] font-semibold text-[#185FA5] [&>.sb-ico]:bg-[#185FA5] [&>.sb-ico]:text-white'
+        : isBemAviv
+          ? 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-100'
+          : 'text-slate-600 hover:bg-slate-50',
+    )
+  }
+
+  function toggleSidebarCollapsed() {
+    setSidebarCollapsed((value) => !value)
+    setCollapsedFlyout(null)
+  }
+
   return (
     <div className={cn(
       "hub-layout flex h-dvh max-h-dvh min-h-0 overflow-hidden font-sans text-slate-900 transition-colors",
@@ -248,19 +311,36 @@ function AppLayoutShell() {
           onClick={() => setMobileMenuOpen(false)}
         />
       ) : null}
+      {sidebarCollapsed && collapsedFlyout ? (
+        <button
+          type="button"
+          className="fixed inset-0 z-[45] hidden bg-transparent lg:block"
+          aria-label="Fechar submenu"
+          onClick={() => setCollapsedFlyout(null)}
+        />
+      ) : null}
+
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex h-dvh max-h-dvh w-[272px] shrink-0 flex-col transition-transform duration-200 ease-out lg:static lg:z-auto lg:h-full lg:w-auto lg:max-h-none lg:translate-x-0',
-          isBemAviv ? 'bg-slate-950 text-slate-400 border-r border-slate-900' : 'bg-white border-r border-slate-200',
+          'hub-sidebar fixed inset-y-0 left-0 z-50 flex h-dvh max-h-dvh shrink-0 flex-col overflow-hidden transition-[width,transform] duration-300 ease-in-out lg:static lg:z-auto lg:h-full lg:max-h-none lg:translate-x-0',
+          isBemAviv ? 'border-r border-slate-800 bg-slate-950 text-slate-400' : 'border-r border-slate-200 bg-white',
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full',
-          sidebarCollapsed ? 'lg:w-[56px]' : 'lg:w-[220px]',
+          sidebarCollapsed ? 'lg:w-[72px]' : 'lg:w-[240px]',
           hideBemAvivChrome && 'hidden',
         )}
+        style={{ width: mobileMenuOpen ? SIDEBAR_WIDTH_EXPANDED : undefined }}
         aria-label="Menu lateral"
+        aria-expanded={!sidebarCollapsed}
       >
-        <div className={cn("flex min-h-[52px] items-center gap-2 px-3 py-2", isBemAviv ? "border-b border-slate-900" : "border-b border-slate-200")}>
+        <div
+          className={cn(
+            'flex shrink-0 items-center gap-2 border-b py-2',
+            sidebarCollapsed ? 'min-h-[72px] flex-col justify-center px-1.5' : 'min-h-[52px] px-3',
+            isBemAviv ? 'border-slate-800' : 'border-slate-200',
+          )}
+        >
           <div
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg shadow-sm"
             style={{ backgroundColor: hubBrand.primary }}
             aria-hidden
           >
@@ -270,26 +350,37 @@ function AppLayoutShell() {
               <rect x="1" y="8" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
               <rect x="8" y="8" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
             </svg>
-                <button
+          </div>
+          {!sidebarCollapsed ? (
+            <div className="min-w-0 flex-1">
+              <p className={cn('truncate font-hub text-sm font-semibold normal-case', isBemAviv ? 'text-slate-100' : 'text-slate-900')}>
+                Hub Lille
+              </p>
+              <p className="truncate text-[10px] font-medium normal-case text-slate-500">
+                {currentSystem === 'bem-aviv' ? "EKO'7" : currentSystem === 'financeiro' ? 'Financeiro' : currentSystem === 'projetos' ? 'Projetos' : 'Navegação'}
+              </p>
+            </div>
+          ) : null}
+          <button
             type="button"
             className={cn(
-              "ml-auto hidden h-8 w-8 shrink-0 items-center justify-center rounded-md lg:flex",
-              isBemAviv 
-                ? "!bg-transparent !border-0 !shadow-none text-slate-400 hover:bg-slate-900 hover:text-slate-200" 
-                : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+              'hub-sidebar-trigger hidden h-7 w-7 shrink-0 items-center justify-center rounded-lg lg:flex',
+              isBemAviv
+                ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
+                : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800',
             )}
-            onClick={() => setSidebarCollapsed((v) => !v)}
+            onClick={toggleSidebarCollapsed}
             aria-label={sidebarCollapsed ? 'Expandir menu' : 'Recolher menu'}
           >
-            <ChevronLeft size={16} className={cn('transition-transform', sidebarCollapsed && 'rotate-180')} />
+            <ChevronLeft size={15} className={cn('transition-transform duration-300', sidebarCollapsed && 'rotate-180')} />
           </button>
           <button
             type="button"
             className={cn(
-              "ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-md lg:hidden",
-              isBemAviv 
-                ? "!bg-transparent !border-0 !shadow-none text-slate-400 hover:bg-slate-900 hover:text-slate-200" 
-                : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+              'hub-sidebar-trigger ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-lg lg:hidden',
+              isBemAviv
+                ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
+                : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800',
             )}
             onClick={() => setMobileMenuOpen(false)}
             aria-label="Fechar menu lateral"
@@ -298,159 +389,165 @@ function AppLayoutShell() {
           </button>
         </div>
 
-        <nav className="flex flex-1 flex-col gap-0 overflow-y-auto overscroll-contain px-2 py-2 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {sidebarSections.map((section) => (
-            <div key={section.title} className="mb-2">
-              {!sidebarCollapsed ? (
-                <div
-                  role="button"
-                  tabIndex={0}
-                  className={cn(
-                    "flex w-full items-center gap-1 rounded-md px-2 pb-1 pt-2 text-left text-sidebar-section font-semibold uppercase tracking-wide transition-colors cursor-pointer select-none",
-                    isBemAviv ? "text-slate-500 hover:bg-slate-900/60 hover:text-slate-300" : "text-slate-500 hover:bg-slate-50"
-                  )}
-                  onClick={() => {
-                    setOpenSectionKey((prev) => (prev === section.key ? null : section.key))
-                    if (section.system === 'bem-aviv') {
-                      navigate('/bem-aviv')
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      setOpenSectionKey((prev) => (prev === section.key ? null : section.key))
-                      if (section.system === 'bem-aviv') {
-                        navigate('/bem-aviv')
-                      }
-                    }
-                  }}
-                  aria-expanded={openSectionKey === section.key}
-                  aria-controls={`sidebar-section-${section.key}`}
-                >
-                  <ChevronDown
-                    size={12}
-                    className={cn('shrink-0 transition-transform', openSectionKey === section.key ? 'rotate-0' : '-rotate-90')}
-                    aria-hidden
-                  />
-                  <span>{section.title}</span>
-                </div>
-              ) : null}
-              {openSectionKey === section.key || (sidebarCollapsed && section.system === currentSystem) ? (
-                <ul id={`sidebar-section-${section.key}`} className="space-y-px">
-                  {section.items.map((item) => {
-                    if (item.kind === 'group') {
-                      const isGroupOpen = openTreeGroupKeys.includes(item.key)
-                      return (
-                        <li key={`${section.title}-${item.key}`}>
-                          <div
-                            role="button"
-                            tabIndex={0}
-                            className={cn(
-                              "flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sidebar-item font-medium normal-case transition-colors cursor-pointer select-none",
-                              isBemAviv ? "text-slate-400 hover:bg-slate-900/60 hover:text-slate-200" : "text-slate-600 hover:bg-slate-50"
-                            )}
-                            onClick={() =>
-                              setOpenTreeGroupKeys((prev) =>
-                                prev.includes(item.key) ? prev.filter((k) => k !== item.key) : [...prev, item.key],
-                              )
-                            }
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault()
+        <nav
+          className={cn(
+            'flex flex-1 flex-col gap-0 overflow-x-hidden overflow-y-auto overscroll-contain py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+            sidebarCollapsed ? 'px-1.5' : 'px-2',
+          )}
+        >
+          {sidebarSections.map((section, sectionIndex) => {
+            const sectionOpen = openSectionKey === section.key || (sidebarCollapsed && section.system === currentSystem)
+            return (
+              <div key={section.key} className={cn(sectionIndex > 0 && !sidebarCollapsed && 'mt-1 border-t border-slate-800/70 pt-1')}>
+                {!sidebarCollapsed ? (
+                  <button
+                    type="button"
+                    className={cn(
+                      'hub-sidebar-trigger flex w-full items-center gap-1.5 rounded-md px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wider',
+                      isBemAviv ? 'text-slate-500 hover:bg-slate-800/70 hover:text-slate-200' : 'text-slate-500 hover:bg-slate-50',
+                    )}
+                    onClick={() => setOpenSectionKey((prev) => (prev === section.key ? null : section.key))}
+                    aria-expanded={openSectionKey === section.key}
+                    aria-controls={`sidebar-section-${section.key}`}
+                  >
+                    <ChevronDown
+                      size={12}
+                      className={cn('shrink-0 transition-transform', openSectionKey === section.key ? 'rotate-0' : '-rotate-90')}
+                      aria-hidden
+                    />
+                    <span>{section.title}</span>
+                  </button>
+                ) : null}
+                {sectionOpen ? (
+                  <ul id={`sidebar-section-${section.key}`} className={cn('space-y-0.5', sidebarCollapsed && 'pt-1')}>
+                    {section.items.map((item) => {
+                      if (item.kind === 'group') {
+                        const isGroupOpen = openTreeGroupKeys.includes(item.key)
+                        const showInlineChildren = !sidebarCollapsed && isGroupOpen
+                        const showCollapsedFlyout = sidebarCollapsed && collapsedFlyout?.key === item.key
+                        return (
+                          <li key={`${section.title}-${item.key}`} className="relative">
+                            <button
+                              type="button"
+                              className={cn(
+                                'hub-sidebar-trigger flex w-full items-center rounded-lg text-left text-sidebar-item font-medium normal-case transition-colors',
+                                sidebarCollapsed ? 'justify-center px-0 py-2.5' : 'gap-2.5 px-2 py-1.5',
+                                showCollapsedFlyout || isGroupOpen
+                                  ? isBemAviv
+                                    ? 'bg-slate-800 text-slate-100'
+                                    : 'bg-slate-100 text-slate-800'
+                                  : isBemAviv
+                                    ? 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-100'
+                                    : 'text-slate-600 hover:bg-slate-50',
+                              )}
+                              onClick={(e) => {
+                                if (sidebarCollapsed) {
+                                  const rect = e.currentTarget.getBoundingClientRect()
+                                  setCollapsedFlyout((prev) =>
+                                    prev?.key === item.key ? null : { key: item.key, top: rect.top },
+                                  )
+                                  return
+                                }
                                 setOpenTreeGroupKeys((prev) =>
                                   prev.includes(item.key) ? prev.filter((k) => k !== item.key) : [...prev, item.key],
                                 )
-                              }
-                            }}
-                            aria-expanded={isGroupOpen}
-                            aria-controls={`sidebar-group-${item.key}`}
+                              }}
+                              aria-expanded={sidebarCollapsed ? showCollapsedFlyout : isGroupOpen}
+                              aria-controls={`sidebar-group-${item.key}`}
+                              title={sidebarCollapsed ? item.label : undefined}
+                            >
+                              {item.icon ? (
+                                <span className="sb-ico flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md [&_svg]:stroke-[2]">
+                                  <item.icon size={sidebarCollapsed ? 16 : 14} aria-hidden />
+                                </span>
+                              ) : null}
+                              {!sidebarCollapsed ? (
+                                <>
+                                  <span className="truncate">{item.label}</span>
+                                  <ChevronDown
+                                    size={12}
+                                    className={cn('ml-auto shrink-0 transition-transform', isGroupOpen ? 'rotate-0' : '-rotate-90')}
+                                    aria-hidden
+                                  />
+                                </>
+                              ) : null}
+                            </button>
+                            {showInlineChildren ? (
+                              <ul id={`sidebar-group-${item.key}`} className="mt-0.5 space-y-0.5 pl-6">
+                                {item.children.map((child) => (
+                                  <li key={`${section.title}-${child.key}-${child.label}`}>
+                                    <NavLink
+                                      to={child.to}
+                                      className={({ isActive }) => navLinkClass(isActive, false)}
+                                    >
+                                      {child.icon ? (
+                                        <span className="sb-ico flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md [&_svg]:stroke-[2]">
+                                          <child.icon size={14} aria-hidden />
+                                        </span>
+                                      ) : null}
+                                      <span className="truncate">{child.label}</span>
+                                    </NavLink>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : null}
+                            {showCollapsedFlyout && collapsedFlyout ? (
+                              <div
+                                className={cn(
+                                  'fixed z-[60] min-w-[210px] rounded-xl border p-1.5 shadow-2xl',
+                                  isBemAviv ? 'border-slate-700 bg-slate-900 text-slate-200' : 'border-slate-200 bg-white text-slate-700',
+                                )}
+                                style={{ left: SIDEBAR_WIDTH_COLLAPSED + 8, top: collapsedFlyout.top }}
+                              >
+                                <p className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">{item.label}</p>
+                                <ul className="space-y-0.5">
+                                  {item.children.map((child) => (
+                                    <li key={`flyout-${child.key}`}>
+                                      <NavLink
+                                        to={child.to}
+                                        onClick={() => setCollapsedFlyout(null)}
+                                        className={({ isActive }) => navLinkClass(isActive, false)}
+                                      >
+                                        {child.icon ? (
+                                          <span className="sb-ico flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md [&_svg]:stroke-[2]">
+                                            <child.icon size={14} aria-hidden />
+                                          </span>
+                                        ) : null}
+                                        <span className="truncate">{child.label}</span>
+                                      </NavLink>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            ) : null}
+                          </li>
+                        )
+                      }
+
+                      return (
+                        <li key={`${section.title}-${item.to}-${item.label}`}>
+                          <NavLink
+                            to={item.to}
+                            end={item.to === '/bem-aviv' || item.to === '/projetos'}
+                            title={sidebarCollapsed ? item.label : undefined}
+                            className={({ isActive }) => navLinkClass(isActive, sidebarCollapsed)}
                           >
                             {item.icon ? (
-                              <span className={cn("sb-ico flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md transition-colors [&_svg]:stroke-[2]", isBemAviv ? "text-slate-400" : "text-slate-600")}>
-                                <item.icon size={14} aria-hidden />
+                              <span className="sb-ico flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md [&_svg]:stroke-[2]">
+                                <item.icon size={sidebarCollapsed ? 16 : 14} aria-hidden />
                               </span>
                             ) : null}
-                            {!sidebarCollapsed ? (
-                              <>
-                                <span className="truncate">{item.label}</span>
-                                <ChevronDown
-                                  size={12}
-                                  className={cn('ml-auto shrink-0 transition-transform', isGroupOpen ? 'rotate-0' : '-rotate-90')}
-                                  aria-hidden
-                                />
-                              </>
-                            ) : null}
-                          </div>
-                          {isGroupOpen ? (
-                            <ul id={`sidebar-group-${item.key}`} className={cn("mt-1 space-y-px", sidebarCollapsed ? "pl-0" : "pl-6")}>
-                              {item.children.map((child) => (
-                                <li key={`${section.title}-${child.key}-${child.label}`}>
-                                  <NavLink
-                                    to={child.to}
-                                    title={sidebarCollapsed ? child.label : undefined}
-                                    className={({ isActive }) =>
-                                      cn(
-                                        'flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sidebar-item font-medium normal-case transition-all duration-150',
-                                        isActive
-                                          ? isBemAviv
-                                            ? 'bg-sky-500/10 font-semibold text-sky-400 border-l-2 border-sky-500 rounded-l-none pl-[6px] [&>.sb-ico]:text-sky-400'
-                                            : 'bg-[#E6F1FB] font-semibold text-[#185FA5] [&>.sb-ico]:bg-[#185FA5] [&>.sb-ico]:text-white'
-                                          : isBemAviv
-                                            ? 'text-slate-400 hover:bg-slate-900/60 hover:text-slate-200'
-                                            : 'text-slate-600 hover:bg-slate-50',
-                                      )
-                                    }
-                                  >
-                                    {child.icon ? (
-                                      <span className="sb-ico flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md transition-colors [&_svg]:stroke-[2]">
-                                        <child.icon size={14} aria-hidden />
-                                      </span>
-                                    ) : null}
-                                    {!sidebarCollapsed ? <span className="truncate">{child.label}</span> : null}
-                                  </NavLink>
-                                </li>
-                              ))}
-                            </ul>
-                          ) : null}
+                            {!sidebarCollapsed ? <span className="truncate">{item.label}</span> : null}
+                          </NavLink>
                         </li>
                       )
-                    }
-
-                    return (
-                      <li key={`${section.title}-${item.to}-${item.label}`}>
-                        <NavLink
-                          to={item.to}
-                          end={item.to === '/bem-aviv' || item.to === '/projetos'}
-                          title={sidebarCollapsed ? item.label : undefined}
-                          className={({ isActive }) =>
-                            cn(
-                              'flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sidebar-item font-medium normal-case transition-all duration-150',
-                              isActive
-                                ? isBemAviv
-                                  ? 'bg-sky-500/10 font-semibold text-sky-400 border-l-2 border-sky-500 rounded-l-none pl-[6px] [&>.sb-ico]:text-sky-400'
-                                  : 'bg-[#E6F1FB] font-semibold text-[#185FA5] [&>.sb-ico]:bg-[#185FA5] [&>.sb-ico]:text-white'
-                                : isBemAviv
-                                  ? 'text-slate-400 hover:bg-slate-900/60 hover:text-slate-200'
-                                  : 'text-slate-600 hover:bg-slate-50',
-                            )
-                          }
-                        >
-                          {item.icon ? (
-                            <span className="sb-ico flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md transition-colors [&_svg]:stroke-[2]">
-                              <item.icon size={14} aria-hidden />
-                            </span>
-                          ) : null}
-                          {!sidebarCollapsed ? <span className="truncate">{item.label}</span> : null}
-                        </NavLink>
-                      </li>
-                    )
-                  })}
-                </ul>
-              ) : null}
-            </div>
-          ))}
-        </nav>     </nav>
-
+                    })}
+                  </ul>
+                ) : null}
+              </div>
+            )
+          })}
+        </nav>
       </aside>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -466,6 +563,17 @@ function AppLayoutShell() {
           >
             <Menu size={16} />
           </button>
+          {sidebarCollapsed ? (
+            <button
+              type="button"
+              className="hidden h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium normal-case text-slate-700 shadow-sm hover:bg-slate-50 lg:inline-flex"
+              onClick={() => setSidebarCollapsed(false)}
+              aria-label="Expandir menu lateral"
+            >
+              <Menu size={14} />
+              Menu
+            </button>
+          ) : null}
           <p className="min-w-0 truncate text-xs text-slate-500">
             {breadcrumb.segment} / <span className="font-medium text-slate-900">{breadcrumb.current}</span>
           </p>
