@@ -270,12 +270,13 @@ function AppLayoutShell() {
               <rect x="1" y="8" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
               <rect x="8" y="8" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
             </svg>
-          </div>
-          <button
+                <button
             type="button"
             className={cn(
               "ml-auto hidden h-8 w-8 shrink-0 items-center justify-center rounded-md lg:flex",
-              isBemAviv ? "text-slate-400 hover:bg-slate-900 hover:text-slate-200" : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+              isBemAviv 
+                ? "!bg-transparent !border-0 !shadow-none text-slate-400 hover:bg-slate-900 hover:text-slate-200" 
+                : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
             )}
             onClick={() => setSidebarCollapsed((v) => !v)}
             aria-label={sidebarCollapsed ? 'Expandir menu' : 'Recolher menu'}
@@ -286,7 +287,9 @@ function AppLayoutShell() {
             type="button"
             className={cn(
               "ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-md lg:hidden",
-              isBemAviv ? "text-slate-400 hover:bg-slate-900 hover:text-slate-200" : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+              isBemAviv 
+                ? "!bg-transparent !border-0 !shadow-none text-slate-400 hover:bg-slate-900 hover:text-slate-200" 
+                : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
             )}
             onClick={() => setMobileMenuOpen(false)}
             aria-label="Fechar menu lateral"
@@ -299,16 +302,26 @@ function AppLayoutShell() {
           {sidebarSections.map((section) => (
             <div key={section.title} className="mb-2">
               {!sidebarCollapsed ? (
-                <button
-                  type="button"
+                <div
+                  role="button"
+                  tabIndex={0}
                   className={cn(
-                    "flex w-full items-center gap-1 rounded-md px-2 pb-1 pt-2 text-left text-sidebar-section font-semibold uppercase tracking-wide transition-colors",
+                    "flex w-full items-center gap-1 rounded-md px-2 pb-1 pt-2 text-left text-sidebar-section font-semibold uppercase tracking-wide transition-colors cursor-pointer select-none",
                     isBemAviv ? "text-slate-500 hover:bg-slate-900/60 hover:text-slate-300" : "text-slate-500 hover:bg-slate-50"
                   )}
                   onClick={() => {
                     setOpenSectionKey((prev) => (prev === section.key ? null : section.key))
                     if (section.system === 'bem-aviv') {
                       navigate('/bem-aviv')
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      setOpenSectionKey((prev) => (prev === section.key ? null : section.key))
+                      if (section.system === 'bem-aviv') {
+                        navigate('/bem-aviv')
+                      }
                     }
                   }}
                   aria-expanded={openSectionKey === section.key}
@@ -320,19 +333,20 @@ function AppLayoutShell() {
                     aria-hidden
                   />
                   <span>{section.title}</span>
-                </button>
+                </div>
               ) : null}
-              {openSectionKey === section.key ? (
+              {openSectionKey === section.key || (sidebarCollapsed && section.system === currentSystem) ? (
                 <ul id={`sidebar-section-${section.key}`} className="space-y-px">
                   {section.items.map((item) => {
                     if (item.kind === 'group') {
                       const isGroupOpen = openTreeGroupKeys.includes(item.key)
                       return (
                         <li key={`${section.title}-${item.key}`}>
-                          <button
-                            type="button"
+                          <div
+                            role="button"
+                            tabIndex={0}
                             className={cn(
-                              "flex w-full appearance-none items-center gap-2.5 rounded-lg border-0 bg-transparent px-2 py-1.5 text-left text-sidebar-item font-medium normal-case outline-none transition-colors focus-visible:ring-0",
+                              "flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sidebar-item font-medium normal-case transition-colors cursor-pointer select-none",
                               isBemAviv ? "text-slate-400 hover:bg-slate-900/60 hover:text-slate-200" : "text-slate-600 hover:bg-slate-50"
                             )}
                             onClick={() =>
@@ -340,6 +354,14 @@ function AppLayoutShell() {
                                 prev.includes(item.key) ? prev.filter((k) => k !== item.key) : [...prev, item.key],
                               )
                             }
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault()
+                                setOpenTreeGroupKeys((prev) =>
+                                  prev.includes(item.key) ? prev.filter((k) => k !== item.key) : [...prev, item.key],
+                                )
+                              }
+                            }}
                             aria-expanded={isGroupOpen}
                             aria-controls={`sidebar-group-${item.key}`}
                           >
@@ -348,15 +370,19 @@ function AppLayoutShell() {
                                 <item.icon size={14} aria-hidden />
                               </span>
                             ) : null}
-                            <span className="truncate">{item.label}</span>
-                            <ChevronDown
-                              size={12}
-                              className={cn('ml-auto shrink-0 transition-transform', isGroupOpen ? 'rotate-0' : '-rotate-90')}
-                              aria-hidden
-                            />
-                          </button>
+                            {!sidebarCollapsed ? (
+                              <>
+                                <span className="truncate">{item.label}</span>
+                                <ChevronDown
+                                  size={12}
+                                  className={cn('ml-auto shrink-0 transition-transform', isGroupOpen ? 'rotate-0' : '-rotate-90')}
+                                  aria-hidden
+                                />
+                              </>
+                            ) : null}
+                          </div>
                           {isGroupOpen ? (
-                            <ul id={`sidebar-group-${item.key}`} className="mt-1 space-y-px pl-6">
+                            <ul id={`sidebar-group-${item.key}`} className={cn("mt-1 space-y-px", sidebarCollapsed ? "pl-0" : "pl-6")}>
                               {item.children.map((child) => (
                                 <li key={`${section.title}-${child.key}-${child.label}`}>
                                   <NavLink
@@ -376,7 +402,7 @@ function AppLayoutShell() {
                                     }
                                   >
                                     {child.icon ? (
-                                      <span className="sb-ico flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md text-slate-600 transition-colors [&_svg]:stroke-[2]">
+                                      <span className="sb-ico flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md transition-colors [&_svg]:stroke-[2]">
                                         <child.icon size={14} aria-hidden />
                                       </span>
                                     ) : null}
@@ -410,7 +436,7 @@ function AppLayoutShell() {
                           }
                         >
                           {item.icon ? (
-                            <span className="sb-ico flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md text-slate-600 transition-colors [&_svg]:stroke-[2]">
+                            <span className="sb-ico flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md transition-colors [&_svg]:stroke-[2]">
                               <item.icon size={14} aria-hidden />
                             </span>
                           ) : null}
@@ -423,7 +449,7 @@ function AppLayoutShell() {
               ) : null}
             </div>
           ))}
-        </nav>
+        </nav>     </nav>
 
       </aside>
 
