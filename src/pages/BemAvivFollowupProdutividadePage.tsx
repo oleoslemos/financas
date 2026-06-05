@@ -47,6 +47,42 @@ type HistoryFormState = {
   notes: string
 }
 
+function clientStatusPill(status: string | null) {
+  const { status: displayStatus, tags } = getDisplayStatusAndTags(status)
+  
+  const statusEl = displayStatus === 'CLIENTE' ? (
+    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[8px] font-semibold text-emerald-800 border border-emerald-200">
+      <span className="h-1 w-1 rounded-full bg-emerald-500" aria-hidden />
+      Cliente
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1 rounded-full bg-[#FAEEDA] px-2 py-0.5 text-[8px] font-semibold text-[#854F0B] border border-[#F5E1C4]">
+      <span className="h-1 w-1 rounded-full bg-[#EF9F27]" aria-hidden />
+      Prospecção
+    </span>
+  )
+
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {statusEl}
+      {tags.map((tag) => {
+        if (tag === 'COLCHÃO') {
+          return (
+            <span key={tag} className="inline-flex items-center rounded-md bg-[#EAF3DE] px-1.5 py-0.5 text-[8px] font-bold text-[#3B6D11] border border-[#D5E6BE]">
+              Colchão
+            </span>
+          )
+        }
+        return (
+          <span key={tag} className="inline-flex items-center rounded-md bg-[#E6F1FB] px-1.5 py-0.5 text-[8px] font-bold text-[#185FA5] border border-[#C5DFF8]">
+            Diversos
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
 function startOfToday() {
   const d = new Date()
   d.setHours(0, 0, 0, 0)
@@ -378,7 +414,7 @@ export function BemAvivFollowupProdutividadePage() {
                   }
                 >
                   <td>{item.full_name}</td>
-                  <td>{item.client_status || 'PROSPECÇÃO'}</td>
+                  <td>{clientStatusPill(item.client_status)}</td>
                   <td>{item.commercial_stage || 'CONTATO'}</td>
                   <td>{formatDateOnly(item.next_followup_at)}</td>
                   <td>{item.next_followup_status || 'PENDENTE'}</td>

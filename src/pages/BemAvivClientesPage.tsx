@@ -490,7 +490,7 @@ export function BemAvivClientesPage() {
       if (statusFilter === 'CLIENTE - COLCHÃO/DIVERSOS') {
         return statusClean === 'CLIENTE - COLCHÃO/DIVERSOS'
       }
-      return statusClean === statusFilter.toUpperCase()
+      return false
     }).filter((r) => clientMatchesEko7Filter(r, eko7Filter))
     const mul = sortDir === 'asc' ? 1 : -1
     return [...filtered].sort((a, b) => {

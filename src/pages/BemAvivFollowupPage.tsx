@@ -11,7 +11,6 @@ import { buildWhatsappUrl } from '../lib/whatsapp'
 import { dateInputToIso, formatDateOnly, todayInputDate, toInputDate } from '../lib/dates'
 import {
   clientHadEko7Presentation,
-  clientHasConfirmedPurchase,
   clientMatchesEko7Filter,
   getDisplayStatusAndTags,
   type BemAvivEko7Filter,
