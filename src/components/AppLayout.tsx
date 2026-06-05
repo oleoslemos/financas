@@ -82,7 +82,6 @@ const hubBrand = {
 
 const SIDEBAR_COLLAPSED_KEY = 'hub-sidebar-collapsed'
 const SIDEBAR_WIDTH_EXPANDED = 240
-const SIDEBAR_WIDTH_COLLAPSED = 72
 
 function readSidebarCollapsedPreference() {
   try {
