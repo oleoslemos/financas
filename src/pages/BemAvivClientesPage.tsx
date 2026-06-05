@@ -382,22 +382,14 @@ export function BemAvivClientesPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [form, setForm] = useState(emptyForm)
 
-  const [pedidosModalClient, setPedidosModalClient] = useState<Cliente | null>(null)
-  const [pedidosModalLoading, setPedidosModalLoading] = useState(false)
+  const [selectedClient, setSelectedClient] = useState<Cliente | null>(null)
+  const [drawerTab, setDrawerTab] = useState<'history' | 'orders' | 'info'>('history')
+  const [drawerLoading, setDrawerLoading] = useState(false)
+
   const [pedidosModalRows, setPedidosModalRows] = useState<OrderRow[]>([])
   const [pedidosDetailOrderId, setPedidosDetailOrderId] = useState<string | null>(null)
-  const [scheduleModalClient, setScheduleModalClient] = useState<Cliente | null>(null)
-  const [scheduleModalSaving, setScheduleModalSaving] = useState(false)
-  const [scheduleModalForm, setScheduleModalForm] = useState({
-    contact_done: false,
-    next_followup_at: '',
-    commercial_stage: 'CONTATO',
-    summary: '',
-    details: '',
-  })
-  const [historyModalClient, setHistoryModalClient] = useState<Cliente | null>(null)
+  
   const [historyModalRows, setHistoryModalRows] = useState<FollowupHistoryRow[]>([])
-  const [historyModalLoading, setHistoryModalLoading] = useState(false)
   const [registerInlineOpen, setRegisterInlineOpen] = useState(false)
   const [scheduleInlineOpen, setScheduleInlineOpen] = useState(false)
   const [scheduleInlineTarget, setScheduleInlineTarget] = useState<'new' | 'client' | 'followup'>('new')
@@ -462,12 +454,18 @@ export function BemAvivClientesPage() {
   const stats = useMemo(() => {
     const total = rows.length
     const byStatus = (v: string) => rows.filter((r) => (r.client_status ?? '').trim() === v).length
+    const prospec = byStatus('PROSPECÇÃO')
+    const clienteColchao = byStatus('CLIENTE - COLCHÃO')
+    const clienteDiversos = byStatus('CLIENTE - DIVERSOS')
+    const clienteColchaoDiversos = byStatus('CLIENTE - COLCHÃO/DIVERSOS')
+    const clientesAtivos = clienteColchao + clienteDiversos + clienteColchaoDiversos
     return {
       total,
-      prospec: byStatus('PROSPECÇÃO'),
-      clienteColchao: byStatus('CLIENTE - COLCHÃO'),
-      clienteDiversos: byStatus('CLIENTE - DIVERSOS'),
-      clienteColchaoDiversos: byStatus('CLIENTE - COLCHÃO/DIVERSOS'),
+      prospec,
+      clienteColchao,
+      clienteDiversos,
+      clienteColchaoDiversos,
+      clientesAtivos,
       eko7Apresentado: rows.filter((r) => clientHadEko7Presentation(r)).length,
       eko7NaoComprou: rows.filter((r) => clientHadEko7Presentation(r) && !clientHasConfirmedPurchase(r)).length,
       eko7Comprou: rows.filter((r) => clientHadEko7Presentation(r) && clientHasConfirmedPurchase(r)).length,
@@ -475,9 +473,9 @@ export function BemAvivClientesPage() {
   }, [rows])
 
   const historyTimeline = useMemo(() => {
-    if (!historyModalClient) return []
-    return buildHistoryTimeline(historyModalClient, historyModalRows)
-  }, [historyModalClient, historyModalRows])
+    if (!selectedClient) return []
+    return buildHistoryTimeline(selectedClient, historyModalRows)
+  }, [selectedClient, historyModalRows])
 
   const displayedRows = useMemo(() => {
     const filtered = rows.filter((r) => {
@@ -549,109 +547,9 @@ export function BemAvivClientesPage() {
     setForm(emptyForm)
   }
 
-  function closeScheduleModal() {
-    setScheduleModalClient(null)
-    setScheduleModalSaving(false)
-  }
-
-  function openScheduleModal(client: Cliente) {
-    const parsed = splitFollowupNote(client.next_followup_note)
-    setScheduleModalClient(client)
-    setScheduleModalForm({
-      contact_done: false,
-      next_followup_at: client.next_followup_at ? toInputDate(client.next_followup_at) : todayInputDate(),
-      commercial_stage: client.commercial_stage || 'CONTATO',
-      summary: parsed.summary,
-      details: parsed.details,
-    })
-  }
-
-  async function submitScheduleModal(e: React.FormEvent) {
-    e.preventDefault()
-    if (!supabase || !ownerUserId || !scheduleModalClient || !activeCompanyId) return
-    if (!scheduleModalForm.next_followup_at) {
-      alert('INFORME A DATA DO AGENDAMENTO.')
-      return
-    }
-    setScheduleModalSaving(true)
-    try {
-      await markPendingAgendamentoAsReagendado(scheduleModalClient.id)
-      const { error } = await supabase
-        .from('bem_aviv_clients')
-        .update({
-          next_followup_at: dateInputToIso(scheduleModalForm.next_followup_at),
-          next_followup_note: composeFollowupNote(scheduleModalForm.summary, scheduleModalForm.details) || null,
-          next_followup_status: 'PENDENTE',
-          commercial_stage: scheduleModalForm.commercial_stage,
-          last_contact_at: scheduleModalForm.contact_done
-            ? new Date().toISOString()
-            : scheduleModalClient.last_contact_at ?? null,
-        })
-        .eq('id', scheduleModalClient.id)
-        .eq('company_id', activeCompanyId)
-      if (error) throw new Error(error.message)
-      await insertAgendamentoFollowup(
-        scheduleModalClient.id,
-        scheduleModalForm.next_followup_at,
-        'PENDENTE',
-        scheduleModalForm.summary,
-        scheduleModalForm.details,
-      )
-      closeScheduleModal()
-      await load()
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Erro ao agendar.')
-    } finally {
-      setScheduleModalSaving(false)
-    }
-  }
-
-  async function openHistoryModal(client: Cliente) {
-    if (!supabase || !ownerUserId || !activeCompanyId) return
-    setHistoryModalClient(client)
-    setEditingHistoryId(null)
-    setRegisterInlineOpen(false)
-    setScheduleInlineOpen(false)
-    setRegisterInlineSaving(false)
-    setScheduleInlineSaving(false)
-    setRegisterInlineForm({
-      contacted_at: todayInputDate(),
-      channel: 'WHATSAPP',
-      result: '',
-      notes: '',
-    })
-    setHistoryModalRows([])
-    setHistoryModalLoading(true)
-    let { data, error } = await supabase
-      .from('bem_aviv_client_followups')
-      .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
-      .is('deleted_at', null)
-      .eq('company_id', activeCompanyId)
-      .eq('client_id', client.id)
-      .order('contacted_at', { ascending: false })
-      .limit(200)
-    if (error && isMissingAuditColumnError(error.message)) {
-      const fallback = await supabase
-        .from('bem_aviv_client_followups')
-        .select('id, client_id, contacted_at, channel, result, notes')
-        .eq('company_id', activeCompanyId)
-        .eq('client_id', client.id)
-        .order('contacted_at', { ascending: false })
-        .limit(200)
-      data = (fallback.data ?? []).map((r) => ({ ...r, created_by_name: null }))
-      error = fallback.error
-    }
-    if (error) {
-      setHistoryModalRows([])
-      setHistoryModalLoading(false)
-      return
-    }
-    setHistoryModalRows((data ?? []) as FollowupHistoryRow[])
-    setHistoryModalLoading(false)
-  }
-
-  async function refetchHistoryModalRows(clientId: string): Promise<FollowupHistoryRow[]> {
-    if (!supabase || !ownerUserId || !activeCompanyId) return []
+  // New unified fetchers for selected client details
+  const fetchHistoryData = useCallback(async (clientId: string): Promise<FollowupHistoryRow[]> => {
+    if (!supabase || !activeCompanyId) return []
     let { data, error } = await supabase
       .from('bem_aviv_client_followups')
       .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
@@ -671,23 +569,77 @@ export function BemAvivClientesPage() {
       data = (fallback.data ?? []).map((r) => ({ ...r, created_by_name: null }))
       error = fallback.error
     }
-    if (error) return []
     return (data ?? []) as FollowupHistoryRow[]
+  }, [supabase, activeCompanyId])
+
+  const fetchOrdersData = useCallback(async (clientId: string): Promise<OrderRow[]> => {
+    if (!supabase || !activeCompanyId) return []
+    const { data, error } = await supabase
+      .from('bem_aviv_sales_orders')
+      .select('id, order_date, document_type, document_number, status, total_amount')
+      .eq('company_id', activeCompanyId)
+      .eq('client_id', clientId)
+      .order('order_date', { ascending: false })
+      .order('document_number', { ascending: false })
+    if (error) return []
+    return (data as OrderRow[]) ?? []
+  }, [supabase, activeCompanyId])
+
+  async function openClientDrawer(client: Cliente) {
+    setSelectedClient(client)
+    setDrawerTab('history')
+    setRegisterInlineOpen(false)
+    setScheduleInlineOpen(false)
+    setEditingHistoryId(null)
+    setEditingScheduleFollowupId(null)
+    
+    if (!supabase || !activeCompanyId) return
+    setDrawerLoading(true)
+    
+    const [historyRes, ordersRes] = await Promise.all([
+      fetchHistoryData(client.id),
+      fetchOrdersData(client.id)
+    ])
+    
+    setHistoryModalRows(historyRes)
+    setPedidosModalRows(ordersRes)
+    setDrawerLoading(false)
   }
 
-  async function refreshHistoryModalClient() {
-    if (!supabase || !historyModalClient || !activeCompanyId) return
-    const [{ data: clientRow }, rows] = await Promise.all([
+  async function refreshSelectedClient() {
+    if (!supabase || !selectedClient || !activeCompanyId) return
+    const [clientRow, historyRows, ordersRows] = await Promise.all([
       supabase
         .from('bem_aviv_clients')
         .select('*')
-        .eq('id', historyModalClient.id)
+        .eq('id', selectedClient.id)
         .eq('company_id', activeCompanyId)
         .maybeSingle(),
-      refetchHistoryModalRows(historyModalClient.id),
+      fetchHistoryData(selectedClient.id),
+      fetchOrdersData(selectedClient.id)
     ])
-    if (clientRow) setHistoryModalClient(clientRow as Cliente)
-    setHistoryModalRows(rows)
+    if (clientRow.data) {
+      setSelectedClient(clientRow.data as Cliente)
+    }
+    setHistoryModalRows(historyRows)
+    setPedidosModalRows(ordersRows)
+  }
+
+  async function updateCommercialStage(clientId: string, stage: string) {
+    if (!supabase || !activeCompanyId) return
+    const { error } = await supabase
+      .from('bem_aviv_clients')
+      .update({ commercial_stage: stage })
+      .eq('id', clientId)
+      .eq('company_id', activeCompanyId)
+    if (error) {
+      alert('Erro ao atualizar estágio comercial: ' + error.message)
+      return
+    }
+    if (selectedClient && selectedClient.id === clientId) {
+      setSelectedClient((prev) => prev ? { ...prev, commercial_stage: stage } : null)
+    }
+    await load()
   }
 
   async function insertAgendamentoFollowup(
@@ -728,7 +680,7 @@ export function BemAvivClientesPage() {
 
   async function markPendingAgendamentoAsReagendado(clientId: string) {
     if (!supabase || !activeCompanyId) return
-    const rows = await refetchHistoryModalRows(clientId)
+    const rows = await fetchHistoryData(clientId)
     for (const r of rows) {
       if (r.channel !== CHANNEL_AGENDAMENTO) continue
       const parsed = parseAgendamentoResult(r.result)
@@ -756,7 +708,7 @@ export function BemAvivClientesPage() {
 
   async function markPendingAgendamentoRecordsConcluido(clientId: string, at: string | null) {
     if (!supabase || !activeCompanyId) return
-    const rows = await refetchHistoryModalRows(clientId)
+    const rows = await fetchHistoryData(clientId)
     for (const r of rows) {
       if (r.channel !== CHANNEL_AGENDAMENTO) continue
       const parsed = parseAgendamentoResult(r.result)
@@ -784,7 +736,7 @@ export function BemAvivClientesPage() {
   }
 
   async function confirmScheduleDone(at?: string | null) {
-    if (!supabase || !ownerUserId || !historyModalClient || !activeCompanyId) return
+    if (!supabase || !ownerUserId || !selectedClient || !activeCompanyId) return
     const doneAt = new Date().toISOString()
     const { error } = await supabase
       .from('bem_aviv_clients')
@@ -792,7 +744,7 @@ export function BemAvivClientesPage() {
         next_followup_status: 'CONCLUIDO',
         last_contact_at: doneAt,
       })
-      .eq('id', historyModalClient.id)
+      .eq('id', selectedClient.id)
       .eq('company_id', activeCompanyId)
     if (error) {
       alert(error.message)
@@ -800,10 +752,10 @@ export function BemAvivClientesPage() {
     }
     try {
       await markPendingAgendamentoRecordsConcluido(
-        historyModalClient.id,
-        at ?? historyModalClient.next_followup_at,
+        selectedClient.id,
+        at ?? selectedClient.next_followup_at,
       )
-      await refreshHistoryModalClient()
+      await refreshSelectedClient()
       await load()
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Erro ao atualizar histórico.')
@@ -811,18 +763,18 @@ export function BemAvivClientesPage() {
   }
 
   function openEditScheduleActive() {
-    if (!historyModalClient) return
-    const parsed = splitFollowupNote(historyModalClient.next_followup_note)
+    if (!selectedClient) return
+    const parsed = splitFollowupNote(selectedClient.next_followup_note)
     setRegisterInlineOpen(false)
     setEditingHistoryId(null)
     setScheduleInlineTarget('client')
     setEditingScheduleFollowupId(null)
     setScheduleInlineForm({
       contact_done: false,
-      next_followup_at: historyModalClient.next_followup_at
-        ? toInputDate(historyModalClient.next_followup_at)
+      next_followup_at: selectedClient.next_followup_at
+        ? toInputDate(selectedClient.next_followup_at)
         : todayInputDate(),
-      commercial_stage: historyModalClient.commercial_stage || 'CONTATO',
+      commercial_stage: selectedClient.commercial_stage || 'CONTATO',
       summary: parsed.summary,
       details: parsed.details,
     })
@@ -843,7 +795,7 @@ export function BemAvivClientesPage() {
     setScheduleInlineForm({
       contact_done: false,
       next_followup_at: toInputDate(row.contacted_at),
-      commercial_stage: historyModalClient?.commercial_stage || 'CONTATO',
+      commercial_stage: selectedClient?.commercial_stage || 'CONTATO',
       summary: parsed.summary,
       details: (row.notes ?? '').trim(),
     })
@@ -852,7 +804,7 @@ export function BemAvivClientesPage() {
 
   async function submitInlineFollowup(e: React.FormEvent) {
     e.preventDefault()
-    if (!supabase || !ownerUserId || !historyModalClient || !activeCompanyId) return
+    if (!supabase || !ownerUserId || !selectedClient || !activeCompanyId) return
     if (!registerInlineForm.contacted_at) return
 
     setRegisterInlineSaving(true)
@@ -892,13 +844,13 @@ export function BemAvivClientesPage() {
         return
       }
 
-      const rows = await refetchHistoryModalRows(historyModalClient.id)
+      const rows = await fetchHistoryData(selectedClient.id)
       setHistoryModalRows(rows)
       if (rows[0]) {
         await supabase
           .from('bem_aviv_clients')
           .update({ last_contact_at: rows[0].contacted_at })
-          .eq('id', historyModalClient.id)
+          .eq('id', selectedClient.id)
           .eq('company_id', activeCompanyId)
       }
       setEditingHistoryId(null)
@@ -910,6 +862,8 @@ export function BemAvivClientesPage() {
         notes: '',
       })
       setRegisterInlineSaving(false)
+      await refreshSelectedClient()
+      await load()
       return
     }
 
@@ -918,7 +872,7 @@ export function BemAvivClientesPage() {
       company_id: activeCompanyId,
       created_by_user_id: user?.id ?? null,
       created_by_name: followupActorName,
-      client_id: historyModalClient.id,
+      client_id: selectedClient.id,
       contacted_at: contactedAtIso,
       channel: registerInlineForm.channel,
       result: registerInlineForm.result || null,
@@ -928,7 +882,7 @@ export function BemAvivClientesPage() {
       const fallback = await supabase.from('bem_aviv_client_followups').insert({
         user_id: followupUserId,
         company_id: activeCompanyId,
-        client_id: historyModalClient.id,
+        client_id: selectedClient.id,
         contacted_at: contactedAtIso,
         channel: registerInlineForm.channel,
         result: registerInlineForm.result || null,
@@ -946,10 +900,10 @@ export function BemAvivClientesPage() {
     await supabase
       .from('bem_aviv_clients')
       .update({ last_contact_at: contactedAtIso })
-      .eq('id', historyModalClient.id)
+      .eq('id', selectedClient.id)
       .eq('company_id', activeCompanyId)
 
-    const rows = await refetchHistoryModalRows(historyModalClient.id)
+    const rows = await fetchHistoryData(selectedClient.id)
     setHistoryModalRows(rows)
     setRegisterInlineOpen(false)
     setRegisterInlineForm({
@@ -959,6 +913,8 @@ export function BemAvivClientesPage() {
       notes: '',
     })
     setRegisterInlineSaving(false)
+    await refreshSelectedClient()
+    await load()
   }
 
   function toggleInlineFollowupForm() {
@@ -1001,7 +957,7 @@ export function BemAvivClientesPage() {
         setScheduleInlineForm({
           contact_done: false,
           next_followup_at: todayInputDate(),
-          commercial_stage: historyModalClient?.commercial_stage || 'CONTATO',
+          commercial_stage: selectedClient?.commercial_stage || 'CONTATO',
           summary: '',
           details: '',
         })
@@ -1015,7 +971,7 @@ export function BemAvivClientesPage() {
 
   async function submitInlineSchedule(e: React.FormEvent) {
     e.preventDefault()
-    if (!supabase || !ownerUserId || !historyModalClient || !activeCompanyId) return
+    if (!supabase || !ownerUserId || !selectedClient || !activeCompanyId) return
     if (!scheduleInlineForm.next_followup_at) {
       alert('INFORME A DATA DO AGENDAMENTO.')
       return
@@ -1054,8 +1010,8 @@ export function BemAvivClientesPage() {
         if (updateError) throw new Error(updateError.message)
 
         const isActiveOnClient =
-          historyModalClient.next_followup_status?.toUpperCase() === 'PENDENTE' &&
-          sameCalendarDay(historyModalClient.next_followup_at, contactedAtIso)
+          selectedClient.next_followup_status?.toUpperCase() === 'PENDENTE' &&
+          sameCalendarDay(selectedClient.next_followup_at, contactedAtIso)
         if (isActiveOnClient) {
           const { error: clientError } = await supabase
             .from('bem_aviv_clients')
@@ -1065,15 +1021,15 @@ export function BemAvivClientesPage() {
               commercial_stage: scheduleInlineForm.commercial_stage,
               last_contact_at: scheduleInlineForm.contact_done
                 ? new Date().toISOString()
-                : historyModalClient.last_contact_at ?? null,
+                : selectedClient.last_contact_at ?? null,
             })
-            .eq('id', historyModalClient.id)
+            .eq('id', selectedClient.id)
             .eq('company_id', activeCompanyId)
           if (clientError) throw new Error(clientError.message)
         }
       } else {
         if (scheduleInlineTarget === 'new') {
-          await markPendingAgendamentoAsReagendado(historyModalClient.id)
+          await markPendingAgendamentoAsReagendado(selectedClient.id)
         }
         const { error: clientError } = await supabase
           .from('bem_aviv_clients')
@@ -1084,27 +1040,27 @@ export function BemAvivClientesPage() {
             commercial_stage: scheduleInlineForm.commercial_stage,
             last_contact_at: scheduleInlineForm.contact_done
               ? new Date().toISOString()
-              : historyModalClient.last_contact_at ?? null,
+              : selectedClient.last_contact_at ?? null,
           })
-          .eq('id', historyModalClient.id)
+          .eq('id', selectedClient.id)
           .eq('company_id', activeCompanyId)
         if (clientError) throw new Error(clientError.message)
 
         if (scheduleInlineTarget === 'new') {
           await insertAgendamentoFollowup(
-            historyModalClient.id,
+            selectedClient.id,
             scheduleInlineForm.next_followup_at,
             'PENDENTE',
             scheduleInlineForm.summary,
             scheduleInlineForm.details,
           )
         } else if (scheduleInlineTarget === 'client') {
-          const rows = await refetchHistoryModalRows(historyModalClient.id)
+          const rows = await fetchHistoryData(selectedClient.id)
           const match = rows.find(
             (r) =>
               r.channel === CHANNEL_AGENDAMENTO &&
               parseAgendamentoResult(r.result).status === 'PENDENTE' &&
-              sameCalendarDay(r.contacted_at, historyModalClient.next_followup_at),
+              sameCalendarDay(r.contacted_at, selectedClient.next_followup_at),
           )
           if (match) {
             let { error: updateError } = await supabase
@@ -1133,7 +1089,7 @@ export function BemAvivClientesPage() {
             if (updateError) throw new Error(updateError.message)
           } else {
             await insertAgendamentoFollowup(
-              historyModalClient.id,
+              selectedClient.id,
               scheduleInlineForm.next_followup_at,
               'PENDENTE',
               scheduleInlineForm.summary,
@@ -1146,7 +1102,7 @@ export function BemAvivClientesPage() {
       setScheduleInlineOpen(false)
       setScheduleInlineTarget('new')
       setEditingScheduleFollowupId(null)
-      await refreshHistoryModalClient()
+      await refreshSelectedClient()
       await load()
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Erro ao salvar agendamento.')
@@ -1156,7 +1112,7 @@ export function BemAvivClientesPage() {
   }
 
   async function removeHistoryRow(rowId: string) {
-    if (!supabase || !ownerUserId || !historyModalClient || !activeCompanyId) return
+    if (!supabase || !ownerUserId || !selectedClient || !activeCompanyId) return
     if (!confirm('EXCLUIR ESTE REGISTRO DE CONTATO?')) return
     let { error } = await supabase
       .from('bem_aviv_client_followups')
@@ -1179,38 +1135,8 @@ export function BemAvivClientesPage() {
       alert(error.message)
       return
     }
-    const rows = await refetchHistoryModalRows(historyModalClient.id)
+    const rows = await fetchHistoryData(selectedClient.id)
     setHistoryModalRows(rows)
-  }
-
-  async function openPedidosModal(client: Cliente) {
-    setPedidosModalClient(client)
-    setPedidosModalRows([])
-    setPedidosDetailOrderId(null)
-    if (!supabase || !ownerUserId || !activeCompanyId) return
-    setPedidosModalLoading(true)
-    const { data, error } = await supabase
-      .from('bem_aviv_sales_orders')
-      .select('id, order_date, document_type, document_number, status, total_amount')
-      .eq('company_id', activeCompanyId)
-      .eq('client_id', client.id)
-      .order('order_date', { ascending: false })
-      .order('document_number', { ascending: false })
-    if (error) {
-      alert(error.message)
-      setPedidosModalRows([])
-      setPedidosModalLoading(false)
-      return
-    }
-    setPedidosModalRows((data as OrderRow[]) ?? [])
-    setPedidosModalLoading(false)
-  }
-
-  function closePedidosModal() {
-    setPedidosModalClient(null)
-    setPedidosModalRows([])
-    setPedidosDetailOrderId(null)
-    setPedidosModalLoading(false)
   }
 
   const pedidosModalStats = useMemo(() => {
@@ -1246,6 +1172,9 @@ export function BemAvivClientesPage() {
     if (error) {
       alert(error.message)
       return
+    }
+    if (selectedClient && selectedClient.id === client.id) {
+      setSelectedClient((prev) => prev ? { ...prev, eko7_presentation_at: nextAt } : null)
     }
     await load()
   }
@@ -1299,6 +1228,9 @@ export function BemAvivClientesPage() {
       if (error) alert(error.message)
     }
     closeClientModal()
+    if (editing && selectedClient && selectedClient.id === editing.id) {
+      await refreshSelectedClient()
+    }
     await load()
   }
 
@@ -1345,28 +1277,665 @@ export function BemAvivClientesPage() {
     else void load()
   }
 
-  function SortHeader({ label, column }: { label: string; column: SortKey }) {
-    const active = sortKey === column
+  function getNextFollowupBadge(client: Cliente) {
+    if (!client.next_followup_at || (client.next_followup_status ?? 'PENDENTE').toUpperCase() !== 'PENDENTE') {
+      return (
+        <span className="text-xs text-slate-400 font-medium">Sem agendamento</span>
+      )
+    }
+
+    const inputDate = toInputDate(client.next_followup_at)
+    const today = todayInputDate()
+    const dDate = new Date(inputDate + 'T12:00:00')
+    const formatted = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(dDate)
+    const parsed = splitFollowupNote(client.next_followup_note)
+    const summary = parsed.summary || 'Follow-up'
+
+    if (inputDate === today) {
+      return (
+        <div className="flex flex-col items-start gap-0.5">
+          <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 animate-pulse">
+            Hoje · {formatted}
+          </span>
+          <span className="max-w-[12rem] truncate text-[10px] text-slate-500" title={summary}>
+            {summary}
+          </span>
+        </div>
+      )
+    }
+
+    if (inputDate < today) {
+      return (
+        <div className="flex flex-col items-start gap-0.5">
+          <span className="inline-flex items-center gap-1 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-800">
+            Atrasado · {formatted}
+          </span>
+          <span className="max-w-[12rem] truncate text-[10px] text-slate-500" title={summary}>
+            {summary}
+          </span>
+        </div>
+      )
+    }
+
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    const tomorrowStr = toInputDate(tomorrow.toISOString())
+    if (inputDate === tomorrowStr) {
+      return (
+        <div className="flex flex-col items-start gap-0.5">
+          <span className="inline-flex items-center gap-1 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-800">
+            Amanhã · {formatted}
+          </span>
+          <span className="max-w-[12rem] truncate text-[10px] text-slate-500" title={summary}>
+            {summary}
+          </span>
+        </div>
+      )
+    }
+
     return (
-      <th scope="col" className="whitespace-nowrap">
-        <button
-          type="button"
-          className="inline-flex items-center gap-1.5 rounded-md px-1 py-0.5 text-left font-semibold text-slate-700 hover:bg-slate-100 hover:text-slate-900"
-          onClick={() => toggleSort(column)}
-          aria-sort={active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
-        >
-          {label}
-          {active ? (
-            sortDir === 'asc' ? (
-              <ArrowUp size={14} className="shrink-0 text-[#185FA5]" aria-hidden />
-            ) : (
-              <ArrowDown size={14} className="shrink-0 text-[#185FA5]" aria-hidden />
+      <div className="flex flex-col items-start gap-0.5">
+        <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-700">
+          {formatted}
+        </span>
+        <span className="max-w-[12rem] truncate text-[10px] text-slate-500" title={summary}>
+          {summary}
+        </span>
+      </div>
+    )
+  }
+
+  function formatLastContact(client: Cliente) {
+    if (!client.last_contact_at) return <span className="text-slate-400">—</span>
+    const inputDate = toInputDate(client.last_contact_at)
+    const today = todayInputDate()
+    
+    if (inputDate === today) {
+      return <span className="text-slate-900 font-medium">Hoje</span>
+    }
+    
+    const dDate = new Date(inputDate + 'T12:00:00')
+    return (
+      <span className="text-slate-700">
+        {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(dDate)}
+      </span>
+    )
+  }
+
+  function renderHistoryTab() {
+    if (!selectedClient) return null
+    return (
+      <div className="space-y-4">
+        {/* Buttons to open inline forms */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="flex-1 inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 transition-colors"
+            onClick={toggleInlineFollowupForm}
+          >
+            <History size={14} strokeWidth={2.5} />
+            {registerInlineOpen && editingHistoryId ? "Novo Contato" : registerInlineOpen ? "Fechar Registro" : "Registrar Contato"}
+          </button>
+          
+          <button
+            type="button"
+            className="flex-1 inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 text-xs font-bold text-sky-700 shadow-2xs hover:bg-sky-100 transition-colors"
+            onClick={toggleInlineScheduleForm}
+          >
+            <CalendarPlus size={14} strokeWidth={2.5} />
+            {scheduleInlineOpen ? "Fechar Agendamento" : "Agendar Próximo"}
+          </button>
+        </div>
+
+        {/* Inline Register Follow-up Form */}
+        {registerInlineOpen && (
+          <form onSubmit={submitInlineFollowup} className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-wide text-slate-700">
+              {editingHistoryId ? 'Editar registro de contato' : 'Registrar novo contato'}
+            </h4>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">Data</label>
+                <input
+                  type="date"
+                  required
+                  value={registerInlineForm.contacted_at}
+                  onChange={(e) => setRegisterInlineForm((prev) => ({ ...prev, contacted_at: e.target.value }))}
+                  className="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs focus:border-[#185FA5] focus:outline-hidden transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">Canal</label>
+                <select
+                  value={registerInlineForm.channel}
+                  onChange={(e) => setRegisterInlineForm((prev) => ({ ...prev, channel: e.target.value }))}
+                  className="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs focus:border-[#185FA5] focus:outline-hidden transition-colors"
+                >
+                  <option value="WHATSAPP">WHATSAPP</option>
+                  <option value="LIGACAO">LIGAÇÃO</option>
+                  <option value="EMAIL">E-MAIL</option>
+                  <option value="OUTRO">OUTRO</option>
+                </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">Resumo curto</label>
+                <input
+                  type="text"
+                  required
+                  value={registerInlineForm.result}
+                  placeholder="Ex: Ligou mas não atendeu, enviou catálogo..."
+                  onChange={(e) => setRegisterInlineForm((prev) => ({ ...prev, result: e.target.value }))}
+                  className="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs focus:border-[#185FA5] focus:outline-hidden transition-colors"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">Detalhes / Observações</label>
+                <textarea
+                  rows={2}
+                  value={registerInlineForm.notes}
+                  placeholder="Observações detalhadas sobre o contato..."
+                  onChange={(e) => setRegisterInlineForm((prev) => ({ ...prev, notes: e.target.value }))}
+                  className="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs focus:border-[#185FA5] focus:outline-hidden transition-colors"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end pt-1">
+              <button
+                type="button"
+                className="rounded border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                onClick={() => {
+                  setEditingHistoryId(null)
+                  setRegisterInlineOpen(false)
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={registerInlineSaving}
+                className="rounded bg-[#185FA5] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#144f8f] disabled:opacity-60"
+              >
+                {registerInlineSaving ? 'Salvando...' : editingHistoryId ? 'Salvar Edição' : 'Registrar'}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* Inline Schedule Form */}
+        {scheduleInlineOpen && (
+          <form onSubmit={submitInlineSchedule} className="rounded-xl border border-sky-200 bg-sky-50/20 p-3.5 shadow-sm space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-wide text-sky-800">
+              {scheduleInlineTarget === 'followup'
+                ? 'Editar agendamento'
+                : scheduleInlineTarget === 'client'
+                  ? 'Editar agendamento ativo'
+                  : 'Agendar próximo contato'}
+            </h4>
+            
+            <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700">
+              <input
+                type="checkbox"
+                checked={scheduleInlineForm.contact_done}
+                onChange={(e) => setScheduleInlineForm((prev) => ({ ...prev, contact_done: e.target.checked }))}
+                className="h-4 w-4 rounded border-slate-300"
+              />
+              Marcar agendamento anterior como Concluído
+            </label>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">Data da Ação</label>
+                <input
+                  type="date"
+                  required
+                  value={scheduleInlineForm.next_followup_at}
+                  onChange={(e) => setScheduleInlineForm((prev) => ({ ...prev, next_followup_at: e.target.value }))}
+                  className="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs focus:border-[#185FA5] focus:outline-hidden transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">Estágio de Relacionamento</label>
+                <select
+                  value={scheduleInlineForm.commercial_stage}
+                  onChange={(e) => setScheduleInlineForm((prev) => ({ ...prev, commercial_stage: e.target.value }))}
+                  className="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs focus:border-[#185FA5] focus:outline-hidden transition-colors"
+                >
+                  {BEM_AVIV_CLIENT_COMMERCIAL_STAGE_OPTIONS.map((stage) => (
+                    <option key={stage} value={stage}>
+                      {stage}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">Resumo (até 60 caracteres)</label>
+                <input
+                  type="text"
+                  maxLength={60}
+                  required
+                  value={scheduleInlineForm.summary}
+                  placeholder="Ex: Telefonar para saber se gostou do travesseiro..."
+                  onChange={(e) => setScheduleInlineForm((prev) => ({ ...prev, summary: e.target.value }))}
+                  className="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs focus:border-[#185FA5] focus:outline-hidden transition-colors"
+                />
+                <p className="mt-1 text-[8px] text-slate-400">{scheduleInlineForm.summary.length}/60</p>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">Mais detalhes</label>
+                <textarea
+                  rows={2}
+                  value={scheduleInlineForm.details}
+                  placeholder="Informações extras ou observações..."
+                  onChange={(e) => setScheduleInlineForm((prev) => ({ ...prev, details: e.target.value }))}
+                  className="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs focus:border-[#185FA5] focus:outline-hidden transition-colors"
+                />
+              </div>
+            </div>
+            
+            <div className="flex gap-2 justify-end pt-1">
+              <button
+                type="button"
+                className="rounded border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                onClick={() => {
+                  setScheduleInlineOpen(false)
+                  setScheduleInlineTarget('new')
+                  setEditingScheduleFollowupId(null)
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={scheduleInlineSaving}
+                className="rounded bg-[#185FA5] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#144f8f] disabled:opacity-60"
+              >
+                {scheduleInlineSaving ? 'Salvando...' : 'Salvar Agendamento'}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* History Timeline list */}
+        <div className="relative border-l border-slate-200 pl-4 ml-2.5 space-y-4">
+          {historyTimeline.map((item) => {
+            const isContact = item.kind === 'contact'
+            const isScheduleActive = item.kind === 'schedule-active'
+            const isScheduleRecord = item.kind === 'schedule-record'
+            
+            // Format icon / indicator color
+            let markerBg = 'bg-slate-200'
+            let markerBorder = 'border-slate-300'
+            if (isScheduleActive) {
+              markerBg = 'bg-amber-500'
+              markerBorder = 'border-amber-600'
+            } else if (isScheduleRecord) {
+              const status = item.status
+              if (status === 'CONCLUIDO') {
+                markerBg = 'bg-emerald-500'
+                markerBorder = 'border-emerald-600'
+              } else if (status === 'PENDENTE') {
+                markerBg = 'bg-amber-500'
+                markerBorder = 'border-amber-600'
+              } else if (status === 'REAGENDADO') {
+                markerBg = 'bg-sky-500'
+                markerBorder = 'border-sky-600'
+              } else {
+                markerBg = 'bg-slate-400'
+                markerBorder = 'border-slate-500'
+              }
+            } else {
+              // standard contact
+              markerBg = 'bg-indigo-500'
+              markerBorder = 'border-indigo-600'
+            }
+
+            return (
+              <div key={item.key} className="relative">
+                {/* Visual marker dot */}
+                <span className={cn(
+                  "absolute -left-[21px] top-1.5 flex h-2.5 w-2.5 rounded-full border shadow-2xs",
+                  markerBg,
+                  markerBorder
+                )} />
+
+                {/* Content Card */}
+                <div className={cn(
+                  "rounded-lg border bg-white p-3 shadow-2xs",
+                  isScheduleActive && "border-amber-200 bg-amber-50/10",
+                  (editingHistoryId === (item.kind === 'contact' ? item.row.id : '') || 
+                   editingScheduleFollowupId === (item.kind === 'schedule-record' ? item.row.id : '')) && "border-[#185FA5] bg-sky-50/20"
+                )}>
+                  {/* Card Header */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-semibold text-slate-800">
+                        {isContact ? `Contato por ${item.row.channel}` : 'Agendamento'}
+                        {isScheduleRecord && (
+                          <span className={cn(
+                            "ml-2 inline-block rounded-full px-1.5 py-0.2 text-[8px] font-bold uppercase",
+                            item.status === 'PENDENTE' && 'bg-amber-100 text-amber-800',
+                            item.status === 'CONCLUIDO' && 'bg-emerald-100 text-emerald-800',
+                            item.status === 'REAGENDADO' && 'bg-sky-100 text-sky-800',
+                            item.status === 'CANCELADO' && 'bg-slate-100 text-slate-600',
+                          )}>
+                            {item.status}
+                          </span>
+                        )}
+                        {isScheduleActive && (
+                          <span className="ml-2 inline-block rounded-full bg-amber-100 px-1.5 py-0.2 text-[8px] font-bold uppercase text-amber-800 animate-pulse">
+                            Ativo
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        {isContact && `${formatDateOnly(item.row.contacted_at)} · Por ${item.row.created_by_name || 'Usuário'}`}
+                        {isScheduleRecord && `${formatDateOnly(item.row.contacted_at)} · Por ${item.row.created_by_name || 'Usuário'}`}
+                        {isScheduleActive && `${formatDateOnly(item.at)} · Pendente no relacionamento`}
+                      </p>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-1">
+                      {isContact && (
+                        <>
+                          <button
+                            type="button"
+                            className="inline-flex h-6 w-6 items-center justify-center rounded border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 active:scale-95"
+                            onClick={() => {
+                              setScheduleInlineOpen(false)
+                              setEditingHistoryId(item.row.id)
+                              setRegisterInlineForm({
+                                contacted_at: toInputDate(item.row.contacted_at),
+                                channel: item.row.channel,
+                                result: item.row.result ?? '',
+                                notes: item.row.notes ?? '',
+                              })
+                              setRegisterInlineOpen(true)
+                            }}
+                            title="Editar contato"
+                          >
+                            <Pencil size={12} strokeWidth={2.2} />
+                          </button>
+                          <button
+                            type="button"
+                            className="inline-flex h-6 w-6 items-center justify-center rounded border border-red-100 bg-white text-red-505 hover:bg-red-50 active:scale-95"
+                            onClick={() => void removeHistoryRow(item.row.id)}
+                            title="Excluir contato"
+                          >
+                            <Trash2 size={12} strokeWidth={2.2} />
+                          </button>
+                        </>
+                      )}
+
+                      {isScheduleActive && (
+                        <>
+                          <button
+                            type="button"
+                            className="inline-flex h-6 items-center gap-0.5 rounded border border-emerald-300 bg-white px-1.5 text-[10px] font-bold text-emerald-800 hover:bg-emerald-50 active:scale-95"
+                            onClick={() => void confirmScheduleDone(item.at)}
+                            title="Confirmar como concluído"
+                          >
+                            <CheckCircle2 size={11} strokeWidth={2.5} />
+                            Feito
+                          </button>
+                          <button
+                            type="button"
+                            className="inline-flex h-6 w-6 items-center justify-center rounded border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 active:scale-95"
+                            onClick={openEditScheduleActive}
+                            title="Editar agendamento"
+                          >
+                            <Pencil size={12} strokeWidth={2.2} />
+                          </button>
+                          <button
+                            type="button"
+                            className="inline-flex h-6 items-center gap-0.5 rounded border border-sky-300 bg-white px-1.5 text-[10px] font-bold text-sky-800 hover:bg-sky-50 active:scale-95"
+                            onClick={openReagendarSchedule}
+                            title="Reagendar contato"
+                          >
+                            <CalendarPlus size={11} strokeWidth={2.5} />
+                            Reagendar
+                          </button>
+                        </>
+                      )}
+
+                      {isScheduleRecord && item.status === 'PENDENTE' && (
+                        <>
+                          <button
+                            type="button"
+                            className="inline-flex h-6 items-center gap-0.5 rounded border border-emerald-300 bg-white px-1.5 text-[10px] font-bold text-emerald-800 hover:bg-emerald-50 active:scale-95"
+                            onClick={() => void confirmScheduleDone(item.row.contacted_at)}
+                            title="Confirmar como concluído"
+                          >
+                            <CheckCircle2 size={11} strokeWidth={2.5} />
+                            Feito
+                          </button>
+                          <button
+                            type="button"
+                            className="inline-flex h-6 w-6 items-center justify-center rounded border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 active:scale-95"
+                            onClick={() => openEditScheduleRecord(item.row)}
+                            title="Editar agendamento"
+                          >
+                            <Pencil size={12} strokeWidth={2.2} />
+                          </button>
+                          <button
+                            type="button"
+                            className="inline-flex h-6 items-center gap-0.5 rounded border border-sky-300 bg-white px-1.5 text-[10px] font-bold text-sky-800 hover:bg-sky-50 active:scale-95"
+                            onClick={() => {
+                              openEditScheduleRecord(item.row)
+                              setScheduleInlineTarget('new')
+                            }}
+                            title="Reagendar contato"
+                          >
+                            <CalendarPlus size={11} strokeWidth={2.5} />
+                            Reagendar
+                          </button>
+                        </>
+                      )}
+
+                      {isScheduleRecord && item.status !== 'PENDENTE' && (
+                        <button
+                          type="button"
+                          className="inline-flex h-6 w-6 items-center justify-center rounded border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 active:scale-95"
+                          onClick={() => openEditScheduleRecord(item.row)}
+                          title="Editar registro do agendamento"
+                        >
+                          <Pencil size={12} strokeWidth={2.2} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Summary / Result & Details */}
+                  <div className="mt-2 text-xs text-slate-700 space-y-1">
+                    <p className="font-semibold normal-case leading-snug">
+                      {isContact ? (item.row.result || 'Sem resumo') : (item.summary || 'Sem resumo')}
+                    </p>
+                    {isContact && item.row.notes && (
+                      <p className="text-[11px] text-slate-500 normal-case bg-slate-50 p-2 rounded whitespace-pre-wrap">
+                        {item.row.notes}
+                      </p>
+                    )}
+                    {isScheduleRecord && item.row.notes && (
+                      <p className="text-[11px] text-slate-500 normal-case bg-slate-50 p-2 rounded whitespace-pre-wrap">
+                        {item.row.notes}
+                      </p>
+                    )}
+                    {isScheduleActive && item.details && (
+                      <p className="text-[11px] text-slate-500 normal-case bg-slate-50 p-2 rounded whitespace-pre-wrap">
+                        {item.details}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
             )
-          ) : (
-            <ArrowUpDown size={14} className="shrink-0 text-slate-400" aria-hidden />
+          })}
+          
+          {historyTimeline.length === 0 && (
+            <p className="text-xs text-slate-400 py-4 text-center">Nenhum registro de contato ou agendamento pendente.</p>
           )}
-        </button>
-      </th>
+        </div>
+      </div>
+    )
+  }
+
+  function renderOrdersTab() {
+    if (!selectedClient) return null
+    return (
+      <div className="space-y-4">
+        {/* Statistics row */}
+        <div className="grid grid-cols-3 gap-2">
+          <div className="rounded-xl border border-slate-200 bg-white p-3 text-center shadow-2xs">
+            <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Total Comprado</p>
+            <p className="font-hub mt-1 text-base font-bold tabular-nums text-slate-900">{formatBRL(pedidosModalStats.total)}</p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-3 text-center shadow-2xs">
+            <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Ticket Médio</p>
+            <p className="font-hub mt-1 text-base font-bold tabular-nums text-slate-900">
+              {pedidosModalStats.media != null ? formatBRL(pedidosModalStats.media) : '—'}
+            </p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-3 text-center shadow-2xs">
+            <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Última Venda</p>
+            <p className="mt-1 text-sm font-semibold text-slate-900">
+              {pedidosModalStats.ultima
+                ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(new Date(pedidosModalStats.ultima + 'T12:00:00'))
+                : '—'}
+            </p>
+          </div>
+        </div>
+
+        {/* Orders Table */}
+        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-2xs">
+          {pedidosModalRows.length === 0 ? (
+            <p className="py-8 text-center text-xs text-slate-500">Nenhum orçamento ou pedido vinculado.</p>
+          ) : (
+            <table className="w-full min-w-[500px] text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50/70 text-left font-bold text-slate-600">
+                  <th className="px-3 py-2">Data</th>
+                  <th className="px-3 py-2">Tipo</th>
+                  <th className="px-3 py-2">Nº documento</th>
+                  <th className="px-3 py-2">Status</th>
+                  <th className="px-3 py-2 text-right">Valor</th>
+                  <th className="px-3 py-2 text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pedidosModalRows.map((o) => (
+                  <tr key={o.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
+                    <td className="whitespace-nowrap px-3 py-2.5 text-slate-700">{o.order_date}</td>
+                    <td className="px-3 py-2.5">
+                      {o.document_type === 'PEDIDO' ? (
+                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-800 border border-emerald-200">
+                          Pedido
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 border border-slate-200">
+                          Orçamento
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 font-medium text-slate-900">{o.document_number ?? '—'}</td>
+                    <td className="px-3 py-2.5 text-slate-600">{o.status}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-right font-medium tabular-nums text-slate-900">
+                      {formatBRL(Number(o.total_amount ?? 0))}
+                    </td>
+                    <td className="px-3 py-2.5 text-right">
+                      <button
+                        type="button"
+                        className="inline-flex h-7 w-7 items-center justify-center rounded border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100 shadow-2xs active:scale-95 transition-all"
+                        title="Ver detalhes do documento"
+                        onClick={() => setPedidosDetailOrderId(o.id)}
+                      >
+                        <Eye size={12} strokeWidth={2.5} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        
+        <p className="text-center text-xs mt-2">
+          <Link
+            to="/bem-aviv/pedidos"
+            state={{ bemAvivPedidosClient: { id: selectedClient.id } }}
+            className="font-semibold text-[#185FA5] hover:underline"
+            onClick={() => setSelectedClient(null)}
+          >
+            Ver todos em Pedidos e Orçamentos →
+          </Link>
+        </p>
+      </div>
+    )
+  }
+
+  function renderInfoTab() {
+    if (!selectedClient) return null
+    return (
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs space-y-4">
+        <h4 className="text-xs font-bold uppercase tracking-wide text-slate-700 border-b border-slate-100 pb-2">Dados Gerais</h4>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">CPF</p>
+            <p className="mt-0.5 font-medium text-slate-900">{formatCpf(selectedClient.cpf) || '—'}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Data de Nascimento</p>
+            <p className="mt-0.5 font-medium text-slate-900">
+              {selectedClient.birth_date
+                ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' }).format(new Date(selectedClient.birth_date + 'T12:00:00'))
+                : '—'}
+            </p>
+          </div>
+          <div className="col-span-2">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">E-mail</p>
+            <p className="mt-0.5 font-medium text-slate-900 normal-case">{selectedClient.email || '—'}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Telefone Primário</p>
+            <p className="mt-0.5 font-medium text-slate-900">{formatPhone(selectedClient.phone_1) || '—'}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Telefone Secundário</p>
+            <p className="mt-0.5 font-medium text-slate-900">{formatPhone(selectedClient.phone_2) || '—'}</p>
+          </div>
+        </div>
+
+        <h4 className="text-xs font-bold uppercase tracking-wide text-slate-700 border-b border-slate-100 pb-2 pt-2">Endereço Completo</h4>
+        <div className="grid grid-cols-3 gap-x-4 gap-y-3 text-xs">
+          <div className="col-span-2">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Logradouro</p>
+            <p className="mt-0.5 font-medium text-slate-900 normal-case">{selectedClient.address_street || '—'}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Número</p>
+            <p className="mt-0.5 font-medium text-slate-900 normal-case">{selectedClient.address_street ? selectedClient.address_number : '—'}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Complemento</p>
+            <p className="mt-0.5 font-medium text-slate-900 normal-case">{selectedClient.address_complement || '—'}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Bairro</p>
+            <p className="mt-0.5 font-medium text-slate-900 normal-case">{selectedClient.address_district || '—'}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">CEP</p>
+            <p className="mt-0.5 font-medium text-slate-900">{formatCep(selectedClient.cep) || '—'}</p>
+          </div>
+          <div className="col-span-2">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Cidade</p>
+            <p className="mt-0.5 font-medium text-slate-900 normal-case">{selectedClient.address_city || '—'}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Estado (UF)</p>
+            <p className="mt-0.5 font-medium text-slate-900">{selectedClient.address_state || '—'}</p>
+          </div>
+        </div>
+      </div>
     )
   }
 
@@ -1400,41 +1969,34 @@ export function BemAvivClientesPage() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-7">
-        <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
-          <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Total</p>
-          <p className="font-hub mt-1 text-[20px] font-bold text-slate-900">{stats.total}</p>
-          <span className="mt-1 inline-block rounded-full bg-slate-100 px-2 py-0.5 text-[8px] text-slate-600">Cadastros</span>
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3.5 shadow-xs">
+          <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Total de Cadastros</p>
+          <p className="font-hub mt-1 text-2xl font-bold text-slate-900">{stats.total}</p>
+          <p className="mt-1 text-[10px] text-slate-500">
+            <span className="font-bold text-slate-700">{stats.prospec}</span> Prospects cadastrados
+          </p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
-          <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Prospecção</p>
-          <p className="font-hub mt-1 text-[20px] font-bold text-slate-900">{stats.prospec}</p>
-          <span className="mt-1 inline-block rounded-full bg-[#FAEEDA] px-2 py-0.5 text-[8px] font-medium text-[#854F0B]">Prospects</span>
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3.5 shadow-xs">
+          <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Clientes Ativos</p>
+          <p className="font-hub mt-1 text-2xl font-bold text-slate-900">{stats.clientesAtivos}</p>
+          <p className="mt-1 text-[10px] text-slate-500">
+            <span className="font-bold text-slate-700">{stats.clienteColchao}</span> Colchão · <span className="font-bold text-slate-700">{stats.clienteDiversos}</span> Diversos · <span className="font-bold text-slate-700">{stats.clienteColchaoDiversos}</span> Mix
+          </p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
-          <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Cliente — colchão</p>
-          <p className="font-hub mt-1 text-[20px] font-bold text-slate-900">{stats.clienteColchao}</p>
-          <span className="mt-1 inline-block rounded-full bg-[#EAF3DE] px-2 py-0.5 text-[8px] font-medium text-[#3B6D11]">Comprou colchão</span>
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3.5 shadow-xs">
+          <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Compraram Colchão</p>
+          <p className="font-hub mt-1 text-2xl font-bold text-slate-900">{stats.clienteColchao + stats.clienteColchaoDiversos}</p>
+          <p className="mt-1 text-[10px] text-slate-500">
+            Total de clientes que adquiriram colchão (Colchão + Mix)
+          </p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
-          <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Cliente — diversos</p>
-          <p className="font-hub mt-1 text-[20px] font-bold text-slate-900">{stats.clienteDiversos}</p>
-          <span className="mt-1 inline-block rounded-full bg-[#E6F1FB] px-2 py-0.5 text-[8px] font-medium text-[#185FA5]">Outros produtos</span>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
-          <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Colchão + diversos</p>
-          <p className="font-hub mt-1 text-[20px] font-bold text-slate-900">{stats.clienteColchaoDiversos}</p>
-          <span className="mt-1 inline-block rounded-full bg-[#EEEDFE] px-2 py-0.5 text-[8px] font-medium text-[#3C3489]">Mix</span>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
-          <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">EKO7 · repique</p>
-          <p className="font-hub mt-1 text-[20px] font-bold text-slate-900">{stats.eko7NaoComprou}</p>
-          <span className="mt-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[8px] font-medium text-amber-800">Apresentado · não comprou</span>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
-          <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">EKO7 · convertidos</p>
-          <p className="font-hub mt-1 text-[20px] font-bold text-slate-900">{stats.eko7Comprou}</p>
-          <span className="mt-1 inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-[8px] font-medium text-emerald-800">Apresentado · comprou</span>
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3.5 shadow-xs">
+          <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Projetos EKO7</p>
+          <p className="font-hub mt-1 text-2xl font-bold text-slate-900">{stats.eko7Apresentado}</p>
+          <p className="mt-1 text-[10px] text-slate-500">
+            <span className="font-bold text-emerald-700">{stats.eko7Comprou}</span> Vendido · <span className="font-bold text-amber-700">{stats.eko7NaoComprou}</span> Repique
+          </p>
         </div>
       </div>
 
@@ -1526,145 +2088,90 @@ export function BemAvivClientesPage() {
           <table>
             <thead>
               <tr>
-                <SortHeader label="Nome" column="full_name" />
-                <SortHeader label="Telefones" column="phones" />
-                <SortHeader label="STATUS" column="client_status" />
-                <th className="text-right">Ações</th>
+                <SortHeader label="Cliente" column="full_name" />
+                <th scope="col" className="text-left font-semibold text-slate-700">Contato</th>
+                <SortHeader label="Status" column="client_status" />
+                <th scope="col" className="text-left font-semibold text-slate-700">Último Contato</th>
+                <th scope="col" className="text-left font-semibold text-slate-700">Próxima Ação</th>
+                <th scope="col" className="text-right font-semibold text-slate-700">Ações</th>
               </tr>
             </thead>
             <tbody>
               {displayedRows.map((r) => {
                 const pal = avatarPalette(r.full_name || '?')
+                const isSelected = selectedClient?.id === r.id
                 return (
-                <tr key={r.id}>
-                  <td>
-                    <div className="flex min-w-0 max-w-[min(720px,55vw)] items-center gap-2.5 xl:max-w-none">
-                      <div
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[8px] font-semibold"
-                        style={{ backgroundColor: pal.bg, color: pal.fg }}
-                      >
-                        {initialsFromName(r.full_name)}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex min-w-0 items-center gap-1.5">
-                          <p className="truncate text-sm font-medium normal-case text-slate-900">{r.full_name}</p>
-                          {clientHadEko7Presentation(r) ? (
-                            <>
+                  <tr
+                    key={r.id}
+                    className={cn(
+                      'cursor-pointer transition-colors hover:bg-slate-50/80 active:bg-slate-100/50',
+                      isSelected && 'bg-sky-50/50 hover:bg-sky-50/80'
+                    )}
+                    onClick={() => void openClientDrawer(r)}
+                  >
+                    <td>
+                      <div className="flex min-w-0 max-w-[min(480px,40vw)] items-center gap-2.5">
+                        <div
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
+                          style={{ backgroundColor: pal.bg, color: pal.fg }}
+                        >
+                          {initialsFromName(r.full_name)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <p className="truncate text-sm font-medium normal-case text-slate-900">{r.full_name}</p>
+                            {clientHadEko7Presentation(r) ? (
                               <span
-                                className="shrink-0 rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-800"
+                                className="shrink-0 rounded bg-violet-100 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-violet-800"
                                 title={`Apresentação EKO7 em ${formatDateOnly(r.eko7_presentation_at)}`}
                               >
                                 EKO7
                               </span>
-                              {clientHasConfirmedPurchase(r) ? (
-                                <span
-                                  className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-800"
-                                  title="Pedido confirmado após apresentação"
-                                >
-                                  Comprou
-                                </span>
-                              ) : (
-                                <span
-                                  className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-900"
-                                  title="Ainda sem pedido confirmado — candidato a repique"
-                                >
-                                  Não comprou
-                                </span>
-                              )}
-                            </>
-                          ) : null}
+                            ) : null}
+                          </div>
+                          {r.email && (
+                            <p className="truncate text-[10px] text-slate-400 normal-case">{r.email}</p>
+                          )}
                         </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="min-w-[9rem] text-xs normal-case text-slate-600">
-                    {[formatPhone(r.phone_1), formatPhone(r.phone_2)].filter(Boolean).join(' / ') || '—'}
-                  </td>
-                  <td>{clientStatusPill(r.client_status)}</td>
-                  <td className="whitespace-nowrap">
-                    <div className="flex max-w-[280px] flex-wrap items-center justify-end gap-1 sm:max-w-none sm:gap-1.5">
-                      <button
-                        type="button"
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-emerald-500 bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 sm:h-10 sm:w-10"
-                        onClick={() => openWhatsapp(r)}
-                        title="Enviar mensagem via WhatsApp"
-                        aria-label="Enviar mensagem via WhatsApp"
-                      >
-                        <MessageCircle size={16} strokeWidth={2.2} />
-                      </button>
-                      <button
-                        type="button"
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-violet-300 bg-white text-violet-800 shadow-sm hover:bg-violet-50 sm:h-10 sm:w-10"
-                        onClick={() => void openHistoryModal(r)}
-                        title="Histórico de follow-up"
-                        aria-label="Histórico de follow-up"
-                      >
-                        <History size={16} strokeWidth={2.2} />
-                      </button>
-                      <button
-                        type="button"
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-amber-300 bg-white text-amber-900 shadow-sm hover:bg-amber-50 sm:h-10 sm:w-10"
-                        onClick={() => void openPedidosModal(r)}
-                        title="Orçamentos e pedidos deste cliente"
-                        aria-label="Orçamentos e pedidos deste cliente"
-                      >
-                        <ClipboardList size={16} strokeWidth={2.2} />
-                      </button>
-                      <button
-                        type="button"
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-sky-300 bg-white text-sky-700 shadow-sm hover:bg-sky-50 sm:h-10 sm:w-10"
-                        onClick={() => openScheduleModal(r)}
-                        title="Agendar follow-up"
-                        aria-label="Agendar follow-up"
-                      >
-                        <CalendarPlus size={16} strokeWidth={2.2} />
-                      </button>
-                      <button
-                        type="button"
-                        className={cn(
-                          'inline-flex h-9 w-9 items-center justify-center rounded-md border shadow-sm sm:h-10 sm:w-10',
-                          clientHadEko7Presentation(r)
-                            ? 'border-violet-400 bg-violet-600 text-white hover:bg-violet-700'
-                            : 'border-violet-200 bg-white text-violet-700 hover:bg-violet-50',
+                    </td>
+                    <td className="text-xs normal-case text-slate-600" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-2">
+                        <span>
+                          {[formatPhone(r.phone_1), formatPhone(r.phone_2)].filter(Boolean).join(' / ') || '—'}
+                        </span>
+                        {(r.phone_1 || r.phone_2) && (
+                          <button
+                            type="button"
+                            className="inline-flex h-6 w-6 items-center justify-center rounded bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 active:scale-95 transition-all"
+                            onClick={() => openWhatsapp(r)}
+                            title="Enviar mensagem via WhatsApp"
+                            aria-label="Enviar mensagem via WhatsApp"
+                          >
+                            <MessageCircle size={13} strokeWidth={2.5} />
+                          </button>
                         )}
-                        onClick={() => void toggleEko7Presentation(r)}
-                        title={
-                          clientHadEko7Presentation(r)
-                            ? `EKO7 apresentado em ${formatDateOnly(r.eko7_presentation_at)} — clique para desmarcar`
-                            : 'Marcar apresentação EKO7 realizada'
-                        }
-                        aria-label={
-                          clientHadEko7Presentation(r) ? 'Desmarcar apresentação EKO7' : 'Marcar apresentação EKO7'
-                        }
-                      >
-                        <Presentation size={16} strokeWidth={2.2} />
-                      </button>
+                      </div>
+                    </td>
+                    <td>{clientStatusPill(r.client_status)}</td>
+                    <td className="text-xs text-slate-600">{formatLastContact(r)}</td>
+                    <td>{getNextFollowupBadge(r)}</td>
+                    <td className="text-right" onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100 sm:h-10 sm:w-10"
-                        onClick={() => openEditClientModal(r)}
-                        title="Editar cliente"
-                        aria-label="Editar cliente"
+                        className="inline-flex h-7 px-2.5 items-center gap-1 rounded border border-slate-200 bg-white text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 active:scale-95 transition-all"
+                        onClick={() => void openClientDrawer(r)}
                       >
-                        <Pencil size={15} strokeWidth={2.2} />
+                        <Eye size={12} strokeWidth={2.5} />
+                        Detalhes
                       </button>
-                      <button
-                        type="button"
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-red-300 bg-white text-red-700 shadow-sm hover:bg-red-50 sm:h-10 sm:w-10"
-                        onClick={() => remove(r.id)}
-                        title="Excluir cliente"
-                        aria-label="Excluir cliente"
-                      >
-                        <Trash2 size={15} strokeWidth={2.2} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+                    </td>
+                  </tr>
                 )
               })}
               {displayedRows.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-8 text-center text-slate-500">
+                  <td colSpan={6} className="py-8 text-center text-slate-500">
                     {rows.length === 0
                       ? 'Nenhum cliente cadastrado.'
                       : 'Nenhum resultado para a pesquisa ou o filtro de status atual.'}
@@ -1845,259 +2352,46 @@ export function BemAvivClientesPage() {
         </div>
       ) : null}
 
-      {scheduleModalClient ? (
+      {/* Backdrop for the Drawer */}
+      {selectedClient ? (
         <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/35 p-3"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="schedule-modal-title"
-        >
-          <div className="w-full max-w-xl rounded-xl border border-slate-200 bg-white p-4 shadow-xl sm:p-5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <h3 id="schedule-modal-title" className="text-lg font-semibold text-slate-900 normal-case">
-                  Agendar follow-up
-                </h3>
-                <p className="text-sm text-slate-500 normal-case">{scheduleModalClient.full_name}</p>
-              </div>
-              <button
-                type="button"
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                onClick={closeScheduleModal}
-                aria-label="Fechar"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={submitScheduleModal} className="mt-4 rounded-lg border border-sky-200 bg-sky-50/40 p-3">
-              <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={scheduleModalForm.contact_done}
-                  onChange={(e) => setScheduleModalForm((prev) => ({ ...prev, contact_done: e.target.checked }))}
-                  className="h-4 w-4 rounded border-slate-300"
-                />
-                Contato realizado
-              </label>
-              <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                <label className="text-xs text-slate-600 sm:col-span-2">
-                  Próximo follow-up
-                  <input
-                    type="date"
-                    required
-                    value={scheduleModalForm.next_followup_at}
-                    onChange={(e) => setScheduleModalForm((prev) => ({ ...prev, next_followup_at: e.target.value }))}
-                    className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
-                  />
-                </label>
-                <label className="text-xs text-slate-600 sm:col-span-2">
-                  Status relacionamento
-                  <select
-                    value={scheduleModalForm.commercial_stage}
-                    onChange={(e) => setScheduleModalForm((prev) => ({ ...prev, commercial_stage: e.target.value }))}
-                    className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
-                  >
-                    {BEM_AVIV_CLIENT_COMMERCIAL_STAGE_OPTIONS.map((stage) => (
-                      <option key={stage} value={stage}>
-                        {stage}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="text-xs text-slate-600 sm:col-span-2">
-                  Resumo (até 60 caracteres)
-                  <input
-                    maxLength={60}
-                    value={scheduleModalForm.summary}
-                    onChange={(e) => setScheduleModalForm((prev) => ({ ...prev, summary: e.target.value }))}
-                    className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
-                  />
-                  <p className="mt-1 text-[8px] text-slate-500">{scheduleModalForm.summary.length}/60</p>
-                </label>
-                <label className="text-xs text-slate-600 sm:col-span-2">
-                  Registro
-                  <textarea
-                    rows={2}
-                    value={scheduleModalForm.details}
-                    onChange={(e) => setScheduleModalForm((prev) => ({ ...prev, details: e.target.value }))}
-                    className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
-                  />
-                </label>
-              </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <button
-                  type="submit"
-                  disabled={scheduleModalSaving}
-                  className="rounded-md bg-[#185FA5] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#144f8f] disabled:opacity-60"
-                >
-                  {scheduleModalSaving ? 'Salvando...' : 'Confirmar agendamento'}
-                </button>
-                <button
-                  type="button"
-                  className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                  onClick={closeScheduleModal}
-                >
-                  Cancelar
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+          className="fixed inset-0 z-40 bg-slate-900/35 backdrop-blur-xs transition-opacity duration-300"
+          onClick={() => setSelectedClient(null)}
+        />
       ) : null}
 
-      {historyModalClient ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/35 p-3">
-          <div className="w-full max-w-5xl rounded-xl border border-slate-200 bg-white p-4 shadow-xl sm:p-5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <h3 className="text-lg font-semibold text-slate-900 normal-case">Histórico de contatos</h3>
-                <p className="text-sm text-slate-500 normal-case">{historyModalClient.full_name}</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="rounded-md bg-[#185FA5] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#144f8f]"
-                  onClick={toggleInlineFollowupForm}
-                >
-                  {registerInlineOpen && editingHistoryId
-                    ? 'Novo contato'
-                    : registerInlineOpen && !editingHistoryId
-                      ? 'Ocultar registro'
-                      : 'Incluir novo follow-up'}
-                </button>
-                <button
-                  type="button"
-                  className="rounded-md border border-sky-300 bg-white px-3 py-1.5 text-sm font-semibold text-sky-700 hover:bg-sky-50"
-                  onClick={toggleInlineScheduleForm}
-                >
-                  Agendar próximo follow-up
-                </button>
-                <button
-                  type="button"
-                  className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                  onClick={() => {
-                    setEditingHistoryId(null)
-                    setHistoryModalClient(null)
+      {/* Details Drawer */}
+      <div
+        className={cn(
+          "fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-xl flex-col border-l border-slate-200 bg-slate-50 shadow-2xl transition-transform duration-300 ease-in-out sm:max-w-2xl",
+          selectedClient ? "translate-x-0" : "translate-x-full"
+        )}
+      >
+        {selectedClient ? (
+          <>
+            {/* Drawer Header */}
+            <div className="flex shrink-0 items-start justify-between border-b border-slate-200 bg-white px-5 py-4 shadow-xs">
+              <div className="flex items-center gap-3">
+                <div
+                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-lg font-bold"
+                  style={{
+                    backgroundColor: avatarPalette(selectedClient.full_name || '?').bg,
+                    color: avatarPalette(selectedClient.full_name || '?').fg,
                   }}
                 >
-                  Fechar
-                </button>
-              </div>
-            </div>
-
-            {registerInlineOpen ? (
-              <form onSubmit={submitInlineFollowup} className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  {editingHistoryId ? 'Editar contato' : 'Registrar novo contato'}
-                </p>
-                <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                  <label className="text-xs text-slate-600">
-                    Data
-                    <input
-                      type="date"
-                      required
-                      value={registerInlineForm.contacted_at}
-                      onChange={(e) => setRegisterInlineForm((prev) => ({ ...prev, contacted_at: e.target.value }))}
-                      className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
-                    />
-                  </label>
-                  <label className="text-xs text-slate-600">
-                    Canal
-                    <select
-                      value={registerInlineForm.channel}
-                      onChange={(e) => setRegisterInlineForm((prev) => ({ ...prev, channel: e.target.value }))}
-                      className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
-                    >
-                      <option value="WHATSAPP">WHATSAPP</option>
-                      <option value="LIGACAO">LIGAÇÃO</option>
-                      <option value="EMAIL">E-MAIL</option>
-                      <option value="OUTRO">OUTRO</option>
-                    </select>
-                  </label>
-                  <label className="text-xs text-slate-600 sm:col-span-2">
-                    Resumo
-                    <input
-                      value={registerInlineForm.result}
-                      onChange={(e) => setRegisterInlineForm((prev) => ({ ...prev, result: e.target.value }))}
-                      className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
-                    />
-                  </label>
-                  <label className="text-xs text-slate-600 sm:col-span-2">
-                    Detalhe
-                    <textarea
-                      rows={2}
-                      value={registerInlineForm.notes}
-                      onChange={(e) => setRegisterInlineForm((prev) => ({ ...prev, notes: e.target.value }))}
-                      className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
-                    />
-                  </label>
+                  {initialsFromName(selectedClient.full_name)}
                 </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <button
-                    type="submit"
-                    disabled={registerInlineSaving}
-                    className="rounded-md bg-[#185FA5] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#144f8f] disabled:opacity-60"
-                  >
-                    {registerInlineSaving ? 'Salvando...' : editingHistoryId ? 'Salvar edição' : 'Salvar contato'}
-                  </button>
-                  {editingHistoryId ? (
-                    <button
-                      type="button"
-                      className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                      onClick={() => {
-                        setEditingHistoryId(null)
-                        setRegisterInlineOpen(false)
-                        setRegisterInlineForm({
-                          contacted_at: todayInputDate(),
-                          channel: 'WHATSAPP',
-                          result: '',
-                          notes: '',
-                        })
-                      }}
-                    >
-                      Cancelar edição
-                    </button>
-                  ) : null}
-                </div>
-              </form>
-            ) : null}
-
-            {scheduleInlineOpen ? (
-              <form onSubmit={submitInlineSchedule} className="mt-4 rounded-lg border border-sky-200 bg-sky-50/40 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                  {scheduleInlineTarget === 'followup'
-                    ? 'Editar agendamento'
-                    : scheduleInlineTarget === 'client'
-                      ? 'Editar agendamento ativo'
-                      : 'Agendar próximo follow-up'}
-                </p>
-                <label className="mt-2 inline-flex items-center gap-2 text-xs font-semibold text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={scheduleInlineForm.contact_done}
-                    onChange={(e) => setScheduleInlineForm((prev) => ({ ...prev, contact_done: e.target.checked }))}
-                    className="h-4 w-4 rounded border-slate-300"
-                  />
-                  Contato realizado
-                </label>
-                <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                  <label className="text-xs text-slate-600 sm:col-span-2">
-                    Próximo follow-up
-                    <input
-                      type="date"
-                      required
-                      value={scheduleInlineForm.next_followup_at}
-                      onChange={(e) => setScheduleInlineForm((prev) => ({ ...prev, next_followup_at: e.target.value }))}
-                      className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
-                    />
-                  </label>
-                  <label className="text-xs text-slate-600 sm:col-span-2">
-                    Status relacionamento
+                <div>
+                  <h3 className="font-hub text-lg font-bold text-slate-900 normal-case leading-snug">
+                    {selectedClient.full_name}
+                  </h3>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    {clientStatusPill(selectedClient.client_status)}
                     <select
-                      value={scheduleInlineForm.commercial_stage}
-                      onChange={(e) => setScheduleInlineForm((prev) => ({ ...prev, commercial_stage: e.target.value }))}
-                      className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+                      value={selectedClient.commercial_stage || 'CONTATO'}
+                      onChange={(e) => void updateCommercialStage(selectedClient.id, e.target.value)}
+                      className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600 outline-hidden hover:bg-slate-50 transition-colors"
+                      title="Estágio Comercial"
                     >
                       {BEM_AVIV_CLIENT_COMMERCIAL_STAGE_OPTIONS.map((stage) => (
                         <option key={stage} value={stage}>
@@ -2105,372 +2399,133 @@ export function BemAvivClientesPage() {
                         </option>
                       ))}
                     </select>
-                  </label>
-                  <label className="text-xs text-slate-600 sm:col-span-2">
-                    Resumo (até 60 caracteres)
-                    <input
-                      maxLength={60}
-                      value={scheduleInlineForm.summary}
-                      onChange={(e) => setScheduleInlineForm((prev) => ({ ...prev, summary: e.target.value }))}
-                      className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
-                    />
-                    <p className="mt-1 text-[8px] text-slate-500">{scheduleInlineForm.summary.length}/60</p>
-                  </label>
-                  <label className="text-xs text-slate-600 sm:col-span-2">
-                    Registro
-                    <textarea
-                      rows={2}
-                      value={scheduleInlineForm.details}
-                      onChange={(e) => setScheduleInlineForm((prev) => ({ ...prev, details: e.target.value }))}
-                      className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
-                    />
-                  </label>
-                </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <button
-                    type="submit"
-                    disabled={scheduleInlineSaving}
-                    className="rounded-md bg-[#185FA5] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#144f8f] disabled:opacity-60"
-                  >
-                    {scheduleInlineSaving ? 'Salvando...' : 'Salvar agendamento'}
-                  </button>
-                </div>
-              </form>
-            ) : null}
-
-            <div className="mt-4 max-h-[65vh] overflow-auto rounded-lg border border-slate-200">
-              {historyModalLoading ? (
-                <p className="p-4 text-sm text-slate-500">Carregando histórico...</p>
-              ) : historyTimeline.length === 0 ? (
-                <p className="p-4 text-sm text-slate-500">Nenhum contato ou agendamento registrado para este cliente.</p>
-              ) : (
-                <table className="min-w-full text-sm">
-                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                    <tr>
-                      <th className="px-3 py-2 text-left">Data</th>
-                      <th className="px-3 py-2 text-left">Tipo</th>
-                      <th className="px-3 py-2 text-left">Status</th>
-                      <th className="px-3 py-2 text-left">Usuário</th>
-                      <th className="px-3 py-2 text-left">Resumo</th>
-                      <th className="px-3 py-2 text-left">Detalhe</th>
-                      <th className="px-3 py-2 text-right">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {historyTimeline.map((item) => {
-                      if (item.kind === 'contact') {
-                        const r = item.row
-                        return (
-                          <tr
-                            key={item.key}
-                            className={cn(
-                              'border-t border-slate-100',
-                              editingHistoryId === r.id && 'bg-sky-50/80',
-                            )}
-                          >
-                            <td className="px-3 py-2 text-slate-700">{formatDateOnly(r.contacted_at)}</td>
-                            <td className="px-3 py-2 text-slate-700">Contato · {r.channel}</td>
-                            <td className="px-3 py-2 text-slate-500">—</td>
-                            <td className="px-3 py-2 text-slate-700">{r.created_by_name || '—'}</td>
-                            <td className="px-3 py-2 text-slate-700">{r.result || '—'}</td>
-                            <td className="px-3 py-2 text-slate-700">{r.notes || '—'}</td>
-                            <td className="px-3 py-2 text-right">
-                              <div className="inline-flex flex-wrap items-center justify-end gap-1">
-                                <button
-                                  type="button"
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
-                                  onClick={() => {
-                                    setScheduleInlineOpen(false)
-                                    setEditingHistoryId(r.id)
-                                    setRegisterInlineForm({
-                                      contacted_at: toInputDate(r.contacted_at),
-                                      channel: r.channel,
-                                      result: r.result ?? '',
-                                      notes: r.notes ?? '',
-                                    })
-                                    setRegisterInlineOpen(true)
-                                  }}
-                                  title="Editar contato"
-                                  aria-label="Editar contato"
-                                >
-                                  <Pencil size={15} strokeWidth={2.2} />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-300 bg-white text-red-700 shadow-sm hover:bg-red-50"
-                                  onClick={() => void removeHistoryRow(r.id)}
-                                  title="Excluir contato"
-                                  aria-label="Excluir contato"
-                                >
-                                  <Trash2 size={15} strokeWidth={2.2} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                      }
-
-                      if (item.kind === 'schedule-active') {
-                        return (
-                          <tr key={item.key} className="border-t border-amber-100 bg-amber-50/50">
-                            <td className="px-3 py-2 font-medium text-slate-800">{formatDateOnly(item.at)}</td>
-                            <td className="px-3 py-2 text-slate-700">Agendamento</td>
-                            <td className="px-3 py-2">
-                              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
-                                {item.status}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2 text-slate-500">—</td>
-                            <td className="px-3 py-2 text-slate-700">{item.summary || '—'}</td>
-                            <td className="px-3 py-2 text-slate-700">{item.details || '—'}</td>
-                            <td className="px-3 py-2 text-right">
-                              <div className="inline-flex flex-wrap items-center justify-end gap-1">
-                                <button
-                                  type="button"
-                                  className="inline-flex h-8 items-center gap-1 rounded-md border border-emerald-300 bg-white px-2 text-xs font-semibold text-emerald-800 shadow-sm hover:bg-emerald-50"
-                                  onClick={() => void confirmScheduleDone(item.at)}
-                                  title="Confirmar realizado"
-                                >
-                                  <CheckCircle2 size={14} strokeWidth={2.2} />
-                                  Feito
-                                </button>
-                                <button
-                                  type="button"
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
-                                  onClick={openEditScheduleActive}
-                                  title="Editar agendamento"
-                                  aria-label="Editar agendamento"
-                                >
-                                  <Pencil size={15} strokeWidth={2.2} />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="inline-flex h-8 items-center gap-1 rounded-md border border-sky-300 bg-white px-2 text-xs font-semibold text-sky-800 shadow-sm hover:bg-sky-50"
-                                  onClick={openReagendarSchedule}
-                                  title="Reagendar"
-                                >
-                                  <CalendarPlus size={14} strokeWidth={2.2} />
-                                  Reagendar
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                      }
-
-                      const r = item.row
-                      const isPending = item.status === 'PENDENTE'
-                      return (
-                        <tr
-                          key={item.key}
-                          className={cn(
-                            'border-t border-slate-100',
-                            isPending && 'bg-amber-50/30',
-                            editingScheduleFollowupId === r.id && 'bg-sky-50/80',
-                          )}
-                        >
-                          <td className="px-3 py-2 text-slate-700">{formatDateOnly(r.contacted_at)}</td>
-                          <td className="px-3 py-2 text-slate-700">Agendamento</td>
-                          <td className="px-3 py-2">
-                            <span
-                              className={cn(
-                                'rounded-full px-2 py-0.5 text-xs font-semibold',
-                                item.status === 'PENDENTE' && 'bg-amber-100 text-amber-800',
-                                item.status === 'CONCLUIDO' && 'bg-emerald-100 text-emerald-800',
-                                item.status === 'REAGENDADO' && 'bg-sky-100 text-sky-800',
-                                item.status === 'CANCELADO' && 'bg-slate-100 text-slate-600',
-                              )}
-                            >
-                              {item.status === 'REAGENDADO' ? 'Reagendado' : item.status}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 text-slate-700">{r.created_by_name || '—'}</td>
-                          <td className="px-3 py-2 text-slate-700">{item.summary || '—'}</td>
-                          <td className="px-3 py-2 text-slate-700">{item.details || '—'}</td>
-                          <td className="px-3 py-2 text-right">
-                            <div className="inline-flex flex-wrap items-center justify-end gap-1">
-                              {isPending ? (
-                                <>
-                                  <button
-                                    type="button"
-                                    className="inline-flex h-8 items-center gap-1 rounded-md border border-emerald-300 bg-white px-2 text-xs font-semibold text-emerald-800 shadow-sm hover:bg-emerald-50"
-                                    onClick={() => void confirmScheduleDone(r.contacted_at)}
-                                    title="Confirmar realizado"
-                                  >
-                                    <CheckCircle2 size={14} strokeWidth={2.2} />
-                                    Feito
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
-                                    onClick={() => openEditScheduleRecord(r)}
-                                    title="Editar agendamento"
-                                    aria-label="Editar agendamento"
-                                  >
-                                    <Pencil size={15} strokeWidth={2.2} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="inline-flex h-8 items-center gap-1 rounded-md border border-sky-300 bg-white px-2 text-xs font-semibold text-sky-800 shadow-sm hover:bg-sky-50"
-                                    onClick={() => {
-                                      openEditScheduleRecord(r)
-                                      setScheduleInlineTarget('new')
-                                    }}
-                                    title="Reagendar"
-                                  >
-                                    <CalendarPlus size={14} strokeWidth={2.2} />
-                                    Reagendar
-                                  </button>
-                                </>
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
-                                  onClick={() => openEditScheduleRecord(r)}
-                                  title="Editar registro"
-                                  aria-label="Editar registro"
-                                >
-                                  <Pencil size={15} strokeWidth={2.2} />
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {pedidosModalClient ? (
-        <div
-          className="fixed inset-0 z-[60] flex items-end justify-center bg-slate-900/45 p-0 sm:items-center sm:p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="pedidos-modal-title"
-        >
-          <div className="flex max-h-[min(92dvh,900px)] w-full max-w-7xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl">
-            <div className="flex shrink-0 flex-wrap items-start gap-3 border-b border-slate-100 bg-slate-50/90 px-4 py-3 sm:px-5">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-start justify-between gap-2">
-                  <h3 id="pedidos-modal-title" className="truncate font-hub text-lg font-semibold text-slate-900 normal-case">
-                    {pedidosModalClient.full_name}
-                  </h3>
-                  <button
-                    type="button"
-                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 sm:hidden"
-                    onClick={closePedidosModal}
-                    aria-label="Fechar"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-                <p className="mt-1 text-xs text-slate-500">Orçamentos e pedidos vinculados a este cliente</p>
-              </div>
-              <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
-                <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-center">
-                  <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Total comprado</p>
-                  <p className="font-hub text-sm font-bold tabular-nums text-slate-900">{formatBRL(pedidosModalStats.total)}</p>
-                </div>
-                <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-center">
-                  <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Média</p>
-                  <p className="font-hub text-sm font-bold tabular-nums text-slate-900">
-                    {pedidosModalStats.media != null ? formatBRL(pedidosModalStats.media) : '—'}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-center">
-                  <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">Última compra</p>
-                  <p className="text-sm font-semibold tabular-nums text-slate-900">
-                    {pedidosModalStats.ultima
-                      ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(pedidosModalStats.ultima + 'T12:00:00'))
-                      : '—'}
-                  </p>
+                  </div>
                 </div>
               </div>
               <button
                 type="button"
-                className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 sm:inline-flex"
-                onClick={closePedidosModal}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 active:scale-95 transition-all"
+                onClick={() => setSelectedClient(null)}
                 aria-label="Fechar"
               >
-                <X size={18} />
+                <X size={16} strokeWidth={2.5} />
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-5">
-              {pedidosModalLoading ? (
-                <p className="py-8 text-center text-sm text-slate-500">Carregando documentos…</p>
-              ) : pedidosModalRows.length === 0 ? (
-                <p className="py-8 text-center text-sm text-slate-500">Nenhum orçamento ou pedido para este cliente.</p>
-              ) : (
-                <div className="overflow-x-auto rounded-lg border border-slate-200">
-                  <table className="w-full min-w-[640px] text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
-                        <th className="px-3 py-2">Data</th>
-                        <th className="px-3 py-2">Tipo</th>
-                        <th className="px-3 py-2">Nº documento</th>
-                        <th className="px-3 py-2">Status</th>
-                        <th className="px-3 py-2 text-right">Valor</th>
-                        <th className="px-3 py-2 text-right">Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pedidosModalRows.map((o) => (
-                        <tr key={o.id} className="border-b border-slate-100 last:border-0">
-                          <td className="whitespace-nowrap px-3 py-2.5 text-slate-800">{o.order_date}</td>
-                          <td className="px-3 py-2.5">
-                            {o.document_type === 'PEDIDO' ? (
-                              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-900">Pedido</span>
-                            ) : (
-                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">Orçamento</span>
-                            )}
-                          </td>
-                          <td className="px-3 py-2.5 font-medium text-slate-900">{o.document_number ?? '—'}</td>
-                          <td className="px-3 py-2.5 text-slate-600">{o.status}</td>
-                          <td className="whitespace-nowrap px-3 py-2.5 text-right font-medium tabular-nums text-slate-900">
-                            {formatBRL(Number(o.total_amount ?? 0))}
-                          </td>
-                          <td className="px-3 py-2.5 text-right">
-                            <button
-                              type="button"
-                              className={pedidosIconBtn}
-                              title="Ver detalhes do documento"
-                              aria-label="Ver detalhes do documento"
-                              onClick={() => setPedidosDetailOrderId(o.id)}
-                            >
-                              <Eye size={15} aria-hidden />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-              <p className="mt-3 text-center text-xs text-slate-500">
-                <Link
-                  to="/bem-aviv/pedidos"
-                  state={{ bemAvivPedidosClient: { id: pedidosModalClient.id } }}
-                  className="font-medium text-[#185FA5] hover:underline"
-                  onClick={closePedidosModal}
-                >
-                  Abrir em Pedidos e orçamentos
-                </Link>
-              </p>
+            {/* Quick Actions Bar */}
+            <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-5 py-3">
+              <button
+                type="button"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white shadow-xs hover:bg-emerald-700 active:scale-95 transition-all"
+                onClick={() => openWhatsapp(selectedClient)}
+              >
+                <MessageCircle size={15} strokeWidth={2.5} />
+                WhatsApp
+              </button>
+              
+              <button
+                type="button"
+                className={cn(
+                  "inline-flex h-9 items-center gap-1.5 rounded-lg border px-3.5 text-sm font-semibold shadow-xs active:scale-95 transition-all",
+                  clientHadEko7Presentation(selectedClient)
+                    ? "border-violet-300 bg-violet-50 text-violet-800 hover:bg-violet-100"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                )}
+                onClick={() => void toggleEko7Presentation(selectedClient)}
+              >
+                <Presentation size={15} strokeWidth={2.5} />
+                {clientHadEko7Presentation(selectedClient) ? "EKO7 Apresentado" : "Marcar Apresentação EKO7"}
+              </button>
+
+              <button
+                type="button"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 text-sm font-semibold text-slate-700 shadow-xs hover:bg-slate-50 active:scale-95 transition-all"
+                onClick={() => openEditClientModal(selectedClient)}
+              >
+                <Pencil size={14} strokeWidth={2.5} />
+                Editar
+              </button>
+
+              <button
+                type="button"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3.5 text-sm font-semibold text-red-600 shadow-xs hover:bg-red-50 active:scale-95 transition-all ml-auto"
+                onClick={() => {
+                  void remove(selectedClient.id)
+                  setSelectedClient(null)
+                }}
+              >
+                <Trash2 size={14} strokeWidth={2.5} />
+                Excluir
+              </button>
             </div>
-          </div>
-        </div>
-      ) : null}
+
+            {/* Tab Switched Header */}
+            <div className="flex shrink-0 border-b border-slate-200 bg-white px-5">
+              <button
+                type="button"
+                className={cn(
+                  "border-b-2 py-3 px-3 text-sm font-semibold transition-all",
+                  drawerTab === 'history'
+                    ? "border-[#185FA5] text-[#185FA5]"
+                    : "border-transparent text-slate-500 hover:text-slate-700"
+                )}
+                onClick={() => setDrawerTab('history')}
+              >
+                Histórico ({historyModalRows.length})
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  "border-b-2 py-3 px-3 text-sm font-semibold transition-all",
+                  drawerTab === 'orders'
+                    ? "border-[#185FA5] text-[#185FA5]"
+                    : "border-transparent text-slate-500 hover:text-slate-700"
+                )}
+                onClick={() => setDrawerTab('orders')}
+              >
+                Pedidos e Orçamentos ({pedidosModalRows.length})
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  "border-b-2 py-3 px-3 text-sm font-semibold transition-all",
+                  drawerTab === 'info'
+                    ? "border-[#185FA5] text-[#185FA5]"
+                    : "border-transparent text-slate-500 hover:text-slate-700"
+                )}
+                onClick={() => setDrawerTab('info')}
+              >
+                Informações
+              </button>
+            </div>
+
+            {/* Drawer Body (Scrollable) */}
+            <div className="flex-1 overflow-y-auto p-5">
+              {drawerLoading ? (
+                <div className="flex h-32 items-center justify-center text-slate-500">
+                  <span>Carregando dados...</span>
+                </div>
+              ) : (
+                <>
+                  {/* Tab 1: Histórico */}
+                  {drawerTab === 'history' && renderHistoryTab()}
+
+                  {/* Tab 2: Pedidos */}
+                  {drawerTab === 'orders' && renderOrdersTab()}
+
+                  {/* Tab 3: Informações */}
+                  {drawerTab === 'info' && renderInfoTab()}
+                </>
+              )}
+            </div>
+          </>
+        ) : null}
+      </div>
 
       <PedidoDetailModal
         orderId={pedidosDetailOrderId}
         companyId={activeCompanyId}
-        clientName={pedidosModalClient?.full_name}
+        clientName={selectedClient?.full_name}
         onClose={() => setPedidosDetailOrderId(null)}
       />
     </div>
