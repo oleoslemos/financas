@@ -29,6 +29,7 @@ import {
   clientHadEko7Presentation,
   clientHasConfirmedPurchase,
   clientMatchesEko7Filter,
+  getDisplayStatusAndTags,
   type BemAvivClientStatusFilter,
   type BemAvivEko7Filter,
 } from '../lib/bemAvivClientStatus'
@@ -302,40 +303,40 @@ function clientMatchesSearch(r: Cliente, raw: string) {
 }
 
 function clientStatusPill(status: string | null) {
-  const s = (status ?? '').trim()
-  if (s === 'PROSPECÇÃO') {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-[#FAEEDA] px-2 py-0.5 text-[8px] font-medium text-[#854F0B]">
-        <span className="h-1 w-1 rounded-full bg-[#EF9F27]" aria-hidden />
-        Prospecção
-      </span>
-    )
-  }
-  if (s === 'CLIENTE - COLCHÃO') {
-    return (
-      <span className="inline-flex max-w-[11rem] items-center gap-1 rounded-full bg-[#EAF3DE] px-2 py-0.5 text-[8px] font-medium text-[#3B6D11]">
-        <span className="h-1 w-1 rounded-full bg-[#639922]" aria-hidden />
-        <span className="truncate">Cliente — colchão</span>
-      </span>
-    )
-  }
-  if (s === 'CLIENTE - DIVERSOS') {
-    return (
-      <span className="inline-flex max-w-[11rem] items-center gap-1 rounded-full bg-[#E6F1FB] px-2 py-0.5 text-[8px] font-medium text-[#185FA5]">
-        <span className="h-1 w-1 rounded-full bg-[#185FA5]" aria-hidden />
-        <span className="truncate">Cliente — diversos</span>
-      </span>
-    )
-  }
-  if (s === 'CLIENTE - COLCHÃO/DIVERSOS') {
-    return (
-      <span className="inline-flex max-w-[12rem] items-center gap-1 rounded-full bg-[#EEEDFE] px-2 py-0.5 text-[8px] font-medium text-[#3C3489]">
-        <span className="h-1 w-1 rounded-full bg-[#6B5CB3]" aria-hidden />
-        <span className="truncate">Colchão + diversos</span>
-      </span>
-    )
-  }
-  return <span className="text-[8px] text-slate-500">{s || '—'}</span>
+  const { status: displayStatus, tags } = getDisplayStatusAndTags(status)
+  
+  const statusEl = displayStatus === 'CLIENTE' ? (
+    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[8px] font-semibold text-emerald-800 border border-emerald-200">
+      <span className="h-1 w-1 rounded-full bg-emerald-500" aria-hidden />
+      Cliente
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1 rounded-full bg-[#FAEEDA] px-2 py-0.5 text-[8px] font-semibold text-[#854F0B] border border-[#F5E1C4]">
+      <span className="h-1 w-1 rounded-full bg-[#EF9F27]" aria-hidden />
+      Prospecção
+    </span>
+  )
+
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {statusEl}
+      {tags.map((tag) => {
+        if (tag === 'COLCHÃO') {
+          return (
+            <span key={tag} className="inline-flex items-center rounded-md bg-[#EAF3DE] px-1.5 py-0.5 text-[8px] font-bold text-[#3B6D11] border border-[#D5E6BE]">
+              Colchão
+            </span>
+          )
+        }
+        // DIVERSOS
+        return (
+          <span key={tag} className="inline-flex items-center rounded-md bg-[#E6F1FB] px-1.5 py-0.5 text-[8px] font-bold text-[#185FA5] border border-[#C5DFF8]">
+            Diversos
+          </span>
+        )
+      })}
+    </div>
+  )
 }
 
 const emptyForm = {
@@ -476,7 +477,20 @@ export function BemAvivClientesPage() {
     const filtered = rows.filter((r) => {
       if (!clientMatchesSearch(r, search)) return false
       if (statusFilter === 'TODOS') return true
-      return (r.client_status ?? '').trim() === statusFilter
+      const statusClean = (r.client_status ?? '').trim().toUpperCase()
+      if (statusFilter === 'PROSPECÇÃO') {
+        return statusClean === 'PROSPECÇÃO'
+      }
+      if (statusFilter === 'CLIENTE - COLCHÃO') {
+        return statusClean === 'CLIENTE - COLCHÃO' || statusClean === 'CLIENTE - COLCHÃO/DIVERSOS'
+      }
+      if (statusFilter === 'CLIENTE - DIVERSOS') {
+        return statusClean === 'CLIENTE - DIVERSOS' || statusClean === 'CLIENTE - COLCHÃO/DIVERSOS'
+      }
+      if (statusFilter === 'CLIENTE - COLCHÃO/DIVERSOS') {
+        return statusClean === 'CLIENTE - COLCHÃO/DIVERSOS'
+      }
+      return statusClean === statusFilter.toUpperCase()
     }).filter((r) => clientMatchesEko7Filter(r, eko7Filter))
     const mul = sortDir === 'asc' ? 1 : -1
     return [...filtered].sort((a, b) => {
@@ -2053,31 +2067,9 @@ export function BemAvivClientesPage() {
           <span className="mx-1 hidden h-6 w-px self-center bg-slate-200 sm:inline" aria-hidden />
           <button
             type="button"
-            className={cn(
-              pillBase,
-              eko7Filter === 'APRESENTADO_NAO_COMPROU' ? 'border-amber-300 bg-amber-50 text-amber-900' : pillIdle,
-            )}
-            onClick={() => setEko7Filter((f) => (f === 'APRESENTADO_NAO_COMPROU' ? 'TODOS' : 'APRESENTADO_NAO_COMPROU'))}
-            title="Apresentação EKO7 feita e ainda sem pedido confirmado — foco para repique"
-          >
-            EKO7 · não comprou
-          </button>
-          <button
-            type="button"
-            className={cn(
-              pillBase,
-              eko7Filter === 'APRESENTADO_COMPROU' ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : pillIdle,
-            )}
-            onClick={() => setEko7Filter((f) => (f === 'APRESENTADO_COMPROU' ? 'TODOS' : 'APRESENTADO_COMPROU'))}
-            title="Apresentação EKO7 feita e já comprou (pedido confirmado)"
-          >
-            EKO7 · comprou
-          </button>
-          <button
-            type="button"
             className={cn(pillBase, eko7Filter === 'APRESENTADO' ? 'border-violet-200 bg-violet-50 text-violet-800' : pillIdle)}
             onClick={() => setEko7Filter((f) => (f === 'APRESENTADO' ? 'TODOS' : 'APRESENTADO'))}
-            title="Todos com apresentação EKO7 (comprou ou não)"
+            title="Todos com apresentação EKO7 realizada"
           >
             EKO7 apresentado
           </button>
@@ -2087,7 +2079,7 @@ export function BemAvivClientesPage() {
             onClick={() => setEko7Filter((f) => (f === 'PENDENTE' ? 'TODOS' : 'PENDENTE'))}
             title="Clientes ainda sem apresentação EKO7"
           >
-            Sem EKO7
+            EKO7 não apresentado
           </button>
         </div>
         <button

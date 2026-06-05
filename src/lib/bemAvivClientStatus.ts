@@ -30,12 +30,30 @@ export function bemAvivClientStatusShortLabel(status: string | null | undefined)
 }
 export type BemAvivClientCommercialStage = (typeof BEM_AVIV_CLIENT_COMMERCIAL_STAGE_OPTIONS)[number]
 
+export interface ClientStatusInfo {
+  status: 'PROSPECÇÃO' | 'CLIENTE'
+  tags: ('COLCHÃO' | 'DIVERSOS')[]
+}
+
+export function getDisplayStatusAndTags(status: string | null | undefined): ClientStatusInfo {
+  const s = (status ?? '').trim().toUpperCase()
+  if (s.startsWith('CLIENTE')) {
+    const tags: ('COLCHÃO' | 'DIVERSOS')[] = []
+    if (s.includes('COLCHÃO') || s.includes('COLCHAO')) {
+      tags.push('COLCHÃO')
+    }
+    if (s.includes('DIVERSOS')) {
+      tags.push('DIVERSOS')
+    }
+    return { status: 'CLIENTE', tags }
+  }
+  return { status: 'PROSPECÇÃO', tags: [] }
+}
+
 export type BemAvivEko7Filter =
   | 'TODOS'
   | 'APRESENTADO'
   | 'PENDENTE'
-  | 'APRESENTADO_NAO_COMPROU'
-  | 'APRESENTADO_COMPROU'
 
 export function clientHadEko7Presentation(client: { eko7_presentation_at?: string | null }): boolean {
   return Boolean(client.eko7_presentation_at)
@@ -52,7 +70,6 @@ export function clientMatchesEko7Filter(
   filter: BemAvivEko7Filter,
 ): boolean {
   const presented = clientHadEko7Presentation(client)
-  const purchased = clientHasConfirmedPurchase(client)
   switch (filter) {
     case 'TODOS':
       return true
@@ -60,11 +77,8 @@ export function clientMatchesEko7Filter(
       return presented
     case 'PENDENTE':
       return !presented
-    case 'APRESENTADO_NAO_COMPROU':
-      return presented && !purchased
-    case 'APRESENTADO_COMPROU':
-      return presented && purchased
     default:
       return true
   }
 }
+

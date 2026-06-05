@@ -13,6 +13,7 @@ import {
   clientHadEko7Presentation,
   clientHasConfirmedPurchase,
   clientMatchesEko7Filter,
+  getDisplayStatusAndTags,
   type BemAvivEko7Filter,
 } from '../lib/bemAvivClientStatus'
 
@@ -34,6 +35,43 @@ type Cliente = {
   next_followup_status: FollowupStatus | null
   eko7_presentation_at: string | null
 }
+
+function clientStatusPill(status: string | null) {
+  const { status: displayStatus, tags } = getDisplayStatusAndTags(status)
+  
+  const statusEl = displayStatus === 'CLIENTE' ? (
+    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[8px] font-semibold text-emerald-800 border border-emerald-200">
+      <span className="h-1 w-1 rounded-full bg-emerald-500" aria-hidden />
+      Cliente
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1 rounded-full bg-[#FAEEDA] px-2 py-0.5 text-[8px] font-semibold text-[#854F0B] border border-[#F5E1C4]">
+      <span className="h-1 w-1 rounded-full bg-[#EF9F27]" aria-hidden />
+      Prospecção
+    </span>
+  )
+
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {statusEl}
+      {tags.map((tag) => {
+        if (tag === 'COLCHÃO') {
+          return (
+            <span key={tag} className="inline-flex items-center rounded-md bg-[#EAF3DE] px-1.5 py-0.5 text-[8px] font-bold text-[#3B6D11] border border-[#D5E6BE]">
+              Colchão
+            </span>
+          )
+        }
+        return (
+          <span key={tag} className="inline-flex items-center rounded-md bg-[#E6F1FB] px-1.5 py-0.5 text-[8px] font-bold text-[#185FA5] border border-[#C5DFF8]">
+            Diversos
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
 
 type FollowupHistoryRow = {
   id: string
@@ -737,10 +775,8 @@ export function BemAvivFollowupPage() {
           <label>EKO7</label>
           <select value={eko7Filter} onChange={(e) => setEko7Filter(e.target.value as BemAvivEko7Filter)}>
             <option value="TODOS">Todos</option>
-            <option value="APRESENTADO_NAO_COMPROU">EKO7 · não comprou (repique)</option>
-            <option value="APRESENTADO_COMPROU">EKO7 · comprou</option>
-            <option value="APRESENTADO">EKO7 apresentado (todos)</option>
-            <option value="PENDENTE">Sem apresentação EKO7</option>
+            <option value="APRESENTADO">EKO7 apresentado</option>
+            <option value="PENDENTE">EKO7 não apresentado</option>
           </select>
         </div>
         <div className="flex items-end">
@@ -776,23 +812,12 @@ export function BemAvivFollowupPage() {
                       <div className="flex flex-wrap items-center gap-1.5">
                         <p className="font-semibold text-slate-900">{row.full_name}</p>
                         {clientHadEko7Presentation(row) ? (
-                          <>
-                            <span
-                              className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-violet-800"
-                              title={`EKO7 em ${formatDateOnly(row.eko7_presentation_at)}`}
-                            >
-                              EKO7
-                            </span>
-                            {clientHasConfirmedPurchase(row) ? (
-                              <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-emerald-800">
-                                Comprou
-                              </span>
-                            ) : (
-                              <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-900">
-                                Não comprou
-                              </span>
-                            )}
-                          </>
+                          <span
+                            className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-violet-800"
+                            title={`EKO7 em ${formatDateOnly(row.eko7_presentation_at)}`}
+                          >
+                            EKO7
+                          </span>
                         ) : null}
                       </div>
                       <p className="mt-0.5 text-sm text-slate-600">{formatPhone(row.phone_1) || formatPhone(row.phone_2) || '—'}</p>
@@ -802,6 +827,10 @@ export function BemAvivFollowupPage() {
                     </span>
                   </div>
                   <dl className="mt-3 grid gap-1.5 text-xs text-slate-600">
+                    <div className="flex justify-between gap-2 items-center">
+                      <dt className="text-slate-500">Status</dt>
+                      <dd className="text-right">{clientStatusPill(row.client_status)}</dd>
+                    </div>
                     <div className="flex justify-between gap-2">
                       <dt className="text-slate-500">Etapa</dt>
                       <dd className="text-right font-medium text-slate-800">{row.commercial_stage || 'CONTATO'}</dd>
@@ -901,19 +930,12 @@ export function BemAvivFollowupPage() {
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span>{row.full_name}</span>
                         {clientHadEko7Presentation(row) ? (
-                          <>
-                            <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-violet-800">EKO7</span>
-                            {clientHasConfirmedPurchase(row) ? (
-                              <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-emerald-800">Comprou</span>
-                            ) : (
-                              <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-900">Não comprou</span>
-                            )}
-                          </>
+                          <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-violet-800">EKO7</span>
                         ) : null}
                       </div>
                     </td>
                     <td>{formatPhone(row.phone_1) || formatPhone(row.phone_2) || '—'}</td>
-                    <td>{row.client_status || '—'}</td>
+                    <td>{clientStatusPill(row.client_status)}</td>
                     <td>{row.commercial_stage || 'CONTATO'}</td>
                     <td>{formatDateOnly(row.last_contact_at)}</td>
                     <td>{formatDateOnly(row.next_followup_at)}</td>
