@@ -485,7 +485,7 @@ export function BemAvivClientesPage() {
         return statusClean === 'CLIENTE - COLCHÃO' || statusClean === 'CLIENTE - COLCHÃO/DIVERSOS'
       }
       if (statusFilter === 'CLIENTE - DIVERSOS') {
-        return statusClean === 'CLIENTE - DIVERSOS' || statusClean === 'CLIENTE - COLCHÃO/DIVERSOS'
+        return statusClean === 'CLIENTE - DIVERSOS'
       }
       if (statusFilter === 'CLIENTE - COLCHÃO/DIVERSOS') {
         return statusClean === 'CLIENTE - COLCHÃO/DIVERSOS'

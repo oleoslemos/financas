@@ -233,8 +233,13 @@ function AppLayoutShell() {
     return 'BA'
   }, [user?.firstName, user?.lastName, user?.primaryEmailAddress?.emailAddress])
 
+  const isBemAviv = currentSystem === 'bem-aviv'
+
   return (
-    <div className="hub-layout flex h-dvh max-h-dvh min-h-0 overflow-hidden bg-slate-100 font-sans text-slate-900">
+    <div className={cn(
+      "hub-layout flex h-dvh max-h-dvh min-h-0 overflow-hidden font-sans text-slate-900 transition-colors",
+      isBemAviv ? "bg-[#FAFBFD]" : "bg-slate-100"
+    )}>
       {mobileMenuOpen ? (
         <button
           type="button"
@@ -245,14 +250,15 @@ function AppLayoutShell() {
       ) : null}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex h-dvh max-h-dvh w-[272px] shrink-0 flex-col border-r border-slate-200 bg-white transition-transform duration-200 ease-out lg:static lg:z-auto lg:h-full lg:w-auto lg:max-h-none lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-50 flex h-dvh max-h-dvh w-[272px] shrink-0 flex-col transition-transform duration-200 ease-out lg:static lg:z-auto lg:h-full lg:w-auto lg:max-h-none lg:translate-x-0',
+          isBemAviv ? 'bg-slate-950 text-slate-400 border-r border-slate-900' : 'bg-white border-r border-slate-200',
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full',
           sidebarCollapsed ? 'lg:w-[56px]' : 'lg:w-[220px]',
           hideBemAvivChrome && 'hidden',
         )}
         aria-label="Menu lateral"
       >
-        <div className="flex min-h-[52px] items-center gap-2 border-b border-slate-200 px-3 py-2">
+        <div className={cn("flex min-h-[52px] items-center gap-2 px-3 py-2", isBemAviv ? "border-b border-slate-900" : "border-b border-slate-200")}>
           <div
             className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md"
             style={{ backgroundColor: hubBrand.primary }}
@@ -267,7 +273,10 @@ function AppLayoutShell() {
           </div>
           <button
             type="button"
-            className="ml-auto hidden h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800 lg:flex"
+            className={cn(
+              "ml-auto hidden h-8 w-8 shrink-0 items-center justify-center rounded-md lg:flex",
+              isBemAviv ? "text-slate-400 hover:bg-slate-900 hover:text-slate-200" : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+            )}
             onClick={() => setSidebarCollapsed((v) => !v)}
             aria-label={sidebarCollapsed ? 'Expandir menu' : 'Recolher menu'}
           >
@@ -275,7 +284,10 @@ function AppLayoutShell() {
           </button>
           <button
             type="button"
-            className="ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800 lg:hidden"
+            className={cn(
+              "ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-md lg:hidden",
+              isBemAviv ? "text-slate-400 hover:bg-slate-900 hover:text-slate-200" : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+            )}
             onClick={() => setMobileMenuOpen(false)}
             aria-label="Fechar menu lateral"
           >
@@ -289,7 +301,10 @@ function AppLayoutShell() {
               {!sidebarCollapsed ? (
                 <button
                   type="button"
-                  className="flex w-full items-center gap-1 rounded-md px-2 pb-1 pt-2 text-left text-sidebar-section font-semibold uppercase tracking-wide text-slate-500 hover:bg-slate-50"
+                  className={cn(
+                    "flex w-full items-center gap-1 rounded-md px-2 pb-1 pt-2 text-left text-sidebar-section font-semibold uppercase tracking-wide transition-colors",
+                    isBemAviv ? "text-slate-500 hover:bg-slate-900/60 hover:text-slate-300" : "text-slate-500 hover:bg-slate-50"
+                  )}
                   onClick={() => {
                     setOpenSectionKey((prev) => (prev === section.key ? null : section.key))
                     if (section.system === 'bem-aviv') {
@@ -316,7 +331,10 @@ function AppLayoutShell() {
                         <li key={`${section.title}-${item.key}`}>
                           <button
                             type="button"
-                            className="flex w-full appearance-none items-center gap-2.5 rounded-lg border-0 bg-transparent px-2 py-1.5 text-left text-sidebar-item font-medium normal-case text-slate-600 outline-none transition-colors hover:bg-slate-50 focus-visible:ring-0"
+                            className={cn(
+                              "flex w-full appearance-none items-center gap-2.5 rounded-lg border-0 bg-transparent px-2 py-1.5 text-left text-sidebar-item font-medium normal-case outline-none transition-colors focus-visible:ring-0",
+                              isBemAviv ? "text-slate-400 hover:bg-slate-900/60 hover:text-slate-200" : "text-slate-600 hover:bg-slate-50"
+                            )}
                             onClick={() =>
                               setOpenTreeGroupKeys((prev) =>
                                 prev.includes(item.key) ? prev.filter((k) => k !== item.key) : [...prev, item.key],
@@ -326,7 +344,7 @@ function AppLayoutShell() {
                             aria-controls={`sidebar-group-${item.key}`}
                           >
                             {item.icon ? (
-                              <span className="sb-ico flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md text-slate-600 transition-colors [&_svg]:stroke-[2]">
+                              <span className={cn("sb-ico flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md transition-colors [&_svg]:stroke-[2]", isBemAviv ? "text-slate-400" : "text-slate-600")}>
                                 <item.icon size={14} aria-hidden />
                               </span>
                             ) : null}
@@ -346,10 +364,14 @@ function AppLayoutShell() {
                                     title={sidebarCollapsed ? child.label : undefined}
                                     className={({ isActive }) =>
                                       cn(
-                                        'flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sidebar-item font-medium normal-case transition-colors',
+                                        'flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sidebar-item font-medium normal-case transition-all duration-150',
                                         isActive
-                                          ? 'bg-[#E6F1FB] font-semibold text-[#185FA5] [&>.sb-ico]:bg-[#185FA5] [&>.sb-ico]:text-white'
-                                          : 'text-slate-600 hover:bg-slate-50',
+                                          ? isBemAviv
+                                            ? 'bg-sky-500/10 font-semibold text-sky-400 border-l-2 border-sky-500 rounded-l-none pl-[6px] [&>.sb-ico]:text-sky-400'
+                                            : 'bg-[#E6F1FB] font-semibold text-[#185FA5] [&>.sb-ico]:bg-[#185FA5] [&>.sb-ico]:text-white'
+                                          : isBemAviv
+                                            ? 'text-slate-400 hover:bg-slate-900/60 hover:text-slate-200'
+                                            : 'text-slate-600 hover:bg-slate-50',
                                       )
                                     }
                                   >
@@ -376,10 +398,14 @@ function AppLayoutShell() {
                           title={sidebarCollapsed ? item.label : undefined}
                           className={({ isActive }) =>
                             cn(
-                              'flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sidebar-item font-medium normal-case transition-colors',
+                              'flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sidebar-item font-medium normal-case transition-all duration-150',
                               isActive
-                                ? 'bg-[#E6F1FB] font-semibold text-[#185FA5] [&>.sb-ico]:bg-[#185FA5] [&>.sb-ico]:text-white'
-                                : 'text-slate-600 hover:bg-slate-50',
+                                ? isBemAviv
+                                  ? 'bg-sky-500/10 font-semibold text-sky-400 border-l-2 border-sky-500 rounded-l-none pl-[6px] [&>.sb-ico]:text-sky-400'
+                                  : 'bg-[#E6F1FB] font-semibold text-[#185FA5] [&>.sb-ico]:bg-[#185FA5] [&>.sb-ico]:text-white'
+                                : isBemAviv
+                                  ? 'text-slate-400 hover:bg-slate-900/60 hover:text-slate-200'
+                                  : 'text-slate-600 hover:bg-slate-50',
                             )
                           }
                         >
@@ -402,7 +428,10 @@ function AppLayoutShell() {
       </aside>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex h-[52px] shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 lg:px-5">
+        <header className={cn(
+          "flex h-[52px] shrink-0 items-center gap-3 border-b px-4 lg:px-5 transition-colors duration-200",
+          isBemAviv ? "border-slate-200/50 bg-white/70 backdrop-blur-md" : "border-slate-200 bg-white"
+        )}>
           <button
             type="button"
             className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 lg:hidden"
@@ -432,7 +461,10 @@ function AppLayoutShell() {
             </label>
           ) : null}
           <div className="ml-auto flex items-center gap-2">
-            <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-1.5 py-1 sm:px-2">
+            <div className={cn(
+              "flex items-center gap-2 rounded-lg border px-1.5 py-1 sm:px-2 transition-all duration-200",
+              isBemAviv ? "border-slate-200/50 bg-white/50 backdrop-blur-sm" : "border-slate-200 bg-slate-50"
+            )}>
               <div
                 className="flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-full text-[8px] font-semibold text-white"
                 style={{ backgroundColor: hubBrand.primary }}
@@ -450,7 +482,12 @@ function AppLayoutShell() {
             </div>
             <button
               type="button"
-              className="relative flex h-[30px] w-[30px] items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+              className={cn(
+                "relative flex h-[30px] w-[30px] items-center justify-center rounded-lg border text-slate-600 transition-colors duration-200",
+                isBemAviv 
+                  ? "border-slate-200/50 bg-white/50 hover:bg-white/80" 
+                  : "border-slate-200 bg-slate-50 hover:bg-slate-100"
+              )}
               aria-label="Notificações (em breve)"
               disabled
             >
@@ -463,7 +500,10 @@ function AppLayoutShell() {
           </div>
         </header>
 
-        <main className="hub-content min-h-0 flex-1 overflow-y-auto bg-slate-100 p-3 normal-case sm:p-4 lg:p-5">
+        <main className={cn(
+          "hub-content min-h-0 flex-1 overflow-y-auto p-3 normal-case sm:p-4 lg:p-5 transition-colors duration-200",
+          isBemAviv ? "bg-[#FAFBFD]/60" : "bg-slate-100"
+        )}>
           {location.pathname.startsWith('/bem-aviv') && cannotListCompanyMembership ? (
             <div
               className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm text-amber-950 shadow-sm"

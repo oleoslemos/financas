@@ -809,43 +809,45 @@ export function BemAvivHomePage() {
 
   return (
     <div className="w-full min-w-0 max-w-none space-y-8 normal-case">
-      <header className="flex flex-wrap items-start gap-4">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-700 ring-1 ring-sky-200/60">
-          <Building2 size={26} strokeWidth={1.75} aria-hidden />
-        </div>
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{"EKO'7 — Visão geral"}</h1>
-          <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-600">
-            {representante ? 'Meta global de vendas' : 'Meta anual de vendas'}, acompanhamento comercial e follow-up.
-            {activeCompany ? (
-              <>
-                {' '}
-                <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-800">
-                  {companyKindLabel(activeCompany.company_kind)}
-                </span>
-              </>
-            ) : null}
-          </p>
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200/40 pb-5">
+        <div className="flex flex-wrap items-start gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 text-sky-700 ring-1 ring-sky-500/10">
+            <Building2 size={26} strokeWidth={1.75} aria-hidden />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">{"EKO'7 — Visão geral"}</h1>
+            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-500">
+              {representante ? 'Meta global de vendas' : 'Meta anual de vendas'}, acompanhamento comercial e follow-up.
+              {activeCompany ? (
+                <>
+                  {' '}
+                  <span className="inline-flex items-center rounded-full bg-sky-500/10 px-2.5 py-0.5 text-xs font-semibold text-sky-850">
+                    {companyKindLabel(activeCompany.company_kind)}
+                  </span>
+                </>
+              ) : null}
+            </p>
+          </div>
         </div>
       </header>
 
       {!supabase || !ownerUserId ? (
-        <p className="text-sm text-slate-600">Conectando ao Supabase…</p>
+        <p className="text-sm text-slate-500 animate-pulse">Conectando ao Supabase…</p>
       ) : !activeCompanyId && companyLoading ? (
-        <p className="text-sm text-slate-600">Carregando empresa…</p>
+        <p className="text-sm text-slate-500 animate-pulse">Carregando empresa…</p>
       ) : !activeCompanyId ? (
-        <p className="text-sm text-slate-600">Nenhuma empresa disponível para esta conta.</p>
+        <p className="text-sm text-slate-500">Nenhuma empresa disponível para esta conta.</p>
       ) : loading ? (
-        <p className="text-sm text-slate-500">Carregando indicadores…</p>
+        <p className="text-sm text-slate-400 animate-pulse">Carregando indicadores…</p>
       ) : (
         <>
           <section className="flex justify-end">
-            <label className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+            <label className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
               Período métricas
               <select
                 value={metricsPeriod}
                 onChange={(e) => setMetricsPeriod(e.target.value as MetricsPeriod)}
-                className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700"
+                className="rounded-lg border border-slate-200 bg-white/60 backdrop-blur-sm px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm outline-none focus:border-[#185FA5] focus:ring-1 focus:ring-[#185FA5]/30 transition-all cursor-pointer"
               >
                 <option value="TODO">Todo período</option>
                 <option value="MES_ATUAL">Mês atual</option>
@@ -857,43 +859,43 @@ export function BemAvivHomePage() {
             </label>
           </section>
 
-          <section className="grid gap-4 md:grid-cols-2">
-            <Card className="border-0 shadow-md ring-1 ring-slate-100/90 transition-shadow hover:shadow-lg min-w-0">
-              <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
-                <CardTitle className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <section className="grid gap-6 md:grid-cols-2">
+            <Card className="border border-slate-200/50 bg-white/70 backdrop-blur-md shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 min-w-0">
+              <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
+                <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-450">
                   {representante ? 'Meta global' : `Meta anual ${goalYear}`}
                 </CardTitle>
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-50 text-[#185FA5] ring-1 ring-sky-100">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#185FA5]/10 text-[#185FA5] ring-1 ring-[#185FA5]/10">
                   <Target size={18} aria-hidden />
                 </span>
               </CardHeader>
               <CardContent className="space-y-4 pt-0">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-100 pb-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-100/60 pb-4">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                       {representante ? 'Valor da meta global' : 'Valor da meta anual'}
                     </p>
-                    <p className="mt-1 font-hub text-2xl font-bold tabular-nums text-slate-900">{formatBRL(annualGoalNum)}</p>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 font-sans text-3xl font-extrabold tracking-tight tabular-nums text-slate-900">{formatBRL(annualGoalNum)}</p>
+                    <p className="mt-1.5 text-xs text-slate-500 font-medium">
                       {representante ? (
                         <>
-                          Vendido acumulado (todo o histórico): <strong>{formatBRL(soldForProgress)}</strong>
+                          Vendido acumulado (todo o histórico): <strong className="text-slate-800 font-semibold">{formatBRL(soldForProgress)}</strong>
                         </>
                       ) : (
                         <>
-                          Vendido no ano ({goalYear}) até agora: <strong>{formatBRL(soldForProgress)}</strong>
+                          Vendido no ano ({goalYear}) até agora: <strong className="text-slate-800 font-semibold">{formatBRL(soldForProgress)}</strong>
                         </>
                       )}
                     </p>
                   </div>
                   {!representante ? (
                     <div className="flex items-center gap-2">
-                      <label className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                         Ano da meta
                         <select
                           value={goalYear}
                           onChange={(e) => setGoalYear(Number(e.target.value))}
-                          className="mt-1 block rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm font-medium text-slate-800"
+                          className="mt-1 block rounded-lg border border-slate-200 bg-white/85 px-2.5 py-1 text-sm font-semibold text-slate-800 shadow-xs outline-none focus:border-[#185FA5] transition-all cursor-pointer"
                         >
                           {[goalYear - 1, goalYear, goalYear + 1].map((y) => (
                             <option key={y} value={y}>
@@ -906,29 +908,29 @@ export function BemAvivHomePage() {
                   ) : null}
                 </div>
 
-                <div className="border-b border-slate-100 pb-4">
+                <div className="border-b border-slate-100/60 pb-4">
                   <div className="mb-2 flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Progresso no ano</span>
-                    <span className="text-sm font-semibold tabular-nums text-[#185FA5]">{progressPct.toFixed(1)}%</span>
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Progresso no ano</span>
+                    <span className="text-sm font-bold tabular-nums text-[#185FA5]">{progressPct.toFixed(1)}%</span>
                   </div>
-                  <Progress value={progressPct} className="h-2.5 bg-slate-100" />
-                  <p className="mt-2 text-xs text-slate-500">
+                  <Progress value={progressPct} className="h-2 bg-slate-100 rounded-full [&>div]:bg-[#185FA5]" />
+                  <p className="mt-2.5 text-xs text-slate-500 font-medium">
                     {annualGoalNum > 0 && soldForProgress >= annualGoalNum ? (
-                      <span className="font-medium text-emerald-700">
-                        {representante ? 'Meta global atingida.' : 'Meta anual atingida.'}
+                      <span className="font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
+                        {representante ? '🎉 Meta global atingida!' : '🎉 Meta anual atingida!'}
                       </span>
                     ) : (
                       <>
-                        Faltam <strong>{formatBRL(Math.max(0, annualGoalNum - soldForProgress))}</strong> para atingir a{' '}
+                        Faltam <strong className="text-slate-700 font-semibold">{formatBRL(Math.max(0, annualGoalNum - soldForProgress))}</strong> para atingir a{' '}
                         {representante ? 'meta global' : 'meta anual'}
                       </>
                     )}
                   </p>
                   {globalGoalReached ? (
-                    <p className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50/90 px-3 py-2 text-xs leading-relaxed text-emerald-900">
+                    <p className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50/60 px-3.5 py-2.5 text-xs leading-relaxed text-emerald-950 shadow-xs">
                       Parabéns — meta global concluída. Para operar como distribuidor (com metas mensais de
                       planejamento), altere o tipo em{' '}
-                      <Link to="/bem-aviv/empresa" className="font-semibold text-emerald-800 underline">
+                      <Link to="/bem-aviv/empresa" className="font-semibold text-emerald-800 hover:text-emerald-950 underline transition-colors">
                         Dados da empresa
                       </Link>
                       .
@@ -936,8 +938,8 @@ export function BemAvivHomePage() {
                   ) : null}
                 </div>
 
-                <div className="flex justify-between items-center pt-2">
-                  <span className="text-xs text-slate-500">
+                <div className="flex justify-between items-center pt-1">
+                  <span className="text-[11px] text-slate-400 font-medium max-w-[65%]">
                     {representante
                       ? 'Representante: apenas meta global (sem divisão por ano ou por mês).'
                       : 'Distribuidor: meta anual e metas mensais de planejamento.'}
@@ -945,53 +947,55 @@ export function BemAvivHomePage() {
                   <Button
                     type="button"
                     variant="secondary"
-                    className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5"
+                    className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 border border-slate-200/80 hover:bg-slate-50 hover:text-slate-800 rounded-lg transition-all"
                     onClick={() => setIsGoalsModalOpen(true)}
                   >
-                    <Pencil size={14} />
+                    <Pencil size={13} />
                     Configurar Metas
                   </Button>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border-0 shadow-md ring-1 ring-slate-100/90 transition-shadow hover:shadow-lg min-w-0">
-              <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
-                <CardTitle className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total vendido (pedidos)</CardTitle>
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100">
+            <Card className="border border-slate-200/50 bg-white/70 backdrop-blur-md shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 min-w-0">
+              <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
+                <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-450">Total vendido (pedidos)</CardTitle>
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 ring-1 ring-emerald-500/10">
                   <TrendingUp size={18} aria-hidden />
                 </span>
               </CardHeader>
-              <CardContent className="space-y-2 pt-0">
-                <p className="font-hub text-2xl font-bold tracking-tight text-slate-900">{formatBRL(totalSold)}</p>
-                <p className="text-xs leading-relaxed text-slate-500">
-                  Soma dos pedidos com status <strong className="font-semibold text-slate-700">Finalizado</strong> ou{' '}
-                  <strong className="font-semibold text-slate-700">Entregue</strong> no período de {periodLabel} (valor líquido do documento).
+              <CardContent className="space-y-3 pt-0">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Faturamento Realizado</p>
+                  <p className="mt-1 font-sans text-3xl font-extrabold tracking-tight tabular-nums text-slate-900">{formatBRL(totalSold)}</p>
+                </div>
+                <p className="text-xs leading-relaxed text-slate-500 font-medium border-b border-slate-100/60 pb-3">
+                  Soma dos pedidos com status <strong className="font-semibold text-slate-850">Finalizado</strong> ou{' '}
+                  <strong className="font-semibold text-slate-850">Entregue</strong> no período de {periodLabel}.
                 </p>
-                <p className="border-t border-slate-100 pt-2 text-xs text-slate-600">
-                  Pedidos em aberto (status Aberto):{' '}
-                  <strong className="font-hub tabular-nums font-semibold text-slate-900">{openOrdersCount}</strong>{' '}
-                  — Valor:{' '}
-                  <strong className="font-hub tabular-nums font-semibold text-slate-900">{formatBRL(openOrdersAmount)}</strong>
-                </p>
-                <p className="text-xs text-slate-600">
-                  Ticket médio (Finalizado/Entregue):{' '}
-                  <strong className="font-hub tabular-nums font-semibold text-slate-900">{formatBRL(avgTicket)}</strong>
-                </p>
-                <p className="text-xs text-slate-600">
-                  Projeção (confirmado + em aberto):{' '}
-                  <strong className="font-hub tabular-nums font-semibold text-slate-900">{formatBRL(totalSold + openOrdersAmount)}</strong>
-                </p>
+                <div className="space-y-1.5 pt-1 text-xs">
+                  <p className="text-slate-500 font-medium flex justify-between">
+                    <span>Pedidos em aberto (status Aberto): <strong className="font-semibold text-slate-700">{openOrdersCount}</strong></span>
+                    <span className="font-semibold text-slate-800 tabular-nums">{formatBRL(openOrdersAmount)}</span>
+                  </p>
+                  <p className="text-slate-500 font-medium flex justify-between">
+                    <span>Ticket médio (Finalizado/Entregue):</span>
+                    <strong className="font-semibold text-slate-800 tabular-nums">{formatBRL(avgTicket)}</strong>
+                  </p>
+                  <p className="text-slate-500 font-medium flex justify-between border-t border-slate-100/60 pt-2">
+                    <span className="font-semibold text-slate-750">Projeção (confirmado + em aberto):</span>
+                    <strong className="font-bold text-[#185FA5] tabular-nums">{formatBRL(totalSold + openOrdersAmount)}</strong>
+                  </p>
+                </div>
               </CardContent>
             </Card>
           </section>
 
-          <Card className="border-0 shadow-md ring-1 ring-slate-100/90">
-            <CardHeader className="pb-2">
-              <CardTitle className="font-hub text-base font-semibold text-slate-900">Resultado mês a mês (pedidos)</CardTitle>
-              <p className="mt-1 text-xs text-slate-500">
-                Empilhado: confirmado (Finalizado/Entregue) em azul escuro na base; pedidos em aberto em azul claro só no topo do mês em que
-                existirem.
+          <Card className="border border-slate-200/50 bg-white/70 backdrop-blur-md shadow-sm transition-all duration-200 hover:shadow-md">
+            <CardHeader className="pb-3">
+              <CardTitle className="font-sans text-base font-bold text-slate-900">Resultado mês a mês (pedidos)</CardTitle>
+              <p className="mt-1 text-xs text-slate-500 font-medium">
+                Empilhado: confirmado (Finalizado/Entregue) em azul escuro na base; pedidos em aberto em azul claro no topo do mês correspondente.
               </p>
             </CardHeader>
             <CardContent className="pt-0">
@@ -1037,26 +1041,26 @@ export function BemAvivHomePage() {
             </CardContent>
           </Card>
 
-          <section className="grid gap-4 xl:grid-cols-2">
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
-                <h2 className="font-hub text-sm font-semibold text-slate-900">Agenda por dia</h2>
+          <section className="grid gap-6 xl:grid-cols-2">
+            <div className="rounded-xl border border-slate-200/50 bg-white/70 backdrop-blur-md p-4 shadow-sm sm:p-5 transition-all duration-200 hover:shadow-md">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100/60 pb-3">
+                <h2 className="font-sans text-sm font-bold text-slate-900">Agenda por dia</h2>
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={() => shiftCalendarMonth(-1)}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200/80 bg-white/60 text-slate-700 shadow-xs hover:bg-slate-50 transition-colors cursor-pointer"
                     aria-label="Mês anterior"
                   >
                     <ChevronLeft size={16} />
                   </button>
-                  <span className="min-w-[8.5rem] text-center text-xs font-medium capitalize text-slate-800 sm:min-w-[9.5rem] sm:text-sm">
+                  <span className="min-w-[8.5rem] text-center text-xs font-semibold capitalize text-slate-800 sm:min-w-[9.5rem] sm:text-sm">
                     {calendarTitle}
                   </span>
                   <button
                     type="button"
                     onClick={() => shiftCalendarMonth(1)}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200/80 bg-white/60 text-slate-700 shadow-xs hover:bg-slate-50 transition-colors cursor-pointer"
                     aria-label="Próximo mês"
                   >
                     <ChevronRight size={16} />
@@ -1064,7 +1068,7 @@ export function BemAvivHomePage() {
                   <button
                     type="button"
                     onClick={goToCurrentMonth}
-                    className="rounded-md border border-[#185FA5]/40 bg-[#E6F1FB] px-2.5 py-1 text-[9px] font-semibold text-[#185FA5] hover:bg-[#d4e8f8] sm:px-3 sm:py-1.5 sm:text-xs"
+                    className="rounded-lg border border-[#185FA5]/20 bg-[#185FA5]/10 px-2.5 py-1 text-[9px] font-bold text-[#185FA5] hover:bg-[#185FA5]/25 shadow-xs transition-all cursor-pointer sm:px-3 sm:py-1.5 sm:text-xs"
                   >
                     Mês atual
                   </button>
@@ -1073,7 +1077,7 @@ export function BemAvivHomePage() {
 
               <div className="mt-4 flex flex-col gap-5 lg:flex-row lg:items-start lg:gap-6">
                 <div className="mx-auto w-full max-w-[300px] shrink-0 sm:max-w-[320px] lg:mx-0">
-                  <div className="grid grid-cols-7 gap-0.5 text-center text-[8px] font-semibold text-slate-500">
+                  <div className="grid grid-cols-7 gap-0.5 text-center text-[9px] font-bold tracking-wider uppercase text-slate-400">
                     {WEEKDAYS_SHORT.map((w) => (
                       <div key={w} className="py-1">
                         {w}
@@ -1095,16 +1099,19 @@ export function BemAvivHomePage() {
                           type="button"
                           onClick={() => setSelectedDay((prev) => (prev === key ? null : key))}
                           className={cn(
-                            'relative flex aspect-square min-h-[2.15rem] flex-col items-center justify-center rounded-md border text-xs font-medium transition-colors sm:min-h-[2.3rem]',
+                            'relative flex aspect-square min-h-[2.15rem] flex-col items-center justify-center rounded-lg border text-xs font-semibold transition-all duration-150 cursor-pointer sm:min-h-[2.3rem]',
                             isSel
-                            ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                              : 'border-slate-200 bg-slate-50/80 text-slate-800 hover:border-slate-300 hover:bg-white',
-                            isToday && !isSel && 'ring-1 ring-[#185FA5]/40',
+                              ? 'border-emerald-600 bg-emerald-600 text-white shadow-sm font-bold scale-105'
+                              : 'border-slate-100 bg-slate-50/35 text-slate-700 hover:border-slate-200 hover:bg-white',
+                            isToday && !isSel && 'ring-2 ring-[#185FA5]/35 text-[#185FA5] font-bold',
                           )}
                         >
                           <span>{cell.date.getDate()}</span>
                           {n > 0 ? (
-                            <span className="absolute bottom-0.5 right-0.5 flex h-3 min-w-[0.65rem] items-center justify-center rounded-full bg-[#185FA5] px-0.5 text-[6px] font-bold leading-none text-white sm:h-3.5 sm:text-[7px]">
+                            <span className={cn(
+                              "absolute bottom-0.5 right-0.5 flex h-3.5 min-w-[0.75rem] items-center justify-center rounded-full px-1 text-[7px] font-extrabold leading-none transition-colors",
+                              isSel ? "bg-white text-emerald-700" : "bg-[#185FA5] text-white"
+                            )}>
                               {n}
                             </span>
                           ) : null}
@@ -1114,27 +1121,27 @@ export function BemAvivHomePage() {
                   </div>
                 </div>
 
-                <div className="min-w-0 flex-1 rounded-lg border border-slate-100 bg-slate-50/80 p-3 sm:p-4">
+                <div className="min-w-0 flex-1 rounded-xl border border-slate-200/40 bg-slate-50/30 p-3 sm:p-4 backdrop-blur-xs">
                   {agendaRows.length === 0 ? (
-                    <p className="mt-3 text-sm text-slate-600">
+                    <p className="mt-3 text-sm text-slate-500 font-medium">
                       {selectedDay
                         ? 'Nenhum follow-up pendente agendado para este dia.'
                         : 'Nenhum follow-up pendente agendado para este mês.'}
                     </p>
                   ) : (
-                    <ul className="mt-3 max-h-[min(420px,55vh)] divide-y divide-slate-200 overflow-y-auto rounded-lg border border-slate-200 bg-white">
+                    <ul className="mt-3 max-h-[min(420px,55vh)] divide-y divide-slate-100 overflow-y-auto rounded-xl border border-slate-200 bg-white/85 shadow-xs">
                       {agendaRows.map((c) => (
-                        <li key={c.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-3 py-2.5 text-sm">
-                        <span className="min-w-0 truncate font-medium text-slate-900">{c.full_name}</span>
-                          <span className="text-right text-xs text-slate-500">{formatDateOnly(c.next_followup_at)}</span>
+                        <li key={c.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-3 py-2.5 text-sm hover:bg-slate-50/30">
+                          <span className="min-w-0 truncate font-semibold text-slate-900">{c.full_name}</span>
+                          <span className="text-right text-xs text-slate-500 tabular-nums">{formatDateOnly(c.next_followup_at)}</span>
                           <button
                             type="button"
                             onClick={() => void openHistoryModal(c)}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-[#185FA5] hover:bg-sky-50"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200/60 bg-white/60 text-[#185FA5] hover:bg-sky-50 transition-colors shadow-xs cursor-pointer"
                             title={`Visualizar histórico — ${c.full_name}`}
                             aria-label={`Visualizar histórico — ${c.full_name}`}
                           >
-                            <History size={16} />
+                            <History size={15} />
                           </button>
                         </li>
                       ))}
@@ -1144,20 +1151,20 @@ export function BemAvivHomePage() {
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
-              <div className="border-b border-slate-100 bg-slate-50/50 px-4 py-4 sm:px-5">
+            <div className="overflow-hidden rounded-xl border border-slate-200/50 bg-white/70 backdrop-blur-md shadow-sm transition-all duration-200 hover:shadow-md">
+              <div className="border-b border-slate-100/60 bg-slate-50/20 px-4 py-4 sm:px-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <h3 className="font-hub text-sm font-semibold tracking-tight text-slate-900">
+                    <h3 className="font-sans text-sm font-bold tracking-tight text-slate-900">
                       Timeline crítica de follow-up
                     </h3>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 text-xs text-slate-500 font-medium">
                       Clientes sem nenhum contato registrado, com follow-up vencido ou sem retorno há{' '}
                       {NO_CONTACT_ALERT_DAYS}+ dias.
                     </p>
                   </div>
                   {!latestFollowupsReady ? (
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase text-slate-500">
+                    <span className="rounded-full bg-slate-100/80 px-2.5 py-1 text-[10px] font-semibold uppercase text-slate-500 animate-pulse">
                       Atualizando…
                     </span>
                   ) : (
@@ -1166,49 +1173,49 @@ export function BemAvivHomePage() {
                     </span>
                   )}
                 </div>
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                  <div className="rounded-xl border border-amber-100 bg-amber-50/80 px-2.5 py-2 text-center">
-                    <p className="text-[9px] font-semibold uppercase text-amber-800">Atrasados</p>
-                    <p className="font-hub text-lg font-bold text-amber-950">{criticalTimelineStats.overdue}</p>
+                <div className="mt-3 grid grid-cols-3 gap-3">
+                  <div className="rounded-xl border border-amber-200/50 bg-amber-50/40 px-2.5 py-2 text-center transition-colors">
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-amber-800">Atrasados</p>
+                    <p className="font-sans text-lg font-extrabold text-amber-950">{criticalTimelineStats.overdue}</p>
                   </div>
-                  <div className="rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-center">
-                    <p className="text-[9px] font-semibold uppercase text-slate-600">Sem contato</p>
-                    <p className="font-hub text-lg font-bold text-slate-900">{criticalTimelineStats.noContact}</p>
+                  <div className="rounded-xl border border-slate-200/60 bg-white/40 px-2.5 py-2 text-center transition-colors">
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Sem contato</p>
+                    <p className="font-sans text-lg font-extrabold text-slate-900">{criticalTimelineStats.noContact}</p>
                   </div>
-                  <div className="rounded-xl border border-orange-100 bg-orange-50/80 px-2.5 py-2 text-center">
-                    <p className="text-[9px] font-semibold uppercase text-orange-800">{NO_CONTACT_ALERT_DAYS}+ dias</p>
-                    <p className="font-hub text-lg font-bold text-orange-950">{criticalTimelineStats.stale}</p>
+                  <div className="rounded-xl border border-orange-200/50 bg-orange-50/40 px-2.5 py-2 text-center transition-colors">
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-orange-800">{NO_CONTACT_ALERT_DAYS}+ dias</p>
+                    <p className="font-sans text-lg font-extrabold text-orange-950">{criticalTimelineStats.stale}</p>
                   </div>
                 </div>
               </div>
               <div className="p-3 sm:p-4">
                 {!latestFollowupsReady ? (
                   <div className="flex flex-col items-center justify-center gap-2 py-12">
-                    <div className="h-7 w-7 animate-spin rounded-full border-4 border-slate-200 border-t-emerald-600" />
-                    <p className="text-xs font-semibold uppercase text-slate-400">Carregando histórico…</p>
+                    <div className="h-7 w-7 animate-spin rounded-full border-4 border-slate-250 border-t-[#185FA5]" />
+                    <p className="text-xs font-semibold uppercase text-slate-400 tracking-wider">Carregando histórico…</p>
                   </div>
                 ) : criticalTimelineClients.length === 0 ? (
-                  <p className="rounded-xl border border-slate-100 bg-slate-50/80 py-8 text-center text-sm text-slate-600">
+                  <p className="rounded-xl border border-slate-100 bg-slate-50/40 py-8 text-center text-sm text-slate-500 font-medium">
                     Nenhum cliente crítico no momento.
                   </p>
                 ) : (
-                  <ul className="max-h-[min(520px,62vh)] divide-y divide-slate-100 overflow-y-auto rounded-xl border border-slate-200 bg-white">
+                  <ul className="max-h-[min(520px,62vh)] divide-y divide-slate-100 overflow-y-auto rounded-xl border border-slate-200 bg-white/80 shadow-xs">
                     {criticalTimelineClients.map(({ client, reason, lastTouchIso, isOverdue }) => (
                       <li
                         key={client.id}
-                        className="grid grid-cols-[1fr_auto] items-center gap-3 px-3 py-3 transition-colors hover:bg-slate-50/80 sm:px-4"
+                        className="grid grid-cols-[1fr_auto] items-center gap-3 px-3 py-3 transition-colors hover:bg-slate-50/30 sm:px-4"
                       >
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-1.5">
                             <p className="truncate text-sm font-semibold text-slate-900">{client.full_name}</p>
                             <span
                               className={cn(
-                                'inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide',
+                                'inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide border',
                                 isOverdue
-                                  ? 'bg-amber-100 text-amber-900'
+                                  ? 'bg-amber-50 text-amber-800 border-amber-100'
                                   : reason === 'Sem contato'
-                                    ? 'bg-slate-100 text-slate-700'
-                                    : 'bg-orange-100 text-orange-900',
+                                    ? 'bg-slate-50 text-slate-600 border-slate-200/60'
+                                    : 'bg-orange-50 text-orange-800 border-orange-100',
                               )}
                             >
                               {isOverdue ? <Clock size={11} aria-hidden /> : <AlertCircle size={11} aria-hidden />}
@@ -1218,26 +1225,26 @@ export function BemAvivHomePage() {
                           <p className="mt-1 text-xs text-slate-500">
                             {client.next_followup_at ? (
                               <>
-                                <span className="font-medium text-slate-600">Próximo:</span>{' '}
-                                {formatDateOnly(client.next_followup_at)}
+                                <span className="font-semibold text-slate-405">Próximo:</span>{' '}
+                                <span className="tabular-nums font-medium text-slate-600">{formatDateOnly(client.next_followup_at)}</span>
                                 {' · '}
                               </>
                             ) : null}
                             {lastTouchIso ? (
                               <>
-                                <span className="font-medium text-slate-600">Último contato:</span>{' '}
-                                {formatDateOnly(lastTouchIso)}
+                                <span className="font-semibold text-slate-405">Último contato:</span>{' '}
+                                <span className="tabular-nums font-medium text-slate-600">{formatDateOnly(lastTouchIso)}</span>
                               </>
                             ) : (
-                              <span className="font-medium text-amber-800">Nenhum contato registrado</span>
+                              <span className="font-semibold text-amber-800">Nenhum contato registrado</span>
                             )}
                           </p>
                         </div>
-                        <div className="flex shrink-0 items-center gap-1.5">
+                        <div className="flex shrink-0 items-center gap-2">
                           <button
                             type="button"
                             onClick={() => navigate(`/bem-aviv/follow-up/agendar/${client.id}`)}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-700 shadow-sm hover:bg-sky-100"
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-sky-200/60 bg-sky-500/10 text-sky-700 shadow-xs hover:bg-sky-500/20 transition-all cursor-pointer"
                             title={`Agendar follow-up — ${client.full_name}`}
                             aria-label={`Agendar follow-up — ${client.full_name}`}
                           >
@@ -1246,7 +1253,7 @@ export function BemAvivHomePage() {
                           <button
                             type="button"
                             onClick={() => void openHistoryModal(client)}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-100"
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200/60 bg-white/60 text-slate-700 shadow-xs hover:bg-slate-100 transition-all cursor-pointer"
                             title={`Histórico — ${client.full_name}`}
                             aria-label={`Histórico — ${client.full_name}`}
                           >
