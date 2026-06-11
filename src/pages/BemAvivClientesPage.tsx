@@ -215,6 +215,9 @@ type Cliente = {
   next_followup_note: string | null
   next_followup_status: string | null
   eko7_presentation_at: string | null
+  spouse_name: string | null
+  spouse_birth_date: string | null
+  spouse_phone: string | null
 }
 
 type SortKey = 'full_name' | 'phones' | 'client_status'
@@ -356,6 +359,9 @@ const emptyForm = {
   client_status: 'PROSPECÇÃO',
   eko7_presentation_done: false,
   eko7_presentation_at: todayInputDate(),
+  spouse_name: '',
+  spouse_birth_date: '',
+  spouse_phone: '',
 }
 
 export function BemAvivClientesPage() {
@@ -570,6 +576,9 @@ export function BemAvivClientesPage() {
       client_status: r.client_status ?? 'PROSPECÇÃO',
       eko7_presentation_done: clientHadEko7Presentation(r),
       eko7_presentation_at: r.eko7_presentation_at ? toInputDate(r.eko7_presentation_at) : todayInputDate(),
+      spouse_name: r.spouse_name ?? '',
+      spouse_birth_date: r.spouse_birth_date ?? '',
+      spouse_phone: r.spouse_phone ?? '',
     })
     setClientModalOpen(true)
   }
@@ -1308,6 +1317,9 @@ export function BemAvivClientesPage() {
       eko7_presentation_at: form.eko7_presentation_done
         ? dateInputToIso(form.eko7_presentation_at) || new Date().toISOString()
         : null,
+      spouse_name: toUpperTrim(form.spouse_name),
+      spouse_birth_date: form.spouse_birth_date || null,
+      spouse_phone: onlyDigits(form.spouse_phone),
     }
     if (editing) {
       const { error } = await supabase
@@ -2054,6 +2066,30 @@ export function BemAvivClientesPage() {
             <p className="mt-0.5 font-medium text-slate-900">{selectedClient.address_state || '—'}</p>
           </div>
         </div>
+
+        {(selectedClient.spouse_name || selectedClient.spouse_birth_date || selectedClient.spouse_phone) && (
+          <>
+            <h4 className="text-xs font-bold uppercase tracking-wide text-slate-700 border-b border-slate-100 pb-2 pt-2">Informações do Cônjuge</h4>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+              <div className="col-span-2">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Nome do Cônjuge</p>
+                <p className="mt-0.5 font-medium text-slate-900">{selectedClient.spouse_name || '—'}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Data de Nascimento</p>
+                <p className="mt-0.5 font-medium text-slate-900">
+                  {selectedClient.spouse_birth_date
+                    ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' }).format(new Date(selectedClient.spouse_birth_date + 'T12:00:00'))
+                    : '—'}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Telefone</p>
+                <p className="mt-0.5 font-medium text-slate-900">{formatPhone(selectedClient.spouse_phone) || '—'}</p>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     )
   }
@@ -2333,6 +2369,22 @@ export function BemAvivClientesPage() {
               <div className="sm:col-span-4 lg:col-span-5">
                 <label>TELEFONE 2</label>
                 <input value={formatPhone(form.phone_2)} onChange={(e) => setForm({ ...form, phone_2: onlyDigits(e.target.value) })} />
+              </div>
+
+              <div className="sm:col-span-12 border-t border-slate-100 pt-3">
+                <span className="text-xs font-bold uppercase tracking-wide text-slate-700 block mb-1">Cônjuge</span>
+              </div>
+              <div className="sm:col-span-6">
+                <label>NOME DO CÔNJUGE</label>
+                <input value={form.spouse_name} onChange={(e) => setForm({ ...form, spouse_name: e.target.value })} />
+              </div>
+              <div className="sm:col-span-3">
+                <label>DATA NASCIMENTO DO CÔNJUGE</label>
+                <input type="date" value={form.spouse_birth_date} onChange={(e) => setForm({ ...form, spouse_birth_date: e.target.value })} />
+              </div>
+              <div className="sm:col-span-3">
+                <label>TELEFONE DO CÔNJUGE</label>
+                <input value={formatPhone(form.spouse_phone)} onChange={(e) => setForm({ ...form, spouse_phone: onlyDigits(e.target.value) })} />
               </div>
 
               <div className="sm:col-span-4">
