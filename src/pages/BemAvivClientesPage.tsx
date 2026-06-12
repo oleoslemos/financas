@@ -9,6 +9,7 @@ import {
   History,
   MessageCircle,
   Pencil,
+  Plus,
   Presentation,
   Search,
   Trash2,
@@ -215,9 +216,16 @@ type Cliente = {
   next_followup_note: string | null
   next_followup_status: string | null
   eko7_presentation_at: string | null
-  spouse_name: string | null
-  spouse_birth_date: string | null
-  spouse_phone: string | null
+  group_reference: string | null
+}
+
+export interface Familiar {
+  id: string
+  client_id: string
+  name: string
+  relationship: string
+  birth_date: string | null
+  phone: string | null
 }
 
 type SortKey = 'full_name' | 'phones' | 'client_status'
@@ -359,9 +367,7 @@ const emptyForm = {
   client_status: 'PROSPECÇÃO',
   eko7_presentation_done: false,
   eko7_presentation_at: todayInputDate(),
-  spouse_name: '',
-  spouse_birth_date: '',
-  spouse_phone: '',
+  group_reference: '',
 }
 
 export function BemAvivClientesPage() {
@@ -385,8 +391,15 @@ export function BemAvivClientesPage() {
   const [form, setForm] = useState(emptyForm)
 
   const [selectedClient, setSelectedClient] = useState<Cliente | null>(null)
-  const [drawerTab, setDrawerTab] = useState<'history' | 'orders' | 'info'>('info')
+  const [drawerTab, setDrawerTab] = useState<'history' | 'orders' | 'info' | 'relatives'>('info')
   const [drawerLoading, setDrawerLoading] = useState(false)
+
+  const [relatives, setRelatives] = useState<Familiar[]>([])
+  const [newRelativeName, setNewRelativeName] = useState('')
+  const [newRelativeRelationship, setNewRelativeRelationship] = useState('')
+  const [newRelativeBirthDate, setNewRelativeBirthDate] = useState('')
+  const [newRelativePhone, setNewRelativePhone] = useState('')
+  const [relativeLoading, setRelativeLoading] = useState(false)
 
   const [pedidosModalRows, setPedidosModalRows] = useState<OrderRow[]>([])
   const [pedidosDetailOrderId, setPedidosDetailOrderId] = useState<string | null>(null)
@@ -576,9 +589,7 @@ export function BemAvivClientesPage() {
       client_status: r.client_status ?? 'PROSPECÇÃO',
       eko7_presentation_done: clientHadEko7Presentation(r),
       eko7_presentation_at: r.eko7_presentation_at ? toInputDate(r.eko7_presentation_at) : todayInputDate(),
-      spouse_name: r.spouse_name ?? '',
-      spouse_birth_date: r.spouse_birth_date ?? '',
-      spouse_phone: r.spouse_phone ?? '',
+      group_reference: r.group_reference ?? '',
     })
     setClientModalOpen(true)
   }
@@ -627,6 +638,18 @@ export function BemAvivClientesPage() {
     return (data as OrderRow[]) ?? []
   }, [supabase, activeCompanyId])
 
+  const fetchRelativesData = useCallback(async (clientId: string): Promise<Familiar[]> => {
+    if (!supabase || !activeCompanyId) return []
+    const { data, error } = await supabase
+      .from('bem_aviv_client_relatives')
+      .select('id, client_id, name, relationship, birth_date, phone')
+      .eq('company_id', activeCompanyId)
+      .eq('client_id', clientId)
+      .order('name')
+    if (error) return []
+    return (data as Familiar[]) ?? []
+  }, [supabase, activeCompanyId])
+
   async function openClientDrawer(client: Cliente) {
     setSelectedClient(client)
     setDrawerTab('info')
@@ -635,22 +658,30 @@ export function BemAvivClientesPage() {
     setEditingHistoryId(null)
     setEditingScheduleFollowupId(null)
     
+    // Reset relative form inputs
+    setNewRelativeName('')
+    setNewRelativeRelationship('')
+    setNewRelativeBirthDate('')
+    setNewRelativePhone('')
+    
     if (!supabase || !activeCompanyId) return
     setDrawerLoading(true)
     
-    const [historyRes, ordersRes] = await Promise.all([
+    const [historyRes, ordersRes, relativesRes] = await Promise.all([
       fetchHistoryData(client.id),
-      fetchOrdersData(client.id)
+      fetchOrdersData(client.id),
+      fetchRelativesData(client.id)
     ])
     
     setHistoryModalRows(historyRes)
     setPedidosModalRows(ordersRes)
+    setRelatives(relativesRes)
     setDrawerLoading(false)
   }
 
   async function refreshSelectedClient() {
     if (!supabase || !selectedClient || !activeCompanyId) return
-    const [clientRow, historyRows, ordersRows] = await Promise.all([
+    const [clientRow, historyRows, ordersRows, relativesRows] = await Promise.all([
       supabase
         .from('bem_aviv_clients')
         .select('*')
@@ -658,13 +689,62 @@ export function BemAvivClientesPage() {
         .eq('company_id', activeCompanyId)
         .maybeSingle(),
       fetchHistoryData(selectedClient.id),
-      fetchOrdersData(selectedClient.id)
+      fetchOrdersData(selectedClient.id),
+      fetchRelativesData(selectedClient.id)
     ])
     if (clientRow.data) {
       setSelectedClient(clientRow.data as Cliente)
     }
     setHistoryModalRows(historyRows)
     setPedidosModalRows(ordersRows)
+    setRelatives(relativesRows)
+  }
+
+  async function handleAddRelative(e: React.FormEvent) {
+    e.preventDefault()
+    if (!supabase || !activeCompanyId || !selectedClient) return
+    if (!newRelativeName.trim() || !newRelativeRelationship.trim()) {
+      alert('NOME E GRAU DE PARENTESCO SÃO OBRIGATÓRIOS.')
+      return
+    }
+    setRelativeLoading(true)
+    const { error } = await supabase.from('bem_aviv_client_relatives').insert({
+      company_id: activeCompanyId,
+      client_id: selectedClient.id,
+      name: newRelativeName.trim(),
+      relationship: newRelativeRelationship.trim(),
+      birth_date: newRelativeBirthDate || null,
+      phone: onlyDigits(newRelativePhone),
+    })
+    if (error) {
+      alert(error.message)
+    } else {
+      setNewRelativeName('')
+      setNewRelativeRelationship('')
+      setNewRelativeBirthDate('')
+      setNewRelativePhone('')
+      const updated = await fetchRelativesData(selectedClient.id)
+      setRelatives(updated)
+    }
+    setRelativeLoading(false)
+  }
+
+  async function handleDeleteRelative(id: string) {
+    if (!supabase || !activeCompanyId || !selectedClient) return
+    if (!confirm('DESEJA EXCLUIR ESTE FAMILIAR?')) return
+    setRelativeLoading(true)
+    const { error } = await supabase
+      .from('bem_aviv_client_relatives')
+      .delete()
+      .eq('id', id)
+      .eq('company_id', activeCompanyId)
+    if (error) {
+      alert(error.message)
+    } else {
+      const updated = await fetchRelativesData(selectedClient.id)
+      setRelatives(updated)
+    }
+    setRelativeLoading(false)
   }
 
   async function updateCommercialStage(clientId: string, stage: string) {
@@ -1317,9 +1397,7 @@ export function BemAvivClientesPage() {
       eko7_presentation_at: form.eko7_presentation_done
         ? dateInputToIso(form.eko7_presentation_at) || new Date().toISOString()
         : null,
-      spouse_name: toUpperTrim(form.spouse_name),
-      spouse_birth_date: form.spouse_birth_date || null,
-      spouse_phone: onlyDigits(form.spouse_phone),
+      group_reference: toUpperTrim(form.group_reference),
     }
     if (editing) {
       const { error } = await supabase
@@ -2003,6 +2081,118 @@ export function BemAvivClientesPage() {
     )
   }
 
+  function renderRelativesTab() {
+    if (!selectedClient) return null
+    return (
+      <div className="space-y-6">
+        {/* Form to add a new relative */}
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
+          <h4 className="text-xs font-bold uppercase tracking-wide text-slate-700 border-b border-slate-100 pb-2 mb-3">
+            Adicionar Familiar
+          </h4>
+          <form onSubmit={handleAddRelative} className="grid grid-cols-1 gap-3 sm:grid-cols-12 sm:gap-4">
+            <div className="sm:col-span-6">
+              <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Nome Completo</label>
+              <input
+                required
+                value={newRelativeName}
+                onChange={(e) => setNewRelativeName(e.target.value)}
+                placeholder="EX: MARIA SOUZA"
+                className="mt-1 w-full"
+              />
+            </div>
+            <div className="sm:col-span-6">
+              <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Grau de Parentesco</label>
+              <input
+                required
+                value={newRelativeRelationship}
+                onChange={(e) => setNewRelativeRelationship(e.target.value)}
+                placeholder="EX: CÔNJUGE, FILHO(A), PAI, MÃE"
+                className="mt-1 w-full"
+              />
+            </div>
+            <div className="sm:col-span-5">
+              <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Aniversário</label>
+              <input
+                type="date"
+                value={newRelativeBirthDate}
+                onChange={(e) => setNewRelativeBirthDate(e.target.value)}
+                className="mt-1 w-full"
+              />
+            </div>
+            <div className="sm:col-span-5">
+              <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Telefone</label>
+              <input
+                value={formatPhone(newRelativePhone)}
+                onChange={(e) => setNewRelativePhone(onlyDigits(e.target.value))}
+                placeholder="(00) 00000-0000"
+                className="mt-1 w-full"
+              />
+            </div>
+            <div className="sm:col-span-2 flex items-end">
+              <Button variant="primary" type="submit" className="w-full justify-center h-10" disabled={relativeLoading}>
+                <Plus size={16} className="mr-1" /> Add
+              </Button>
+            </div>
+          </form>
+        </div>
+
+        {/* Relatives List */}
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs space-y-3">
+          <h4 className="text-xs font-bold uppercase tracking-wide text-slate-700 border-b border-slate-100 pb-2">
+            Familiares Cadastrados ({relatives.length})
+          </h4>
+          {relatives.length === 0 ? (
+            <p className="text-xs text-slate-400 py-4 text-center">Nenhum familiar cadastrado para este cliente.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wide">
+                    <th className="py-2 pr-2">Nome</th>
+                    <th className="py-2 px-2">Parentesco</th>
+                    <th className="py-2 px-2">Aniversário</th>
+                    <th className="py-2 px-2">Telefone</th>
+                    <th className="py-2 pl-2 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {relatives.map((rel) => (
+                    <tr key={rel.id} className="text-slate-700 hover:bg-slate-50/50">
+                      <td className="py-2.5 pr-2 font-medium text-slate-900">{rel.name}</td>
+                      <td className="py-2.5 px-2">
+                        <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 uppercase">
+                          {rel.relationship}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-2 font-medium">
+                        {rel.birth_date ? formatDateOnly(rel.birth_date) : '—'}
+                      </td>
+                      <td className="py-2.5 px-2 font-medium">
+                        {rel.phone ? formatPhone(rel.phone) : '—'}
+                      </td>
+                      <td className="py-2.5 pl-2 text-right">
+                        <button
+                          type="button"
+                          className="inline-flex h-6 w-6 items-center justify-center rounded border border-red-100 bg-white text-red-500 hover:bg-red-50 active:scale-95"
+                          onClick={() => void handleDeleteRelative(rel.id)}
+                          title="Excluir familiar"
+                          disabled={relativeLoading}
+                        >
+                          <Trash2 size={12} strokeWidth={2.2} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   function renderInfoTab() {
     if (!selectedClient) return null
     return (
@@ -2024,6 +2214,10 @@ export function BemAvivClientesPage() {
           <div className="col-span-2">
             <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">E-mail</p>
             <p className="mt-0.5 font-medium text-slate-900 normal-case">{selectedClient.email || '—'}</p>
+          </div>
+          <div className="col-span-2">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Grupo / Referência</p>
+            <p className="mt-0.5 font-medium text-slate-900 normal-case">{selectedClient.group_reference || '—'}</p>
           </div>
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Telefone Primário</p>
@@ -2066,30 +2260,6 @@ export function BemAvivClientesPage() {
             <p className="mt-0.5 font-medium text-slate-900">{selectedClient.address_state || '—'}</p>
           </div>
         </div>
-
-        {(selectedClient.spouse_name || selectedClient.spouse_birth_date || selectedClient.spouse_phone) && (
-          <>
-            <h4 className="text-xs font-bold uppercase tracking-wide text-slate-700 border-b border-slate-100 pb-2 pt-2">Informações do Cônjuge</h4>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
-              <div className="col-span-2">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Nome do Cônjuge</p>
-                <p className="mt-0.5 font-medium text-slate-900">{selectedClient.spouse_name || '—'}</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Data de Nascimento</p>
-                <p className="mt-0.5 font-medium text-slate-900">
-                  {selectedClient.spouse_birth_date
-                    ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' }).format(new Date(selectedClient.spouse_birth_date + 'T12:00:00'))
-                    : '—'}
-                </p>
-              </div>
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Telefone</p>
-                <p className="mt-0.5 font-medium text-slate-900">{formatPhone(selectedClient.spouse_phone) || '—'}</p>
-              </div>
-            </div>
-          </>
-        )}
       </div>
     )
   }
@@ -2371,21 +2541,6 @@ export function BemAvivClientesPage() {
                 <input value={formatPhone(form.phone_2)} onChange={(e) => setForm({ ...form, phone_2: onlyDigits(e.target.value) })} />
               </div>
 
-              <div className="sm:col-span-12 border-t border-slate-100 pt-3">
-                <span className="text-xs font-bold uppercase tracking-wide text-slate-700 block mb-1">Cônjuge</span>
-              </div>
-              <div className="sm:col-span-6">
-                <label>NOME DO CÔNJUGE</label>
-                <input value={form.spouse_name} onChange={(e) => setForm({ ...form, spouse_name: e.target.value })} />
-              </div>
-              <div className="sm:col-span-3">
-                <label>DATA NASCIMENTO DO CÔNJUGE</label>
-                <input type="date" value={form.spouse_birth_date} onChange={(e) => setForm({ ...form, spouse_birth_date: e.target.value })} />
-              </div>
-              <div className="sm:col-span-3">
-                <label>TELEFONE DO CÔNJUGE</label>
-                <input value={formatPhone(form.spouse_phone)} onChange={(e) => setForm({ ...form, spouse_phone: onlyDigits(e.target.value) })} />
-              </div>
 
               <div className="sm:col-span-4">
                 <label>CEP</label>
@@ -2471,11 +2626,15 @@ export function BemAvivClientesPage() {
                   </p>
                 )}
               </div>
-              <div className="sm:col-span-8">
+              <div className="sm:col-span-5">
                 <label>E-MAIL</label>
                 <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
               </div>
               <div className="sm:col-span-4">
+                <label>GRUPO/REFERÊNCIA</label>
+                <input value={form.group_reference} onChange={(e) => setForm({ ...form, group_reference: e.target.value })} />
+              </div>
+              <div className="sm:col-span-3">
                 <label>CLASSIFICAÇÃO</label>
                 <input
                   value={editing?.client_status ?? 'PROSPECÇÃO'}
@@ -2626,6 +2785,18 @@ export function BemAvivClientesPage() {
                 type="button"
                 className={cn(
                   "border-b-2 py-3 px-3 text-sm font-semibold transition-all",
+                  drawerTab === 'relatives'
+                    ? "border-[#185FA5] text-[#185FA5]"
+                    : "border-transparent text-slate-500 hover:text-slate-700"
+                )}
+                onClick={() => setDrawerTab('relatives')}
+              >
+                Familiares ({relatives.length})
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  "border-b-2 py-3 px-3 text-sm font-semibold transition-all",
                   drawerTab === 'history'
                     ? "border-[#185FA5] text-[#185FA5]"
                     : "border-transparent text-slate-500 hover:text-slate-700"
@@ -2657,6 +2828,7 @@ export function BemAvivClientesPage() {
               ) : (
                 <>
                   {drawerTab === 'info' && renderInfoTab()}
+                  {drawerTab === 'relatives' && renderRelativesTab()}
                   {drawerTab === 'history' && renderHistoryTab()}
                   {drawerTab === 'orders' && renderOrdersTab()}
                 </>
