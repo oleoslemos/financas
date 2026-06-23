@@ -2,7 +2,7 @@ import { useUser } from '@clerk/clerk-react'
 import { Check, FileText, Pencil, Plus, Split, Trash2, Undo2, X, Landmark, Users } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '../components/ui/Button'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
@@ -77,6 +77,7 @@ function acaoQuitarLabel(kind: Kind) {
 export function CashflowPage() {
   const { user } = useUser()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const supabase = useSupabase()
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
   const [formKind, setFormKind] = useState<Kind>('payable')
@@ -113,12 +114,50 @@ export function CashflowPage() {
   const [paidAtEdit, setPaidAtEdit] = useState('')
 
   const monthRange = currentMonthRange()
+  const [filterSearch, setFilterSearch] = useState('')
   const [filterKind, setFilterKind] = useState<'ALL' | Kind>('ALL')
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'open' | 'paid'>('open')
   const [filterBank, setFilterBank] = useState('')
   const [filterFamilyMember, setFilterFamilyMember] = useState('')
   const [filterFrom, setFilterFrom] = useState(monthRange.from)
   const [filterTo, setFilterTo] = useState(monthRange.to)
+
+  useEffect(() => {
+    if (searchParams.get('action') === 'new') {
+      setCreateOpen(true)
+      setSearchParams({}, { replace: true })
+    }
+  }, [searchParams, setSearchParams])
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement
+      if (
+        activeEl &&
+        (activeEl.tagName === 'INPUT' ||
+          activeEl.tagName === 'TEXTAREA' ||
+          activeEl.getAttribute('contenteditable') === 'true')
+      ) {
+        return
+      }
+
+      const key = e.key.toLowerCase()
+      if (key === 'n') {
+        e.preventDefault()
+        setCreateOpen(true)
+      } else if (key === '/') {
+        e.preventDefault()
+        const searchInput = document.getElementById('search-filter-input') as HTMLInputElement | null
+        if (searchInput) {
+          searchInput.focus()
+          searchInput.select()
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   const load = useCallback(async () => {
     if (!supabase || !ownerUserId) return
@@ -172,6 +211,7 @@ export function CashflowPage() {
   const filteredRows = useMemo(
     () =>
       rows.filter((r) => {
+        if (filterSearch && !r.description?.toLowerCase().includes(filterSearch.toLowerCase())) return false
         if (filterKind !== 'ALL' && r.kind !== filterKind) return false
         if (filterStatus !== 'ALL' && r.status !== filterStatus) return false
         if (filterFamilyMember && r.family_member_id !== filterFamilyMember) return false
@@ -187,7 +227,7 @@ export function CashflowPage() {
         if (filterTo && r.due_date > filterTo) return false
         return true
       }),
-    [rows, filterKind, filterStatus, filterBank, filterFamilyMember, filterFrom, filterTo],
+    [rows, filterSearch, filterKind, filterStatus, filterBank, filterFamilyMember, filterFrom, filterTo],
   )
 
   const currentBalance = useMemo(() => {
@@ -401,6 +441,24 @@ export function CashflowPage() {
       clearForm()
       setCreateOpen(false)
       load()
+    }
+  }
+
+  const handleDescriptionChange = (val: string) => {
+    setDescription(val)
+    if (!val || val.trim().length < 3) return
+
+    const match = rows.find(
+      (r) =>
+        r.description &&
+        r.description.toLowerCase().includes(val.toLowerCase()) &&
+        r.kind === formKind
+    )
+    if (match) {
+      if (match.category_id) setCategoryId(match.category_id)
+      if (match.bank_account_id) setBankId(match.bank_account_id)
+      if (match.destination_bank_account_id) setDestinationBankId(match.destination_bank_account_id)
+      if (match.family_member_id) setFamilyMemberId(match.family_member_id)
     }
   }
 
@@ -788,7 +846,7 @@ export function CashflowPage() {
                   </label>
                   <input
                     value={description}
-                    onChange={(e) => setDescription(e.target.value)}
+                    onChange={(e) => handleDescriptionChange(e.target.value)}
                     placeholder={formKind === 'transfer' ? 'Ex.: Resgate aplicação para conta corrente' : 'Ex.: Aluguel residencial'}
                     className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm placeholder:text-slate-400 focus:border-[#185FA5] focus:outline-none focus:ring-1 focus:ring-[#185FA5]"
                   />
@@ -1005,7 +1063,18 @@ export function CashflowPage() {
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 border-t border-slate-100 pt-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6 border-t border-slate-100 pt-3">
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Buscar</label>
+            <input
+              id="search-filter-input"
+              type="text"
+              placeholder="Filtro rápido..."
+              value={filterSearch}
+              onChange={(e) => setFilterSearch(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#185FA5]"
+            />
+          </div>
           <div>
             <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Filtrar Conta</label>
             <select

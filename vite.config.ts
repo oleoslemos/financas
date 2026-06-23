@@ -56,6 +56,34 @@ export default defineConfig(({ mode }) => {
               purpose: 'any maskable',
             },
           ],
+          shortcuts: [
+            {
+              name: 'Novo Lançamento',
+              short_name: 'Lançamento',
+              description: 'Criar um novo lançamento financeiro',
+              url: '/lsh/fluxo?action=new',
+              icons: [
+                {
+                  src: '/favicon.svg',
+                  sizes: '512x512',
+                  type: 'image/svg+xml'
+                }
+              ]
+            },
+            {
+              name: 'Ver Dashboard',
+              short_name: 'Dashboard',
+              description: 'Visualizar resumo financeiro',
+              url: '/lsh/dashboard',
+              icons: [
+                {
+                  src: '/favicon.svg',
+                  sizes: '512x512',
+                  type: 'image/svg+xml'
+                }
+              ]
+            }
+          ]
         },
       }),
     ],

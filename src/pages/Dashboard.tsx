@@ -552,6 +552,27 @@ export function Dashboard() {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
+              <div className="sr-only">
+                <h4>Resumo de Fluxo de Caixa Mensal</h4>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Mês</th>
+                      <th>Receitas</th>
+                      <th>Despesas</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {barChartData.map((row) => (
+                      <tr key={row.label}>
+                        <td>{row.label}</td>
+                        <td>{formatBRL(row.Receitas)}</td>
+                        <td>{formatBRL(row.Despesas)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 
@@ -592,6 +613,25 @@ export function Dashboard() {
                         <span className="truncate">{entry.name}</span>
                       </div>
                     ))}
+                  </div>
+                  <div className="sr-only">
+                    <h4>Resumo de Despesas por Categoria</h4>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Categoria</th>
+                          <th>Valor</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pieChartData.map((row) => (
+                          <tr key={row.name}>
+                            <td>{row.name}</td>
+                            <td>{formatBRL(row.value)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}

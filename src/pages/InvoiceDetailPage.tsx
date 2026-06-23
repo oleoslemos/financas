@@ -79,6 +79,22 @@ export function InvoiceDetailPage() {
   })
   const [editingItem, setEditingItem] = useState<Item | null>(null)
 
+  const handleDescriptionChange = (desc: string) => {
+    const nextForm = { ...itemForm, description: desc }
+    if (desc && desc.trim().length >= 3) {
+      const match = items.find(
+        (it) =>
+          it.description &&
+          it.description.toLowerCase().includes(desc.toLowerCase())
+      )
+      if (match) {
+        if (match.category_id) nextForm.category_id = match.category_id
+        if (match.family_member_id) nextForm.family_member_id = match.family_member_id
+      }
+    }
+    setItemForm(nextForm)
+  }
+
   function statusPt(s: string | null) {
     if (!s) return '—'
     if (s === 'open') return 'ABERTO'
@@ -699,7 +715,7 @@ export function InvoiceDetailPage() {
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Descrição</label>
                 <input
                   value={itemForm.description}
-                  onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
+                  onChange={(e) => handleDescriptionChange(e.target.value)}
                   disabled={itemsLocked}
                   placeholder="Ex.: Supermercado Lemos"
                   className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm focus:outline-none"
