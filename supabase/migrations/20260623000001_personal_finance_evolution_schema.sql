@@ -1,7 +1,4 @@
--- Evolução Financeira LSH: Transferências, Subcategorias, Familiares e Cores de Contas
-
--- 1. Adicionar valor 'transfer' ao enum payable_kind
-ALTER TYPE public.payable_kind ADD VALUE IF NOT EXISTS 'transfer';
+-- Evolução Financeira LSH - Parte 2: Estrutura de Contas, Categorias, Familiares e Constraints
 
 -- 2. Adicionar coluna 'color' na tabela de contas bancárias
 ALTER TABLE public.bank_accounts ADD COLUMN IF NOT EXISTS color text;
