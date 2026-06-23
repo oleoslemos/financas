@@ -2,17 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSupabase } from '../hooks/useSupabase'
 import { useCompany } from '../context/CompanyContext'
 import { formatBRL } from '../lib/format'
-import { formatDateOnly, todayInputDate } from '../lib/dates'
 import {
   TrendingUp,
-  Users,
-  Package,
-  CreditCard,
   DollarSign,
-  Calendar,
   RefreshCw,
-  Search,
-  ShoppingCart,
   FileText,
   Truck
 } from 'lucide-react'
@@ -22,7 +15,6 @@ import {
   Pie,
   Cell,
   Tooltip,
-  Legend,
   BarChart,
   Bar,
   XAxis,
@@ -65,7 +57,7 @@ const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6', '#ef4444'
 
 export function BemAvivRelatoriosPage() {
   const supabase = useSupabase()
-  const { activeCompanyId, activeCompany } = useCompany()
+  const { activeCompanyId } = useCompany()
 
   const [loading, setLoading] = useState(true)
   const [preset, setPreset] = useState<DateRangePreset>('MES_ATUAL')
@@ -518,7 +510,7 @@ export function BemAvivRelatoriosPage() {
                             paddingAngle={3}
                             dataKey="value"
                           >
-                            {paymentMethodData.map((entry, index) => (
+                            {paymentMethodData.map((_entry, index) => (
                               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                             ))}
                           </Pie>
@@ -546,7 +538,7 @@ export function BemAvivRelatoriosPage() {
             <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm flex flex-col justify-between min-h-[380px]">
               <div>
                 <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Distribuição Funil de Vendas</h3>
-                <p className="text-xs font-semibold text-slate-400">Posicionamento de clientes por etapa comercial ativa no CRM.</p>
+                <p className="text-xs font-semibold text-slate-400">Posicionamento de clientes por etapa comercial activa no CRM.</p>
               </div>
               <div className="flex-1 min-h-[240px] flex items-center justify-center">
                 {crmConversion.length === 0 ? (
@@ -559,7 +551,7 @@ export function BemAvivRelatoriosPage() {
                         <YAxis tick={{ fill: '#64748b', fontSize: 10 }} />
                         <Tooltip formatter={(value) => [`${value} clientes`]} />
                         <Bar dataKey="quantidade" fill="#10b981" radius={[8, 8, 0, 0]}>
-                          {crmConversion.map((entry, index) => (
+                          {crmConversion.map((_entry, index) => (
                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                           ))}
                         </Bar>

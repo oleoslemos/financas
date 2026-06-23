@@ -2,10 +2,8 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
 import { formatBRL } from '../lib/format'
-import { formatDateOnly } from '../lib/dates'
-import { ArrowLeft, Printer, CheckCircle } from 'lucide-react'
+import { ArrowLeft, Printer } from 'lucide-react'
 
-type PaymentOption = 'A_VISTA' | 'A_PRAZO'
 type PaymentMethod = 'DINHEIRO' | 'PIX' | 'CARTAO_DEBITO' | 'CARTAO_CREDITO' | 'BOLETO'
 
 const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
@@ -98,9 +96,12 @@ export function BemAvivPedidoPrintPage() {
     setErrorMsg(null)
 
     async function loadData() {
+      const clientLocal = supabase
+      if (!clientLocal) return
+
       try {
         // 1. Fetch Order
-        const { data: orderData, error: orderErr } = await supabase
+        const { data: orderData, error: orderErr } = await clientLocal
           .from('bem_aviv_sales_orders')
           .select('*')
           .eq('id', orderId)
@@ -115,14 +116,14 @@ export function BemAvivPedidoPrintPage() {
 
         // 2. Fetch Client, Items, Company in parallel
         const clientQuery = orderRow.client_id
-          ? supabase.from('bem_aviv_clients').select('*').eq('id', orderRow.client_id).maybeSingle()
+          ? clientLocal.from('bem_aviv_clients').select('*').eq('id', orderRow.client_id).maybeSingle()
           : Promise.resolve({ data: null, error: null })
 
         const companyQuery = orderRow.company_id
-          ? supabase.from('companies').select('*').eq('id', orderRow.company_id).maybeSingle()
+          ? clientLocal.from('companies').select('*').eq('id', orderRow.company_id).maybeSingle()
           : Promise.resolve({ data: null, error: null })
 
-        const itemsQuery = supabase
+        const itemsQuery = clientLocal
           .from('bem_aviv_sales_order_items')
           .select('id, item_description, quantity, unit_price, total_price, discount_amount')
           .eq('sales_order_id', orderId)

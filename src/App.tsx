@@ -115,7 +115,7 @@ export default function App() {
               <Route path="/bem-aviv/catalogos-preco/:catalogId" element={<BemAvivCatalogoPrecoDetailPage />} />
               <Route path="/bem-aviv/catalogos-preco/:catalogId/bloco/:blockId" element={<BemAvivCatalogoMatrizBlocoPage />} />
               <Route path="/bem-aviv/empresas" element={<BemAvivEmpresaPage />} />
-              <Route path="/bem-aviv/relatorios" element={<BemAvivRelatoriosPage />} />>
+              <Route path="/bem-aviv/relatorios" element={<BemAvivRelatoriosPage />} />
 
               <Route element={<RequireFullHubAccess />}>
                 <Route path="/lsh/inicio" element={<Navigate to="/lsh/resumo" replace />} />

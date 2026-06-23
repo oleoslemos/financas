@@ -184,7 +184,7 @@ function canReopenPedido(r: Pedido) {
   )
 }
 
-function canVerDetalhePedido(r: Pedido) {
+function canVerDetalhePedido(_r: Pedido) {
   return true
 }
 
@@ -887,6 +887,54 @@ export function BemAvivPedidosPage() {
       setDetailModalDeliveries(deliveries)
     }
     setDetailModalLoading(false)
+  }
+
+  const handlePrintDetailModal = () => {
+    if (!detailModalPedido) return
+    window.open(`/bem-aviv/pedidos/imprimir/${detailModalPedido.id}`, '_blank')
+  }
+
+  const handleShareWhatsappDetailModal = () => {
+    if (!detailModalPedido) return
+
+    const typeLabel = detailModalPedido.document_type === 'ORCAMENTO' ? 'Orçamento' : 'Pedido'
+    const name = detailModalClientRealName || (detailModalPedido.client_id ? clientNameById.get(detailModalPedido.client_id) : null) || 'Cliente'
+    const dateFormatted = detailModalPedido.order_date ? detailModalPedido.order_date.split('-').reverse().join('/') : '—'
+
+    let text = `Olá, *${name}*!\n`
+    text += `Segue o resumo do seu *${typeLabel} de Venda (BemAviv)*:\n\n`
+    text += `*Número:* ${detailModalPedido.document_number ?? '—'}\n`
+    text += `*Data:* ${dateFormatted}\n`
+    text += `*Status:* ${detailModalPedido.status}\n\n`
+
+    if (detailModalItems.length > 0) {
+      text += `*Itens:*\n`
+      detailModalItems.forEach((it) => {
+        text += `• ${it.quantity}x ${it.item_description} (${formatBRL(it.unit_price)}/un) - *${formatBRL(it.total_price)}*\n`
+      })
+      text += `\n`
+    }
+
+    text += `*Forma de Pagamento:* ${detailModalPedido.payment_option === 'A_PRAZO' ? 'À prazo' : 'À vista'}\n`
+    if (detailModalPedido.payment_method) {
+      text += `*Meio de Pagamento:* ${PAYMENT_METHOD_LABEL[parsePaymentMethod(detailModalPedido.payment_method)]}\n`
+    }
+    if (downVal(detailModalPedido) > 0) {
+      text += `*Entrada:* ${formatBRL(downVal(detailModalPedido))}\n`
+    }
+    text += `*Condições:* ${installmentCell(detailModalPedido)}\n\n`
+
+    text += `*Valor Total Líquido: ${formatBRL(netTotal(detailModalPedido))}*\n\n`
+
+    const viewUrl = `${window.location.origin}/bem-aviv/pedidos/imprimir/${detailModalPedido.id}`
+    text += `Para visualizar o documento completo em PDF e imprimir, acesse o link:\n${viewUrl}`
+
+    const url = buildWhatsappUrlWithText(detailModalClientPhone, text)
+    if (url) {
+      window.open(url, '_blank')
+    } else {
+      alert('Telefone do cliente inválido ou não cadastrado.')
+    }
   }
 
   async function deleteDocumento(order: Pedido) {
@@ -1655,7 +1703,23 @@ export function BemAvivPedidosPage() {
               </div>
 
               {/* Modal Footer */}
-              <div className="mt-6 flex justify-end border-t border-slate-100 pt-4">
+              <div className="mt-6 flex flex-wrap gap-2 justify-end border-t border-slate-100 pt-4">
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:bg-slate-50 active:scale-95"
+                  onClick={handlePrintDetailModal}
+                >
+                  <Printer size={16} />
+                  Imprimir PDF
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-emerald-700 active:scale-95 shadow-emerald-600/10"
+                  onClick={handleShareWhatsappDetailModal}
+                >
+                  <MessageCircle size={16} />
+                  WhatsApp
+                </button>
                 <button
                   type="button"
                   className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 active:scale-95 transition-all shadow-sm"
