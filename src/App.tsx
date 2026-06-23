@@ -19,6 +19,7 @@ const SignUpPage = lazy(() => import('./pages/SignUpPage').then((m) => ({ defaul
 const Dashboard = lazy(() => import('./pages/Dashboard').then((m) => ({ default: m.Dashboard })))
 const BankAccounts = lazy(() => import('./pages/BankAccounts').then((m) => ({ default: m.BankAccounts })))
 const Categories = lazy(() => import('./pages/Categories').then((m) => ({ default: m.Categories })))
+const FamilyMembers = lazy(() => import('./pages/FamilyMembersPage').then((m) => ({ default: m.FamilyMembersPage })))
 const CashflowPage = lazy(() => import('./pages/CashflowPage').then((m) => ({ default: m.CashflowPage })))
 const CreditCardsPage = lazy(() => import('./pages/CreditCardsPage').then((m) => ({ default: m.CreditCardsPage })))
 const CardInvoicesPage = lazy(() => import('./pages/CardInvoicesPage').then((m) => ({ default: m.CardInvoicesPage })))
@@ -125,6 +126,7 @@ export default function App() {
                 <Route path="/lsh/resumo" element={<Dashboard />} />
                 <Route path="/lsh/contas-bancarias" element={<BankAccounts />} />
                 <Route path="/lsh/categorias" element={<Categories />} />
+                <Route path="/lsh/familiares" element={<FamilyMembers />} />
                 <Route path="/lsh/fluxo" element={<CashflowPage />} />
                 <Route path="/lsh/cartoes" element={<CreditCardsPage />} />
                 <Route path="/lsh/cartoes/:cardId" element={<CardInvoicesPage />} />

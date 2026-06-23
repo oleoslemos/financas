@@ -1,5 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
-import { CalendarDays, CreditCard, Landmark, Wallet } from 'lucide-react'
+import { CalendarDays, CreditCard, Landmark, TrendingUp, TrendingDown, ArrowUpRight } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
@@ -8,19 +8,35 @@ import { resolveDataOwnerId } from '../lib/dataOwner'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { formatBRL } from '../lib/format'
 import { monthLabel, parseISODate, toISODate } from '../lib/dates'
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+} from 'recharts'
 
 type Row = {
   id: string
   description: string
   amount: number
   due_date: string
-  kind: 'payable' | 'receivable'
+  kind: 'payable' | 'receivable' | 'transfer'
   bank_account_id: string | null
+  destination_bank_account_id: string | null
   status: 'open' | 'paid'
+  category_id: string | null
 }
 
-type Bank = { id: string; name: string; initial_balance: number }
-type PaidMovement = { bank_account_id: string | null; amount: number; kind: 'payable' | 'receivable' }
+type Bank = { id: string; name: string; initial_balance: number; color: string | null }
+type PaidMovement = { bank_account_id: string | null; destination_bank_account_id: string | null; amount: number; kind: 'payable' | 'receivable' | 'transfer' }
+type Category = { id: string; name: string; parent_id: string | null }
 
 function monthKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
@@ -40,7 +56,6 @@ function nextMonthKey(key: string): string {
   return monthKey(new Date(y, m, 1))
 }
 
-/** Avança ou retrocede meses a partir de uma chave YYYY-MM. */
 function shiftMonthKey(key: string, delta: number): string {
   const [y, m] = key.split('-').map(Number)
   return monthKey(new Date(y, m - 1 + delta, 1))
@@ -64,19 +79,24 @@ function rowSort(a: Row, b: Row) {
   return a.due_date.localeCompare(b.due_date) || a.description.localeCompare(b.description)
 }
 
+const PIE_COLORS = ['#185FA5', '#8B5CF6', '#10B981', '#F97316', '#EF4444', '#EC4899', '#EAB308', '#64748B']
+
 export function Dashboard() {
   const { user } = useUser()
   const supabase = useSupabase()
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
+  
   const [banks, setBanks] = useState<Bank[]>([])
   const [openRows, setOpenRows] = useState<Row[]>([])
   const [paidMovements, setPaidMovements] = useState<PaidMovement[]>([])
+  const [cats, setCats] = useState<Category[]>([])
+  const [rangeMovements, setRangeMovements] = useState<Row[]>([])
+  
   const [selectedBankId, setSelectedBankId] = useState<string>('ALL')
   const [selectedMonth, setSelectedMonth] = useState<string>(() => monthKey(new Date()))
   const [loading, setLoading] = useState(true)
 
   const [creditCards, setCreditCards] = useState<{ id: string; name: string }[]>([])
-  /** Meses à frente do mês atual (além da base fixa: 3 meses anteriores + atual). */
   const [ccFutureMonths, setCcFutureMonths] = useState<3 | 6 | 9 | 12>(3)
   const [ccCardSeries, setCcCardSeries] = useState<
     {
@@ -85,7 +105,6 @@ export function Dashboard() {
       series: { monthKey: string; label: string; total: number; segment: 'passado' | 'atual' | 'futuro' }[]
     }[]
   >([])
-  /** Totais agregados (todos os cartões) por competência: mês atual + próximos 6 meses. */
   const [ccKpiByMonth, setCcKpiByMonth] = useState<
     { monthKey: string; label: string; total: number; isCurrent: boolean }[]
   >([])
@@ -99,33 +118,49 @@ export function Dashboard() {
       const from = startOfMonthIso(selectedMonth)
       const until = endOfMonthIso(nextMonthKey(selectedMonth))
 
-      const [b, pr, paid] = await Promise.all([
+      // Range de 6 meses para os gráficos (4 meses atrás até o próximo mês)
+      const chartStartMonthKey = shiftMonthKey(selectedMonth, -4)
+      const chartEndMonthKey = nextMonthKey(selectedMonth)
+      const chartFrom = startOfMonthIso(chartStartMonthKey)
+      const chartUntil = endOfMonthIso(chartEndMonthKey)
+
+      const [b, pr, paid, categories, rangeData] = await Promise.all([
         supabase
           .from('bank_accounts')
-          .select('id, name, initial_balance')
+          .select('id, name, initial_balance, color')
           .eq('user_id', ownerUserId)
           .eq('is_active', true),
         supabase
           .from('payables_receivables')
-          .select('id, description, amount, due_date, kind, bank_account_id, status')
+          .select('id, description, amount, due_date, kind, bank_account_id, destination_bank_account_id, status, category_id')
           .eq('user_id', ownerUserId)
           .eq('status', 'open')
           .gte('due_date', from)
           .lte('due_date', until)
-          .order('due_date', { ascending: true })
-        ,
+          .order('due_date', { ascending: true }),
         supabase
           .from('payables_receivables')
-          .select('bank_account_id, amount, kind')
+          .select('bank_account_id, destination_bank_account_id, amount, kind')
           .eq('user_id', ownerUserId)
           .eq('status', 'paid'),
+        supabase
+          .from('categories')
+          .select('id, name, parent_id')
+          .eq('user_id', ownerUserId),
+        supabase
+          .from('payables_receivables')
+          .select('id, description, amount, due_date, kind, bank_account_id, destination_bank_account_id, status, category_id')
+          .eq('user_id', ownerUserId)
+          .gte('due_date', chartFrom)
+          .lte('due_date', chartUntil)
       ])
+      
       if (cancelled) return
-      const banksData = (b.data as Bank[]) ?? []
-      const rowsData = (pr.data as Row[]) ?? []
-      setBanks(banksData)
-      setOpenRows(rowsData)
+      setBanks((b.data as Bank[]) ?? [])
+      setOpenRows((pr.data as Row[]) ?? [])
       setPaidMovements(((paid.data ?? []) as PaidMovement[]) ?? [])
+      setCats((categories.data as Category[]) ?? [])
+      setRangeMovements((rangeData.data as Row[]) ?? [])
       setLoading(false)
     })()
     return () => {
@@ -137,13 +172,101 @@ export function Dashboard() {
     const map = new Map<string, number>()
     for (const bank of banks) map.set(bank.id, Number(bank.initial_balance ?? 0))
     for (const mv of paidMovements) {
-      if (!mv.bank_account_id) continue
-      const cur = map.get(mv.bank_account_id) ?? 0
-      const delta = mv.kind === 'receivable' ? Number(mv.amount) : -Number(mv.amount)
-      map.set(mv.bank_account_id, cur + delta)
+      if (mv.kind === 'transfer') {
+        if (mv.bank_account_id) {
+          const srcCur = map.get(mv.bank_account_id) ?? 0
+          map.set(mv.bank_account_id, srcCur - Number(mv.amount))
+        }
+        if (mv.destination_bank_account_id) {
+          const dstCur = map.get(mv.destination_bank_account_id) ?? 0
+          map.set(mv.destination_bank_account_id, dstCur + Number(mv.amount))
+        }
+      } else {
+        if (!mv.bank_account_id) continue
+        const cur = map.get(mv.bank_account_id) ?? 0
+        const delta = mv.kind === 'receivable' ? Number(mv.amount) : -Number(mv.amount)
+        map.set(mv.bank_account_id, cur + delta)
+      }
     }
     return map
   }, [banks, paidMovements])
+
+  // Total consolidado (Patrimônio)
+  const consolidatedBalance = useMemo(() => {
+    let sum = 0
+    banks.forEach(b => {
+      sum += currentBalanceByBankId.get(b.id) ?? 0
+    })
+    return sum
+  }, [banks, currentBalanceByBankId])
+
+  // Movimentos do mês selecionado para KPIs de receitas/despesas operacionais
+  const currentMonthMovements = useMemo(() => {
+    const from = startOfMonthIso(selectedMonth)
+    const until = endOfMonthIso(selectedMonth)
+    // Precisamos de todas as transações (abertas ou pagas) desse mês
+    return rangeMovements.filter(m => m.due_date >= from && m.due_date <= until)
+  }, [rangeMovements, selectedMonth])
+
+  const currentMonthIncomes = useMemo(() => {
+    return currentMonthMovements
+      .filter(m => m.kind === 'receivable')
+      .reduce((sum, m) => sum + Number(m.amount), 0)
+  }, [currentMonthMovements])
+
+  const currentMonthExpenses = useMemo(() => {
+    return currentMonthMovements
+      .filter(m => m.kind === 'payable')
+      .reduce((sum, m) => sum + Number(m.amount), 0)
+  }, [currentMonthMovements])
+
+  const currentMonthResult = useMemo(() => {
+    return currentMonthIncomes - currentMonthExpenses
+  }, [currentMonthIncomes, currentMonthExpenses])
+
+  // Dados para o Gráfico de Barras (Fluxo de Caixa)
+  const barChartData = useMemo(() => {
+    const startKey = shiftMonthKey(selectedMonth, -4)
+    const endKey = nextMonthKey(selectedMonth)
+    const months = monthKeysInclusive(startKey, endKey)
+    
+    return months.map(mk => {
+      const monthMvs = rangeMovements.filter(m => refMonthKey(m.due_date) === mk)
+      
+      const receitas = monthMvs
+        .filter(m => m.kind === 'receivable')
+        .reduce((sum, m) => sum + Number(m.amount), 0)
+      
+      const despesas = monthMvs
+        .filter(m => m.kind === 'payable')
+        .reduce((sum, m) => sum + Number(m.amount), 0)
+      
+      return {
+        month: mk,
+        label: monthLabel(parseISODate(`${mk}-01`)).toUpperCase(),
+        Receitas: receitas,
+        Despesas: despesas,
+      }
+    })
+  }, [rangeMovements, selectedMonth])
+
+  // Dados para o Gráfico de Donut (Despesas por Categoria Pai)
+  const pieChartData = useMemo(() => {
+    const summaryMap = new Map<string, number>()
+    const currentExpenses = currentMonthMovements.filter(m => m.kind === 'payable')
+    
+    currentExpenses.forEach(exp => {
+      const cat = cats.find(c => c.id === exp.category_id)
+      const parentId = cat?.parent_id || cat?.id || 'other'
+      const parentName = cats.find(c => c.id === parentId)?.name || 'OUTROS'
+      
+      summaryMap.set(parentName, (summaryMap.get(parentName) ?? 0) + Number(exp.amount))
+    })
+
+    return Array.from(summaryMap.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+  }, [currentMonthMovements, cats])
 
   useEffect(() => {
     if (!supabase || !ownerUserId) return
@@ -243,12 +366,10 @@ export function Dashboard() {
   }, [supabase, ownerUserId, ccFutureMonths])
 
   const monthCurrent = selectedMonth
-  const monthNext = nextMonthKey(selectedMonth)
-  const selectedBankName = selectedBankId === 'ALL' ? 'TODAS AS CONTAS' : banks.find((b) => b.id === selectedBankId)?.name ?? 'CONTA'
 
   const rowsScoped = useMemo(
     () =>
-      openRows.filter((r) => (selectedBankId === 'ALL' ? true : r.bank_account_id === selectedBankId)),
+      openRows.filter((r) => (selectedBankId === 'ALL' ? true : r.bank_account_id === selectedBankId || r.destination_bank_account_id === selectedBankId)),
     [openRows, selectedBankId],
   )
 
@@ -266,335 +387,395 @@ export function Dashboard() {
         .sort(rowSort),
     [rowsScoped, monthCurrent],
   )
-  const payNext = useMemo(
-    () =>
-      rowsScoped
-        .filter((r) => r.kind === 'payable' && r.due_date >= startOfMonthIso(monthNext) && r.due_date <= endOfMonthIso(monthNext))
-        .sort(rowSort),
-    [rowsScoped, monthNext],
-  )
-  const recNext = useMemo(
-    () =>
-      rowsScoped
-        .filter((r) => r.kind === 'receivable' && r.due_date >= startOfMonthIso(monthNext) && r.due_date <= endOfMonthIso(monthNext))
-        .sort(rowSort),
-    [rowsScoped, monthNext],
-  )
-
   const ccKpiPeriodTotal = useMemo(() => ccKpiByMonth.reduce((s, r) => s + r.total, 0), [ccKpiByMonth])
+
+  // Despesa total em faturas de cartões no mês selecionado
+  const currentCcExpensesTotal = useMemo(() => {
+    const data = ccKpiByMonth.find(k => k.monthKey === selectedMonth)
+    return data ? data.total : 0
+  }, [ccKpiByMonth, selectedMonth])
 
   if (!supabase) {
     return <p className="text-slate-600">CONECTANDO AO BANCO…</p>
   }
 
   return (
-    <div className="space-y-8">
-      <header>
-        <h2 className="text-xl font-semibold text-slate-900">OLÁ{user?.firstName ? `, ${user.firstName}` : ''}</h2>
-        <p className="text-xs text-slate-600">SALDOS BANCÁRIOS E CONTAS ABERTAS</p>
+    <div className="space-y-6">
+      <header className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800">Painel Financeiro</h2>
+          <p className="text-sm text-slate-500">Saldos consolidados, fluxo de caixa e análise de despesas.</p>
+        </div>
+
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm">
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+            <CalendarDays size={16} className="text-[#185FA5]" />
+            <span>MÊS BASE:</span>
+          </div>
+          <input
+            type="month"
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="w-36 rounded-xl border border-slate-200 px-2 py-1 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-[#185FA5]"
+          />
+        </div>
       </header>
 
       {loading ? (
-        <p className="text-slate-500">CARREGANDO…</p>
+        <p className="p-6 text-center text-sm text-slate-500">Carregando painel...</p>
       ) : (
-        <div className="grid w-full gap-4 sm:gap-6 xl:grid-cols-[minmax(0,360px)_minmax(0,1fr)]">
-          <section className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-semibold tracking-wide text-slate-600">CONTAS BANCÁRIAS</h3>
-              <Button
-                type="button"
-                variant="secondary"
-                className={`text-[9px] ${selectedBankId === 'ALL' ? 'ring-1 ring-sky-500/60' : ''}`}
-                onClick={() => setSelectedBankId('ALL')}
-              >
-                TODAS
-              </Button>
+        <div className="space-y-6">
+          {/* Métricas Consolidadas */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {/* Patrimônio Líquido */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex items-center gap-4">
+              <div className="rounded-xl bg-[#E6F1FB] p-3 text-[#185FA5] shrink-0">
+                <Landmark size={24} />
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Patrimônio Líquido</p>
+                <p className={`text-xl font-bold mt-0.5 ${consolidatedBalance < 0 ? 'text-red-600' : 'text-slate-800'}`}>
+                  {formatBRL(consolidatedBalance)}
+                </p>
+              </div>
             </div>
 
-            {banks.length === 0 ? (
-              <p className="text-xs text-slate-500">
-                NENHUMA CONTA ATIVA.{' '}
-                <Link to="/lsh/contas-bancarias" className="text-sky-600 hover:underline">
-                  CADASTRAR
+            {/* Resultado do Mês */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex items-center gap-4">
+              <div className={`rounded-xl p-3 shrink-0 ${currentMonthResult >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                {currentMonthResult >= 0 ? <TrendingUp size={24} /> : <TrendingDown size={24} />}
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Resultado Operacional</p>
+                <p className={`text-xl font-bold mt-0.5 ${currentMonthResult < 0 ? 'text-red-600' : 'text-slate-800'}`}>
+                  {formatBRL(currentMonthResult)}
+                </p>
+              </div>
+            </div>
+
+            {/* Receitas Operacionais */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex items-center gap-4">
+              <div className="rounded-xl bg-emerald-50 text-emerald-600 p-3 shrink-0">
+                <ArrowUpRight size={24} />
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Receitas do Mês</p>
+                <p className="text-xl font-bold text-slate-800 mt-0.5">{formatBRL(currentMonthIncomes)}</p>
+              </div>
+            </div>
+
+            {/* Despesas em Cartão */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex items-center gap-4">
+              <div className="rounded-xl bg-violet-50 text-violet-600 p-3 shrink-0">
+                <CreditCard size={24} />
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Despesas no Cartão</p>
+                <p className="text-xl font-bold text-slate-800 mt-0.5">{formatBRL(currentCcExpensesTotal)}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            {/* Contas Bancárias (Lista Lateral) */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Contas Bancárias</h3>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className={`h-[28px] text-[10px] font-semibold px-2.5 ${selectedBankId === 'ALL' ? 'bg-[#E6F1FB] text-[#185FA5] hover:bg-[#E6F1FB]/85 border-[#185FA5]/25' : 'bg-slate-50 text-slate-600 border-none'}`}
+                  onClick={() => setSelectedBankId('ALL')}
+                >
+                  TODAS
+                </Button>
+              </div>
+
+              {banks.length === 0 ? (
+                <p className="text-xs text-slate-400 py-6 text-center">
+                  Nenhuma conta ativa.{' '}
+                  <Link to="/lsh/contas-bancarias" className="text-sky-600 hover:underline">
+                    Cadastrar
+                  </Link>
+                </p>
+              ) : (
+                <div className="space-y-2.5 overflow-y-auto max-h-[300px]">
+                  {banks.map((b) => {
+                    const selected = selectedBankId === b.id
+                    const balance = currentBalanceByBankId.get(b.id) ?? Number(b.initial_balance ?? 0)
+                    return (
+                      <button
+                        key={b.id}
+                        type="button"
+                        onClick={() => setSelectedBankId((prev) => (prev === b.id ? 'ALL' : b.id))}
+                        className={`w-full rounded-xl border p-3.5 text-left transition-all ${
+                          selected
+                            ? 'border-[#185FA5] bg-[#E6F1FB]/20 ring-1 ring-[#185FA5]/30'
+                            : 'border-slate-100 bg-slate-50/50 hover:bg-slate-50 hover:border-slate-200'
+                        }`}
+                      >
+                        <div className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-500">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="h-2.5 w-2.5 rounded-full ring-1 ring-black/5"
+                              style={{ backgroundColor: b.color || '#64748B' }}
+                            />
+                            <span>{b.name}</span>
+                          </div>
+                        </div>
+                        <div className="text-base font-bold text-slate-800 mt-1">
+                          {formatBRL(balance)}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Gráfico de Fluxo de Caixa (BarChart) */}
+            <div className="lg:col-span-2 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col gap-4">
+              <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Fluxo de Caixa Mensal</h3>
+              <div className="h-[280px] w-full text-xs font-medium text-slate-500">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={barChartData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                    <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: '#64748B' }} />
+                    <YAxis tickLine={false} axisLine={false} tickFormatter={(val) => `R$ ${val}`} tick={{ fill: '#64748B' }} />
+                    <Tooltip
+                      formatter={(val: any) => [formatBRL(Number(val)), '']}
+                      contentStyle={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #E2E8F0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
+                    />
+                    <Legend iconType="circle" wrapperStyle={{ paddingTop: 10 }} />
+                    <Bar dataKey="Receitas" fill="#10B981" radius={[4, 4, 0, 0]} maxBarSize={30} />
+                    <Bar dataKey="Despesas" fill="#EF4444" radius={[4, 4, 0, 0]} maxBarSize={30} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            {/* Gráfico de Pizza de Categorias (Donut) */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col gap-4">
+              <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Despesas por Categoria</h3>
+              {pieChartData.length === 0 ? (
+                <div className="flex-1 flex items-center justify-center py-12 text-slate-400 text-xs">
+                  Nenhuma despesa registrada neste mês.
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center gap-4">
+                  <div className="h-[180px] w-full text-xs font-medium text-slate-500">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={pieChartData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={80}
+                          paddingAngle={3}
+                          dataKey="value"
+                        >
+                          {pieChartData.map((_, index) => (
+                            <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(val: any) => [formatBRL(Number(val)), '']} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 w-full text-[11px] font-semibold text-slate-600">
+                    {pieChartData.slice(0, 6).map((entry, idx) => (
+                      <div key={entry.name} className="flex items-center gap-1.5 min-w-0">
+                        <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }} />
+                        <span className="truncate">{entry.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Contas Abertas do Mês Selecionado */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Despesas Abertas — {monthCurrent}</h3>
+                <span className="text-[10px] font-bold text-red-500 bg-red-50 px-2 py-0.5 rounded-md">PAGAR</span>
+              </div>
+              <div className="space-y-2 overflow-y-auto max-h-[220px] flex-1">
+                {payCurrent.length === 0 ? (
+                  <p className="text-xs text-slate-400 py-8 text-center">Nenhuma despesa em aberto.</p>
+                ) : (
+                  payCurrent.map((x) => (
+                    <div
+                      key={`p0-${x.id}`}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/50 p-3 text-xs font-semibold"
+                    >
+                      <span className="min-w-0 flex-1 truncate text-slate-700">{x.description || '—'}</span>
+                      <div className="flex shrink-0 items-center gap-2.5 tabular-nums">
+                        <span className="text-red-600">{formatBRL(Number(x.amount))}</span>
+                        <span className="text-slate-400 font-mono text-[10px]">{x.due_date}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Receitas Abertas do Mês Selecionado */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Receitas Abertas — {monthCurrent}</h3>
+                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">RECEBER</span>
+              </div>
+              <div className="space-y-2 overflow-y-auto max-h-[220px] flex-1">
+                {recCurrent.length === 0 ? (
+                  <p className="text-xs text-slate-400 py-8 text-center">Nenhuma receita em aberto.</p>
+                ) : (
+                  recCurrent.map((x) => (
+                    <div
+                      key={`r0-${x.id}`}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/50 p-3 text-xs font-semibold"
+                    >
+                      <span className="min-w-0 flex-1 truncate text-slate-700">{x.description || '—'}</span>
+                      <div className="flex shrink-0 items-center gap-2.5 tabular-nums">
+                        <span className="text-emerald-700">{formatBRL(Number(x.amount))}</span>
+                        <span className="text-slate-400 font-mono text-[10px]">{x.due_date}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Seção de Cartões de Crédito */}
+          <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2 text-sm font-bold text-slate-800 uppercase tracking-wide">
+                <CreditCard size={18} className="text-[#185FA5]" />
+                <span>Evolução por Cartão de Crédito</span>
+              </div>
+              <Link to="/lsh/cartoes" className="text-xs font-semibold text-sky-600 hover:underline">
+                Gerenciar Cartões
+              </Link>
+            </div>
+            
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <p className="text-xs text-slate-500 leading-normal max-w-xl">
+                Valores calculados por competência da fatura (soma de itens por mês de referência). Exibe histórico de 3 meses e projeção futura de acordo com a seleção.
+              </p>
+              <div>
+                <select
+                  className="rounded-xl border border-slate-200 px-3.5 py-1.5 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#185FA5]"
+                  value={ccFutureMonths}
+                  onChange={(e) => setCcFutureMonths(Number(e.target.value) as 3 | 6 | 9 | 12)}
+                >
+                  <option value={3}>Mais 3 Meses</option>
+                  <option value={6}>Mais 6 Meses</option>
+                  <option value={9}>Mais 9 Meses</option>
+                  <option value={12}>Mais 12 Meses</option>
+                </select>
+              </div>
+            </div>
+
+            {ccLoading ? (
+              <p className="text-xs text-slate-400 text-center py-6">Carregando evolução de cartões...</p>
+            ) : creditCards.length === 0 ? (
+              <p className="text-xs text-slate-400 text-center py-6">
+                Nenhum cartão cadastrado.{' '}
+                <Link to="/lsh/cartoes" className="text-sky-600 hover:underline">
+                  Cadastrar
                 </Link>
               </p>
             ) : (
-              banks.map((b) => {
-                const selected = selectedBankId === b.id
-                return (
-                  <button
-                    key={b.id}
-                    type="button"
-                    onClick={() => setSelectedBankId((prev) => (prev === b.id ? 'ALL' : b.id))}
-                    className={`w-full rounded-xl border bg-white p-3 text-left shadow-sm transition-colors sm:p-4 ${
-                      selected ? 'border-sky-500 ring-1 ring-sky-200' : 'border-slate-200 hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="mb-1 flex items-center gap-2 text-[9px] text-slate-500">
-                      <Landmark size={14} />
-                      <span>{b.name}</span>
-                    </div>
-                    <div className="text-sm font-semibold text-slate-900">
-                      SALDO ATUAL: {formatBRL(currentBalanceByBankId.get(b.id) ?? Number(b.initial_balance ?? 0))}
-                    </div>
-                  </button>
-                )
-              })
+              <div className="space-y-5">
+                <div className="rounded-xl border border-sky-100 bg-gradient-to-br from-sky-50/20 to-white p-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-sky-900">
+                    Soma de Todos os Cartões por Competência
+                  </p>
+                  <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7 text-xs font-semibold">
+                    {ccKpiByMonth.map((row) => (
+                      <div
+                        key={row.monthKey}
+                        className={`rounded-xl border px-3.5 py-3 ${
+                          row.isCurrent
+                            ? 'border-sky-400 bg-white ring-1 ring-sky-200/50 shadow-sm'
+                            : 'border-slate-100 bg-white/60'
+                        }`}
+                      >
+                        {row.isCurrent && (
+                          <span className="block text-[9px] font-bold uppercase tracking-wider text-sky-600 mb-0.5">
+                            Mês Atual
+                          </span>
+                        )}
+                        <p className="truncate text-slate-600 text-[11px] uppercase tracking-wide leading-tight">
+                          {row.label.replace(' DE ', ' ')}
+                        </p>
+                        <p className="mt-2 text-base font-bold text-slate-800 tabular-nums">{formatBRL(row.total)}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-3.5 border-t border-sky-100 pt-3 text-xs font-semibold text-slate-500">
+                    Total Acumulado no Período Projetado:{' '}
+                    <span className="font-bold tabular-nums text-slate-800">{formatBRL(ccKpiPeriodTotal)}</span>
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+                  {ccCardSeries.map((card) => {
+                    const maxBar = Math.max(1, ...card.series.map((s) => s.total))
+                    return (
+                      <Link
+                        key={card.cardId}
+                        to={`/lsh/cartoes/${card.cardId}`}
+                        className="flex flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-colors hover:border-[#185FA5] hover:shadow-md"
+                      >
+                        <h4 className="mb-4 truncate text-sm font-bold text-slate-800" title={card.name}>
+                          {card.name}
+                        </h4>
+                        <div className="flex min-h-0 flex-1 flex-col gap-3">
+                          {card.series.map((row) => (
+                            <div key={row.monthKey} className="space-y-1">
+                              <div className="flex items-center justify-between gap-2 text-xs font-semibold leading-none">
+                                <span
+                                  className={
+                                    row.segment === 'atual'
+                                      ? 'min-w-0 truncate text-slate-800'
+                                      : row.segment === 'futuro'
+                                        ? 'min-w-0 truncate text-sky-800 font-medium'
+                                        : 'min-w-0 truncate text-slate-400 font-normal'
+                                  }
+                                  title={row.label}
+                                >
+                                  {row.segment === 'atual' ? 'ATUAL · ' : row.segment === 'futuro' ? '→ ' : ''}
+                                  {row.label.replace(' DE ', ' ')}
+                                </span>
+                                <span className="shrink-0 text-slate-700 font-bold tabular-nums">
+                                  {formatBRL(row.total)}
+                                </span>
+                              </div>
+                              <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                                <div
+                                  className={`h-full rounded-full transition-[width] ${
+                                    row.segment === 'futuro' ? 'bg-violet-400' : 'bg-[#185FA5]/80'
+                                  }`}
+                                  style={{ width: `${(row.total / maxBar) * 100}%` }}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
             )}
-          </section>
-
-          <section className="space-y-4">
-            <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-              <div className="mb-2 flex items-center gap-2 text-xs text-slate-600">
-                <CalendarDays size={14} />
-                <span>MÊS BASE</span>
-              </div>
-              <input
-                type="month"
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                className="w-44"
-              />
-              <div className="mt-2 text-[9px] text-slate-500">
-                EXIBINDO: {selectedMonth} E {nextMonthKey(selectedMonth)}
-              </div>
-              <div className="mt-1 text-[9px] text-slate-500">
-                FILTRO DE CONTA: {selectedBankName}
-              </div>
-            </div>
-
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-                <h3 className="mb-2 text-xs font-semibold text-slate-700">CONTAS ABERTAS — {selectedMonth}</h3>
-                <div className="space-y-2">
-                  <p className="text-[9px] font-medium text-amber-800">A PAGAR</p>
-                  {payCurrent.length === 0 ? (
-                    <p className="text-[9px] text-slate-500">
-                      SEM REGISTROS
-                      {selectedBankId !== 'ALL' ? ' NESTA CONTA.' : '.'}
-                    </p>
-                  ) : (
-                    payCurrent.map((x) => (
-                      <div
-                        key={`p0-${x.id}`}
-                        className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-2 py-1.5 text-xs"
-                      >
-                        <span className="min-w-0 flex-1 truncate text-slate-700">{x.description || '—'}</span>
-                        <div className="flex shrink-0 items-center gap-2 tabular-nums">
-                          <span className="text-amber-800">{formatBRL(Number(x.amount))}</span>
-                          <span className="whitespace-nowrap text-slate-500">{x.due_date}</span>
-                        </div>
-                      </div>
-                    ))
-                  )}
-
-                  <p className="pt-2 text-[9px] font-medium text-emerald-800">A RECEBER</p>
-                  {recCurrent.length === 0 ? (
-                    <p className="text-[9px] text-slate-500">
-                      SEM REGISTROS
-                      {selectedBankId !== 'ALL' ? ' NESTA CONTA.' : '.'}
-                    </p>
-                  ) : (
-                    recCurrent.map((x) => (
-                      <div
-                        key={`r0-${x.id}`}
-                        className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-2 py-1.5 text-xs"
-                      >
-                        <span className="min-w-0 flex-1 truncate text-slate-700">{x.description || '—'}</span>
-                        <div className="flex shrink-0 items-center gap-2 tabular-nums">
-                          <span className="text-emerald-700">{formatBRL(Number(x.amount))}</span>
-                          <span className="whitespace-nowrap text-slate-500">{x.due_date}</span>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-                <h3 className="mb-2 text-xs font-semibold text-slate-700">CONTAS ABERTAS — {monthNext}</h3>
-                <div className="space-y-2">
-                  <p className="text-[9px] font-medium text-amber-800">A PAGAR</p>
-                  {payNext.length === 0 ? (
-                    <p className="text-[9px] text-slate-500">
-                      SEM REGISTROS
-                      {selectedBankId !== 'ALL' ? ' NESTA CONTA.' : '.'}
-                    </p>
-                  ) : (
-                    payNext.map((x) => (
-                      <div
-                        key={`p1-${x.id}`}
-                        className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-2 py-1.5 text-xs"
-                      >
-                        <span className="min-w-0 flex-1 truncate text-slate-700">{x.description || '—'}</span>
-                        <div className="flex shrink-0 items-center gap-2 tabular-nums">
-                          <span className="text-amber-800">{formatBRL(Number(x.amount))}</span>
-                          <span className="whitespace-nowrap text-slate-500">{x.due_date}</span>
-                        </div>
-                      </div>
-                    ))
-                  )}
-
-                  <p className="pt-2 text-[9px] font-medium text-emerald-800">A RECEBER</p>
-                  {recNext.length === 0 ? (
-                    <p className="text-[9px] text-slate-500">
-                      SEM REGISTROS
-                      {selectedBankId !== 'ALL' ? ' NESTA CONTA.' : '.'}
-                    </p>
-                  ) : (
-                    recNext.map((x) => (
-                      <div
-                        key={`r1-${x.id}`}
-                        className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-2 py-1.5 text-xs"
-                      >
-                        <span className="min-w-0 flex-1 truncate text-slate-700">{x.description || '—'}</span>
-                        <div className="flex shrink-0 items-center gap-2 tabular-nums">
-                          <span className="text-emerald-700">{formatBRL(Number(x.amount))}</span>
-                          <span className="whitespace-nowrap text-slate-500">{x.due_date}</span>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <Link to="/lsh/fluxo" className="inline-flex items-center gap-2 text-xs text-sky-600 hover:underline">
-              <Wallet size={14} />
-              VER MOVIMENTOS COMPLETOS
-            </Link>
           </section>
         </div>
       )}
-
-      <section className="mt-8 space-y-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:mt-10 sm:p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-800">
-            <CreditCard size={16} className="text-sky-600" />
-            <span>EVOLUÇÃO POR CARTÃO (TOTAL DA FATURA)</span>
-          </div>
-          <Link to="/lsh/cartoes" className="text-[9px] text-sky-600 hover:underline">
-            GERENCIAR CARTÕES
-          </Link>
-        </div>
-        <p className="text-[9px] text-slate-500">
-          CADA CARD É UM CARTÃO: BASE DE 3 MESES ANTERIORES + MÊS ATUAL ({monthKey(new Date())}), DEPOIS MESES À FRENTE
-          CONFORME O FILTRO. VALORES = SOMA DOS ITENS DA FATURA POR COMPETÊNCIA.
-        </p>
-        <div className="flex flex-wrap items-end gap-4">
-          <div>
-            <label className="mb-1 block text-[9px] text-slate-600">À FRENTE (EM CADA CARD)</label>
-            <select
-              className="min-w-[200px]"
-              value={ccFutureMonths}
-              onChange={(e) => setCcFutureMonths(Number(e.target.value) as 3 | 6 | 9 | 12)}
-            >
-              <option value={3}>PRÓXIMOS 3 MESES</option>
-              <option value={6}>PRÓXIMOS 6 MESES</option>
-              <option value={9}>PRÓXIMOS 9 MESES</option>
-              <option value={12}>PRÓXIMOS 12 MESES</option>
-            </select>
-          </div>
-        </div>
-
-        {ccLoading ? (
-          <p className="text-xs text-slate-500">CARREGANDO EVOLUÇÃO…</p>
-        ) : creditCards.length === 0 ? (
-          <p className="text-xs text-slate-500">
-            NENHUM CARTÃO CADASTRADO.{' '}
-            <Link to="/lsh/cartoes" className="text-sky-600 hover:underline">
-              CADASTRAR
-            </Link>
-          </p>
-        ) : (
-          <>
-            <div className="rounded-xl border border-sky-200 bg-gradient-to-br from-sky-50 to-white p-4 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-wide text-sky-900">
-                Total de todos os cartões por mês
-              </p>
-              <p className="mt-1 text-xs text-slate-600">
-                Mês atual e próximos 6 meses — soma das faturas por competência (todos os cartões)
-              </p>
-              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7">
-                {ccKpiByMonth.map((row) => (
-                  <div
-                    key={row.monthKey}
-                    className={`rounded-lg border px-2 py-2 sm:px-3 sm:py-2.5 ${
-                      row.isCurrent ? 'border-sky-400 bg-white ring-1 ring-sky-200' : 'border-slate-200/80 bg-white/60'
-                    }`}
-                  >
-                    {row.isCurrent ? (
-                      <p className="text-[8px] font-semibold uppercase tracking-wide text-sky-700 sm:text-xs">
-                        Mês atual
-                      </p>
-                    ) : null}
-                    <p
-                      className={`truncate font-semibold leading-tight ${row.isCurrent ? 'mt-0.5 text-sm text-sky-950 sm:text-base' : 'text-sm text-slate-800 sm:text-base'}`}
-                      title={row.label}
-                    >
-                      {row.label.replace(' DE ', ' ')}
-                    </p>
-                    <p className="mt-1.5 text-base font-bold tabular-nums text-amber-900 sm:text-lg">{formatBRL(row.total)}</p>
-                  </div>
-                ))}
-              </div>
-              <p className="mt-3 border-t border-sky-200/80 pt-3 text-xs text-slate-600">
-                Total no período (7 competências):{' '}
-                <span className="font-semibold tabular-nums text-slate-900">{formatBRL(ccKpiPeriodTotal)}</span>
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-              {ccCardSeries.map((card) => {
-                const maxBar = Math.max(1, ...card.series.map((s) => s.total))
-                return (
-                  <Link
-                    key={card.cardId}
-                    to={`/cartoes/${card.cardId}`}
-                    className="flex flex-col rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition-colors hover:border-sky-300 hover:shadow-md sm:p-4"
-                  >
-                    <h4 className="mb-3 truncate text-sm font-semibold text-slate-900" title={card.name}>
-                      {card.name}
-                    </h4>
-                    <div className="flex min-h-0 flex-1 flex-col gap-2.5">
-                      {card.series.map((row) => (
-                        <div key={row.monthKey} className="space-y-1">
-                          <div className="flex items-center justify-between gap-2 text-xs leading-snug sm:text-sm">
-                            <span
-                              className={
-                                row.segment === 'atual'
-                                  ? 'min-w-0 truncate font-semibold text-slate-900'
-                                  : row.segment === 'futuro'
-                                    ? 'min-w-0 truncate font-medium text-sky-800'
-                                    : 'min-w-0 truncate text-slate-700'
-                              }
-                              title={row.label}
-                            >
-                              {row.segment === 'atual' ? 'ATUAL · ' : row.segment === 'futuro' ? '→ ' : ''}
-                              {row.label.replace(' DE ', ' ')}
-                            </span>
-                            <span className="shrink-0 font-semibold tabular-nums text-amber-900">
-                              {formatBRL(row.total)}
-                            </span>
-                          </div>
-                          <div className="h-2 overflow-hidden rounded-full bg-slate-200">
-                            <div
-                              className={`h-full rounded-full transition-[width] ${
-                                row.segment === 'futuro' ? 'bg-violet-500' : 'bg-sky-500'
-                              }`}
-                              style={{ width: `${(row.total / maxBar) * 100}%` }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </Link>
-                )
-              })}
-            </div>
-          </>
-        )}
-      </section>
     </div>
   )
 }

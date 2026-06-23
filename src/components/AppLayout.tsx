@@ -148,6 +148,7 @@ function AppLayoutShell() {
           { label: 'Contas bancárias', to: '/lsh/contas-bancarias', icon: Landmark },
           { label: 'Categorias', to: '/lsh/categorias', icon: Tags },
           { label: 'Cartões', to: '/lsh/cartoes', icon: CreditCard },
+          { label: 'Membros da Família', to: '/lsh/familiares', icon: Users },
         ],
       },
     ],

@@ -1,5 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
-import { Pencil, Trash2 } from 'lucide-react'
+import { Pencil, Trash2, Tags, CornerDownRight } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
@@ -7,7 +7,12 @@ import { resolveDataOwnerId } from '../lib/dataOwner'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { toUpperTrim } from '../lib/text'
 
-type Cat = { id: string; name: string; type: 'income' | 'expense' | 'neutral' }
+type Cat = {
+  id: string
+  name: string
+  type: 'income' | 'expense' | 'neutral'
+  parent_id?: string | null
+}
 
 const types: { v: Cat['type']; l: string }[] = [
   { v: 'expense', l: 'Despesa' },
@@ -23,12 +28,17 @@ export function Categories() {
   const [loading, setLoading] = useState(true)
   const [name, setName] = useState('')
   const [type, setType] = useState<Cat['type']>('expense')
+  const [parentId, setParentId] = useState<string>('')
   const [editing, setEditing] = useState<Cat | null>(null)
 
   const load = useCallback(async () => {
     if (!supabase || !ownerUserId) return
     setLoading(true)
-    const { data } = await supabase.from('categories').select('*').eq('user_id', ownerUserId).order('name')
+    const { data } = await supabase
+      .from('categories')
+      .select('*')
+      .eq('user_id', ownerUserId)
+      .order('name')
     setRows((data as Cat[]) ?? [])
     setLoading(false)
   }, [ownerUserId, supabase])
@@ -42,45 +52,116 @@ export function Categories() {
     if (!supabase || !ownerUserId) return
     const n = toUpperTrim(name)
     if (!n) return
+    
+    const payload = {
+      name: n,
+      type,
+      parent_id: parentId || null,
+    }
+
     if (editing) {
-      const { error } = await supabase.from('categories').update({ name: n, type }).eq('id', editing.id)
+      const { error } = await supabase
+        .from('categories')
+        .update(payload)
+        .eq('id', editing.id)
       if (error) alert(error.message)
       else {
         setEditing(null)
         setName('')
+        setParentId('')
         load()
       }
     } else {
-      const { error } = await supabase.from('categories').insert({ user_id: ownerUserId, name: n, type })
+      const { error } = await supabase
+        .from('categories')
+        .insert({ user_id: ownerUserId, ...payload })
       if (error) alert(error.message)
       else {
         setName('')
+        setParentId('')
         load()
       }
     }
   }
 
   async function remove(id: string) {
-    if (!supabase || !confirm('Excluir categoria?')) return
+    if (!supabase || !confirm('Deseja excluir esta categoria? Subcategorias vinculadas a ela passarão a ser categorias principais.')) return
     const { error } = await supabase.from('categories').delete().eq('id', id)
     if (error) alert(error.message)
     else load()
   }
 
+  // Filtrar categorias pai elegíveis (deve ser do mesmo tipo, não pode ter pai, e não pode ser a própria categoria que está sendo editada)
+  const rootCategories = rows.filter(
+    (r) => !r.parent_id && r.type === type && (!editing || r.id !== editing.id)
+  )
+
+  // Organizar a listagem de forma hierárquica
+  const rootCategoriesAll = rows.filter((r) => !r.parent_id)
+  const getSubcategories = (pid: string) => rows.filter((r) => r.parent_id === pid)
+
+  const orderedRows: Array<{ cat: Cat; isSub: boolean; parentName?: string }> = []
+  rootCategoriesAll.forEach((root) => {
+    orderedRows.push({ cat: root, isSub: false })
+    const subs = getSubcategories(root.id)
+    subs.forEach((sub) => {
+      orderedRows.push({ cat: sub, isSub: true, parentName: root.name })
+    })
+  })
+
+  // Adicionar categorias com parent_id órfãos (caso existam por inconsistência)
+  const orphanCategories = rows.filter(
+    (r) => r.parent_id && !rootCategoriesAll.some((root) => root.id === r.parent_id)
+  )
+  orphanCategories.forEach((orphan) => {
+    orderedRows.push({ cat: orphan, isSub: false })
+  })
+
   if (!supabase) return <p className="text-slate-600">Conectando…</p>
 
   return (
-    <div className="space-y-8">
-      <h2 className="text-2xl font-semibold">Categorias</h2>
+    <div className="max-w-4xl space-y-8">
+      <div>
+        <h2 className="flex items-center gap-2 text-2xl font-bold text-slate-800">
+          <Tags className="text-[#185FA5]" size={28} />
+          Categorias
+        </h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Gerencie as categorias e subcategorias para classificar receitas e despesas.
+        </p>
+      </div>
 
-      <form onSubmit={submit} className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+      <form
+        onSubmit={submit}
+        className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+      >
         <div className="min-w-[200px] flex-1">
-          <label>Nome</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Alimentação" required />
+          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">
+            Nome
+          </label>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Ex.: Alimentação"
+            required
+            className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm placeholder:text-slate-400 focus:border-[#185FA5] focus:outline-none focus:ring-1 focus:ring-[#185FA5]"
+          />
         </div>
+
         <div className="w-40">
-          <label>Tipo</label>
-          <select value={type} onChange={(e) => setType(e.target.value as Cat['type'])}>
+          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">
+            Tipo
+          </label>
+          <select
+            value={type}
+            onChange={(e) => {
+              const newType = e.target.value as Cat['type']
+              setType(newType)
+              // Resetar categoria pai se mudar o tipo
+              setParentId('')
+            }}
+            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-[#185FA5] focus:outline-none focus:ring-1 focus:ring-[#185FA5]"
+          >
             {types.map((t) => (
               <option key={t.v} value={t.v}>
                 {t.l}
@@ -88,52 +169,102 @@ export function Categories() {
             ))}
           </select>
         </div>
-        <Button type="submit" variant="primary">
-          {editing ? 'Salvar' : 'Adicionar'}
-        </Button>
-        {editing && (
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => {
-              setEditing(null)
-              setName('')
-            }}
+
+        <div className="w-56">
+          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">
+            Categoria Pai (Opcional)
+          </label>
+          <select
+            value={parentId}
+            onChange={(e) => setParentId(e.target.value)}
+            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-[#185FA5] focus:outline-none focus:ring-1 focus:ring-[#185FA5]"
           >
-            Cancelar
+            <option value="">Nenhuma (Categoria Principal)</option>
+            {rootCategories.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex gap-2">
+          <Button type="submit" variant="primary" className="h-[38px] px-5 font-semibold">
+            {editing ? 'Salvar' : 'Adicionar'}
           </Button>
-        )}
+          {editing && (
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-[38px] px-4"
+              onClick={() => {
+                setEditing(null)
+                setName('')
+                setParentId('')
+              }}
+            >
+              Cancelar
+            </Button>
+          )}
+        </div>
       </form>
 
-      <div className="table-wrap">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         {loading ? (
-          <p className="p-4 text-slate-500">Carregando…</p>
+          <p className="p-6 text-center text-sm text-slate-500">Carregando categorias...</p>
+        ) : orderedRows.length === 0 ? (
+          <div className="p-8 text-center text-slate-400">
+            <Tags className="mx-auto mb-2 text-slate-300" size={32} />
+            <p className="text-sm">Nenhuma categoria cadastrada ainda.</p>
+          </div>
         ) : (
-          <table>
+          <table className="w-full border-collapse text-left text-sm">
             <thead>
-              <tr>
-                <th>Nome</th>
-                <th>Tipo</th>
-                <th></th>
+              <tr className="border-b border-slate-100 bg-slate-50/75 text-xs font-bold uppercase tracking-wider text-slate-500">
+                <th className="px-6 py-3.5">Nome</th>
+                <th className="px-6 py-3.5">Tipo</th>
+                <th className="px-6 py-3.5 text-right">Ações</th>
               </tr>
             </thead>
-            <tbody>
-              {rows.map((c) => (
-                <tr key={c.id}>
-                  <td>{c.name}</td>
-                  <td>{types.find((t) => t.v === c.type)?.l}</td>
-                  <td>
-                    <div className="flex items-center justify-end gap-2">
+            <tbody className="divide-y divide-slate-100">
+              {orderedRows.map(({ cat, isSub }) => (
+                <tr key={cat.id} className={isSub ? 'bg-slate-50/20 hover:bg-slate-50/60' : 'hover:bg-slate-50/50'}>
+                  <td className="px-6 py-3.5">
+                    {isSub ? (
+                      <span className="flex items-center gap-1.5 pl-6 font-medium text-slate-600">
+                        <CornerDownRight size={14} className="text-slate-400" />
+                        {cat.name}
+                      </span>
+                    ) : (
+                      <span className="font-semibold text-slate-800">{cat.name}</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-3.5">
+                    <span
+                      className={`inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-medium ${
+                        cat.type === 'income'
+                          ? 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20'
+                          : cat.type === 'expense'
+                            ? 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20'
+                            : 'bg-slate-50 text-slate-700 ring-1 ring-inset ring-slate-600/20'
+                      }`}
+                    >
+                      {types.find((t) => t.v === cat.type)?.l}
+                    </span>
+                  </td>
+                  <td className="px-6 py-3.5">
+                    <div className="flex items-center justify-end gap-1.5">
                       <Button
                         type="button"
                         variant="ghost"
-                        className="inline-flex h-9 w-9 items-center justify-center p-0"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg p-0 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
                         title="EDITAR"
                         aria-label="EDITAR"
                         onClick={() => {
-                          setEditing(c)
-                          setName(c.name)
-                          setType(c.type)
+                          setEditing(cat)
+                          setName(cat.name)
+                          setType(cat.type)
+                          setParentId(cat.parent_id || '')
                         }}
                       >
                         <Pencil size={16} />
@@ -141,10 +272,10 @@ export function Categories() {
                       <Button
                         type="button"
                         variant="ghost"
-                        className="inline-flex h-9 w-9 items-center justify-center p-0 text-red-600"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg p-0 text-red-500 hover:bg-red-50 hover:text-red-600"
                         title="EXCLUIR"
                         aria-label="EXCLUIR"
-                        onClick={() => remove(c.id)}
+                        onClick={() => remove(cat.id)}
                       >
                         <Trash2 size={16} />
                       </Button>

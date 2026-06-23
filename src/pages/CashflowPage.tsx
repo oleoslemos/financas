@@ -1,5 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
-import { Check, FileText, Pencil, Plus, Split, Trash2, Undo2, X } from 'lucide-react'
+import { Check, FileText, Pencil, Plus, Split, Trash2, Undo2, X, Landmark, Users } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '../components/ui/Button'
 import { useNavigate } from 'react-router-dom'
@@ -28,7 +28,6 @@ function stripParcelDesc(d: string) {
   return d.replace(/\s*\(PARCELA \d+\/\d+\)\s*$/i, '').trim()
 }
 
-/** Descrição persistida ao editar: mantém sufixo da parcela quando for lançamento parcelado. */
 function descriptionForEditedRow(edit: Pr, baseDesc: string) {
   if (
     edit.installment_group_id &&
@@ -47,7 +46,7 @@ function currentMonthRange() {
   return { from: toISODate(first), to: toISODate(last) }
 }
 
-type Kind = 'payable' | 'receivable'
+type Kind = 'payable' | 'receivable' | 'transfer'
 type Pr = {
   id: string
   description: string
@@ -58,17 +57,20 @@ type Pr = {
   kind: Kind
   category_id: string | null
   bank_account_id: string | null
+  destination_bank_account_id: string | null
+  family_member_id: string | null
   installment_group_id: string | null
   installment_number: number | null
   installment_count: number | null
 }
 
 function statusQuitadoLabel(kind: Kind) {
+  if (kind === 'transfer') return 'CONCLUÍDO'
   return kind === 'receivable' ? 'RECEBIDO' : 'PAGO'
 }
 
-/** Rótulo do botão de quitar título em aberto. */
 function acaoQuitarLabel(kind: Kind) {
+  if (kind === 'transfer') return 'CONCLUIR'
   return kind === 'receivable' ? 'RECEBER' : 'PAGAR'
 }
 
@@ -83,8 +85,9 @@ export function CashflowPage() {
 
   const [rows, setRows] = useState<Pr[]>([])
   const [invoiceDetailByPayable, setInvoiceDetailByPayable] = useState<Record<string, { cardId: string; invoiceId: string }>>({})
-  const [cats, setCats] = useState<{ id: string; name: string }[]>([])
+  const [cats, setCats] = useState<{ id: string; name: string; type?: string; parent_id?: string | null }[]>([])
   const [banks, setBanks] = useState<{ id: string; name: string; initial_balance: number | null }[]>([])
+  const [familyMembers, setFamilyMembers] = useState<{ id: string; name: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -94,6 +97,8 @@ export function CashflowPage() {
   const [dueDate, setDueDate] = useState(toISODate(new Date()))
   const [categoryId, setCategoryId] = useState('')
   const [bankId, setBankId] = useState('')
+  const [destinationBankId, setDestinationBankId] = useState('')
+  const [familyMemberId, setFamilyMemberId] = useState('')
   const [parcelAmount, setParcelAmount] = useState('')
   const [parcelCount, setParcelCount] = useState('12')
   const [firstDue, setFirstDue] = useState(toISODate(new Date()))
@@ -111,6 +116,7 @@ export function CashflowPage() {
   const [filterKind, setFilterKind] = useState<'ALL' | Kind>('ALL')
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'open' | 'paid'>('open')
   const [filterBank, setFilterBank] = useState('')
+  const [filterFamilyMember, setFilterFamilyMember] = useState('')
   const [filterFrom, setFilterFrom] = useState(monthRange.from)
   const [filterTo, setFilterTo] = useState(monthRange.to)
 
@@ -118,13 +124,13 @@ export function CashflowPage() {
     if (!supabase || !ownerUserId) return
     setLoading(true)
     setLoadError(null)
-    const [pRes, cRes, bRes, invRes] = await Promise.all([
+    const [pRes, cRes, bRes, invRes, famRes] = await Promise.all([
       supabase
         .from('payables_receivables')
         .select('*')
         .eq('user_id', ownerUserId)
         .order('due_date', { ascending: true }),
-      supabase.from('categories').select('id, name').eq('user_id', ownerUserId).order('name'),
+      supabase.from('categories').select('id, name, type, parent_id').eq('user_id', ownerUserId).order('name'),
       supabase
         .from('bank_accounts')
         .select('id, name, initial_balance')
@@ -132,18 +138,22 @@ export function CashflowPage() {
         .eq('is_active', true)
         .order('name'),
       supabase.from('credit_card_invoices').select('id, credit_card_id, payable_id').eq('user_id', ownerUserId).not('payable_id', 'is', null),
+      supabase.from('lsh_family_members').select('id, name').eq('user_id', ownerUserId).order('name'),
     ])
-    const errs = [pRes.error, cRes.error, bRes.error, invRes.error].filter(Boolean) as { message: string }[]
+    const errs = [pRes.error, cRes.error, bRes.error, invRes.error, famRes.error].filter(Boolean) as { message: string }[]
     if (errs.length) setLoadError(errs.map((e) => e.message).join(' · '))
 
     const p = pRes.data
     const c = cRes.data
     const b = bRes.data
     const inv = invRes.data
+    const fam = famRes.data
 
     setRows((p as Pr[]) ?? [])
-    setCats((c as { id: string; name: string }[]) ?? [])
+    setCats((c as any[]) ?? [])
     setBanks((b as { id: string; name: string; initial_balance: number | null }[]) ?? [])
+    setFamilyMembers((fam as { id: string; name: string }[]) ?? [])
+    
     const links = ((inv ?? []) as Array<{ id: string; credit_card_id: string; payable_id: string | null }>).reduce(
       (acc, row) => {
         if (row.payable_id) acc[row.payable_id] = { cardId: row.credit_card_id, invoiceId: row.id }
@@ -164,23 +174,50 @@ export function CashflowPage() {
       rows.filter((r) => {
         if (filterKind !== 'ALL' && r.kind !== filterKind) return false
         if (filterStatus !== 'ALL' && r.status !== filterStatus) return false
-        if (filterBank && (r.bank_account_id || '') !== filterBank) return false
+        if (filterFamilyMember && r.family_member_id !== filterFamilyMember) return false
+        if (filterBank) {
+          // Se for transferência, a conta de origem ou destino deve corresponder ao filtro de conta
+          if (r.kind === 'transfer') {
+            if (r.bank_account_id !== filterBank && r.destination_bank_account_id !== filterBank) return false
+          } else {
+            if ((r.bank_account_id || '') !== filterBank) return false
+          }
+        }
         if (filterFrom && r.due_date < filterFrom) return false
         if (filterTo && r.due_date > filterTo) return false
         return true
       }),
-    [rows, filterKind, filterStatus, filterBank, filterFrom, filterTo],
+    [rows, filterKind, filterStatus, filterBank, filterFamilyMember, filterFrom, filterTo],
   )
+
   const currentBalance = useMemo(() => {
     const selectedBankIds = filterBank ? new Set([filterBank]) : new Set(banks.map((bank) => bank.id))
     const openingBalance = banks
       .filter((bank) => selectedBankIds.has(bank.id))
       .reduce((sum, bank) => sum + Number(bank.initial_balance ?? 0), 0)
+    
     const settledDelta = rows
-      .filter((row) => row.status === 'paid' && !!row.bank_account_id && selectedBankIds.has(row.bank_account_id))
-      .reduce((sum, row) => sum + (row.kind === 'receivable' ? Number(row.amount) : -Number(row.amount)), 0)
+      .filter((row) => row.status === 'paid')
+      .reduce((sum, row) => {
+        let delta = 0
+        if (row.kind === 'transfer') {
+          if (row.bank_account_id && selectedBankIds.has(row.bank_account_id)) {
+            delta -= Number(row.amount)
+          }
+          if (row.destination_bank_account_id && selectedBankIds.has(row.destination_bank_account_id)) {
+            delta += Number(row.amount)
+          }
+        } else {
+          if (row.bank_account_id && selectedBankIds.has(row.bank_account_id)) {
+            delta += row.kind === 'receivable' ? Number(row.amount) : -Number(row.amount)
+          }
+        }
+        return sum + delta
+      }, 0)
+    
     return openingBalance + settledDelta
   }, [banks, filterBank, rows])
+
   const totalReceivable = useMemo(
     () =>
       filteredRows
@@ -217,18 +254,34 @@ export function CashflowPage() {
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!supabase || !ownerUserId) return
-    const baseDesc = toUpperTrim(description) || (formKind === 'payable' ? 'CONTA A PAGAR' : 'CONTA A RECEBER')
+
+    if (formKind === 'transfer' && (!bankId || !destinationBankId)) {
+      alert('Selecione as contas de origem e destino para a transferência.')
+      return
+    }
+    if (formKind === 'transfer' && bankId === destinationBankId) {
+      alert('A conta de destino deve ser diferente da conta de origem.')
+      return
+    }
+
+    const defaultDesc =
+      formKind === 'transfer'
+        ? 'TRANSFERÊNCIA BANCÁRIA'
+        : formKind === 'payable'
+          ? 'CONTA A PAGAR'
+          : 'CONTA A RECEBER'
+    const baseDesc = toUpperTrim(description) || defaultDesc
 
     if (editing) {
       const newAmount = parseMoney(amount)
       const newBankId = bankId || null
 
-      // À vista aberto → parcelado: remove o lançamento único e recria o grupo.
       if (
         editing.status === 'open' &&
         !editing.installment_group_id &&
         mode === 'parcelado' &&
-        formStatus === 'open'
+        formStatus === 'open' &&
+        formKind !== 'transfer'
       ) {
         const n = Math.max(1, parseInt(parcelCount, 10) || 1)
         const each = parseMoney(parcelAmount)
@@ -248,6 +301,8 @@ export function CashflowPage() {
           status: 'open' as const,
           category_id: categoryId || null,
           bank_account_id: newBankId,
+          destination_bank_account_id: null,
+          family_member_id: familyMemberId || null,
           installment_group_id: groupId,
           installment_number: i + 1,
           installment_count: n,
@@ -277,23 +332,25 @@ export function CashflowPage() {
           description: descriptionForEditedRow(editing, baseDesc),
           amount: newAmount,
           due_date: dueDate,
-          category_id: categoryId || null,
+          category_id: formKind === 'transfer' ? null : (categoryId || null),
           bank_account_id: newBankId,
+          destination_bank_account_id: formKind === 'transfer' ? (destinationBankId || null) : null,
+          family_member_id: familyMemberId || null,
           status: nextStatus,
           paid_at: nextPaidAt,
         })
         .eq('id', editing.id)
       if (error) alertDbError(error.message)
       else {
-        // O saldo atual é derivado dos lançamentos quitados; não mutamos saldo da conta aqui.
         setEditing(null)
         clearForm()
+        setCreateOpen(false)
         load()
       }
       return
     }
 
-    if (mode === 'vista') {
+    if (mode === 'vista' || formKind === 'transfer') {
       const { error } = await supabase.from('payables_receivables').insert({
         user_id: ownerUserId,
         kind: formKind,
@@ -302,8 +359,10 @@ export function CashflowPage() {
         due_date: dueDate,
         status: formStatus,
         paid_at: formStatus === 'paid' ? (paidAtEdit || dueDate || toISODate(new Date())) : null,
-        category_id: categoryId || null,
+        category_id: formKind === 'transfer' ? null : (categoryId || null),
         bank_account_id: bankId || null,
+        destination_bank_account_id: formKind === 'transfer' ? (destinationBankId || null) : null,
+        family_member_id: familyMemberId || null,
         installment_group_id: null,
         installment_number: null,
         installment_count: null,
@@ -330,6 +389,8 @@ export function CashflowPage() {
       status: 'open' as const,
       category_id: categoryId || null,
       bank_account_id: bankId || null,
+      destination_bank_account_id: null,
+      family_member_id: familyMemberId || null,
       installment_group_id: groupId,
       installment_number: i + 1,
       installment_count: n,
@@ -349,6 +410,8 @@ export function CashflowPage() {
     setDueDate(toISODate(new Date()))
     setCategoryId('')
     setBankId('')
+    setDestinationBankId('')
+    setFamilyMemberId('')
     setParcelAmount('')
     setParcelCount('12')
     setFirstDue(toISODate(new Date()))
@@ -361,21 +424,47 @@ export function CashflowPage() {
   function startEdit(r: Pr) {
     setEditing(r)
     setCreateOpen(true)
-    setMode('vista')
+    setMode(r.installment_group_id ? 'parcelado' : 'vista')
     setFormKind(r.kind)
     setDescription(stripParcelDesc(r.description))
     setAmount(String(r.amount))
     setDueDate(r.due_date)
     setCategoryId(r.category_id ?? '')
     setBankId(r.bank_account_id ?? '')
+    setDestinationBankId(r.destination_bank_account_id ?? '')
+    setFamilyMemberId(r.family_member_id ?? '')
     setPaidAtEdit(r.paid_at ?? toISODate(new Date()))
     setFormStatus(r.status)
   }
 
-  function openPayModal(r: Pr) {
-    setPayModalRow(r)
-    setPayDateInput(r.due_date || toISODate(new Date()))
-  }
+  type CatHierarchy = typeof cats[number] & { parentName?: string }
+
+  const formattedCatsList = useMemo(() => {
+    const parentCats = cats.filter(c => !c.parent_id)
+    const result: CatHierarchy[] = []
+    
+    parentCats.forEach(parent => {
+      // Find subcategories
+      const subs = cats.filter(c => c.parent_id === parent.id)
+      result.push(parent)
+      subs.forEach(sub => {
+        result.push({ ...sub, parentName: parent.name })
+      })
+    })
+
+    // Orphan categories
+    cats.filter(c => c.parent_id && !parentCats.some(p => p.id === c.parent_id)).forEach(orphan => {
+      result.push(orphan)
+    })
+    
+    return result
+  }, [cats])
+
+  const formCatsList = useMemo(() => {
+    // Only show categories matching formKind (receivable -> income, payable -> expense, neutral for both)
+    const expectedType = formKind === 'receivable' ? 'income' : 'expense'
+    return formattedCatsList.filter(c => !c.type || c.type === 'neutral' || c.type === expectedType)
+  }, [formattedCatsList, formKind])
 
   async function confirmPay() {
     if (!supabase || !ownerUserId || !payModalRow) return
@@ -497,6 +586,8 @@ export function CashflowPage() {
             status: 'open' as const,
             category_id: template.category_id,
             bank_account_id: template.bank_account_id,
+            destination_bank_account_id: null,
+            family_member_id: template.family_member_id,
             installment_group_id: parcelGroupModalId,
             installment_number: i,
             installment_count: newN,
@@ -520,59 +611,52 @@ export function CashflowPage() {
     }
   }
 
+  function openPayModal(r: Pr) {
+    setPayModalRow(r)
+    setPayDateInput(r.due_date || toISODate(new Date()))
+  }
+
   if (!supabase) return <p className="text-slate-600">Conectando…</p>
 
   const title = 'Movimentos financeiros'
   const editOpen = editing?.status === 'open'
   const editLocksKind = !!editing && !editOpen
-  const editLocksMode = !!editing && (!editOpen || !!editing.installment_group_id)
-  const editLocksStatus = mode !== 'vista' || (!!editing && !editOpen)
+  const editLocksMode = formKind === 'transfer' || (!!editing && (!editOpen || !!editing.installment_group_id))
+  const editLocksStatus = mode !== 'vista' || formKind === 'transfer' || (!!editing && !editOpen)
   const editParceladoBlockedByPaid =
     !!editing && editOpen && !editing.installment_group_id && formStatus === 'paid'
 
-  const sharedFinance = Boolean(user?.id && ownerUserId && user.id !== ownerUserId)
-
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {loadError ? (
-        <div
-          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
-          role="alert"
-        >
-          <strong className="font-semibold">Não foi possível carregar parte dos dados.</strong>{' '}
-          {loadError}
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-950" role="alert">
+          <strong className="font-semibold">Erro ao carregar dados.</strong> {loadError}
         </div>
       ) : null}
-      {sharedFinance && cats.length === 0 ? (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-          Nenhuma categoria listada para o workspace compartilhado. Se outra pessoa já cadastrou
-          categorias e você não vê nada aqui, o banco provavelmente ainda usa RLS antiga (só o dono
-          do registro enxerga). Aplique no Supabase a migration{' '}
-          <code className="rounded bg-amber-100/80 px-1">20260422160000_ensure_finance_shared_workspace_rls.sql</code>.
-          Confira também na Vercel se <code className="rounded bg-amber-100/80 px-1">VITE_SHARED_EMAILS</code> inclui o
-          e-mail da conta logada.
-        </div>
-      ) : null}
+
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-2xl font-semibold">{title}</h2>
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800">{title}</h2>
+          <p className="text-sm text-slate-500">Controle suas contas a pagar, receber e transferências.</p>
+        </div>
         <Button
           type="button"
           variant="primary"
-          className="inline-flex items-center gap-2"
+          className="inline-flex items-center gap-2 font-semibold"
           onClick={() => {
             clearForm()
             setEditing(null)
             setCreateOpen(true)
           }}
         >
-          <Plus size={16} />
-          ADICIONAR MOVIMENTO
+          <Plus size={18} />
+          Novo Movimento
         </Button>
       </div>
 
       {createOpen ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-3 sm:p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-3 sm:p-4 backdrop-blur-[2px]"
           role="presentation"
           onClick={() => {
             setCreateOpen(false)
@@ -583,17 +667,17 @@ export function CashflowPage() {
           <div
             role="dialog"
             aria-labelledby="create-movement-title"
-            className="w-full max-w-3xl rounded-xl border border-slate-200 bg-white p-4 shadow-xl"
+            className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl transition-all"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between gap-2">
-              <h3 id="create-movement-title" className="text-lg font-medium text-slate-900">
-                {editing ? 'Editar movimento' : 'Novo movimento'}
+            <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3">
+              <h3 id="create-movement-title" className="text-lg font-bold text-slate-800">
+                {editing ? 'Editar Movimento' : 'Novo Movimento'}
               </h3>
               <Button
                 type="button"
                 variant="ghost"
-                className="inline-flex h-9 w-9 items-center justify-center p-0"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-xl p-0 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                 aria-label="Fechar"
                 onClick={() => {
                   setCreateOpen(false)
@@ -601,7 +685,7 @@ export function CashflowPage() {
                   clearForm()
                 }}
               >
-                <X size={16} />
+                <X size={18} />
               </Button>
             </div>
 
@@ -610,139 +694,211 @@ export function CashflowPage() {
                 <Button
                   type="button"
                   variant={formKind === 'payable' ? 'primary' : 'secondary'}
-                  className="text-sm"
+                  className={`text-xs font-semibold h-[34px] ${formKind === 'payable' ? '' : 'bg-slate-100 border-none text-slate-600 hover:bg-slate-200'}`}
                   disabled={editLocksKind}
-                  onClick={() => setFormKind('payable')}
+                  onClick={() => {
+                    setFormKind('payable')
+                    setFormStatus('open')
+                  }}
                 >
-                  CONTA A PAGAR
+                  DESPESA
                 </Button>
                 <Button
                   type="button"
                   variant={formKind === 'receivable' ? 'primary' : 'secondary'}
-                  className="text-sm"
+                  className={`text-xs font-semibold h-[34px] ${formKind === 'receivable' ? '' : 'bg-slate-100 border-none text-slate-600 hover:bg-slate-200'}`}
                   disabled={editLocksKind}
-                  onClick={() => setFormKind('receivable')}
+                  onClick={() => {
+                    setFormKind('receivable')
+                    setFormStatus('open')
+                  }}
                 >
-                  CONTA A RECEBER
+                  RECEITA
+                </Button>
+                <Button
+                  type="button"
+                  variant={formKind === 'transfer' ? 'primary' : 'secondary'}
+                  className={`text-xs font-semibold h-[34px] ${formKind === 'transfer' ? '' : 'bg-slate-100 border-none text-slate-600 hover:bg-slate-200'}`}
+                  disabled={editLocksKind}
+                  onClick={() => {
+                    setFormKind('transfer')
+                    setMode('vista')
+                    setFormStatus('paid') // default transfers as concluded/paid
+                  }}
+                >
+                  TRANSFERÊNCIA
                 </Button>
                 <div className="ml-auto flex items-center gap-2">
-                  <label className="mb-0 text-xs text-slate-600">STATUS</label>
+                  <label className="mb-0 text-xs font-semibold uppercase tracking-wider text-slate-500">STATUS</label>
                   <select
-                    className="h-9"
+                    className="h-[34px] rounded-xl border border-slate-200 px-3 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#185FA5]"
                     value={formStatus}
                     onChange={(e) => setFormStatus(e.target.value as 'open' | 'paid')}
                     disabled={editLocksStatus}
-                    title={
-                      mode !== 'vista'
-                        ? 'Status manual somente em lançamento à vista.'
-                        : editLocksStatus && editing
-                          ? 'Só é possível alterar o status enquanto o lançamento está em aberto.'
-                          : undefined
-                    }
                   >
-                    <option value="open">ABERTO</option>
+                    <option value="open">EM ABERTO</option>
                     <option value="paid">{statusQuitadoLabel(formKind)}</option>
                   </select>
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant={mode === 'vista' ? 'primary' : 'secondary'}
-                  className="text-sm"
-                  onClick={() => setMode('vista')}
-                  disabled={editLocksMode}
-                >
-                  À vista
-                </Button>
-                <Button
-                  type="button"
-                  variant={mode === 'parcelado' ? 'primary' : 'secondary'}
-                  className="text-sm"
-                  onClick={() => {
-                    setMode('parcelado')
-                    if (editing && editing.status === 'open' && !editing.installment_group_id) {
-                      setParcelAmount(amount)
-                      setParcelCount('12')
-                      setFirstDue(dueDate)
-                    }
-                  }}
-                  disabled={editLocksMode || editParceladoBlockedByPaid}
-                >
-                  Parcelado
-                </Button>
-              </div>
+              {formKind !== 'transfer' && (
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant={mode === 'vista' ? 'primary' : 'secondary'}
+                    className={`text-xs font-semibold h-[30px] px-3.5 ${mode === 'vista' ? '' : 'bg-slate-100 border-none text-slate-600 hover:bg-slate-200'}`}
+                    onClick={() => setMode('vista')}
+                    disabled={editLocksMode}
+                  >
+                    À vista
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={mode === 'parcelado' ? 'primary' : 'secondary'}
+                    className={`text-xs font-semibold h-[30px] px-3.5 ${mode === 'parcelado' ? '' : 'bg-slate-100 border-none text-slate-600 hover:bg-slate-200'}`}
+                    onClick={() => {
+                      setMode('parcelado')
+                      if (editing && editing.status === 'open' && !editing.installment_group_id) {
+                        setParcelAmount(amount)
+                        setParcelCount('12')
+                        setFirstDue(dueDate)
+                      }
+                    }}
+                    disabled={editLocksMode || editParceladoBlockedByPaid}
+                  >
+                    Parcelado
+                  </Button>
+                </div>
+              )}
 
               {editing?.installment_group_id &&
                 editing.installment_number != null &&
                 editing.installment_count != null && (
-                  <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
+                  <p className="rounded-xl border border-sky-100 bg-sky-50/70 px-3.5 py-2 text-xs text-sky-800">
                     Editando apenas a parcela {editing.installment_number} de {editing.installment_count}. Ao salvar,
-                    mantém <span className="font-mono text-sky-800">(PARCELA {editing.installment_number}/{editing.installment_count})</span>.
+                    mantém o indicador no nome.
                   </p>
                 )}
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-3.5 sm:grid-cols-2">
                 <div className="sm:col-span-2">
-                  <label>
-                    {editing?.installment_group_id ? 'Descrição (texto base, sem número da parcela)' : 'Descrição'}
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    {editing?.installment_group_id ? 'Descrição (texto base, sem sufixo de parcela)' : 'Descrição'}
                   </label>
-                  <input value={description} onChange={(e) => setDescription(e.target.value)} />
+                  <input
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder={formKind === 'transfer' ? 'Ex.: Resgate aplicação para conta corrente' : 'Ex.: Aluguel residencial'}
+                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm placeholder:text-slate-400 focus:border-[#185FA5] focus:outline-none focus:ring-1 focus:ring-[#185FA5]"
+                  />
                 </div>
+
                 {mode === 'vista' ? (
                   <>
                     <div>
-                      <label>Valor</label>
-                      <input value={amount} onChange={(e) => setAmount(e.target.value)} required />
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Valor</label>
+                      <input
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        required
+                        placeholder="0,00"
+                        className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm placeholder:text-slate-400 focus:border-[#185FA5] focus:outline-none focus:ring-1 focus:ring-[#185FA5]"
+                      />
                     </div>
                     <div>
-                      <label>Vencimento</label>
-                      <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} required />
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Vencimento</label>
+                      <input
+                        type="date"
+                        value={dueDate}
+                        onChange={(e) => setDueDate(e.target.value)}
+                        required
+                        className="w-full rounded-xl border border-slate-200 px-3.5 py-1.5 text-sm focus:border-[#185FA5] focus:outline-none focus:ring-1 focus:ring-[#185FA5]"
+                      />
                     </div>
                     {formStatus === 'paid' ? (
                       <div>
-                        <label>{formKind === 'receivable' ? 'DATA DE RECEBIMENTO' : 'DATA DE PAGAMENTO'}</label>
-                        <input type="date" value={paidAtEdit || dueDate} onChange={(e) => setPaidAtEdit(e.target.value)} required />
+                        <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">
+                          {formKind === 'transfer' ? 'DATA DA TRANSFERÊNCIA' : formKind === 'receivable' ? 'DATA DE RECEBIMENTO' : 'DATA DE PAGAMENTO'}
+                        </label>
+                        <input
+                          type="date"
+                          value={paidAtEdit || dueDate}
+                          onChange={(e) => setPaidAtEdit(e.target.value)}
+                          required
+                          className="w-full rounded-xl border border-slate-200 px-3.5 py-1.5 text-sm focus:border-[#185FA5] focus:outline-none focus:ring-1 focus:ring-[#185FA5]"
+                        />
                       </div>
                     ) : null}
                   </>
                 ) : (
                   <>
                     <div>
-                      <label>Valor de cada parcela</label>
-                      <input value={parcelAmount} onChange={(e) => setParcelAmount(e.target.value)} required />
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Valor de cada parcela</label>
+                      <input
+                        value={parcelAmount}
+                        onChange={(e) => setParcelAmount(e.target.value)}
+                        required
+                        placeholder="0,00"
+                        className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm placeholder:text-slate-400 focus:border-[#185FA5] focus:outline-none focus:ring-1 focus:ring-[#185FA5]"
+                      />
                     </div>
                     <div>
-                      <label>Número de parcelas</label>
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Número de parcelas</label>
                       <input
                         type="number"
                         min={1}
                         value={parcelCount}
                         onChange={(e) => setParcelCount(e.target.value)}
                         required
+                        className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm focus:border-[#185FA5] focus:outline-none focus:ring-1 focus:ring-[#185FA5]"
                       />
                     </div>
                     <div>
-                      <label>1º vencimento</label>
-                      <input type="date" value={firstDue} onChange={(e) => setFirstDue(e.target.value)} required />
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">1º vencimento</label>
+                      <input
+                        type="date"
+                        value={firstDue}
+                        onChange={(e) => setFirstDue(e.target.value)}
+                        required
+                        className="w-full rounded-xl border border-slate-200 px-3.5 py-1.5 text-sm focus:border-[#185FA5] focus:outline-none focus:ring-1 focus:ring-[#185FA5]"
+                      />
                     </div>
                   </>
                 )}
+
+                {formKind !== 'transfer' && (
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Categoria</label>
+                    <select
+                      value={categoryId}
+                      onChange={(e) => setCategoryId(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm focus:border-[#185FA5] focus:outline-none focus:ring-1 focus:ring-[#185FA5]"
+                    >
+                      <option value="">—</option>
+                      {formCatsList.filter(c => !c.parent_id).map((parent) => (
+                        <optgroup key={parent.id} label={parent.name}>
+                          <option value={parent.id}>{parent.name} (Geral)</option>
+                          {formCatsList.filter(c => c.parent_id === parent.id).map((sub) => (
+                            <option key={sub.id} value={sub.id}>
+                              ↳ {sub.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <div>
-                  <label>Categoria</label>
-                  <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-                    <option value="">—</option>
-                    {cats.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label>Conta bancária (liquidação)</label>
-                  <select value={bankId} onChange={(e) => setBankId(e.target.value)}>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    {formKind === 'transfer' ? 'Conta de Origem' : 'Conta bancária (liquidação)'}
+                  </label>
+                  <select
+                    value={bankId}
+                    onChange={(e) => setBankId(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm focus:border-[#185FA5] focus:outline-none focus:ring-1 focus:ring-[#185FA5]"
+                  >
                     <option value="">—</option>
                     {banks.map((b) => (
                       <option key={b.id} value={b.id}>
@@ -751,12 +907,51 @@ export function CashflowPage() {
                     ))}
                   </select>
                 </div>
+
+                {formKind === 'transfer' && (
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Conta de Destino
+                    </label>
+                    <select
+                      value={destinationBankId}
+                      onChange={(e) => setDestinationBankId(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm focus:border-[#185FA5] focus:outline-none focus:ring-1 focus:ring-[#185FA5]"
+                    >
+                      <option value="">—</option>
+                      {banks.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Familiar Responsável
+                  </label>
+                  <select
+                    value={familyMemberId}
+                    onChange={(e) => setFamilyMemberId(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm focus:border-[#185FA5] focus:outline-none focus:ring-1 focus:ring-[#185FA5]"
+                  >
+                    <option value="">Sem vínculo (Lançamento comum)</option>
+                    {familyMembers.map((fm) => (
+                      <option key={fm.id} value={fm.id}>
+                        {fm.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
-              <div className="flex flex-wrap justify-end gap-2">
+              <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-3.5">
                 <Button
                   type="button"
                   variant="secondary"
+                  className="h-[38px] px-4 font-semibold"
                   onClick={() => {
                     setCreateOpen(false)
                     setEditing(null)
@@ -765,7 +960,7 @@ export function CashflowPage() {
                 >
                   Cancelar
                 </Button>
-                <Button type="submit" variant="primary">
+                <Button type="submit" variant="primary" className="h-[38px] px-5 font-semibold">
                   {editing
                     ? editing.installment_group_id
                       ? 'Salvar esta parcela'
@@ -778,43 +973,47 @@ export function CashflowPage() {
         </div>
       ) : null}
 
-      <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Saldo atual</p>
-            <p className={`mt-1 text-lg font-semibold ${currentBalance < 0 ? 'text-red-600' : 'text-slate-900'}`}>
+      <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Saldo Atual</p>
+            <p className={`mt-1 text-lg font-bold ${currentBalance < 0 ? 'text-red-600' : 'text-slate-800'}`}>
               {formatBRL(currentBalance)}
             </p>
           </div>
-          <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3">
-            <p className="text-xs uppercase tracking-wide text-indigo-700">Saldo previsto</p>
-            <p className={`mt-1 text-lg font-semibold ${projectedBalance < 0 ? 'text-red-600' : 'text-indigo-800'}`}>
+          <div className="rounded-xl border border-indigo-100 bg-indigo-50/30 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600">Saldo Previsto</p>
+            <p className={`mt-1 text-lg font-bold ${projectedBalance < 0 ? 'text-red-600' : 'text-indigo-800'}`}>
               {formatBRL(projectedBalance)}
             </p>
           </div>
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-            <p className="text-xs uppercase tracking-wide text-emerald-700">A receber</p>
-            <p className="mt-1 text-lg font-semibold text-emerald-800">{formatBRL(totalReceivable)}</p>
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50/20 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600">Receitas Abertas</p>
+            <p className="mt-1 text-lg font-bold text-emerald-700">{formatBRL(totalReceivable)}</p>
           </div>
-          <div className="rounded-lg border border-emerald-200 bg-white p-3">
-            <p className="text-xs uppercase tracking-wide text-emerald-700">Recebido</p>
-            <p className="mt-1 text-lg font-semibold text-emerald-800">{formatBRL(totalReceived)}</p>
+          <div className="rounded-xl border border-emerald-100 bg-white p-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600">Receitas Quitadas</p>
+            <p className="mt-1 text-lg font-bold text-emerald-700">{formatBRL(totalReceived)}</p>
           </div>
-          <div className="rounded-lg border border-rose-200 bg-rose-50 p-3">
-            <p className="text-xs uppercase tracking-wide text-rose-700">A pagar</p>
-            <p className="mt-1 text-lg font-semibold text-rose-800">{formatBRL(totalPayable)}</p>
+          <div className="rounded-xl border border-red-100 bg-red-50/20 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-red-600">Despesas Abertas</p>
+            <p className="mt-1 text-lg font-bold text-red-700">{formatBRL(totalPayable)}</p>
           </div>
-          <div className="rounded-lg border border-rose-200 bg-white p-3">
-            <p className="text-xs uppercase tracking-wide text-rose-700">Pago</p>
-            <p className="mt-1 text-lg font-semibold text-rose-800">{formatBRL(totalPaid)}</p>
+          <div className="rounded-xl border border-red-100 bg-white p-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-red-600">Despesas Quitadas</p>
+            <p className="mt-1 text-lg font-bold text-red-700">{formatBRL(totalPaid)}</p>
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 border-t border-slate-100 pt-3">
           <div>
-            <label>Conta bancária</label>
-            <select value={filterBank} onChange={(e) => setFilterBank(e.target.value)}>
-              <option value="">Todas</option>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Filtrar Conta</label>
+            <select
+              value={filterBank}
+              onChange={(e) => setFilterBank(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#185FA5]"
+            >
+              <option value="">Todas as contas</option>
               {banks.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.name}
@@ -823,130 +1022,226 @@ export function CashflowPage() {
             </select>
           </div>
           <div>
-            <label>Tipo</label>
-            <select value={filterKind} onChange={(e) => setFilterKind(e.target.value as 'ALL' | Kind)}>
-              <option value="ALL">Todos</option>
-              <option value="payable">A pagar</option>
-              <option value="receivable">A receber</option>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Filtrar Tipo</label>
+            <select
+              value={filterKind}
+              onChange={(e) => setFilterKind(e.target.value as 'ALL' | Kind)}
+              className="w-full rounded-xl border border-slate-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#185FA5]"
+            >
+              <option value="ALL">Todos os tipos</option>
+              <option value="payable">Despesas</option>
+              <option value="receivable">Receitas</option>
+              <option value="transfer">Transferências</option>
             </select>
           </div>
           <div>
-            <label>Status</label>
-            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as 'ALL' | 'open' | 'paid')}>
-              <option value="ALL">Todos</option>
-              <option value="open">Aberto</option>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Filtrar Status</label>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as 'ALL' | 'open' | 'paid')}
+              className="w-full rounded-xl border border-slate-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#185FA5]"
+            >
+              <option value="ALL">Todos os status</option>
+              <option value="open">Em aberto</option>
               <option value="paid">Quitado</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Filtrar Familiar</label>
+            <select
+              value={filterFamilyMember}
+              onChange={(e) => setFilterFamilyMember(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#185FA5]"
+            >
+              <option value="">Todos os familiares</option>
+              {familyMembers.map((fm) => (
+                <option key={fm.id} value={fm.id}>
+                  {fm.name}
+                </option>
+              ))}
             </select>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label>De</label>
-              <input type="date" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)} />
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">De</label>
+              <input
+                type="date"
+                value={filterFrom}
+                onChange={(e) => setFilterFrom(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 px-2 py-1 text-xs focus:outline-none"
+              />
             </div>
             <div>
-              <label>Até</label>
-              <input type="date" value={filterTo} onChange={(e) => setFilterTo(e.target.value)} />
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Até</label>
+              <input
+                type="date"
+                value={filterTo}
+                onChange={(e) => setFilterTo(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 px-2 py-1 text-xs focus:outline-none"
+              />
             </div>
           </div>
         </div>
       </div>
 
-      <div className="table-wrap">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         {loading ? (
-          <p className="p-4 text-slate-500">Carregando…</p>
+          <p className="p-6 text-center text-sm text-slate-500">Carregando lançamentos...</p>
+        ) : filteredRows.length === 0 ? (
+          <div className="p-8 text-center text-slate-400">
+            <FileText className="mx-auto mb-2 text-slate-300" size={32} />
+            <p className="text-sm">Nenhum lançamento financeiro encontrado.</p>
+          </div>
         ) : (
-          <table>
+          <table className="w-full border-collapse text-left text-sm">
             <thead>
-              <tr>
-                <th>Tipo</th>
-                <th>Descrição</th>
-                <th>Valor</th>
-                <th>Vencimento</th>
-                <th>Quitação</th>
-                <th>Parcela</th>
-                <th>Status</th>
-                <th></th>
+              <tr className="border-b border-slate-100 bg-slate-50/75 text-xs font-bold uppercase tracking-wider text-slate-500">
+                <th className="px-5 py-3">Tipo</th>
+                <th className="px-5 py-3">Descrição</th>
+                <th className="px-5 py-3">Categoria</th>
+                <th className="px-5 py-3">Familiar</th>
+                <th className="px-5 py-3 text-right">Valor</th>
+                <th className="px-5 py-3">Vencimento</th>
+                <th className="px-5 py-3">Liquidação</th>
+                <th className="px-5 py-3">Status</th>
+                <th className="px-5 py-3 text-right">Ações</th>
               </tr>
             </thead>
-            <tbody>
-              {filteredRows.map((r) => (
-                <tr key={r.id}>
-                  <td>{r.kind === 'payable' ? 'CONTAS A PAGAR' : 'CONTAS A RECEBER'}</td>
-                  <td className="max-w-[260px] truncate">{stripParcelDesc(r.description)}</td>
-                  <td>{formatBRL(Number(r.amount))}</td>
-                  <td>{r.due_date}</td>
-                  <td>{r.status === 'paid' && r.paid_at ? r.paid_at : '—'}</td>
-                  <td>
-                    {r.installment_group_id
-                      ? `${r.installment_number ?? '?'}/${r.installment_count ?? '?'}`
-                      : r.kind === 'payable' && invoiceDetailByPayable[r.id]
-                        ? '1/1'
-                        : '—'}
-                  </td>
-                  <td>{r.status === 'paid' ? statusQuitadoLabel(r.kind) : 'ABERTO'}</td>
-                  <td className="whitespace-nowrap">
-                    <div className="flex items-center justify-end gap-2">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="inline-flex h-9 w-9 items-center justify-center p-0"
-                      title={r.status === 'paid' ? 'REABRIR' : acaoQuitarLabel(r.kind)}
-                      aria-label={r.status === 'paid' ? 'REABRIR' : acaoQuitarLabel(r.kind)}
-                      onClick={() => (r.status === 'paid' ? void reopenPaid(r) : openPayModal(r))}
-                    >
-                      {r.status === 'paid' ? <Undo2 size={16} /> : <Check size={16} />}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="inline-flex h-9 w-9 items-center justify-center p-0"
-                      title="EDITAR"
-                      aria-label="EDITAR"
-                      onClick={() => startEdit(r)}
-                    >
-                      <Pencil size={16} />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="inline-flex h-9 w-9 items-center justify-center p-0 disabled:cursor-not-allowed disabled:opacity-40"
-                      title="ALTERAR PARCELAS"
-                      aria-label="ALTERAR PARCELAS"
-                      disabled={!r.installment_group_id}
-                      onClick={() => {
-                        if (r.installment_group_id) openParcelGroupEdit(r.installment_group_id)
-                      }}
-                    >
-                      <Split size={16} />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="inline-flex h-9 w-9 items-center justify-center p-0 disabled:cursor-not-allowed disabled:opacity-40"
-                      title="DETALHAR FATURA"
-                      aria-label="DETALHAR FATURA"
-                      disabled={!(r.kind === 'payable' && invoiceDetailByPayable[r.id])}
-                      onClick={() => {
-                        const det = invoiceDetailByPayable[r.id]
-                        if (r.kind === 'payable' && det) navigate(`/lsh/cartoes/${det.cardId}/faturas/${det.invoiceId}`)
-                      }}
-                    >
-                      <FileText size={16} />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="inline-flex h-9 w-9 items-center justify-center p-0 text-red-600"
-                      title="EXCLUIR"
-                      aria-label="EXCLUIR"
-                      onClick={() => removeRow(r)}
-                    >
-                      <Trash2 size={16} />
-                    </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+            <tbody className="divide-y divide-slate-100">
+              {filteredRows.map((r) => {
+                const cat = cats.find((c) => c.id === r.category_id)
+                const categoryLabel = cat
+                  ? cat.parent_id
+                    ? `${cats.find((p) => p.id === cat.parent_id)?.name} > ${cat.name}`
+                    : cat.name
+                  : '—'
+                const fmName = familyMembers.find((f) => f.id === r.family_member_id)?.name || '—'
+
+                let descRender: React.ReactNode = stripParcelDesc(r.description)
+                if (r.kind === 'transfer') {
+                  const src = banks.find((b) => b.id === r.bank_account_id)?.name || 'Conta'
+                  const dst = banks.find((b) => b.id === r.destination_bank_account_id)?.name || 'Conta'
+                  descRender = (
+                    <span className="flex items-center gap-1.5 font-medium text-slate-700">
+                      <Landmark size={14} className="text-slate-400 shrink-0" />
+                      {src} ➔ {dst}
+                    </span>
+                  )
+                }
+
+                return (
+                  <tr key={r.id} className="hover:bg-slate-50/30">
+                    <td className="px-5 py-3.5">
+                      <span
+                        className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold ${
+                          r.kind === 'receivable'
+                            ? 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/10'
+                            : r.kind === 'payable'
+                              ? 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/10'
+                              : 'bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-600/10'
+                        }`}
+                      >
+                        {r.kind === 'receivable' ? 'RECEITA' : r.kind === 'payable' ? 'DESPESA' : 'TRANSF.'}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5 max-w-[220px] truncate font-medium text-slate-800">
+                      {descRender}
+                    </td>
+                    <td className="px-5 py-3.5 text-slate-500 text-xs font-medium">
+                      {categoryLabel}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      {fmName !== '—' ? (
+                        <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">
+                          <Users size={12} className="text-slate-400" />
+                          {fmName}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3.5 text-right font-bold text-slate-800">
+                      {formatBRL(Number(r.amount))}
+                    </td>
+                    <td className="px-5 py-3.5 text-slate-600 font-mono text-xs">{r.due_date}</td>
+                    <td className="px-5 py-3.5 text-slate-600 font-mono text-xs">
+                      {r.status === 'paid' && r.paid_at ? r.paid_at : '—'}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <span
+                        className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold ${
+                          r.status === 'paid'
+                            ? 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/15'
+                            : 'bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-600/15'
+                        }`}
+                      >
+                        {r.status === 'paid' ? statusQuitadoLabel(r.kind) : 'ABERTO'}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="inline-flex h-8.5 w-8.5 items-center justify-center rounded-lg p-0 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                          title={r.status === 'paid' ? 'REABRIR' : acaoQuitarLabel(r.kind)}
+                          aria-label={r.status === 'paid' ? 'REABRIR' : acaoQuitarLabel(r.kind)}
+                          onClick={() => (r.status === 'paid' ? void reopenPaid(r) : openPayModal(r))}
+                        >
+                          {r.status === 'paid' ? <Undo2 size={15} /> : <Check size={15} />}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="inline-flex h-8.5 w-8.5 items-center justify-center rounded-lg p-0 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                          title="EDITAR"
+                          aria-label="EDITAR"
+                          onClick={() => startEdit(r)}
+                        >
+                          <Pencil size={15} />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="inline-flex h-8.5 w-8.5 items-center justify-center rounded-lg p-0 text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+                          title="ALTERAR PARCELAS"
+                          aria-label="ALTERAR PARCELAS"
+                          disabled={!r.installment_group_id}
+                          onClick={() => {
+                            if (r.installment_group_id) openParcelGroupEdit(r.installment_group_id)
+                          }}
+                        >
+                          <Split size={15} />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="inline-flex h-8.5 w-8.5 items-center justify-center rounded-lg p-0 text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+                          title="DETALHAR FATURA"
+                          aria-label="DETALHAR FATURA"
+                          disabled={!(r.kind === 'payable' && invoiceDetailByPayable[r.id])}
+                          onClick={() => {
+                            const det = invoiceDetailByPayable[r.id]
+                            if (r.kind === 'payable' && det) navigate(`/lsh/cartoes/${det.cardId}/faturas/${det.invoiceId}`)
+                          }}
+                        >
+                          <FileText size={15} />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="inline-flex h-8.5 w-8.5 items-center justify-center rounded-lg p-0 text-red-500 hover:bg-red-50 hover:text-red-600"
+                          title="EXCLUIR"
+                          aria-label="EXCLUIR"
+                          onClick={() => removeRow(r)}
+                        >
+                          <Trash2 size={15} />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         )}
@@ -954,39 +1249,37 @@ export function CashflowPage() {
 
       {payModalRow && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-3 sm:p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-3 sm:p-4 backdrop-blur-[2px]"
           role="presentation"
           onClick={() => setPayModalRow(null)}
         >
           <div
             role="dialog"
             aria-labelledby="pay-modal-title"
-            className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-xl"
+            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl transition-all"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 id="pay-modal-title" className="text-lg font-medium text-slate-900">
-              {payModalRow.kind === 'payable' ? 'CONFIRMAR PAGAMENTO' : 'CONFIRMAR RECEBIMENTO'}
+            <h3 id="pay-modal-title" className="text-lg font-bold text-slate-800">
+              {payModalRow.kind === 'payable' ? 'Confirmar Pagamento' : payModalRow.kind === 'transfer' ? 'Confirmar Transferência' : 'Confirmar Recebimento'}
             </h3>
-            <p className="mt-2 text-sm text-slate-600">
-              {payModalRow.kind === 'payable' ? 'INFORME A DATA DO PAGAMENTO.' : 'INFORME A DATA DO RECEBIMENTO.'}
+            <p className="mt-2 text-sm text-slate-500">
+              Selecione a data de liquidação para este lançamento.
             </p>
             <div className="mt-4">
-              <label className="text-sm text-slate-700">
-                {payModalRow.kind === 'payable' ? 'DATA DO PAGAMENTO' : 'DATA DO RECEBIMENTO'}
-              </label>
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Data de Liquidação</label>
               <input
                 type="date"
-                className="mt-1 w-full"
+                className="mt-1.5 w-full rounded-xl border border-slate-200 px-3.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#185FA5]"
                 value={payDateInput}
                 onChange={(e) => setPayDateInput(e.target.value)}
               />
             </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <Button type="button" variant="secondary" onClick={() => setPayModalRow(null)}>
-                CANCELAR
+            <div className="mt-5 flex justify-end gap-2 border-t border-slate-100 pt-3.5">
+              <Button type="button" variant="secondary" className="h-[36px] px-4" onClick={() => setPayModalRow(null)}>
+                Cancelar
               </Button>
-              <Button type="button" variant="primary" onClick={() => void confirmPay()}>
-                {payModalRow.kind === 'payable' ? 'CONFIRMAR PAGAMENTO' : 'CONFIRMAR RECEBIMENTO'}
+              <Button type="button" variant="primary" className="h-[36px] px-4 font-semibold" onClick={() => void confirmPay()}>
+                Confirmar
               </Button>
             </div>
           </div>
@@ -995,52 +1288,48 @@ export function CashflowPage() {
 
       {parcelGroupModalId && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-3 sm:p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-3 sm:p-4 backdrop-blur-[2px]"
           role="presentation"
           onClick={() => setParcelGroupModalId(null)}
         >
           <div
             role="dialog"
             aria-labelledby="parcel-modal-title"
-            className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-xl"
+            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl transition-all"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 id="parcel-modal-title" className="text-lg font-medium text-slate-900">
-              Alterar parcelamento
-            </h3>
-            <div className="mt-2 flex justify-end">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+              <h3 id="parcel-modal-title" className="text-lg font-bold text-slate-800">
+                Alterar parcelamento
+              </h3>
               <button
                 type="button"
-                className="text-xs text-amber-700 hover:underline"
+                className="text-xs font-semibold text-red-500 hover:text-red-600"
                 onClick={() => {
                   if (parcelGroupModalId) void deleteOpenGroup(parcelGroupModalId)
                 }}
               >
-                Excluir parcelas em aberto do grupo
+                Excluir em aberto
               </button>
             </div>
-            <p className="mt-2 text-sm text-slate-600">
-              Defina o novo número total de parcelas (ex.: de 12 para 10). Ao{' '}
-              <span className="text-slate-800">diminuir</span>, as parcelas removidas são as de número maior —
-              apenas se estiverem <span className="text-slate-800">em aberto</span>. Parcelas pagas não podem ser
-              removidas assim. Ao <span className="text-slate-800">aumentar</span>, novas parcelas usam o mesmo valor,
-              categoria, conta e vencimentos mensais a partir da última parcela atual.
+            <p className="mt-3 text-xs text-slate-500 leading-relaxed">
+              Defina o novo número total de parcelas. Ao reduzir, as parcelas em aberto adicionais serão removidas. Ao aumentar, novas parcelas serão geradas com base na última atual.
             </p>
             <div className="mt-4">
-              <label className="text-sm text-slate-700">Número de parcelas</label>
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Número de parcelas</label>
               <input
                 type="number"
                 min={1}
-                className="mt-1 w-full"
+                className="mt-1.5 w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#185FA5]"
                 value={parcelNewCount}
                 onChange={(e) => setParcelNewCount(e.target.value)}
               />
             </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <Button type="button" variant="secondary" onClick={() => setParcelGroupModalId(null)}>
+            <div className="mt-5 flex justify-end gap-2 border-t border-slate-100 pt-3.5">
+              <Button type="button" variant="secondary" className="h-[36px] px-4" onClick={() => setParcelGroupModalId(null)}>
                 Cancelar
               </Button>
-              <Button type="button" variant="primary" onClick={() => void applyParcelGroupCount()}>
+              <Button type="button" variant="primary" className="h-[36px] px-4 font-semibold" onClick={() => void applyParcelGroupCount()}>
                 Aplicar
               </Button>
             </div>

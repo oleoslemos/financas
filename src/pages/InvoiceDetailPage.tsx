@@ -1,5 +1,5 @@
 import { useUser } from '@clerk/clerk-react'
-import { Pencil, Trash2 } from 'lucide-react'
+import { Pencil, Trash2, Users, ArrowLeft } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { Button } from '../components/ui/Button'
 import { Link, useParams } from 'react-router-dom'
@@ -31,6 +31,7 @@ type Item = {
   description: string
   amount: number
   category_id: string | null
+  family_member_id: string | null
   installment_group_id: string | null
   installment_number: number | null
   installment_count: number | null
@@ -49,10 +50,13 @@ export function InvoiceDetailPage() {
   const { user } = useUser()
   const supabase = useSupabase()
   const ownerUserId = resolveDataOwnerId(user?.id, clerkEmailCandidates(user).join(','))
+  
   const [cardName, setCardName] = useState('')
+  const [limitAmount, setLimitAmount] = useState<number | null>(null)
   const [inv, setInv] = useState<Inv | null>(null)
   const [items, setItems] = useState<Item[]>([])
   const [cats, setCats] = useState<{ id: string; name: string }[]>([])
+  const [familyMembers, setFamilyMembers] = useState<{ id: string; name: string }[]>([])
   const [payableStatus, setPayableStatus] = useState<string | null>(null)
   const [dueDate, setDueDate] = useState('')
   const [invoiceNav, setInvoiceNav] = useState<{ prev: InvoiceNavRow[]; next: InvoiceNavRow[] }>({
@@ -69,8 +73,8 @@ export function InvoiceDetailPage() {
     description: '',
     amount: '',
     category_id: '',
+    family_member_id: '',
     parcel_count: '1',
-    /** total = divide o valor informado; per_installment = repete o mesmo valor em cada parcela */
     amount_mode: 'total' as ItemAmountMode,
   })
   const [editingItem, setEditingItem] = useState<Item | null>(null)
@@ -87,17 +91,25 @@ export function InvoiceDetailPage() {
     setLoading(true)
     const ccCat = await ensureCreditCardExpenseCategory(supabase, ownerUserId)
     setCcCategoryId(ccCat)
-    const [{ data: c }, { data: i }, { data: it }, { data: cat }] = await Promise.all([
-      supabase.from('credit_cards').select('name').eq('id', cardId).eq('user_id', ownerUserId).single(),
+    
+    const [{ data: c }, { data: i }, { data: it }, { data: cat }, { data: fams }] = await Promise.all([
+      supabase.from('credit_cards').select('name, limit_amount').eq('id', cardId).eq('user_id', ownerUserId).single(),
       supabase.from('credit_card_invoices').select('*').eq('id', invoiceId).eq('user_id', ownerUserId).single(),
       supabase.from('credit_card_invoice_items').select('*').eq('invoice_id', invoiceId).order('occurred_on'),
       supabase.from('categories').select('id, name').eq('user_id', ownerUserId).order('name'),
+      supabase.from('lsh_family_members').select('id, name').eq('user_id', ownerUserId).order('name'),
     ])
-    const cardNm = (c as { name: string } | null)?.name ?? ''
+
+    const cardNm = (c as { name: string; limit_amount: number | null } | null)?.name ?? ''
+    const cardLimit = (c as { name: string; limit_amount: number | null } | null)?.limit_amount ?? null
     setCardName(cardNm)
+    setLimitAmount(cardLimit)
+    
     let invoice = i as Inv | null
     setItems((it as Item[]) ?? [])
     setCats((cat as { id: string; name: string }[]) ?? [])
+    setFamilyMembers((fams as { id: string; name: string }[]) ?? [])
+
     if (invoice) {
       setDueDate(invoice.due_date)
       if (ownerUserId) {
@@ -158,7 +170,7 @@ export function InvoiceDetailPage() {
   }, [supabase, ownerUserId, invoiceId, cardId])
 
   useEffect(() => {
-    load()
+    void load()
   }, [load])
 
   useEffect(() => {
@@ -168,7 +180,6 @@ export function InvoiceDetailPage() {
 
   const itemsLocked = !!(inv?.payable_id && payableStatus === 'paid')
 
-  /** Lê a fatura no banco e sincroniza total/vencimento na conta a pagar vinculada. */
   const runSyncInvoice = useCallback(async () => {
     if (!supabase || !invoiceId || !ownerUserId) return
     const { data: row } = await supabase
@@ -258,12 +269,16 @@ export function InvoiceDetailPage() {
     const baseDesc = toUpperTrim(itemForm.description)
     const baseAmount = parseMoney(itemForm.amount)
     const baseCategoryId = itemForm.category_id || ccCategoryId || null
+    const baseFamilyMemberId = itemForm.family_member_id || null
+
     const base = {
       occurred_on: itemForm.occurred_on,
       description: baseDesc,
       amount: baseAmount,
       category_id: baseCategoryId,
+      family_member_id: baseFamilyMemberId,
     }
+
     if (editingItem) {
       const { error } = await supabase.from('credit_card_invoice_items').update(base).eq('id', editingItem.id)
       if (error) {
@@ -298,7 +313,7 @@ export function InvoiceDetailPage() {
             const patchIds = targets.map((t) => t.id)
             const { error: batchErr } = await supabase
               .from('credit_card_invoice_items')
-              .update({ amount: baseAmount })
+              .update({ amount: baseAmount, family_member_id: baseFamilyMemberId })
               .in('id', patchIds)
             if (batchErr) alert(batchErr.message)
             else extraInvoiceIds.push(...targets.map((t) => t.invoice_id))
@@ -311,6 +326,7 @@ export function InvoiceDetailPage() {
         description: '',
         amount: '',
         category_id: ccCategoryId ?? '',
+        family_member_id: '',
         parcel_count: '1',
         amount_mode: 'total',
       })
@@ -335,6 +351,7 @@ export function InvoiceDetailPage() {
           description: '',
           amount: '',
           category_id: ccCategoryId ?? '',
+          family_member_id: '',
           parcel_count: '1',
           amount_mode: 'total',
         })
@@ -396,6 +413,7 @@ export function InvoiceDetailPage() {
           description: `${baseDesc} (PARCELA ${i + 1}/${n})`,
           amount: shareAmounts[i] ?? 0,
           category_id: baseCategoryId,
+          family_member_id: baseFamilyMemberId,
           installment_group_id: groupId,
           installment_number: i + 1,
           installment_count: n,
@@ -442,6 +460,7 @@ export function InvoiceDetailPage() {
         description: '',
         amount: '',
         category_id: ccCategoryId ?? '',
+        family_member_id: '',
         parcel_count: '1',
         amount_mode: 'total',
       })
@@ -472,38 +491,48 @@ export function InvoiceDetailPage() {
   if (!inv) return <p className="text-red-600">Fatura não encontrada.</p>
 
   const total = items.reduce((s, x) => s + Number(x.amount), 0)
+  const percentUsed = limitAmount ? Math.min(100, (total / limitAmount) * 100) : 0
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className="space-y-4">
-        <div className="flex flex-wrap items-center gap-4">
-          <h2 className="text-2xl font-semibold">
-            Fatura {cardName} — {monthLabel(parseISODate(inv.reference_month))}
-          </h2>
+        <div className="flex flex-wrap items-center gap-3">
+          <Link
+            to={`/lsh/cartoes/${cardId}`}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+            title="Voltar"
+          >
+            <ArrowLeft size={18} />
+          </Link>
+          <div>
+            <h2 className="text-2xl font-bold text-slate-800">
+              Fatura {cardName}
+            </h2>
+            <p className="text-sm text-slate-500">Competência: {monthLabel(parseISODate(inv.reference_month)).toUpperCase()}</p>
+          </div>
         </div>
+
         <nav
-          className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-sm sm:p-4"
+          className="flex flex-col gap-3.5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm text-xs font-semibold text-slate-600"
           aria-label="Navegação da fatura"
         >
-          <div className="flex flex-wrap gap-3">
-            <Link to="/lsh/cartoes" className="font-medium text-sky-600 hover:underline">
+          <div className="flex flex-wrap gap-4">
+            <Link to="/lsh/cartoes" className="text-sky-600 hover:underline">
               ← CARTÕES
             </Link>
-            <Link to={`/lsh/cartoes/${cardId}`} className="font-medium text-sky-600 hover:underline">
-              FATURAS DESTE CARTÃO
+            <Link to={`/lsh/cartoes/${cardId}`} className="text-sky-600 hover:underline">
+              VER FATURAS DESTE CARTÃO
             </Link>
           </div>
           {invoiceNav.prev.length > 0 && (
-            <div>
-              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">
-                Até 3 faturas anteriores
-              </p>
-              <div className="flex flex-wrap gap-2">
+            <div className="border-t border-slate-100 pt-2.5">
+              <p className="mb-1 text-[10px] uppercase tracking-wider text-slate-400">Faturas Anteriores</p>
+              <div className="flex flex-wrap gap-1.5">
                 {invoiceNav.prev.map((row) => (
                   <Link
                     key={row.id}
                     to={`/lsh/cartoes/${cardId}/faturas/${row.id}`}
-                    className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-sky-700 hover:bg-slate-100"
+                    className="rounded-lg border border-slate-200 bg-slate-50/50 px-2.5 py-1 text-slate-700 hover:bg-slate-100 hover:border-slate-300"
                   >
                     {row.competenciaKey}
                   </Link>
@@ -512,16 +541,14 @@ export function InvoiceDetailPage() {
             </div>
           )}
           {invoiceNav.next.length > 0 && (
-            <div>
-              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">
-                Até 12 faturas seguintes
-              </p>
-              <div className="flex flex-wrap gap-2">
+            <div className="border-t border-slate-100 pt-2.5">
+              <p className="mb-1 text-[10px] uppercase tracking-wider text-slate-400">Faturas Seguintes</p>
+              <div className="flex flex-wrap gap-1.5">
                 {invoiceNav.next.map((row) => (
                   <Link
                     key={row.id}
                     to={`/lsh/cartoes/${cardId}/faturas/${row.id}`}
-                    className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-sky-700 hover:bg-slate-100"
+                    className="rounded-lg border border-slate-200 bg-slate-50/50 px-2.5 py-1 text-slate-700 hover:bg-slate-100 hover:border-slate-300"
                   >
                     {row.competenciaKey}
                   </Link>
@@ -533,211 +560,315 @@ export function InvoiceDetailPage() {
       </div>
 
       {warnPaid && (
-        <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          A conta a pagar vinculada está <strong>paga</strong>: o valor não foi atualizado automaticamente.
-        </p>
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-950">
+          A conta a pagar vinculada está <strong>PAGA</strong>: novos lançamentos não alteram o valor no fluxo de caixa automaticamente.
+        </div>
       )}
 
       {itemsLocked && (
-        <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-          Itens bloqueados porque a conta a pagar vinculada está paga. Reabra a conta a pagar no fluxo “Pagar /
-          Receber” para editar.
-        </p>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-700">
+          Itens bloqueados porque a fatura foi liquidada (conta a pagar está paga). Reabra a conta para editar.
+        </div>
       )}
 
-      <form onSubmit={saveInvoiceMeta} className="flex flex-wrap items-end gap-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-        <div>
-          <label>Vencimento da fatura</label>
-          <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-        </div>
-        <Button type="submit" variant="secondary">
-          Atualizar vencimento
-        </Button>
-        <p className="mb-0 max-w-xl text-xs text-slate-600">
-          Esta fatura mantém conta a pagar vinculada automaticamente; o valor é atualizado quando os itens mudam
-          (exceto se a conta já estiver paga).
-        </p>
-      </form>
-
-      <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-        <p className="text-lg font-medium text-slate-900">
-          Total da fatura: <span className="text-sky-600">{formatBRL(total)}</span>
-        </p>
-        {inv.payable_id && (
-          <p className="text-xs text-slate-600">CONTA A PAGAR: {inv.payable_id.slice(0, 8)}… — {statusPt(payableStatus)}</p>
-        )}
-      </div>
-
-      <form onSubmit={submitItem} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-2 sm:p-4">
-        <div>
-          <label>Data</label>
-          <input
-            type="date"
-            value={itemForm.occurred_on}
-            onChange={(e) => setItemForm({ ...itemForm, occurred_on: e.target.value })}
-            disabled={itemsLocked}
-          />
-        </div>
-        <div>
-          <label>VALOR</label>
-          <input
-            value={itemForm.amount}
-            onChange={(e) => setItemForm({ ...itemForm, amount: e.target.value })}
-            disabled={itemsLocked}
-            required
-          />
-        </div>
-        <div className="sm:col-span-2 flex flex-col gap-2">
-          <span className="text-xs text-slate-600">O VALOR INFORMADO É:</span>
-          <div className="flex flex-wrap gap-4">
-            <label className="mb-0 flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-              <input
-                type="radio"
-                name="item_amount_mode"
-                className="h-4 w-4"
-                checked={itemForm.amount_mode === 'total'}
-                disabled={itemsLocked || !!editingItem}
-                onChange={() => setItemForm({ ...itemForm, amount_mode: 'total' })}
-              />
-              TOTAL DA COMPRA (DIVIDIR PELA QUANTIDADE DE PARCELAS)
-            </label>
-            <label className="mb-0 flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-              <input
-                type="radio"
-                name="item_amount_mode"
-                className="h-4 w-4"
-                checked={itemForm.amount_mode === 'per_installment'}
-                disabled={itemsLocked || !!editingItem}
-                onChange={() => setItemForm({ ...itemForm, amount_mode: 'per_installment' })}
-              />
-              VALOR DE CADA PARCELA (REPETIR EM TODAS AS PARCELAS)
-            </label>
+      {/* Visualização de Limite do Cartão */}
+      {limitAmount && limitAmount > 0 ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
+          <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wide">
+            <span>Uso do Limite do Cartão</span>
+            <span>{formatBRL(total)} / {formatBRL(limitAmount)} ({percentUsed.toFixed(1)}%)</span>
+          </div>
+          <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-300 ${
+                percentUsed > 90
+                  ? 'bg-red-500'
+                  : percentUsed > 75
+                    ? 'bg-amber-500'
+                    : 'bg-emerald-500'
+              }`}
+              style={{ width: `${percentUsed}%` }}
+            />
+          </div>
+          <div className="flex justify-between text-[11px] font-semibold text-slate-500">
+            <span>Disponível para compras:</span>
+            <span className="text-slate-800">{formatBRL(Math.max(0, limitAmount - total))}</span>
           </div>
         </div>
-        <div className="sm:col-span-2">
-          <label>Descrição</label>
-          <input
-            value={itemForm.description}
-            onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
-            disabled={itemsLocked}
-          />
-        </div>
-        <div>
-          <label>Categoria (padrão: {CREDIT_CARD_INVOICE_CATEGORY_NAME})</label>
-          <select
-            value={itemForm.category_id}
-            onChange={(e) => setItemForm({ ...itemForm, category_id: e.target.value })}
-            disabled={itemsLocked}
-          >
-            <option value="">— (usa {CREDIT_CARD_INVOICE_CATEGORY_NAME})</option>
-            {cats.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label>QUANTIDADE DE PARCELAS</label>
-          <input
-            type="number"
-            min={1}
-            value={itemForm.parcel_count}
-            onChange={(e) => setItemForm({ ...itemForm, parcel_count: e.target.value })}
-            disabled={itemsLocked || !!editingItem}
-            required
-          />
-        </div>
-        <div className="flex items-end gap-2">
-          <Button type="submit" variant="primary" disabled={itemsLocked}>
-            {editingItem ? 'Salvar item' : 'Adicionar item'}
-          </Button>
-          {editingItem && (
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                setEditingItem(null)
-                setItemForm({
-                  occurred_on: toISODate(new Date()),
-                  description: '',
-                  amount: '',
-                  category_id: ccCategoryId ?? '',
-                  parcel_count: '1',
-                  amount_mode: 'total',
-                })
-              }}
-            >
-              Cancelar
-            </Button>
-          )}
-        </div>
-      </form>
+      ) : null}
 
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Data</th>
-              <th>Descrição</th>
-              <th>Parcela</th>
-              <th>Categoria</th>
-              <th>Valor</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((it) => (
-              <tr key={it.id}>
-                <td>{it.occurred_on}</td>
-                <td>{it.description}</td>
-                <td className="text-slate-600">
-                  {`${it.installment_number ?? 1}/${it.installment_count ?? 1}`}
-                </td>
-                <td className="text-slate-600">
-                  {cats.find((c) => c.id === it.category_id)?.name ?? (it.category_id ? '…' : '—')}
-                </td>
-                <td>{formatBRL(Number(it.amount))}</td>
-                <td className="whitespace-nowrap">
-                  <div className="flex items-center justify-end gap-2">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="inline-flex h-9 w-9 items-center justify-center p-0"
-                      title="EDITAR"
-                      aria-label="EDITAR"
-                      disabled={itemsLocked}
-                      onClick={() => {
-                        setEditingItem(it)
-                        setItemForm({
-                          occurred_on: it.occurred_on,
-                          description: it.description,
-                          amount: String(it.amount),
-                          category_id: it.category_id ?? '',
-                          parcel_count: String(it.installment_count ?? 1),
-                          amount_mode: 'total',
-                        })
-                      }}
-                    >
-                      <Pencil size={16} />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="inline-flex h-9 w-9 items-center justify-center p-0 text-red-600"
-                      title="EXCLUIR"
-                      aria-label="EXCLUIR"
-                      disabled={itemsLocked}
-                      onClick={() => deleteItem(it.id)}
-                    >
-                      <Trash2 size={16} />
-                    </Button>
-                  </div>
-                </td>
+      <div className="grid gap-4 md:grid-cols-3">
+        {/* Info Fatura */}
+        <div className="md:col-span-1 space-y-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800">Informações</h3>
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total da Fatura</span>
+              <span className="text-2xl font-bold text-slate-800 block">{formatBRL(total)}</span>
+            </div>
+
+            {inv.payable_id && (
+              <div className="space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Status da Conta Vinculada</span>
+                <span
+                  className={`inline-flex rounded-md px-2 py-0.5 text-xs font-bold ${
+                    payableStatus === 'paid' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'
+                  }`}
+                >
+                  {statusPt(payableStatus)}
+                </span>
+              </div>
+            )}
+
+            <form onSubmit={saveInvoiceMeta} className="space-y-3 pt-3 border-t border-slate-100">
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Data de Vencimento</label>
+                <input
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-1.5 text-sm font-medium focus:outline-none"
+                />
+              </div>
+              <Button type="submit" variant="secondary" className="w-full h-[36px] text-xs font-semibold">
+                Atualizar Vencimento
+              </Button>
+            </form>
+          </div>
+        </div>
+
+        {/* Cadastro de Item */}
+        <div className="md:col-span-2">
+          <form onSubmit={submitItem} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800">
+              {editingItem ? 'Editar Item da Fatura' : 'Adicionar Item na Fatura'}
+            </h3>
+            
+            <div className="grid gap-3.5 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Data da Compra</label>
+                <input
+                  type="date"
+                  value={itemForm.occurred_on}
+                  onChange={(e) => setItemForm({ ...itemForm, occurred_on: e.target.value })}
+                  disabled={itemsLocked}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-1.5 text-sm focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Valor</label>
+                <input
+                  value={itemForm.amount}
+                  onChange={(e) => setItemForm({ ...itemForm, amount: e.target.value })}
+                  disabled={itemsLocked}
+                  required
+                  placeholder="0,00"
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm focus:outline-none"
+                />
+              </div>
+              
+              <div className="sm:col-span-2 space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Modo do Lançamento</span>
+                <div className="flex flex-wrap gap-4">
+                  <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-slate-600">
+                    <input
+                      type="radio"
+                      name="item_amount_mode"
+                      checked={itemForm.amount_mode === 'total'}
+                      disabled={itemsLocked || !!editingItem}
+                      onChange={() => setItemForm({ ...itemForm, amount_mode: 'total' })}
+                      className="h-4 w-4 text-[#185FA5]"
+                    />
+                    Dividir valor total pelas parcelas
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-slate-600">
+                    <input
+                      type="radio"
+                      name="item_amount_mode"
+                      checked={itemForm.amount_mode === 'per_installment'}
+                      disabled={itemsLocked || !!editingItem}
+                      onChange={() => setItemForm({ ...itemForm, amount_mode: 'per_installment' })}
+                      className="h-4 w-4 text-[#185FA5]"
+                    />
+                    Repetir valor em cada parcela
+                  </label>
+                </div>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Descrição</label>
+                <input
+                  value={itemForm.description}
+                  onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
+                  disabled={itemsLocked}
+                  placeholder="Ex.: Supermercado Lemos"
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Categoria</label>
+                <select
+                  value={itemForm.category_id}
+                  onChange={(e) => setItemForm({ ...itemForm, category_id: e.target.value })}
+                  disabled={itemsLocked}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none"
+                >
+                  <option value="">— Categoria padrão</option>
+                  {cats.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Familiar Responsável</label>
+                <select
+                  value={itemForm.family_member_id}
+                  onChange={(e) => setItemForm({ ...itemForm, family_member_id: e.target.value })}
+                  disabled={itemsLocked}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none"
+                >
+                  <option value="">Sem vínculo</option>
+                  {familyMembers.map((fm) => (
+                    <option key={fm.id} value={fm.id}>
+                      {fm.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Quantidade de Parcelas</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={itemForm.parcel_count}
+                  onChange={(e) => setItemForm({ ...itemForm, parcel_count: e.target.value })}
+                  disabled={itemsLocked || !!editingItem}
+                  required
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2.5 border-t border-slate-100">
+              {editingItem && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-[38px] px-4 text-xs font-semibold"
+                  onClick={() => {
+                    setEditingItem(null)
+                    setItemForm({
+                      occurred_on: toISODate(new Date()),
+                      description: '',
+                      amount: '',
+                      category_id: ccCategoryId ?? '',
+                      family_member_id: '',
+                      parcel_count: '1',
+                      amount_mode: 'total',
+                    })
+                  }}
+                >
+                  Cancelar
+                </Button>
+              )}
+              <Button type="submit" variant="primary" className="h-[38px] px-5 text-xs font-semibold" disabled={itemsLocked}>
+                {editingItem ? 'Salvar Item' : 'Adicionar Item'}
+              </Button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        {items.length === 0 ? (
+          <p className="p-6 text-center text-sm text-slate-400">Nenhum item lançado nesta fatura.</p>
+        ) : (
+          <table className="w-full border-collapse text-left text-sm">
+            <thead>
+              <tr className="border-b border-slate-100 bg-slate-50/75 text-xs font-bold uppercase tracking-wider text-slate-500">
+                <th className="px-5 py-3">Data</th>
+                <th className="px-5 py-3">Descrição</th>
+                <th className="px-5 py-3">Familiar</th>
+                <th className="px-5 py-3">Parcela</th>
+                <th className="px-5 py-3">Categoria</th>
+                <th className="px-5 py-3 text-right">Valor</th>
+                <th className="px-5 py-3 text-right">Ações</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {items.map((it) => {
+                const fm = familyMembers.find((f) => f.id === it.family_member_id)
+                return (
+                  <tr key={it.id} className="hover:bg-slate-50/30">
+                    <td className="px-5 py-3.5 text-slate-600 font-mono text-xs">{it.occurred_on}</td>
+                    <td className="px-5 py-3.5 font-semibold text-slate-800">{it.description}</td>
+                    <td className="px-5 py-3.5">
+                      {fm ? (
+                        <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
+                          <Users size={12} className="text-slate-400" />
+                          {fm.name}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3.5 text-slate-500 font-medium">
+                      {`${it.installment_number ?? 1}/${it.installment_count ?? 1}`}
+                    </td>
+                    <td className="px-5 py-3.5 text-slate-500 font-medium">
+                      {cats.find((c) => c.id === it.category_id)?.name ?? CREDIT_CARD_INVOICE_CATEGORY_NAME}
+                    </td>
+                    <td className="px-5 py-3.5 text-right font-bold text-slate-800">
+                      {formatBRL(Number(it.amount))}
+                    </td>
+                    <td className="px-5 py-3.5 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="inline-flex h-8.5 w-8.5 items-center justify-center rounded-lg p-0 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                          title="EDITAR"
+                          aria-label="EDITAR"
+                          disabled={itemsLocked}
+                          onClick={() => {
+                            setEditingItem(it)
+                            setItemForm({
+                              occurred_on: it.occurred_on,
+                              description: it.description,
+                              amount: String(it.amount),
+                              category_id: it.category_id ?? '',
+                              family_member_id: it.family_member_id ?? '',
+                              parcel_count: String(it.installment_count ?? 1),
+                              amount_mode: 'total',
+                            })
+                          }}
+                        >
+                          <Pencil size={15} />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="inline-flex h-8.5 w-8.5 items-center justify-center rounded-lg p-0 text-red-500 hover:bg-red-50 hover:text-red-600"
+                          title="EXCLUIR"
+                          aria-label="EXCLUIR"
+                          disabled={itemsLocked}
+                          onClick={() => deleteItem(it.id)}
+                        >
+                          <Trash2 size={15} />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   )
