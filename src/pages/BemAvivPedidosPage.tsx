@@ -17,7 +17,10 @@ import {
   Search,
   Sparkles,
   FileText,
+  Printer,
+  MessageCircle,
 } from 'lucide-react'
+import { buildWhatsappUrlWithText } from '../lib/whatsapp'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
@@ -182,11 +185,7 @@ function canReopenPedido(r: Pedido) {
 }
 
 function canVerDetalhePedido(r: Pedido) {
-  const s = r.status
-  return (
-    r.document_type === 'PEDIDO' &&
-    (s === 'ABERTO' || s === 'ENTREGUE' || s === 'ENTREGA PENDENTE' || s === 'ENTREGA PARCIAL' || s === 'FINALIZADO')
-  )
+  return true
 }
 
 function canExcluirDocumento(r: Pedido) {
@@ -318,6 +317,8 @@ export function BemAvivPedidosPage() {
   const [detailModalItems, setDetailModalItems] = useState<OrderItemDetailRow[]>([])
   const [detailModalDeliveries, setDetailModalDeliveries] = useState<OrderDeliveryHistoryRow[]>([])
   const [detailModalLoading, setDetailModalLoading] = useState(false)
+  const [detailModalClientPhone, setDetailModalClientPhone] = useState<string | null>(null)
+  const [detailModalClientRealName, setDetailModalClientRealName] = useState<string | null>(null)
   const [partialDeliveryOrder, setPartialDeliveryOrder] = useState<Pedido | null>(null)
   const [fullDeliveryOrder, setFullDeliveryOrder] = useState<Pedido | null>(null)
   const [expectedArrivalOrder, setExpectedArrivalOrder] = useState<Pedido | null>(null)
@@ -837,6 +838,8 @@ export function BemAvivPedidosPage() {
     setDetailModalPedido(null)
     setDetailModalItems([])
     setDetailModalDeliveries([])
+    setDetailModalClientPhone(null)
+    setDetailModalClientRealName(null)
     setDetailModalLoading(false)
   }
 
@@ -845,7 +848,27 @@ export function BemAvivPedidosPage() {
     setDetailModalPedido(pedido)
     setDetailModalItems([])
     setDetailModalDeliveries([])
+    setDetailModalClientPhone(null)
+    setDetailModalClientRealName(null)
     setDetailModalLoading(true)
+
+    // Fetch client details
+    let clientPhoneVal: string | null = null
+    let clientNameVal: string | null = null
+    if (pedido.client_id) {
+      const { data: clientData } = await supabase
+        .from('bem_aviv_clients')
+        .select('full_name, phone_1, phone_2')
+        .eq('id', pedido.client_id)
+        .maybeSingle()
+      if (clientData) {
+        clientNameVal = clientData.full_name
+        clientPhoneVal = clientData.phone_1 || clientData.phone_2 || null
+      }
+    }
+    setDetailModalClientRealName(clientNameVal)
+    setDetailModalClientPhone(clientPhoneVal)
+
     const { data, error } = await supabase
       .from('bem_aviv_sales_order_items')
       .select('id, item_description, quantity, quantity_delivered, unit_price, discount_amount, total_price, created_at')

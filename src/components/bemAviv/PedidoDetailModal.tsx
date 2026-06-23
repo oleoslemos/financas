@@ -1,10 +1,11 @@
-import { X } from 'lucide-react'
+import { X, Printer, MessageCircle } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useSupabase } from '../../hooks/useSupabase'
 import { formatBRL } from '../../lib/format'
 import { formatDateOnly } from '../../lib/dates'
 import { isDeliveryPendingStatus, remainingQty } from '../../lib/bemAvivOrderDelivery'
 import { fetchOrderDeliveryHistory, type OrderDeliveryHistoryRow } from '../../lib/bemAvivOrderDeliveries'
+import { buildWhatsappUrlWithText } from '../../lib/whatsapp'
 
 type PaymentOption = 'A_VISTA' | 'A_PRAZO'
 type PaymentMethod = 'DINHEIRO' | 'PIX' | 'CARTAO_DEBITO' | 'CARTAO_CREDITO' | 'BOLETO'
@@ -96,12 +97,16 @@ export function PedidoDetailModal({ orderId, companyId, clientName, onClose }: P
   const [items, setItems] = useState<OrderItemDetailRow[]>([])
   const [deliveries, setDeliveries] = useState<OrderDeliveryHistoryRow[]>([])
   const [loading, setLoading] = useState(false)
+  const [clientPhone, setClientPhone] = useState<string | null>(null)
+  const [realClientName, setRealClientName] = useState<string | null>(null)
 
   useEffect(() => {
     if (!orderId || !supabase || !companyId) {
       setPedido(null)
       setItems([])
       setDeliveries([])
+      setClientPhone(null)
+      setRealClientName(null)
       return
     }
 
@@ -110,6 +115,8 @@ export function PedidoDetailModal({ orderId, companyId, clientName, onClose }: P
     setPedido(null)
     setItems([])
     setDeliveries([])
+    setClientPhone(null)
+    setRealClientName(null)
 
     ;(async () => {
       const { data: orderData, error: orderErr } = await supabase
@@ -130,6 +137,25 @@ export function PedidoDetailModal({ orderId, companyId, clientName, onClose }: P
       }
 
       setPedido(orderData as PedidoDetail)
+
+      // Fetch client info for WhatsApp sharing
+      let clientPhoneVal: string | null = null
+      let clientNameVal: string | null = null
+      if (orderData.client_id) {
+        const { data: clientData } = await supabase
+          .from('bem_aviv_clients')
+          .select('full_name, phone_1, phone_2')
+          .eq('id', orderData.client_id)
+          .maybeSingle()
+        if (clientData) {
+          clientNameVal = clientData.full_name
+          clientPhoneVal = clientData.phone_1 || clientData.phone_2 || null
+        }
+      }
+
+      if (cancelled) return
+      setClientPhone(clientPhoneVal)
+      setRealClientName(clientNameVal)
 
       const { data: itemsData, error: itemsErr } = await supabase
         .from('bem_aviv_sales_order_items')
@@ -158,6 +184,54 @@ export function PedidoDetailModal({ orderId, companyId, clientName, onClose }: P
       cancelled = true
     }
   }, [orderId, supabase, companyId])
+
+  const handlePrint = () => {
+    if (!pedido) return
+    window.open(`/bem-aviv/pedidos/imprimir/${pedido.id}`, '_blank')
+  }
+
+  const handleShareWhatsapp = () => {
+    if (!pedido) return
+
+    const typeLabel = pedido.document_type === 'ORCAMENTO' ? 'Orçamento' : 'Pedido'
+    const name = realClientName || clientName || 'Cliente'
+    const dateFormatted = pedido.order_date ? pedido.order_date.split('-').reverse().join('/') : '—'
+
+    let text = `Olá, *${name}*!\n`
+    text += `Segue o resumo do seu *${typeLabel} de Venda (BemAviv)*:\n\n`
+    text += `*Número:* ${pedido.document_number ?? '—'}\n`
+    text += `*Data:* ${dateFormatted}\n`
+    text += `*Status:* ${pedido.status}\n\n`
+
+    if (items.length > 0) {
+      text += `*Itens:*\n`
+      items.forEach((it) => {
+        text += `• ${it.quantity}x ${it.item_description} (${formatBRL(it.unit_price)}/un) - *${formatBRL(it.total_price)}*\n`
+      })
+      text += `\n`
+    }
+
+    text += `*Forma de Pagamento:* ${pedido.payment_option === 'A_PRAZO' ? 'À prazo' : 'À vista'}\n`
+    if (pedido.payment_method) {
+      text += `*Meio de Pagamento:* ${PAYMENT_METHOD_LABEL[parsePaymentMethod(pedido.payment_method)]}\n`
+    }
+    if (downVal(pedido) > 0) {
+      text += `*Entrada:* ${formatBRL(downVal(pedido))}\n`
+    }
+    text += `*Condições:* ${installmentCell(pedido)}\n\n`
+
+    text += `*Valor Total Líquido: ${formatBRL(netTotal(pedido))}*\n\n`
+
+    const viewUrl = `${window.location.origin}/bem-aviv/pedidos/imprimir/${pedido.id}`
+    text += `Para visualizar o documento completo em PDF e imprimir, acesse o link:\n${viewUrl}`
+
+    const url = buildWhatsappUrlWithText(clientPhone, text)
+    if (url) {
+      window.open(url, '_blank')
+    } else {
+      alert('Telefone do cliente inválido ou não cadastrado.')
+    }
+  }
 
   if (!orderId) return null
 
@@ -384,7 +458,23 @@ export function PedidoDetailModal({ orderId, companyId, clientName, onClose }: P
                 </div>
               </div>
 
-              <div className="mt-6 flex justify-end border-t border-slate-100 pt-4">
+              <div className="mt-6 flex flex-wrap gap-2 justify-end border-t border-slate-100 pt-4">
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:bg-slate-50 active:scale-95"
+                  onClick={handlePrint}
+                >
+                  <Printer size={16} />
+                  Imprimir PDF
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-emerald-700 active:scale-95 shadow-emerald-600/10"
+                  onClick={handleShareWhatsapp}
+                >
+                  <MessageCircle size={16} />
+                  WhatsApp
+                </button>
                 <button
                   type="button"
                   className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:bg-slate-50 active:scale-95"

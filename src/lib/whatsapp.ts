@@ -20,3 +20,10 @@ export function buildWhatsappUrl(rawPhone?: string | null): string | null {
   if (!normalized) return null
   return `https://wa.me/${normalized}`
 }
+
+export function buildWhatsappUrlWithText(rawPhone?: string | null, text?: string): string | null {
+  const normalized = normalizePhoneForWhatsapp(rawPhone)
+  if (!normalized) return null
+  return `https://api.whatsapp.com/send?phone=${normalized}&text=${encodeURIComponent(text ?? '')}`
+}
+

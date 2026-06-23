@@ -197,6 +197,7 @@ function AppLayoutShell() {
         { kind: 'link', key: '/bem-aviv', label: 'Visão geral', to: '/bem-aviv', icon: LayoutGrid },
         { kind: 'link', key: '/bem-aviv/clientes', label: 'Clientes', to: '/bem-aviv/clientes', icon: UserCircle },
         { kind: 'link', key: '/bem-aviv/pedidos', label: 'Pedidos e orçamentos', to: '/bem-aviv/pedidos', icon: ShoppingCart },
+        { kind: 'link', key: '/bem-aviv/relatorios', label: 'Relatórios de vendas', to: '/bem-aviv/relatorios', icon: PieChart },
         { kind: 'link', key: '/bem-aviv/empresas', label: 'Dados da empresa', to: '/bem-aviv/empresas', icon: Building2 },
         {
           kind: 'group',
