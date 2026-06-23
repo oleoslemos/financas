@@ -804,7 +804,8 @@ export function InvoiceDetailPage() {
         {items.length === 0 ? (
           <p className="p-6 text-center text-sm text-slate-400">Nenhum item lançado nesta fatura.</p>
         ) : (
-          <table className="w-full border-collapse text-left text-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-left text-sm">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/75 text-xs font-bold uppercase tracking-wider text-slate-500">
                 <th className="px-5 py-3">Data</th>
@@ -884,6 +885,7 @@ export function InvoiceDetailPage() {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>

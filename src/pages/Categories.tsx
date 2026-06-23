@@ -218,7 +218,8 @@ export function Categories() {
             <p className="text-sm">Nenhuma categoria cadastrada ainda.</p>
           </div>
         ) : (
-          <table className="w-full border-collapse text-left text-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-left text-sm">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/75 text-xs font-bold uppercase tracking-wider text-slate-500">
                 <th className="px-6 py-3.5">Nome</th>
@@ -285,6 +286,7 @@ export function Categories() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>

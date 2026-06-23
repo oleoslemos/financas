@@ -1162,7 +1162,8 @@ export function CashflowPage() {
             <p className="text-sm">Nenhum lançamento financeiro encontrado.</p>
           </div>
         ) : (
-          <table className="w-full border-collapse text-left text-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-left text-sm">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/75 text-xs font-bold uppercase tracking-wider text-slate-500">
                 <th className="px-5 py-3">Tipo</th>
@@ -1313,6 +1314,7 @@ export function CashflowPage() {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 
