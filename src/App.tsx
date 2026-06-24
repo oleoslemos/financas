@@ -86,9 +86,9 @@ export default function App() {
       <Routes>
         <Route path="/sign-in/*" element={<SignInPage />} />
         <Route path="/sign-up/*" element={<SignUpPage />} />
+        <Route path="/bem-aviv/pedidos/imprimir/:orderId" element={<BemAvivPedidoPrintPage />} />
         <Route element={<RequireAuth />}>
           <Route element={<AllowedEmailGuard />}>
-            <Route path="/bem-aviv/pedidos/imprimir/:orderId" element={<BemAvivPedidoPrintPage />} />
             
             <Route element={<AppLayout />}>
               <Route path="/" element={<HomeRedirect />} />
