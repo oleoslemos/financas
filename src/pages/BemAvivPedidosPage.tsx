@@ -76,6 +76,8 @@ type Pedido = {
   other_expenses?: number | null
   expected_arrival_date?: string | null
   delivered_at?: string | null
+  client_accepted_at?: string | null
+  client_signature?: string | null
 }
 
 type ClienteOpt = { id: string; full_name: string }
@@ -131,15 +133,15 @@ function installmentCell(r: Pedido) {
 }
 
 function canEditOrcamento(r: Pedido) {
-  return r.document_type === 'ORCAMENTO' && !r.converted_order_id && r.status === 'ABERTO'
+  return r.document_type === 'ORCAMENTO' && !r.converted_order_id && r.status === 'ABERTO' && !r.client_accepted_at
 }
 
 function canFecharGerarPedido(r: Pedido) {
-  return r.document_type === 'ORCAMENTO' && !r.converted_order_id && r.status === 'ABERTO'
+  return r.document_type === 'ORCAMENTO' && !r.converted_order_id && r.status === 'ABERTO' && !r.client_accepted_at
 }
 
 function canEditPedido(r: Pedido) {
-  return r.document_type === 'PEDIDO' && r.status === 'ABERTO'
+  return r.document_type === 'PEDIDO' && r.status === 'ABERTO' && !r.client_accepted_at
 }
 
 function canCancelPedido(r: Pedido) {
@@ -189,7 +191,7 @@ function canVerDetalhePedido(_r: Pedido) {
 }
 
 function canExcluirDocumento(r: Pedido) {
-  return r.status === 'CANCELADO'
+  return r.status === 'CANCELADO' && !r.client_accepted_at
 }
 
 function renderStatusBadge(status: string, docType: 'ORCAMENTO' | 'PEDIDO') {
@@ -1271,7 +1273,14 @@ export function BemAvivPedidosPage() {
                   return (
                     <tr key={r.id} className="hover:bg-slate-50/80 transition-colors duration-150">
                       <td className="whitespace-nowrap px-4 py-4 font-bold text-slate-900 tabular-nums">
-                        {r.document_number || '—'}
+                        <div className="flex flex-col">
+                          <span>{r.document_number || '—'}</span>
+                          {r.client_accepted_at && (
+                            <span className="inline-flex items-center gap-0.5 text-[9px] font-extrabold uppercase tracking-wide text-emerald-600 mt-0.5">
+                              ✓ Assinado
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-500 font-medium">
                         {r.order_date ? r.order_date.split('-').reverse().join('/') : '—'}

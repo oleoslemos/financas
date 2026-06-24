@@ -37,6 +37,8 @@ type PedidoDetail = {
   other_expenses?: number | null
   expected_arrival_date?: string | null
   delivered_at?: string | null
+  client_accepted_at?: string | null
+  client_signature?: string | null
 }
 
 type OrderItemDetailRow = {
@@ -122,7 +124,7 @@ export function PedidoDetailModal({ orderId, companyId, clientName, onClose }: P
       const { data: orderData, error: orderErr } = await supabase
         .from('bem_aviv_sales_orders')
         .select(
-          'id, client_id, order_date, document_type, document_number, status, total_amount, notes, discount_total, installments_count, payment_option, payment_method, down_payment_amount, down_payment_method, freight_amount, other_expenses, expected_arrival_date, delivered_at',
+          'id, client_id, order_date, document_type, document_number, status, total_amount, notes, discount_total, installments_count, payment_option, payment_method, down_payment_amount, down_payment_method, freight_amount, other_expenses, expected_arrival_date, delivered_at, client_accepted_at, client_signature',
         )
         .eq('id', orderId)
         .eq('company_id', companyId)
@@ -357,6 +359,19 @@ export function PedidoDetailModal({ orderId, companyId, clientName, onClose }: P
                         <span className="text-slate-400">Status atual:</span>{' '}
                         <span className="font-semibold text-slate-800">{pedido.status}</span>
                       </p>
+                      {pedido.client_accepted_at && (
+                        <div className="border-t border-slate-200/80 pt-2 mt-2 space-y-1">
+                          <p className="text-[10px] font-extrabold uppercase tracking-wide text-emerald-600">
+                            ✓ Assinado pelo Cliente
+                          </p>
+                          <p className="text-[11px] text-slate-500 font-medium">
+                            Em: <span className="font-semibold tabular-nums text-slate-700">{new Date(pedido.client_accepted_at).toLocaleString('pt-BR')}</span>
+                          </p>
+                          <p className="text-[11px] text-slate-500 font-medium uppercase">
+                            Assinatura: <span className="font-semibold font-mono text-slate-700">{pedido.client_signature}</span>
+                          </p>
+                        </div>
+                      )}
                       {pedido.document_type === 'PEDIDO' ? (
                         <>
                           <p>
