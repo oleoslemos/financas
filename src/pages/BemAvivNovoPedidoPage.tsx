@@ -737,6 +737,7 @@ export function BemAvivNovoPedidoPage() {
 
   const [lineItems, setLineItems] = useState<LinhaItem[]>([])
   const [liquidTotalDigits, setLiquidTotalDigits] = useState('')
+  const [discountFixedAmount, setDiscountFixedAmount] = useState<number | null>(null)
 
   const pedidosReturnLinkState = useMemo(
     () => pedidosListReturnState(form.document_type, location.state),
@@ -948,6 +949,7 @@ export function BemAvivNovoPedidoPage() {
             : '',
       })
       setLineItems(mapped)
+      setDiscountFixedAmount(quoteDiscountAmount > 0 ? quoteDiscountAmount : null)
       setLoadedDocumentLabel(quote.document_number ?? quote.id)
       setOrderBootstrapping(false)
     })()
@@ -983,10 +985,11 @@ export function BemAvivNovoPedidoPage() {
   const downPaymentApplied = downPaymentNum
 
   const orderDiscount = useMemo(() => {
+    if (discountFixedAmount !== null) return discountFixedAmount
     const base = lineItems.length > 0 ? linesGrossTotal : 0
     const p = parseOrderDiscountPercent(form.discount_percent)
     return roundMoneySigned((base * p) / 100)
-  }, [lineItems.length, linesGrossTotal, form.discount_percent])
+  }, [lineItems.length, linesGrossTotal, form.discount_percent, discountFixedAmount])
 
   const previewOrderTotal = useMemo(() => {
     if (lineItems.length === 0) return null
@@ -1022,9 +1025,8 @@ export function BemAvivNovoPedidoPage() {
       setLiquidTotalDigits('')
       return
     }
-    const p = parseOrderDiscountPercent(form.discount_percent)
     const entrada = downPaymentNum
-    const net = clampMoney(sumLinesNet - (sumLinesNet * p) / 100 + freightAmountNum + otherExpensesNum - entrada)
+    const net = clampMoney(sumLinesNet - orderDiscount + freightAmountNum + otherExpensesNum - entrada)
     setLiquidTotalDigits(moneyDigitsFromNumber(net))
   }, [
     lineItems.length,
@@ -1032,7 +1034,7 @@ export function BemAvivNovoPedidoPage() {
     freightAmountNum,
     otherExpensesNum,
     downPaymentNum,
-    form.discount_percent,
+    orderDiscount,
   ])
 
   const applyLiquidRawToDiscount = useCallback((raw: string) => {
@@ -1050,6 +1052,7 @@ export function BemAvivNovoPedidoPage() {
     }
     if (discNeeded >= -0.000_001) {
       const p = G > 0 ? (discNeeded / G) * 100 : 0
+      setDiscountFixedAmount(discNeeded)
       setForm((f) => ({
         ...f,
         discount_percent: formatDiscountPercentInput(p),
@@ -1062,13 +1065,14 @@ export function BemAvivNovoPedidoPage() {
       alert('Não foi possível ajustar com outras despesas e desconto zerado.')
       return
     }
+    setDiscountFixedAmount(null)
     setForm((f) => ({
       ...f,
       discount_percent: '',
       other_expenses: newOther > 0 ? moneyDigitsFromNumber(newOther) : '',
     }))
     setLiquidTotalDigits(moneyDigitsFromNumber(targetLiquid))
-  }, [lineItems.length, sumLinesNet, freightAmountNum, otherExpensesNum, downPaymentNum])
+  }, [lineItems.length, sumLinesNet, freightAmountNum, otherExpensesNum, downPaymentNum, setDiscountFixedAmount])
 
   const handleAddProductLine = useCallback((p: OfferProduct, variationCode: string, qty: number) => {
     const vars = normalizePayload(p.payload).variations ?? []
@@ -1104,6 +1108,7 @@ export function BemAvivNovoPedidoPage() {
             quantity: qty,
           },
         ])
+        setDiscountFixedAmount(null)
         return
       }
 
@@ -1140,6 +1145,7 @@ export function BemAvivNovoPedidoPage() {
         })
       }
       setLineItems((prev) => [...prev, ...exploded])
+      setDiscountFixedAmount(null)
       return
     }
 
@@ -1157,19 +1163,23 @@ export function BemAvivNovoPedidoPage() {
         quantity: qty,
       },
     ])
-  }, [selectedPriceTableId, priceLookup, form.document_type, catalogForTable])
+    setDiscountFixedAmount(null)
+  }, [selectedPriceTableId, priceLookup, form.document_type, catalogForTable, setDiscountFixedAmount])
 
   const removeLine = useCallback((key: string) => {
     setLineItems((prev) => prev.filter((l) => l.key !== key))
-  }, [])
+    setDiscountFixedAmount(null)
+  }, [setDiscountFixedAmount])
 
   const handleUpdateLineQty = useCallback((key: string, qty: number) => {
     setLineItems((prev) => prev.map((l) => (l.key !== key ? l : { ...l, quantity: qty })))
-  }, [])
+    setDiscountFixedAmount(null)
+  }, [setDiscountFixedAmount])
 
   const handleUpdateLineUnitPrice = useCallback((key: string, price: number) => {
     setLineItems((prev) => prev.map((l) => (l.key !== key ? l : { ...l, unit_price: price })))
-  }, [])
+    setDiscountFixedAmount(null)
+  }, [setDiscountFixedAmount])
 
   async function deleteCurrentDocument() {
     if (!supabase || !ownerUserId || !activeCompanyId || !editOrderId || !isEditMode || deletingDocument) return
@@ -1695,7 +1705,10 @@ export function BemAvivNovoPedidoPage() {
                       id="np-frete"
                       className="np-input"
                       value={form.freight_amount}
-                      onValueChange={(val) => setForm((f) => ({ ...f, freight_amount: val }))}
+                      onValueChange={(val) => {
+                        setForm((f) => ({ ...f, freight_amount: val }))
+                        setDiscountFixedAmount(null)
+                      }}
                     />
                   </div>
                 </div>
@@ -1709,7 +1722,10 @@ export function BemAvivNovoPedidoPage() {
                       id="np-entrada"
                       className="np-input"
                       value={form.down_payment}
-                      onValueChange={(val) => setForm((f) => ({ ...f, down_payment: val }))}
+                      onValueChange={(val) => {
+                        setForm((f) => ({ ...f, down_payment: val }))
+                        setDiscountFixedAmount(null)
+                      }}
                     />
                   </div>
                   <div className="np-field">
@@ -1742,7 +1758,10 @@ export function BemAvivNovoPedidoPage() {
                       id="np-despesas"
                       className="np-input"
                       value={form.other_expenses}
-                      onValueChange={(val) => setForm((f) => ({ ...f, other_expenses: val }))}
+                      onValueChange={(val) => {
+                        setForm((f) => ({ ...f, other_expenses: val }))
+                        setDiscountFixedAmount(null)
+                      }}
                     />
                   </div>
                   <div className="np-field">
@@ -1753,7 +1772,10 @@ export function BemAvivNovoPedidoPage() {
                       id="np-desconto"
                       className="np-input"
                       value={form.discount_percent}
-                      onValueChange={(val) => setForm((f) => ({ ...f, discount_percent: val }))}
+                      onValueChange={(val) => {
+                        setForm((f) => ({ ...f, discount_percent: val }))
+                        setDiscountFixedAmount(null)
+                      }}
                     />
                   </div>
                 </div>
