@@ -6,7 +6,12 @@ export function addMonths(d: Date, months: number): Date {
 }
 
 export function toISODate(d: Date): string {
-  return d.toISOString().slice(0, 10)
+  if (!d || Number.isNaN(d.getTime())) return ''
+  try {
+    return d.toISOString().slice(0, 10)
+  } catch {
+    return ''
+  }
 }
 
 export function parseISODate(s: string): Date {
@@ -21,12 +26,18 @@ export function monthLabel(d: Date): string {
 /** Valor para `<input type="date">` (YYYY-MM-DD) no fuso local. */
 export function toInputDate(value?: string | null): string {
   if (!value) return ''
-  const dt = /^\d{4}-\d{2}-\d{2}$/.test(value.trim()) ? parseISODate(value.trim()) : new Date(value)
-  if (Number.isNaN(dt.getTime())) return ''
-  const y = dt.getFullYear()
-  const m = String(dt.getMonth() + 1).padStart(2, '0')
-  const day = String(dt.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
+  try {
+    const trimmed = value.trim()
+    if (!trimmed) return ''
+    const dt = /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? parseISODate(trimmed) : new Date(trimmed)
+    if (Number.isNaN(dt.getTime())) return ''
+    const y = dt.getFullYear()
+    const m = String(dt.getMonth() + 1).padStart(2, '0')
+    const day = String(dt.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  } catch {
+    return ''
+  }
 }
 
 export function todayInputDate(): string {
@@ -35,16 +46,30 @@ export function todayInputDate(): string {
 
 /** Converte YYYY-MM-DD (ou datetime-local legado) para ISO no início do dia local. */
 export function dateInputToIso(value: string): string {
-  const trimmed = value.trim()
-  if (!trimmed) return ''
-  if (trimmed.includes('T')) return new Date(trimmed).toISOString()
-  const datePart = trimmed.slice(0, 10)
-  return parseISODate(datePart).toISOString()
+  if (!value) return ''
+  try {
+    const trimmed = value.trim()
+    if (!trimmed) return ''
+    if (trimmed.includes('T')) {
+      const dt = new Date(trimmed)
+      return Number.isNaN(dt.getTime()) ? '' : dt.toISOString()
+    }
+    const datePart = trimmed.slice(0, 10)
+    const dt = parseISODate(datePart)
+    return Number.isNaN(dt.getTime()) ? '' : dt.toISOString()
+  } catch {
+    return ''
+  }
 }
 
 export function formatDateOnly(value?: string | null): string {
   if (!value) return '—'
-  const dt = new Date(value)
-  if (Number.isNaN(dt.getTime())) return '—'
-  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(dt)
+  try {
+    const dt = new Date(value)
+    if (Number.isNaN(dt.getTime())) return '—'
+    return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(dt)
+  } catch {
+    return '—'
+  }
 }
+

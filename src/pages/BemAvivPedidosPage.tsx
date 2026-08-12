@@ -191,7 +191,7 @@ function canVerDetalhePedido(_r: Pedido) {
 }
 
 function canExcluirDocumento(r: Pedido) {
-  return r.status === 'CANCELADO' && !r.client_accepted_at
+  return r.status === 'CANCELADO'
 }
 
 function renderStatusBadge(status: string, docType: 'ORCAMENTO' | 'PEDIDO') {

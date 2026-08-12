@@ -1468,8 +1468,18 @@ export function BemAvivClientesPage() {
     }
 
     const inputDate = toInputDate(client.next_followup_at)
+    if (!inputDate) {
+      return (
+        <span className="text-xs text-slate-400 font-medium">Sem agendamento</span>
+      )
+    }
     const today = todayInputDate()
     const dDate = new Date(inputDate + 'T12:00:00')
+    if (Number.isNaN(dDate.getTime())) {
+      return (
+        <span className="text-xs text-slate-400 font-medium">Sem agendamento</span>
+      )
+    }
     const formatted = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(dDate)
     const parsed = splitFollowupNote(client.next_followup_note)
     const summary = parsed.summary || 'Follow-up'
@@ -1531,6 +1541,7 @@ export function BemAvivClientesPage() {
   function formatLastContact(client: Cliente) {
     if (!client.last_contact_at) return <span className="text-slate-400">—</span>
     const inputDate = toInputDate(client.last_contact_at)
+    if (!inputDate) return <span className="text-slate-400">—</span>
     const today = todayInputDate()
     
     if (inputDate === today) {
@@ -1538,6 +1549,7 @@ export function BemAvivClientesPage() {
     }
     
     const dDate = new Date(inputDate + 'T12:00:00')
+    if (Number.isNaN(dDate.getTime())) return <span className="text-slate-400">—</span>
     return (
       <span className="text-slate-700">
         {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(dDate)}
@@ -2007,9 +2019,13 @@ export function BemAvivClientesPage() {
           <div className="rounded-xl border border-slate-200 bg-white p-3 text-center shadow-2xs">
             <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Última Venda</p>
             <p className="mt-1 text-sm font-semibold text-slate-900">
-              {pedidosModalStats.ultima
-                ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(new Date(pedidosModalStats.ultima + 'T12:00:00'))
-                : '—'}
+              {(() => {
+                const ultimaInput = toInputDate(pedidosModalStats.ultima)
+                if (!ultimaInput) return '—'
+                const dDate = new Date(ultimaInput + 'T12:00:00')
+                if (Number.isNaN(dDate.getTime())) return '—'
+                return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(dDate)
+              })()}
             </p>
           </div>
         </div>
@@ -2206,9 +2222,13 @@ export function BemAvivClientesPage() {
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Data de Nascimento</p>
             <p className="mt-0.5 font-medium text-slate-900">
-              {selectedClient.birth_date
-                ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' }).format(new Date(selectedClient.birth_date + 'T12:00:00'))
-                : '—'}
+              {(() => {
+                const birthInput = toInputDate(selectedClient.birth_date)
+                if (!birthInput) return '—'
+                const dDate = new Date(birthInput + 'T12:00:00')
+                if (Number.isNaN(dDate.getTime())) return '—'
+                return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' }).format(dDate)
+              })()}
             </p>
           </div>
           <div className="col-span-2">
