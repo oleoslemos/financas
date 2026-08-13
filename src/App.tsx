@@ -55,6 +55,9 @@ const TasksPage = lazy(() => import('./pages/TasksPage').then((m) => ({ default:
 const SystemChooserPage = lazy(() =>
   import('./pages/SystemChooserPage').then((m) => ({ default: m.SystemChooserPage })),
 )
+const CalculadoraOrcamentoPage = lazy(() =>
+  import('./pages/CalculadoraOrcamentoPage').then((m) => ({ default: m.CalculadoraOrcamentoPage })),
+)
 const ProjectsHubPage = lazy(() => import('./pages/ProjectsHubPage').then((m) => ({ default: m.ProjectsHubPage })))
 const ProjectNotesPage = lazy(() => import('./pages/ProjectNotesPage').then((m) => ({ default: m.ProjectNotesPage })))
 const ProjectKanbanPage = lazy(() => import('./pages/ProjectKanbanPage').then((m) => ({ default: m.ProjectKanbanPage })))
@@ -94,6 +97,7 @@ export default function App() {
               <Route path="/" element={<HomeRedirect />} />
               <Route path="/inicio" element={<HomeRedirect />} />
               <Route path="/escolher-sistema" element={<SystemChooserPage />} />
+              <Route path="/calculadora-orcamento" element={<CalculadoraOrcamentoPage />} />
               <Route path="/bem-aviv" element={<BemAvivHomePage />} />
               <Route path="/bem-aviv/clientes" element={<BemAvivClientesPage />} />
               <Route path="/bem-aviv/follow-up/agendar/:clientId" element={<BemAvivFollowupSchedulePage />} />

@@ -3,6 +3,7 @@ import { UserButton } from './ui/AuthComponents'
 import {
   BriefcaseBusiness,
   Building2,
+  Calculator,
   ChevronDown,
   ChevronLeft,
   CircleDollarSign,
@@ -198,6 +199,7 @@ function AppLayoutShell() {
         { kind: 'link', key: '/bem-aviv', label: 'Visão geral', to: '/bem-aviv', icon: LayoutGrid },
         { kind: 'link', key: '/bem-aviv/clientes', label: 'Clientes', to: '/bem-aviv/clientes', icon: UserCircle },
         { kind: 'link', key: '/bem-aviv/pedidos', label: 'Pedidos e orçamentos', to: '/bem-aviv/pedidos', icon: ShoppingCart },
+        { kind: 'link', key: '/calculadora-orcamento', label: 'Calculadora Orçamento', to: '/calculadora-orcamento', icon: Calculator },
         { kind: 'link', key: '/bem-aviv/relatorios', label: 'Relatórios de vendas', to: '/bem-aviv/relatorios', icon: PieChart },
         { kind: 'link', key: '/bem-aviv/empresas', label: 'Dados da empresa', to: '/bem-aviv/empresas', icon: Building2 },
         {
@@ -237,6 +239,7 @@ function AppLayoutShell() {
     if (location.pathname.startsWith('/lsh')) return 'financeiro'
     if (location.pathname.startsWith('/bem-aviv')) return 'bem-aviv'
     if (location.pathname.startsWith('/projetos')) return 'projetos'
+    if (location.pathname.startsWith('/calculadora-orcamento')) return 'bem-aviv'
     return 'global'
   }, [location.pathname])
 
