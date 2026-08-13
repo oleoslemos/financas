@@ -16,7 +16,11 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true
+    "noUncheckedSideEffectImports": true,
+    "baseUrl": ".",
+    "paths": {
+      "@clerk/clerk-react": ["./src/hooks/useClerkCompat.ts"]
+    }
   },
   "include": ["src"]
 }

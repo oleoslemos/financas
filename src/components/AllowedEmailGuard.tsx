@@ -1,4 +1,5 @@
-import { SignOutButton, useUser } from '@clerk/clerk-react'
+import { useUser } from '../hooks/useClerkCompat'
+import { SignOutButton } from './ui/AuthComponents'
 import { Outlet } from 'react-router-dom'
 import { Button } from './ui/Button'
 import { getAllowedEmailSetForHostname, isEmailAllowed } from '../lib/allowedEmails'

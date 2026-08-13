@@ -1,4 +1,4 @@
-import { useUser } from '@clerk/clerk-react'
+import { useUser } from '../hooks/useClerkCompat'
 import { Navigate, Outlet } from 'react-router-dom'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { isBemAvivOnlyUser } from '../lib/userAccess'

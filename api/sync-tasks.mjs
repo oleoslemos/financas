@@ -1,5 +1,5 @@
 import { runTasksSync } from '../scripts/tasks-sync-core.mjs'
-import { verifyToken } from '@clerk/backend'
+import { createClient } from '@supabase/supabase-js'
 
 function json(res, statusCode, payload) {
   res.statusCode = statusCode
@@ -24,12 +24,15 @@ async function getAuthenticatedUserId(req) {
   const token = auth.slice(7).trim()
   if (!token) return ''
 
-  const secretKey = process.env.CLERK_SECRET_KEY?.trim()
-  if (!secretKey) return ''
+  const supabaseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim()
+  const supabaseAnonKey = (process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '').trim()
+  if (!supabaseUrl || !supabaseAnonKey) return ''
 
   try {
-    const payload = await verifyToken(token, { secretKey })
-    return typeof payload?.sub === 'string' ? payload.sub : ''
+    const supabase = createClient(supabaseUrl, supabaseAnonKey)
+    const { data: { user }, error } = await supabase.auth.getUser(token)
+    if (error || !user) return ''
+    return user.id
   } catch (_error) {
     return ''
   }

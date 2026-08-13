@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { useUser } from '@clerk/clerk-react'
+import { useUser } from './hooks/useClerkCompat'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AllowedEmailGuard } from './components/AllowedEmailGuard'
 import { AppLayout } from './components/AppLayout'

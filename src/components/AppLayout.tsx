@@ -1,4 +1,5 @@
-import { useUser, UserButton } from '@clerk/clerk-react'
+import { useUser } from '../hooks/useClerkCompat'
+import { UserButton } from './ui/AuthComponents'
 import {
   BriefcaseBusiness,
   Building2,

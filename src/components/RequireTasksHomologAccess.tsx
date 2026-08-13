@@ -1,4 +1,4 @@
-import { useUser } from '@clerk/clerk-react'
+import { useUser } from '../hooks/useClerkCompat'
 import { Navigate, Outlet } from 'react-router-dom'
 import { canAccessTasksHomolog } from '../lib/tasksHomologAccess'
 

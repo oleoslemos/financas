@@ -1,4 +1,4 @@
-import { useAuth } from '@clerk/clerk-react'
+import { useAuth } from '../hooks/useClerkCompat'
 import { Navigate, Outlet } from 'react-router-dom'
 
 export function RequireAuth() {
