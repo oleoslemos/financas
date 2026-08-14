@@ -18,12 +18,8 @@ import {
   Calendar, 
   User,
   ShoppingBag,
-  Sparkles,
-  Smartphone,
-  Check,
   ChevronRight,
-  Search,
-  Plus
+  Search
 } from 'lucide-react'
 
 type SelectedProductItem = {
@@ -110,8 +106,6 @@ export function CalculadoraOrcamentoPage() {
   // Status & History
   const [isSaving, setIsSaving] = useState(false)
   const [isConverting, setIsConverting] = useState(false)
-  const [saveSuccess, setSaveSuccess] = useState(false)
-  const [copySuccess, setCopySuccess] = useState(false)
   const [history, setHistory] = useState<QuickQuote[]>([])
   const [loadedQuoteId, setLoadedQuoteId] = useState<string | null>(null)
 
@@ -362,11 +356,9 @@ export function CalculadoraOrcamentoPage() {
       return
     }
     setIsSaving(true)
-    setSaveSuccess(false)
 
     try {
       // 1. Check or Create Client
-      let clientId = ''
       const searchName = clientName.toUpperCase().trim()
       
       const { data: existingClients, error: searchError } = await supabase
@@ -378,11 +370,9 @@ export function CalculadoraOrcamentoPage() {
 
       if (searchError) throw searchError
 
-      if (existingClients && existingClients.length > 0) {
-        clientId = existingClients[0].id
-      } else {
+      if (!existingClients || existingClients.length === 0) {
         // Insert new Client
-        const { data: newClient, error: clientError } = await supabase
+        const { error: clientError } = await supabase
           .from('bem_aviv_clients')
           .insert({
             user_id: ownerUserId,
@@ -395,11 +385,8 @@ export function CalculadoraOrcamentoPage() {
             phone_2: '',
             cep: '',
           })
-          .select('id')
-          .single()
 
         if (clientError) throw clientError
-        if (newClient) clientId = newClient.id
       }
 
       // 2. Save the Quote
@@ -431,8 +418,6 @@ export function CalculadoraOrcamentoPage() {
         if (error) throw error
         if (data) setLoadedQuoteId(data.id)
       }
-      setSaveSuccess(true)
-      setTimeout(() => setSaveSuccess(false), 3000)
       void loadHistory()
 
       // Reload clients list
@@ -637,8 +622,6 @@ ${productsText}
 ⚡ *Pagamento Pix/Dinheiro (10% Desconto):* R$ ${total10PercentDesc.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
 
     void navigator.clipboard.writeText(message)
-    setCopySuccess(true)
-    setTimeout(() => setCopySuccess(false), 2000)
   }
 
   // Filtered and Sorted History
