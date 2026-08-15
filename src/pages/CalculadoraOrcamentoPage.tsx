@@ -536,41 +536,37 @@ export function CalculadoraOrcamentoPage() {
     setIsSaving(true)
 
     try {
-      // 1. Check or Create Client
+      // 1. Check or Create Client (apenas se tiver company)
       const searchName = clientName.toUpperCase().trim()
-      
-      const { data: existingClients, error: searchError } = await supabase
-        .from('bem_aviv_clients')
-        .select('id')
-        .eq('company_id', activeCompanyId)
-        .eq('full_name', searchName)
-        .limit(1)
 
-      if (searchError) throw searchError
-
-      if (!existingClients || existingClients.length === 0) {
-        // Insert new Client
-        const { error: clientError } = await supabase
+      if (activeCompanyId) {
+        const { data: existingClients, error: searchError } = await supabase
           .from('bem_aviv_clients')
-          .insert({
-            user_id: ownerUserId,
-            company_id: activeCompanyId,
-            full_name: searchName,
-            birth_date: clientBirthDate || null,
-            client_status: 'CLIENTE',
-            cpf: '',
-            phone_1: '',
-            phone_2: '',
-            cep: '',
-          })
+          .select('id')
+          .eq('company_id', activeCompanyId)
+          .eq('full_name', searchName)
+          .limit(1)
 
-        if (clientError) throw clientError
+        if (searchError) throw searchError
+
+        if (!existingClients || existingClients.length === 0) {
+          const { error: clientError } = await supabase
+            .from('bem_aviv_clients')
+            .insert({
+              user_id: ownerUserId,
+              company_id: activeCompanyId,
+              full_name: searchName,
+              birth_date: clientBirthDate || null,
+              client_status: 'CLIENTE',
+            })
+          if (clientError) throw clientError
+        }
       }
 
       // 2. Save the Quote
       const payload = {
         user_id: ownerUserId,
-        client_name: clientName.toUpperCase().trim(),
+        client_name: searchName,
         client_birth_date: clientBirthDate || null,
         items: quoteOptions,
         downpayment: quoteOptions[0]?.downpayment || 0,
@@ -578,44 +574,44 @@ export function CalculadoraOrcamentoPage() {
       }
 
       if (loadedQuoteId) {
-        // Update
         const { error } = await supabase
           .from('bem_aviv_quick_quotes')
           .update(payload)
           .eq('id', loadedQuoteId)
-
         if (error) throw error
       } else {
-        // Insert new
         const { data, error } = await supabase
           .from('bem_aviv_quick_quotes')
           .insert(payload)
           .select('id')
           .single()
-
         if (error) throw error
         if (data) setLoadedQuoteId(data.id)
       }
+
       void loadHistory()
 
       // Reload clients list
-      const { data: clData } = await supabase
-        .from('bem_aviv_clients')
-        .select('id, full_name, birth_date')
-        .eq('company_id', activeCompanyId)
-        .order('full_name')
-      if (clData) {
-        setDbClients(clData.map(c => ({
-          id: c.id,
-          full_name: c.full_name || '',
-          birth_date: c.birth_date || null
-        })))
+      if (activeCompanyId) {
+        const { data: clData } = await supabase
+          .from('bem_aviv_clients')
+          .select('id, full_name, birth_date')
+          .eq('company_id', activeCompanyId)
+          .order('full_name')
+        if (clData) {
+          setDbClients(clData.map(c => ({
+            id: c.id,
+            full_name: c.full_name || '',
+            birth_date: c.birth_date || null
+          })))
+        }
       }
 
       setCurrentView('list')
     } catch (err) {
+      const msg = err instanceof Error ? err.message : JSON.stringify(err)
       console.error('Erro ao salvar orçamento:', err)
-      alert('Ocorreu um erro ao salvar o orçamento.')
+      alert(`Erro ao salvar orçamento:\n${msg}`)
     } finally {
       setIsSaving(false)
     }
