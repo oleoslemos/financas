@@ -502,11 +502,13 @@ export function CalculadoraOrcamentoPage() {
     if (!Number.isFinite(unit) || unit <= 0) { alert('PREÇO INVÁLIDO NO CATÁLOGO.'); return }
     const dimPart = v.dimensions ? ` — ${v.dimensions}` : ''
     const descName = `${p.name} [${v.code}]${dimPart}`
+    // Auto-detecta eletrônico pelo nome do produto ou dimensão
+    const isEletro = /eletro/i.test(p.name) || /eletro/i.test(v.dimensions ?? '') || /eletro/i.test(p.product_type ?? '')
     const newItem: SelectedProductItem = {
       productId: p.id,
       productName: descName,
       price: unit,
-      hasElectronics: false,
+      hasElectronics: isEletro,
       quantity: qty,
       offer_product_id: p.id,
       variation_code: effectiveCode,
@@ -1230,15 +1232,26 @@ ${productsText}
                                   type="text"
                                   value={option.name}
                                   onChange={(e) => handleRenameOption(option.id, e.target.value)}
-                                  className="font-bold text-slate-800 focus:bg-slate-50 focus:outline-none px-2 py-0.5 rounded border border-transparent focus:border-slate-200 w-full"
+                                  className="font-bold text-slate-800 bg-transparent focus:bg-slate-50 focus:outline-none px-2 py-0.5 rounded border border-transparent focus:border-slate-200 w-full text-sm"
                                 />
                                 {option.items.length > 0 && (() => {
                                   const firstItem = option.items[0]
-                                  const hasEletro = option.items.some(i => i.hasElectronics)
-                                  const nameParts = firstItem.productName.split(' [')[0]
+                                  // Auto-detecta eletro: hasElectronics ou nome contendo 'eletro'
+                                  const hasEletro = option.items.some(i =>
+                                    i.hasElectronics || /eletro/i.test(i.productName)
+                                  )
+                                  // Extrai nome base (antes do [CODE])
+                                  const baseName = firstItem.productName.split(' [')[0].trim()
+                                  // Extrai dimensões (após '] — ')
+                                  const dimsMatch = firstItem.productName.match(/\] — (.+)$/)
+                                  const dims = dimsMatch ? ` ${dimsMatch[1]}` : ''
                                   return (
-                                    <p className="text-[10px] text-slate-400 font-medium px-2 truncate">
-                                      {nameParts}{hasEletro && <span className="ml-1 text-amber-500 font-bold">— ELETRÔNICO</span>}
+                                    <p className="text-[10px] font-semibold px-2 truncate leading-tight">
+                                      <span className="text-slate-500">{baseName}{dims}</span>
+                                      {hasEletro
+                                        ? <span className="ml-1 text-emerald-600">— COM ELETRÔNICOS</span>
+                                        : <span className="ml-1 text-slate-400">— SEM ELETRÔNICOS</span>
+                                      }
                                     </p>
                                   )
                                 })()}
