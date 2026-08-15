@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useUser } from '../hooks/useClerkCompat'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { resolveDataOwnerId } from '../lib/dataOwner'
@@ -6,6 +6,8 @@ import { supabase } from '../lib/supabaseClient'
 import { SearchableSelect } from '../components/ui/SearchableSelect'
 import { Button } from '../components/ui/Button'
 import { useNavigate } from 'react-router-dom'
+import { normalizePayload, type OfferProduct, type OfferVariation } from '../lib/bemAvivOfferProduct'
+import { formatBRL } from '../lib/format'
 import { useCompany } from '../context/CompanyContext'
 import { 
   Calculator, 
@@ -19,7 +21,10 @@ import {
   User,
   ShoppingBag,
   ChevronRight,
-  Search
+  Search,
+  Minus,
+  Plus,
+  Package
 } from 'lucide-react'
 
 type SelectedProductItem = {
@@ -28,6 +33,194 @@ type SelectedProductItem = {
   price: number
   hasElectronics: boolean
   quantity?: number
+  // Novos campos para compatibilidade com offer_products
+  offer_product_id?: string
+  variation_code?: string
+}
+
+type OfferPriceTableRow = { id: string; name: string; is_default: boolean }
+
+type OfferPriceTableItemRow = {
+  price_table_id: string
+  offer_product_id: string
+  variation_code: string
+  price: number
+}
+
+function normalizeTextKey(v: string) {
+  return v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+}
+
+function resolveTableUnitPrice(
+  tableId: string,
+  productId: string,
+  variationCode: string,
+  fallback: number,
+  lookup: Map<string, number>,
+): number {
+  const k = `${tableId}:${productId}:${variationCode}`
+  const p = lookup.get(k)
+  if (p != null && Number.isFinite(p) && p > 0) return p
+  return fallback
+}
+
+// ── ProductSelector (idêntico ao de BemAvivNovoPedidoPage) ──────────────────
+interface ProductSelectorProps {
+  catalogForTable: OfferProduct[]
+  selectedPriceTableId: string
+  priceLookup: Map<string, number>
+  onAdd: (product: OfferProduct, variationCode: string, qty: number) => void
+}
+
+function ProductSelector({ catalogForTable, selectedPriceTableId, priceLookup, onAdd }: ProductSelectorProps) {
+  const [draftProductName, setDraftProductName] = useState('')
+  const [draftProductType, setDraftProductType] = useState('')
+  const [draftVariationCode, setDraftVariationCode] = useState('')
+  const [draftQty, setDraftQty] = useState('1')
+  const [productQuery, setProductQuery] = useState('')
+  const [comboOpen, setComboOpen] = useState(false)
+  const comboRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (!comboRef.current?.contains(e.target as Node)) setComboOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [])
+
+  const prevPriceTableRef = useRef(selectedPriceTableId)
+  useEffect(() => {
+    if (prevPriceTableRef.current !== selectedPriceTableId) {
+      prevPriceTableRef.current = selectedPriceTableId
+      setDraftProductName('')
+      setDraftProductType('')
+      setDraftVariationCode('')
+      setProductQuery('')
+      setDraftQty('1')
+    }
+  }, [selectedPriceTableId])
+
+  const uniqueProductNames = useMemo(() => {
+    const byKey = new Map<string, string>()
+    for (const p of catalogForTable) {
+      const name = (p.name ?? '').trim()
+      if (!name) continue
+      const key = normalizeTextKey(name)
+      if (!byKey.has(key)) byKey.set(key, name)
+    }
+    return [...byKey.values()].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }))
+  }, [catalogForTable])
+
+  const productSuggestions = useMemo(() => {
+    const q = normalizeTextKey(productQuery)
+    if (!q) return uniqueProductNames.slice(0, 12)
+    return uniqueProductNames.filter((n) => normalizeTextKey(n).includes(q)).slice(0, 12)
+  }, [productQuery, uniqueProductNames])
+
+  const productTypeOptions = useMemo(() => {
+    if (!draftProductName) return [] as string[]
+    const types = new Set<string>()
+    const selectedNameKey = normalizeTextKey(draftProductName)
+    for (const p of catalogForTable) {
+      if (normalizeTextKey(p.name) !== selectedNameKey) continue
+      types.add((p.product_type ?? '').trim() || '—')
+    }
+    return [...types].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }))
+  }, [catalogForTable, draftProductName])
+
+  const selectedOffer = useMemo(
+    () => catalogForTable.find((p) => {
+      if (normalizeTextKey(p.name) !== normalizeTextKey(draftProductName)) return false
+      const t = (p.product_type ?? '').trim() || '—'
+      return t === draftProductType
+    }) ?? null,
+    [draftProductName, draftProductType, catalogForTable],
+  )
+
+  const variationOptions = useMemo(() => {
+    if (!selectedOffer || !selectedPriceTableId) return [] as OfferVariation[]
+    const vars = normalizePayload(selectedOffer.payload).variations ?? []
+    return vars.map((v) => ({ ...v, price: resolveTableUnitPrice(selectedPriceTableId, selectedOffer.id, v.code, v.price, priceLookup) }))
+  }, [selectedOffer, selectedPriceTableId, priceLookup])
+
+  const productSelectOptions = useMemo(() => uniqueProductNames.map((name) => ({ value: name, label: name })), [uniqueProductNames])
+  const typeSelectOptions = useMemo(() => productTypeOptions.map((t) => ({ value: t, label: t })), [productTypeOptions])
+  const variationSelectOptions = useMemo(() => variationOptions.map((v) => ({ value: v.code, label: `[${v.code}] ${v.dimensions || '—'} — ${formatBRL(v.price)}` })), [variationOptions])
+
+  useEffect(() => { setDraftProductType(''); setDraftVariationCode('') }, [draftProductName])
+  useEffect(() => { if (productTypeOptions.length === 1) setDraftProductType(productTypeOptions[0]) }, [productTypeOptions])
+  useEffect(() => { setDraftVariationCode('') }, [draftProductType])
+  useEffect(() => { if (variationOptions.length === 1) setDraftVariationCode(variationOptions[0].code) }, [variationOptions])
+
+  const handleAdd = () => {
+    if (!selectedPriceTableId) { alert('SELECIONE UMA TABELA DE PREÇO.'); return }
+    const p = selectedOffer
+    if (!p) { alert('SELECIONE PRODUTO E TIPO DO CATÁLOGO.'); return }
+    const qty = Math.max(1, parseInt(draftQty.replace(/\D/g, ''), 10) || 1)
+    const vars = variationOptions
+    const v = vars.find((x) => x.code === draftVariationCode)
+    if (vars.length > 0 && !v) { alert('SELECIONE A VARIAÇÃO (CÓDIGO / DIMENSÕES).'); return }
+    onAdd(p, draftVariationCode, qty)
+    setDraftProductName(''); setDraftProductType(''); setDraftVariationCode(''); setDraftQty('1'); setProductQuery('')
+  }
+
+  return (
+    <>
+      <div ref={comboRef} className="np-search-wrap">
+        <div className="np-search-inner">
+          <Search size={14} aria-hidden />
+          <input
+            type="text"
+            className="np-input"
+            value={productQuery}
+            onChange={(e) => { setProductQuery(e.target.value); setComboOpen(true) }}
+            onFocus={() => setComboOpen(true)}
+            placeholder="Buscar por nome, linha ou tipo…"
+            autoComplete="off"
+            disabled={!selectedPriceTableId || catalogForTable.length === 0}
+            aria-label="Buscar produto"
+          />
+          {comboOpen && productSuggestions.length > 0 ? (
+            <ul className="absolute left-0 right-0 top-full z-20 mt-1 max-h-56 overflow-auto rounded-lg border border-[var(--np-border)] bg-white py-1 shadow-lg" role="listbox">
+              {productSuggestions.map((name) => (
+                <li key={name}>
+                  <button type="button" className="w-full px-3 py-2 text-left text-sm hover:bg-[var(--np-bg)]" onClick={() => { setDraftProductName(name); setProductQuery(name); setComboOpen(false) }}>{name}</button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+        <button type="button" className="np-btn-primary shrink-0" onClick={handleAdd}>
+          <Plus size={14} aria-hidden />
+          Adicionar
+        </button>
+      </div>
+
+      <div className="np-row-4">
+        <div className="np-field np-searchable">
+          <label className="np-label">Produto</label>
+          <SearchableSelect value={draftProductName} onChange={(v) => { setDraftProductName(v); setProductQuery(v) }} options={productSelectOptions} placeholder="— Catálogo —" aria-label="Produto" />
+        </div>
+        <div className="np-field np-searchable">
+          <label className="np-label">Tipo</label>
+          <SearchableSelect value={draftProductType} onChange={setDraftProductType} options={typeSelectOptions} placeholder="—" disabled={!draftProductName} aria-label="Tipo" />
+        </div>
+        <div className="np-field np-searchable">
+          <label className="np-label">Variação</label>
+          <SearchableSelect value={draftVariationCode} onChange={setDraftVariationCode} options={variationSelectOptions} placeholder="—" disabled={!selectedOffer || variationOptions.length === 0} aria-label="Variação" />
+        </div>
+        <div className="np-field">
+          <label className="np-label">Quantidade</label>
+          <div className="np-qty-wrap">
+            <button type="button" aria-label="Diminuir" onClick={() => setDraftQty(String(Math.max(1, (parseInt(draftQty, 10) || 1) - 1)))}><Minus size={14} aria-hidden /></button>
+            <input inputMode="numeric" value={draftQty} onChange={(e) => setDraftQty(e.target.value)} aria-label="Quantidade" />
+            <button type="button" aria-label="Aumentar" onClick={() => setDraftQty(String(Math.max(1, (parseInt(draftQty, 10) || 1) + 1)))}><Plus size={14} aria-hidden /></button>
+          </div>
+        </div>
+      </div>
+    </>
+  )
 }
 
 type QuoteOption = {
@@ -98,8 +291,10 @@ export function CalculadoraOrcamentoPage() {
     { id: crypto.randomUUID ? crypto.randomUUID() : String(Math.random()), name: 'Opção 1', items: [], downpayment: 0, installments_qty: 5 }
   ])
 
-  // Catalog data
-  const [dbProducts, setDbProducts] = useState<{ id: string; name: string; price: number }[]>([])
+  // Catalog data (offer_products + price tables)
+  const [offerProducts, setOfferProducts] = useState<OfferProduct[]>([])
+  const [priceTables, setPriceTables] = useState<OfferPriceTableRow[]>([])
+  const [tableItems, setTableItems] = useState<OfferPriceTableItemRow[]>([])
   const [dbClients, setDbClients] = useState<{ id: string; full_name: string; birth_date: string | null }[]>([])
   const [showClientSuggestions, setShowClientSuggestions] = useState(false)
 
@@ -109,43 +304,59 @@ export function CalculadoraOrcamentoPage() {
   const [history, setHistory] = useState<QuickQuote[]>([])
   const [loadedQuoteId, setLoadedQuoteId] = useState<string | null>(null)
 
-  // Modal State for managing option products
+  // Modal State
   const [isOptionModalOpen, setIsOptionModalOpen] = useState(false)
   const [activeOptionId, setActiveOptionId] = useState<string | null>(null)
   const [modalOptionName, setModalOptionName] = useState('')
   const [modalOptionItems, setModalOptionItems] = useState<SelectedProductItem[]>([])
-  
-  // Modal single selection inputs
-  const [modalSelectedProductId, setModalSelectedProductId] = useState('')
-  const [modalSelectedProductHasElectronics, setModalSelectedProductHasElectronics] = useState(false)
-  const [modalSelectedQty, setModalSelectedQty] = useState(1)
-  const [modalProductSearchText, setModalProductSearchText] = useState('')
-  const [quickSelectStates, setQuickSelectStates] = useState<Record<string, { checked: boolean; hasElectronics: boolean; quantity: number }>>({})
+  const [modalSelectedPriceTableId, setModalSelectedPriceTableId] = useState('')
 
   // Print Preview Option state
   const [printOption, setPrintOption] = useState<QuoteOption | null>(null)
 
-  // Fetch Eko'7 Products
+  // Fetch Offer Products + Price Tables
   useEffect(() => {
     if (!ownerUserId) return
-    async function loadProducts() {
-      const { data, error } = await supabase
-        .from('bem_aviv_products')
-        .select('id, name, price')
-        .eq('user_id', ownerUserId)
-        .order('name')
+    async function loadCatalog() {
+      const [{ data: offers }, { data: tbls }] = await Promise.all([
+        supabase
+          .from('bem_aviv_offer_products')
+          .select('id, name, category, product_line, product_type, pricing_mode, price_table_id, payload')
+          .eq('user_id', ownerUserId!)
+          .order('name'),
+        supabase
+          .from('bem_aviv_offer_price_tables')
+          .select('id, name, is_default')
+          .eq('user_id', ownerUserId!)
+          .order('name'),
+      ])
 
-      if (!error && data) {
-        setDbProducts(
-          data.map((p) => ({
-            id: p.id,
-            name: p.name || 'PRODUTO SEM NOME',
-            price: Number(p.price) || 0,
-          }))
-        )
+      const tablesList = ((tbls ?? []) as OfferPriceTableRow[])
+      setPriceTables(tablesList)
+
+      const defaultTableId = tablesList.find((t) => t.is_default)?.id ?? tablesList[0]?.id ?? ''
+      setModalSelectedPriceTableId(defaultTableId)
+
+      const tableIds = tablesList.map((t) => t.id)
+      if (tableIds.length > 0) {
+        const { data: ti } = await supabase
+          .from('bem_aviv_offer_price_table_items')
+          .select('price_table_id, offer_product_id, variation_code, price')
+          .in('price_table_id', tableIds)
+        const tiRows = ((ti ?? []) as Array<{ price_table_id: string; offer_product_id: string; variation_code: string; price: number | string }>).map((r) => ({
+          price_table_id: r.price_table_id,
+          offer_product_id: r.offer_product_id,
+          variation_code: r.variation_code,
+          price: Number(r.price),
+        }))
+        setTableItems(tiRows)
+      }
+
+      if (offers) {
+        setOfferProducts((offers as OfferProduct[]).map((r) => ({ ...r, payload: normalizePayload(r.payload) })))
       }
     }
-    void loadProducts()
+    void loadCatalog()
   }, [ownerUserId])
 
   // Fetch Clients for suggestions
@@ -188,12 +399,6 @@ export function CalculadoraOrcamentoPage() {
   useEffect(() => {
     void loadHistory()
   }, [ownerUserId])
-
-  // Options for SearchableSelect
-  const productOptions = dbProducts.map((p) => ({
-    value: p.id,
-    label: `${p.name} - R$ ${p.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-  }))
 
   const getOptionTotalAmount = (option: QuoteOption) => {
     return option.items.reduce((sum, item) => sum + (item.price * (item.quantity || 1)), 0)
@@ -253,90 +458,53 @@ export function CalculadoraOrcamentoPage() {
     setActiveOptionId(opt.id)
     setModalOptionName(opt.name)
     setModalOptionItems([...opt.items].map(item => ({ ...item, quantity: item.quantity || 1 })))
-    
-    setModalSelectedProductId('')
-    setModalSelectedProductHasElectronics(false)
-    setModalSelectedQty(1)
-    setModalProductSearchText('')
-
-    // Initialize quick select states based on dbProducts
-    const initialStates: Record<string, { checked: boolean; hasElectronics: boolean; quantity: number }> = {}
-    dbProducts.forEach(p => {
-      const existing = opt.items.find(it => it.productId === p.id)
-      initialStates[p.id] = {
-        checked: !!existing,
-        hasElectronics: existing?.hasElectronics || false,
-        quantity: existing?.quantity || 1
-      }
-    })
-    setQuickSelectStates(initialStates)
     setIsOptionModalOpen(true)
   }
 
-  const handleToggleQuickSelect = (prodId: string, key: 'checked' | 'hasElectronics' | 'quantity', value: any) => {
-    setQuickSelectStates(prev => {
-      const current = prev[prodId] || { checked: false, hasElectronics: false, quantity: 1 }
-      return {
-        ...prev,
-        [prodId]: {
-          ...current,
-          [key]: value
-        }
-      }
-    })
-  }
+  // Memos para ProductSelector no modal
+  const modalPriceLookup = useMemo(() => {
+    const mm = new Map<string, number>()
+    for (const it of tableItems) {
+      mm.set(`${it.price_table_id}:${it.offer_product_id}:${it.variation_code}`, Number(it.price))
+    }
+    return mm
+  }, [tableItems])
 
-  const handleModalAddSingle = () => {
-    if (!modalSelectedProductId) return
-    const prod = dbProducts.find(p => p.id === modalSelectedProductId)
-    if (!prod) return
-    
+  const modalProductIdsByTable = useMemo(() => {
+    const m = new Map<string, Set<string>>()
+    for (const it of tableItems) {
+      if (!m.has(it.price_table_id)) m.set(it.price_table_id, new Set())
+      m.get(it.price_table_id)!.add(it.offer_product_id)
+    }
+    return m
+  }, [tableItems])
+
+  const modalCatalogForTable = useMemo(() => {
+    if (!modalSelectedPriceTableId) return [] as OfferProduct[]
+    const allowed = modalProductIdsByTable.get(modalSelectedPriceTableId)
+    if (!allowed || allowed.size === 0) return [] as OfferProduct[]
+    return offerProducts.filter((p) => allowed.has(p.id))
+  }, [offerProducts, modalProductIdsByTable, modalSelectedPriceTableId])
+
+  const handleAddProductLineToModal = useCallback((p: OfferProduct, variationCode: string, qty: number) => {
+    const vars = normalizePayload(p.payload).variations ?? []
+    const v = vars.find((x) => x.code === variationCode)
+    if (!v) return
+    const unit = resolveTableUnitPrice(modalSelectedPriceTableId, p.id, variationCode, v.price, modalPriceLookup)
+    if (!Number.isFinite(unit) || unit <= 0) { alert('PREÇO INVÁLIDO NO CATÁLOGO.'); return }
+    const dimPart = v.dimensions ? ` — ${v.dimensions}` : ''
+    const descName = `${p.name} [${v.code}]${dimPart}`
     const newItem: SelectedProductItem = {
-      productId: prod.id,
-      productName: prod.name,
-      price: prod.price,
-      hasElectronics: modalSelectedProductHasElectronics,
-      quantity: modalSelectedQty
+      productId: p.id,
+      productName: descName,
+      price: unit,
+      hasElectronics: false,
+      quantity: qty,
+      offer_product_id: p.id,
+      variation_code: v.code,
     }
-
-    setModalOptionItems([...modalOptionItems, newItem])
-    setModalSelectedProductId('')
-    setModalSelectedProductHasElectronics(false)
-    setModalSelectedQty(1)
-  }
-
-  const handleModalAddMultiple = () => {
-    const itemsToAdd: SelectedProductItem[] = []
-    
-    Object.entries(quickSelectStates).forEach(([prodId, state]) => {
-      if (state.checked) {
-        const prod = dbProducts.find(p => p.id === prodId)
-        if (prod) {
-          const alreadyAdded = modalOptionItems.some(item => item.productId === prodId && item.hasElectronics === state.hasElectronics)
-          if (!alreadyAdded) {
-            itemsToAdd.push({
-              productId: prod.id,
-              productName: prod.name,
-              price: prod.price,
-              hasElectronics: state.hasElectronics,
-              quantity: state.quantity
-            })
-          }
-        }
-      }
-    })
-
-    if (itemsToAdd.length > 0) {
-      setModalOptionItems([...modalOptionItems, ...itemsToAdd])
-    }
-
-    // Reset quick select check states
-    const resetStates = { ...quickSelectStates }
-    Object.keys(resetStates).forEach(k => {
-      resetStates[k] = { checked: false, hasElectronics: false, quantity: 1 }
-    })
-    setQuickSelectStates(resetStates)
-  }
+    setModalOptionItems(prev => [...prev, newItem])
+  }, [modalSelectedPriceTableId, modalPriceLookup])
 
   const handleSaveOptionModal = () => {
     if (!activeOptionId) return
@@ -1245,225 +1413,111 @@ ${productsText}
       </div>
 
       {/* ========================================================
-         GERENCIAR PRODUTOS MODAL (SUB-VIEW TO MANAGE PRODUCTS)
+         GERENCIAR PRODUTOS MODAL — estilo "Produtos e kits" do Novo Pedido
          ======================================================== */}
       {isOptionModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
-            
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/50 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bem-aviv-novo-pedido bem-aviv-novo-pedido-shell normal-case bg-white rounded-2xl w-full max-w-4xl shadow-2xl flex flex-col my-8 overflow-hidden">
+
             {/* Modal Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-              <div>
-                <h3 className="font-extrabold text-slate-800 text-lg">
-                  Gerenciar Produtos — {modalOptionName}
-                </h3>
-                <p className="text-xs text-slate-400">Selecione produtos para adicionar ou remova produtos existentes.</p>
+              <div className="flex items-center gap-3">
+                <div className="np-section-icon np-icon-green"><Package size={15} aria-hidden /></div>
+                <div>
+                  <h3 className="font-extrabold text-slate-800 text-base">
+                    Produtos e kits — {modalOptionName}
+                  </h3>
+                  <p className="text-xs text-slate-400">{modalOptionItems.length} {modalOptionItems.length === 1 ? 'item' : 'itens'}</p>
+                </div>
               </div>
-              <button
-                onClick={() => setIsOptionModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 text-lg font-bold"
-              >
-                &times;
-              </button>
+              <button onClick={() => setIsOptionModalOpen(false)} className="text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
             </div>
 
             {/* Modal Body */}
-            <div className="p-6 overflow-y-auto space-y-6 flex-1 grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-              
-              {/* Left Column: Product selectors */}
-              <div className="space-y-6">
-                <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 space-y-4">
-                  <h4 className="font-bold text-slate-700 text-sm">Adicionar Produto Individual</h4>
-                  
-                  <div className="space-y-3">
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-slate-500">Produto</label>
-                      <SearchableSelect
-                        options={productOptions}
-                        value={modalSelectedProductId}
-                        onChange={(val) => setModalSelectedProductId(val)}
-                        placeholder="Selecione um produto..."
-                        className="[&_input]:bg-white [&_input]:border [&_input]:border-slate-200 [&_input]:rounded-xl [&_input]:py-2 [&_input]:px-3 [&_input]:text-sm"
-                      />
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-3 items-end">
-                      <div className="space-y-1">
-                        <label className="text-xs font-bold text-slate-500">Quantidade</label>
-                        <input
-                          type="number"
-                          min="1"
-                          value={modalSelectedQty}
-                          onChange={(e) => setModalSelectedQty(Math.max(1, Number(e.target.value) || 1))}
-                          className="w-full bg-white border border-slate-200 rounded-xl py-2 px-3 text-sm focus:outline-none focus:border-indigo-500"
-                        />
-                      </div>
-                      <div className="flex items-center gap-2 h-10 px-3 bg-white border border-slate-200 rounded-xl">
-                        <input
-                          id="modal-has-electronics"
-                          type="checkbox"
-                          checked={modalSelectedProductHasElectronics}
-                          onChange={(e) => setModalSelectedProductHasElectronics(e.target.checked)}
-                          className="h-4 w-4 rounded border-slate-300 text-indigo-600 cursor-pointer"
-                        />
-                        <label htmlFor="modal-has-electronics" className="text-xs font-semibold text-slate-600 cursor-pointer">
-                          Eletrônicos?
-                        </label>
-                      </div>
-                    </div>
+            <div className="p-6 overflow-y-auto flex-1 space-y-4">
 
-                    <button
-                      type="button"
-                      onClick={handleModalAddSingle}
-                      disabled={!modalSelectedProductId}
-                      className="w-full h-10 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition duration-150 disabled:opacity-50"
-                    >
-                      Adicionar à Lista
-                    </button>
-                  </div>
-                </div>
-
-                {/* Quick multi-select checklist */}
-                <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 space-y-4">
-                  <div className="flex justify-between items-center">
-                    <h4 className="font-bold text-slate-700 text-sm">Seleção Rápida (Múltiplos)</h4>
-                    <input
-                      type="text"
-                      placeholder="Filtrar catálogo..."
-                      value={modalProductSearchText}
-                      onChange={(e) => setModalProductSearchText(e.target.value)}
-                      className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs outline-none focus:border-indigo-500"
-                    />
-                  </div>
-
-                  <div className="max-h-60 overflow-y-auto border border-slate-200 rounded-xl bg-white divide-y divide-slate-100">
-                    {dbProducts
-                      .filter(p => p.name.toLowerCase().includes(modalProductSearchText.toLowerCase()))
-                      .map((product) => {
-                        const state = quickSelectStates[product.id] || { checked: false, hasElectronics: false, quantity: 1 }
-                        return (
-                          <div key={product.id} className="p-3 flex items-center justify-between gap-4 text-xs">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <input
-                                type="checkbox"
-                                checked={state.checked}
-                                onChange={(e) => handleToggleQuickSelect(product.id, 'checked', e.target.checked)}
-                                className="h-4 w-4 rounded border-slate-300 text-indigo-600 cursor-pointer"
-                              />
-                              <div className="min-w-0">
-                                <p className="font-semibold text-slate-700 truncate">{product.name}</p>
-                                <p className="text-slate-400 font-medium">R$ {product.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                              </div>
-                            </div>
-
-                            {state.checked && (
-                              <div className="flex items-center gap-2 shrink-0">
-                                <label className="flex items-center gap-1 text-[10px] font-semibold text-slate-500">
-                                  <input
-                                    type="checkbox"
-                                    checked={state.hasElectronics}
-                                    onChange={(e) => handleToggleQuickSelect(product.id, 'hasElectronics', e.target.checked)}
-                                    className="h-3 w-3 rounded border-slate-300 text-indigo-600 cursor-pointer"
-                                  />
-                                  <span>Eletro?</span>
-                                </label>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  value={state.quantity}
-                                  onChange={(e) => handleToggleQuickSelect(product.id, 'quantity', Math.max(1, Number(e.target.value) || 1))}
-                                  className="w-10 border border-slate-200 rounded px-1.5 py-0.5 text-center text-xs focus:outline-none"
-                                />
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleModalAddMultiple}
-                    className="w-full h-10 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-bold rounded-xl text-xs transition duration-150"
-                  >
-                    Adicionar Itens Selecionados
-                  </button>
-                </div>
-              </div>
-
-              {/* Right Column: Draft items table */}
-              <div className="space-y-4 lg:sticky lg:top-0">
-                <div className="flex justify-between items-center">
-                  <h4 className="font-bold text-slate-700 text-sm">Produtos no Orçamento</h4>
-                  <span className="font-black text-slate-800 text-sm">
-                    Total Parcial: R$ {modalOptionItems.reduce((s, i) => s + i.price * (i.quantity || 1), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
-
-                <div className="border border-slate-100 rounded-xl overflow-hidden max-h-[380px] overflow-y-auto bg-white">
-                  {modalOptionItems.length > 0 ? (
-                    <table className="w-full text-left border-collapse text-xs">
-                      <thead>
-                        <tr className="bg-slate-50 border-b border-slate-100 sticky top-0 z-10">
-                          <th className="p-2.5 font-bold text-slate-500">Produto</th>
-                          <th className="p-2.5 font-bold text-slate-500 text-center">Qtd</th>
-                          <th className="p-2.5 font-bold text-slate-500 text-center">Eletro?</th>
-                          <th className="p-2.5 font-bold text-slate-500 text-right">Total</th>
-                          <th className="p-2.5 text-center w-8"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {modalOptionItems.map((item, idx) => (
-                          <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/20">
-                            <td className="p-2.5 font-semibold text-slate-700">{item.productName}</td>
-                            <td className="p-2.5 text-center">
-                              <input
-                                type="number"
-                                min="1"
-                                value={item.quantity || 1}
-                                onChange={(e) => {
-                                  const newQty = Math.max(1, Number(e.target.value) || 1)
-                                  setModalOptionItems(prev => prev.map((it, i) => i === idx ? { ...it, quantity: newQty } : it))
-                                }}
-                                className="w-10 border border-slate-200 rounded text-center py-0.5 focus:outline-none"
-                              />
-                            </td>
-                            <td className="p-2.5 text-center">
-                              <input
-                                type="checkbox"
-                                checked={item.hasElectronics}
-                                onChange={(e) => {
-                                  const checked = e.target.checked
-                                  setModalOptionItems(prev => prev.map((it, i) => i === idx ? { ...it, hasElectronics: checked } : it))
-                                }}
-                                className="h-4 w-4 rounded border-slate-300 text-indigo-600 cursor-pointer"
-                              />
-                            </td>
-                            <td className="p-2.5 text-right font-bold text-slate-700">
-                              R$ {(item.price * (item.quantity || 1)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </td>
-                            <td className="p-2.5 text-center">
-                              <button
-                                type="button"
-                                onClick={() => setModalOptionItems(prev => prev.filter((_, i) => i !== idx))}
-                                className="text-slate-400 hover:text-rose-600"
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+              {/* Tabela de preço */}
+              <div className="np-field">
+                <label className="np-label" htmlFor="modal-tabela">Tabela de preço</label>
+                <select
+                  id="modal-tabela"
+                  className="np-select"
+                  value={modalSelectedPriceTableId}
+                  onChange={(e) => setModalSelectedPriceTableId(e.target.value)}
+                  disabled={priceTables.length === 0}
+                >
+                  {priceTables.length === 0 ? (
+                    <option value="">— Nenhuma tabela —</option>
                   ) : (
-                    <div className="p-8 text-center text-slate-400 flex flex-col items-center justify-center space-y-2">
-                      <ShoppingBag size={24} className="text-slate-300" />
-                      <p className="font-semibold text-xs">Nenhum produto adicionado ainda.</p>
-                    </div>
+                    priceTables.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}{t.is_default ? ' (padrão)' : ''}
+                      </option>
+                    ))
                   )}
-                </div>
+                </select>
               </div>
 
+              {/* ProductSelector */}
+              <ProductSelector
+                catalogForTable={modalCatalogForTable}
+                selectedPriceTableId={modalSelectedPriceTableId}
+                priceLookup={modalPriceLookup}
+                onAdd={handleAddProductLineToModal}
+              />
+
+              <p className="np-hint">
+                Produtos em modo <strong>kit</strong> geram uma linha por item do catálogo, com quantidade = (qtd do kit) × (qtd de cada item no kit).
+              </p>
+
+              {/* Items table */}
+              <div className="np-items-wrap">
+                <div className="np-items-head" role="row">
+                  <span>Item</span>
+                  <span>Qtd</span>
+                  <span>Preço un.</span>
+                  <span>Total</span>
+                  <span />
+                </div>
+                {modalOptionItems.length === 0 ? (
+                  <div className="np-empty-items">Nenhum item ainda — busque e adicione produtos acima</div>
+                ) : (
+                  modalOptionItems.map((item, idx) => (
+                    <div key={idx} className="np-item-row" role="row">
+                      <div>
+                        <div className="np-item-name">{item.productName}</div>
+                        <div className="np-item-var">Catálogo</div>
+                      </div>
+                      <input
+                        className="np-input"
+                        inputMode="numeric"
+                        value={item.quantity || 1}
+                        onChange={(e) => {
+                          const newQty = Math.max(1, parseInt(e.target.value.replace(/\D/g, ''), 10) || 1)
+                          setModalOptionItems(prev => prev.map((it, i) => i === idx ? { ...it, quantity: newQty } : it))
+                        }}
+                        aria-label={`Quantidade ${item.productName}`}
+                      />
+                      <input
+                        className="np-input np-price"
+                        inputMode="numeric"
+                        value={`R$ ${item.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+                        readOnly
+                        aria-label={`Preço ${item.productName}`}
+                      />
+                      <span className="np-cell-r tabular-nums">{formatBRL(item.price * (item.quantity || 1))}</span>
+                      <button
+                        type="button"
+                        className="np-btn-remove"
+                        aria-label="Remover"
+                        onClick={() => setModalOptionItems(prev => prev.filter((_, i) => i !== idx))}
+                      >
+                        <Trash2 size={14} aria-hidden />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
 
             {/* Modal Footer */}
@@ -1491,3 +1545,4 @@ ${productsText}
     </div>
   )
 }
+
