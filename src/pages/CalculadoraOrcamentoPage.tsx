@@ -1220,20 +1220,32 @@ ${productsText}
                         <div className="space-y-4">
                           
                           {/* Option Header */}
-                          <div className="flex items-center justify-between border-b border-slate-50 pb-3">
-                            <div className="flex items-center gap-2">
-                              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-slate-600 text-xs font-bold">
+                          <div className="flex items-start justify-between border-b border-slate-50 pb-3">
+                            <div className="flex items-start gap-2 min-w-0">
+                              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 text-xs font-bold mt-0.5">
                                 {optIdx + 1}
                               </span>
-                              <input
-                                type="text"
-                                value={option.name}
-                                onChange={(e) => handleRenameOption(option.id, e.target.value)}
-                                className="font-bold text-slate-800 focus:bg-slate-50 focus:outline-none px-2 py-0.5 rounded border border-transparent focus:border-slate-200"
-                              />
+                              <div className="min-w-0">
+                                <input
+                                  type="text"
+                                  value={option.name}
+                                  onChange={(e) => handleRenameOption(option.id, e.target.value)}
+                                  className="font-bold text-slate-800 focus:bg-slate-50 focus:outline-none px-2 py-0.5 rounded border border-transparent focus:border-slate-200 w-full"
+                                />
+                                {option.items.length > 0 && (() => {
+                                  const firstItem = option.items[0]
+                                  const hasEletro = option.items.some(i => i.hasElectronics)
+                                  const nameParts = firstItem.productName.split(' [')[0]
+                                  return (
+                                    <p className="text-[10px] text-slate-400 font-medium px-2 truncate">
+                                      {nameParts}{hasEletro && <span className="ml-1 text-amber-500 font-bold">— ELETRÔNICO</span>}
+                                    </p>
+                                  )
+                                })()}
+                              </div>
                             </div>
                             
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1 shrink-0">
                               <button
                                 type="button"
                                 onClick={() => handleDuplicateOption(option)}
@@ -1256,7 +1268,7 @@ ${productsText}
                           </div>
 
                           {/* Selected Products summary */}
-                          <div className="space-y-3">
+                          <div className="space-y-2">
                             <div className="flex justify-between items-center">
                               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Produtos Selecionados</span>
                               <button
@@ -1270,48 +1282,41 @@ ${productsText}
                             </div>
 
                             {option.items.length > 0 ? (
-                              <div className="border border-slate-100 rounded-xl overflow-hidden text-xs">
-                                <table className="w-full text-left border-collapse">
-                                  <thead>
-                                    <tr className="bg-slate-50/50 border-b border-slate-100">
-                                      <th className="p-2.5 font-bold text-slate-500">Produto</th>
-                                      <th className="p-2.5 font-bold text-slate-500 text-center">Qtd</th>
-                                      <th className="p-2.5 font-bold text-slate-500 text-center">Eletrônicos</th>
-                                      <th className="p-2.5 font-bold text-slate-500 text-right">Preço</th>
-                                      <th className="p-2.5 text-center w-8"></th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {option.items.map((item, itemIdx) => (
-                                      <tr key={itemIdx} className="border-b border-slate-50/50 hover:bg-slate-50/20">
-                                        <td className="p-2.5 font-medium text-slate-800">{item.productName}</td>
-                                        <td className="p-2.5 text-center font-bold text-slate-600">{item.quantity || 1}</td>
-                                        <td className="p-2.5 text-center">
-                                          <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-bold ${
-                                            item.hasElectronics 
-                                              ? 'bg-amber-50 text-amber-600 border border-amber-100' 
-                                              : 'bg-slate-50 text-slate-400 border border-slate-100'
-                                          }`}>
-                                            {item.hasElectronics ? 'Sim' : 'Não'}
-                                          </span>
-                                        </td>
-                                        <td className="p-2.5 text-right font-bold text-slate-700">
-                                          R$ {(item.price * (item.quantity || 1)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                        </td>
-                                        <td className="p-2.5 text-center">
-                                          <button
-                                            type="button"
-                                            onClick={() => handleRemoveProductFromOption(option.id, itemIdx)}
-                                            className="text-slate-400 hover:text-rose-600"
-                                          >
-                                            <Trash2 size={12} />
-                                          </button>
-                                        </td>
+                              <>
+                                <div className="border border-slate-100 rounded-xl overflow-hidden text-[11px]">
+                                  <table className="w-full text-left border-collapse">
+                                    <thead>
+                                      <tr className="bg-slate-50/50 border-b border-slate-100">
+                                        <th className="px-2.5 py-2 font-bold text-slate-400">Produto</th>
+                                        <th className="px-2 py-2 font-bold text-slate-400 text-center w-8">Qtd</th>
+                                        <th className="px-2 py-2 text-center w-8"></th>
                                       </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
+                                    </thead>
+                                    <tbody>
+                                      {option.items.map((item, itemIdx) => (
+                                        <tr key={itemIdx} className="border-b border-slate-50/50 hover:bg-slate-50/20">
+                                          <td className="px-2.5 py-1.5 font-medium text-slate-700 leading-tight">{item.productName}</td>
+                                          <td className="px-2 py-1.5 text-center font-bold text-slate-600 w-8">{item.quantity || 1}</td>
+                                          <td className="px-2 py-1.5 text-center w-8">
+                                            <button
+                                              type="button"
+                                              onClick={() => handleRemoveProductFromOption(option.id, itemIdx)}
+                                              className="text-slate-400 hover:text-rose-600"
+                                            >
+                                              <Trash2 size={11} />
+                                            </button>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                                <div className="flex justify-end">
+                                  <span className="text-xs font-black text-slate-800">
+                                    Total: {formatBRL(totalAmount)}
+                                  </span>
+                                </div>
+                              </>
                             ) : (
                               <div
                                 onClick={() => handleOpenOptionModal(option)}
@@ -1478,9 +1483,9 @@ ${productsText}
                 Produtos em modo <strong>kit</strong> geram uma linha por item do catálogo, com quantidade = (qtd do kit) × (qtd de cada item no kit).
               </p>
 
-              {/* Items table */}
-              <div className="np-items-wrap">
-                <div className="np-items-head" role="row">
+              {/* Items table — fonte menor, col Qtd estreita */}
+              <div className="np-items-wrap" style={{ fontSize: '12px' }}>
+                <div className="np-items-head" role="row" style={{ gridTemplateColumns: 'minmax(0,1fr) 48px 88px 88px 36px' }}>
                   <span>Item</span>
                   <span>Qtd</span>
                   <span>Preço un.</span>
@@ -1491,9 +1496,9 @@ ${productsText}
                   <div className="np-empty-items">Nenhum item ainda — busque e adicione produtos acima</div>
                 ) : (
                   modalOptionItems.map((item, idx) => (
-                    <div key={idx} className="np-item-row" role="row">
+                    <div key={idx} className="np-item-row" role="row" style={{ gridTemplateColumns: 'minmax(0,1fr) 48px 88px 88px 36px' }}>
                       <div>
-                        <div className="np-item-name">{item.productName}</div>
+                        <div className="np-item-name" style={{ fontSize: '12px' }}>{item.productName}</div>
                         <div className="np-item-var">Catálogo</div>
                       </div>
                       <input
