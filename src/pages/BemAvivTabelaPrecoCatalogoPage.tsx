@@ -1,6 +1,7 @@
 import { useUser } from '@clerk/clerk-react'
-import { Copy, Eye, Pencil, Plus, RefreshCw, Star, Trash2, X } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ChevronDown, ChevronRight, Copy, Download, Eye, Pencil, Plus, RefreshCw, Star, Trash2, Upload, X } from 'lucide-react'
+import * as XLSX from 'xlsx'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '../components/ui/Button'
 import { FormDialog } from '../components/ui/FormDialog'
 import { useSupabase } from '../hooks/useSupabase'
@@ -74,6 +75,8 @@ export function BemAvivTabelaPrecoCatalogoPage() {
   const [productCopyModal, setProductCopyModal] = useState<ProductCopyModalState>(null)
   const [copyTargetTableId, setCopyTargetTableId] = useState('')
   const [addTableModalOpen, setAddTableModalOpen] = useState(false)
+  const [expandedTables, setExpandedTables] = useState<Set<string>>(new Set())
+  const importInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   const itemsByTableId = useMemo(() => {
     const m = new Map<string, PriceTableItem[]>()
@@ -107,7 +110,7 @@ export function BemAvivTabelaPrecoCatalogoPage() {
       alert((error ?? itemError ?? productError)?.message)
       return
     }
-    setRows((data as PriceTable[]) ?? [])
+    setRows(((data as PriceTable[]) ?? []).sort((a, b) => b.name.localeCompare(a.name, 'pt-BR')))
     setItems((itemRows as PriceTableItem[]) ?? [])
     setProducts(((productRows ?? []) as OfferProduct[]).map((r) => ({ ...r, payload: normalizePayload(r.payload) })))
   }, [ownerUserId, supabase])

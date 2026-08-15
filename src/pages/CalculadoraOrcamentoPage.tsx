@@ -425,7 +425,7 @@ export function CalculadoraOrcamentoPage() {
     const duplicated: QuoteOption = {
       ...opt,
       id: crypto.randomUUID ? crypto.randomUUID() : String(Math.random()),
-      name: `${opt.name} (Cópia)`
+      name: `Opção ${quoteOptions.length + 1}`
     }
     setQuoteOptions([...quoteOptions, duplicated])
   }
@@ -503,7 +503,7 @@ export function CalculadoraOrcamentoPage() {
     const dimPart = v.dimensions ? ` — ${v.dimensions}` : ''
     const descName = `${p.name} [${v.code}]${dimPart}`
     // Auto-detecta eletrônico pelo nome do produto ou dimensão
-    const isEletro = /eletro/i.test(p.name) || /eletro/i.test(v.dimensions ?? '') || /eletro/i.test(p.product_type ?? '')
+    const isEletro = /eletr[oô]/i.test(p.name) || /eletr[oô]/i.test(v.dimensions ?? '') || /eletr[oô]/i.test(p.product_type ?? '')
     const newItem: SelectedProductItem = {
       productId: p.id,
       productName: descName,
@@ -1232,9 +1232,9 @@ ${productsText}
                                 />
                                 {option.items.length > 0 && (() => {
                                   const firstItem = option.items[0]
-                                  // Auto-detecta eletro: hasElectronics ou nome contendo 'eletro'
+                                  // Auto-detecta eletro: hasElectronics ou nome contendo 'eletr[oô]'
                                   const hasEletro = option.items.some(i =>
-                                    i.hasElectronics || /eletro/i.test(i.productName)
+                                    i.hasElectronics || /eletr[oô]/i.test(i.productName)
                                   )
                                   // Extrai nome base (antes do [CODE])
                                   const baseName = firstItem.productName.split(' [')[0].trim()
