@@ -481,16 +481,24 @@ export function CalculadoraOrcamentoPage() {
 
   const modalCatalogForTable = useMemo(() => {
     if (!modalSelectedPriceTableId) return [] as OfferProduct[]
+    // Inclui produtos via tabela de itens (pricing_mode GRADE/KIT)
     const allowed = modalProductIdsByTable.get(modalSelectedPriceTableId)
-    if (!allowed || allowed.size === 0) return [] as OfferProduct[]
-    return offerProducts.filter((p) => allowed.has(p.id))
+    // Inclui também produtos UNICO com price_table_id direto no produto
+    return offerProducts.filter((p) => {
+      if (allowed && allowed.has(p.id)) return true
+      if (p.pricing_mode === 'UNICO' && p.price_table_id === modalSelectedPriceTableId) return true
+      return false
+    })
   }, [offerProducts, modalProductIdsByTable, modalSelectedPriceTableId])
 
   const handleAddProductLineToModal = useCallback((p: OfferProduct, variationCode: string, qty: number) => {
     const vars = normalizePayload(p.payload).variations ?? []
-    const v = vars.find((x) => x.code === variationCode)
+    // Para UNICO com variação única, usa automaticamente
+    const effectiveCode = variationCode || (vars.length === 1 ? vars[0].code : '')
+    const v = vars.find((x) => x.code === effectiveCode)
     if (!v) return
-    const unit = resolveTableUnitPrice(modalSelectedPriceTableId, p.id, variationCode, v.price, modalPriceLookup)
+    // Tenta buscar na tabela de preço; fallback para preço da variação
+    const unit = resolveTableUnitPrice(modalSelectedPriceTableId, p.id, effectiveCode, v.price, modalPriceLookup)
     if (!Number.isFinite(unit) || unit <= 0) { alert('PREÇO INVÁLIDO NO CATÁLOGO.'); return }
     const dimPart = v.dimensions ? ` — ${v.dimensions}` : ''
     const descName = `${p.name} [${v.code}]${dimPart}`
@@ -501,7 +509,7 @@ export function CalculadoraOrcamentoPage() {
       hasElectronics: false,
       quantity: qty,
       offer_product_id: p.id,
-      variation_code: v.code,
+      variation_code: effectiveCode,
     }
     setModalOptionItems(prev => [...prev, newItem])
   }, [modalSelectedPriceTableId, modalPriceLookup])
@@ -1416,8 +1424,8 @@ ${productsText}
          GERENCIAR PRODUTOS MODAL — estilo "Produtos e kits" do Novo Pedido
          ======================================================== */}
       {isOptionModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/50 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="bem-aviv-novo-pedido bem-aviv-novo-pedido-shell normal-case bg-white rounded-2xl w-full max-w-4xl shadow-2xl flex flex-col my-8 overflow-hidden">
+        <div className="fixed inset-0 z-[9999] flex items-start justify-center bg-black/40 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bem-aviv-novo-pedido bg-white rounded-2xl w-full max-w-3xl shadow-2xl flex flex-col my-8 overflow-hidden">
 
             {/* Modal Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
