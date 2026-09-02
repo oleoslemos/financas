@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
 import { useCompany } from '../context/CompanyContext'
+import { useSessionState } from '../hooks/useSessionState'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { buildWhatsappUrl } from '../lib/whatsapp'
@@ -180,15 +181,17 @@ export function BemAvivFollowupPage() {
   const [rows, setRows] = useState<Cliente[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [dateFilter, setDateFilter] = useState<DateFilter>('TODOS')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('TODOS')
+  const [dateFilter, setDateFilter] = useSessionState<DateFilter>('followup:dateFilter', 'TODOS')
+  const [statusFilter, setStatusFilter] = useSessionState<StatusFilter>('followup:statusFilter', 'TODOS')
   const [eko7Filter, setEko7Filter] = useState<BemAvivEko7Filter>('TODOS')
   const [sortKey, setSortKey] = useState<SortKey>('full_name')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
-  const [registeringClient, setRegisteringClient] = useState<Cliente | null>(null)
+  const [registeringClientId, setRegisteringClientId] = useSessionState<string | null>('followup:registeringClientId', null)
+  const [registeringClient, setRegisteringClientRaw] = useState<Cliente | null>(null)
   const [historyRows, setHistoryRows] = useState<FollowupHistoryRow[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null)
+  const registeringReopenedRef = useRef(false)
   const [startFollowupOpen, setStartFollowupOpen] = useState(false)
   const [startFollowupForm, setStartFollowupForm] = useState<StartFollowupForm>({
     clientId: '',
@@ -230,6 +233,23 @@ export function BemAvivFollowupPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  function setRegisteringClient(client: Cliente | null) {
+    setRegisteringClientRaw(client)
+    setRegisteringClientId(client?.id ?? null)
+  }
+
+  // Re-open registering contact modal if previously open
+  useEffect(() => {
+    if (registeringReopenedRef.current) return
+    if (!registeringClientId || loading || rows.length === 0) return
+    const client = rows.find((r) => r.id === registeringClientId)
+    if (!client) return
+    registeringReopenedRef.current = true
+    setRegisteringClient(client)
+    void loadHistory(client.id)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, rows, registeringClientId])
 
   const loadHistory = useCallback(
     async (clientId: string) => {

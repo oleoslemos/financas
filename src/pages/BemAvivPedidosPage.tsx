@@ -25,6 +25,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
 import { useCompany } from '../context/CompanyContext'
+import { useSessionState } from '../hooks/useSessionState'
 import {
   clearPedidosFiltersSession,
   isPedidosPageReload,
@@ -308,14 +309,15 @@ export function BemAvivPedidosPage() {
   const [clients, setClients] = useState<ClienteOpt[]>([])
   const [loading, setLoading] = useState(true)
   const [queryError, setQueryError] = useState<string | null>(null)
-  const [typeTab, setTypeTab] = useState<'ORCAMENTO' | 'PEDIDO'>('PEDIDO')
+  const [typeTab, setTypeTab] = useSessionState<'ORCAMENTO' | 'PEDIDO'>('pedidos:typeTab', 'PEDIDO')
   const [clientTableFilterId, setClientTableFilterId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<PedidosStatusFilter>('TODOS')
   const [sortBy, setSortBy] = useState<'DATA' | 'DOCUMENTO' | 'CLIENTE' | 'STATUS' | 'VALOR'>('DATA')
   const [sortDir, setSortDir] = useState<'DESC' | 'ASC'>('DESC')
   const filtersReadyRef = useRef(false)
-  const [detailModalPedido, setDetailModalPedido] = useState<Pedido | null>(null)
+  const [detailModalPedidoId, setDetailModalPedidoId] = useSessionState<string | null>('pedidos:detailModalPedidoId', null)
+  const [detailModalPedido, setDetailModalPedidoRaw] = useState<Pedido | null>(null)
   const [detailModalItems, setDetailModalItems] = useState<OrderItemDetailRow[]>([])
   const [detailModalDeliveries, setDetailModalDeliveries] = useState<OrderDeliveryHistoryRow[]>([])
   const [detailModalLoading, setDetailModalLoading] = useState(false)
@@ -324,6 +326,7 @@ export function BemAvivPedidosPage() {
   const [partialDeliveryOrder, setPartialDeliveryOrder] = useState<Pedido | null>(null)
   const [fullDeliveryOrder, setFullDeliveryOrder] = useState<Pedido | null>(null)
   const [expectedArrivalOrder, setExpectedArrivalOrder] = useState<Pedido | null>(null)
+  const detailModalReopenedRef = useRef(false)
 
   const clientNameById = useMemo(() => {
     const m = new Map<string, string>()
@@ -493,6 +496,17 @@ export function BemAvivPedidosPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  // Re-open detail modal if previously open
+  useEffect(() => {
+    if (detailModalReopenedRef.current) return
+    if (!detailModalPedidoId || loading || rows.length === 0) return
+    const order = rows.find((r) => r.id === detailModalPedidoId)
+    if (!order) return
+    detailModalReopenedRef.current = true
+    void openPedidoDetailModal(order)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, rows, detailModalPedidoId])
 
   useEffect(() => {
     const st = location.state as PedidosLocationState | null
@@ -834,6 +848,11 @@ export function BemAvivPedidosPage() {
     }
 
     await load()
+  }
+
+  function setDetailModalPedido(pedido: Pedido | null) {
+    setDetailModalPedidoRaw(pedido)
+    setDetailModalPedidoId(pedido?.id ?? null)
   }
 
   function closePedidoDetailModal() {

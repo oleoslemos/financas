@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '../components/ui/Button'
 import { useLocation } from 'react-router-dom'
 import { useSupabase } from '../hooks/useSupabase'
+import { useSessionState } from '../hooks/useSessionState'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { formatBRL, formatBRLFromCentsDigits, numberToCentsDigits, parseDigitsCentsToNumber, parseMoney } from '../lib/format'
@@ -189,14 +190,14 @@ export function BemAvivProdutosPage() {
   const [priceTables, setPriceTables] = useState<PriceTableOpt[]>([])
   const [editing, setEditing] = useState<Produto | null>(null)
   const [loading, setLoading] = useState(true)
-  const [filterCategory, setFilterCategory] = useState<string>('TODOS')
+  const [filterCategory, setFilterCategory] = useSessionState<string>('produtos:filterCategory', 'TODOS')
   const [form, setForm] = useState(emptyForm)
   const [duplicateBase, setDuplicateBase] = useState<DuplicateValidationBase | null>(null)
   const [filterNameModel, setFilterNameModel] = useState('')
   const [filterLine, setFilterLine] = useState('')
   const [filterDimension, setFilterDimension] = useState('')
   const [filterTable, setFilterTable] = useState('')
-  const [showForm, setShowForm] = useState(false)
+  const [showForm, setShowForm] = useSessionState<boolean>('produtos:showForm', false)
   const formRef = useRef<HTMLFormElement>(null)
 
   const isComfort = form.category === COMFORT_PLATFORM_CATEGORY

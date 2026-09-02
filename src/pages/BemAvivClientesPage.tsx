@@ -15,8 +15,9 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useSessionState } from '../hooks/useSessionState'
 import { PedidoDetailModal } from '../components/bemAviv/PedidoDetailModal'
 import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
@@ -390,9 +391,12 @@ export function BemAvivClientesPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [form, setForm] = useState(emptyForm)
 
-  const [selectedClient, setSelectedClient] = useState<Cliente | null>(null)
-  const [drawerTab, setDrawerTab] = useState<'history' | 'orders' | 'info' | 'relatives'>('info')
+  // Persist which client was open so the drawer re-opens after navigation
+  const [selectedClientId, setSelectedClientId] = useSessionState<string | null>('clientes:selectedClientId', null)
+  const [selectedClient, setSelectedClientRaw] = useState<Cliente | null>(null)
+  const [drawerTab, setDrawerTab] = useSessionState<'history' | 'orders' | 'info' | 'relatives'>('clientes:drawerTab', 'info')
   const [drawerLoading, setDrawerLoading] = useState(false)
+  const drawerReopenedRef = useRef(false)
 
   const [relatives, setRelatives] = useState<Familiar[]>([])
   const [newRelativeName, setNewRelativeName] = useState('')
@@ -425,6 +429,15 @@ export function BemAvivClientesPage() {
     summary: '',
     details: '',
   })
+
+  // Wrapper that keeps selectedClientId in sync with the full object
+  const setSelectedClient = useCallback((clientOrUpdater: Cliente | null | ((prev: Cliente | null) => Cliente | null)) => {
+    setSelectedClientRaw((prev) => {
+      const next = typeof clientOrUpdater === 'function' ? clientOrUpdater(prev) : clientOrUpdater
+      setSelectedClientId(next?.id ?? null)
+      return next
+    })
+  }, [setSelectedClientId])
 
   const load = useCallback(async () => {
     if (!supabase) {
@@ -460,6 +473,17 @@ export function BemAvivClientesPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  // Re-open drawer after navigation if a client was previously selected
+  useEffect(() => {
+    if (drawerReopenedRef.current) return
+    if (!selectedClientId || loading || rows.length === 0) return
+    const client = rows.find((r) => r.id === selectedClientId)
+    if (!client) return
+    drawerReopenedRef.current = true
+    void openClientDrawer(client, true)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, rows, selectedClientId])
 
   const dataLoadBanner = useMemo(
     () => [companyCtxError, queryError].filter(Boolean).join(' · '),
@@ -650,9 +674,9 @@ export function BemAvivClientesPage() {
     return (data as Familiar[]) ?? []
   }, [supabase, activeCompanyId])
 
-  async function openClientDrawer(client: Cliente) {
+  async function openClientDrawer(client: Cliente, preserveTab = false) {
     setSelectedClient(client)
-    setDrawerTab('info')
+    if (!preserveTab) setDrawerTab('info')
     setRegisterInlineOpen(false)
     setScheduleInlineOpen(false)
     setEditingHistoryId(null)
@@ -2550,7 +2574,7 @@ export function BemAvivClientesPage() {
 
               <div className="sm:col-span-4 lg:col-span-3">
                 <label>CPF</label>
-                <input required value={formatCpf(form.cpf)} onChange={(e) => setForm({ ...form, cpf: onlyDigits(e.target.value) })} />
+                <input value={formatCpf(form.cpf)} onChange={(e) => setForm({ ...form, cpf: onlyDigits(e.target.value) })} />
               </div>
               <div className="sm:col-span-4 lg:col-span-4">
                 <label>TELEFONE 1</label>

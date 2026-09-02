@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom'
 import { normalizePayload, type OfferProduct, type OfferVariation } from '../lib/bemAvivOfferProduct'
 import { formatBRL } from '../lib/format'
 import { useCompany } from '../context/CompanyContext'
+import { useSessionState } from '../hooks/useSessionState'
 import { 
   Calculator, 
   Trash2, 
@@ -278,16 +279,16 @@ export function CalculadoraOrcamentoPage() {
   const currentUserId = user?.id ?? null
   const ownerUserId = resolveDataOwnerId(currentUserId, clerkEmailCandidates(user).join(','))
 
-  // View control
-  const [currentView, setCurrentView] = useState<'list' | 'editor'>('list')
+  // View control — persisted across navigation
+  const [currentView, setCurrentView] = useSessionState<'list' | 'editor'>('calc:currentView', 'list')
   const [filterSearch, setFilterSearch] = useState('')
   const [sortField, setSortField] = useState<'date' | 'name'>('date')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
-  // Editor States
-  const [clientName, setClientName] = useState('')
-  const [clientBirthDate, setClientBirthDate] = useState('')
-  const [quoteOptions, setQuoteOptions] = useState<QuoteOption[]>([
+  // Editor States — persisted across navigation
+  const [clientName, setClientName] = useSessionState('calc:clientName', '')
+  const [clientBirthDate, setClientBirthDate] = useSessionState('calc:clientBirthDate', '')
+  const [quoteOptions, setQuoteOptions] = useSessionState<QuoteOption[]>('calc:quoteOptions', [
     { id: crypto.randomUUID ? crypto.randomUUID() : String(Math.random()), name: 'Opção 1', items: [], downpayment: 0, installments_qty: 5 }
   ])
 
@@ -302,7 +303,7 @@ export function CalculadoraOrcamentoPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [isConverting, setIsConverting] = useState(false)
   const [history, setHistory] = useState<QuickQuote[]>([])
-  const [loadedQuoteId, setLoadedQuoteId] = useState<string | null>(null)
+  const [loadedQuoteId, setLoadedQuoteId] = useSessionState<string | null>('calc:loadedQuoteId', null)
 
   // Modal State
   const [isOptionModalOpen, setIsOptionModalOpen] = useState(false)
