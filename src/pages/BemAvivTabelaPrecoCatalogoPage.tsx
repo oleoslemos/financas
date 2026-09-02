@@ -1,7 +1,6 @@
 import { useUser } from '@clerk/clerk-react'
-import { ChevronDown, ChevronRight, Copy, Download, Eye, Pencil, Plus, RefreshCw, Star, Trash2, Upload, X } from 'lucide-react'
-import * as XLSX from 'xlsx'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Copy, Eye, Pencil, Plus, RefreshCw, Star, Trash2, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '../components/ui/Button'
 import { FormDialog } from '../components/ui/FormDialog'
 import { useSupabase } from '../hooks/useSupabase'
@@ -75,8 +74,6 @@ export function BemAvivTabelaPrecoCatalogoPage() {
   const [productCopyModal, setProductCopyModal] = useState<ProductCopyModalState>(null)
   const [copyTargetTableId, setCopyTargetTableId] = useState('')
   const [addTableModalOpen, setAddTableModalOpen] = useState(false)
-  const [expandedTables, setExpandedTables] = useState<Set<string>>(new Set())
-  const importInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   const itemsByTableId = useMemo(() => {
     const m = new Map<string, PriceTableItem[]>()
