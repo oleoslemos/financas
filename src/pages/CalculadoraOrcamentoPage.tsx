@@ -772,7 +772,9 @@ export function CalculadoraOrcamentoPage() {
     const totalAmount = getOptionTotalAmount(option)
     const installment10x = totalAmount - option.downpayment > 0 ? (totalAmount - option.downpayment) / 10 : 0
     const total5PercentDesc = totalAmount * 0.95
-    const installmentDivisor = option.installments_qty > 0 ? total5PercentDesc / option.installments_qty : 0
+    const has5PercentDesc = option.installments_qty <= 5
+    const totalInstallmentBase = has5PercentDesc ? total5PercentDesc : totalAmount
+    const installmentDivisor = option.installments_qty > 0 ? totalInstallmentBase / option.installments_qty : 0
     const total10PercentDesc = totalAmount * 0.90
 
     const message = `*ORÇAMENTO BEM AVIV - EKO'7 (${option.name.toUpperCase()})*
@@ -792,7 +794,7 @@ ${productsText}
 
 💵 *Pagamentos Especiais:*
 • *A Vista (5% Desconto):* R$ ${total5PercentDesc.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-• *Parcelamento em ${option.installments_qty}x (c/ 5% desc):* ${option.installments_qty}x de R$ ${installmentDivisor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+• *Parcelamento em ${option.installments_qty}x${has5PercentDesc ? ' (c/ 5% desc)' : ''}:* ${option.installments_qty}x de R$ ${installmentDivisor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
 
 ⚡ *Pagamento Pix/Dinheiro (10% Desconto):* R$ ${total10PercentDesc.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
 
@@ -884,8 +886,8 @@ ${productsText}
                 <span className="text-emerald-700 font-semibold">R$ {(getOptionTotalAmount(printOption) * 0.95).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-700 font-medium">Parcelado em {printOption.installments_qty}x (5% desc):</span>
-                <span className="text-slate-800 font-medium">{printOption.installments_qty}x de R$ {(printOption.installments_qty > 0 ? (getOptionTotalAmount(printOption) * 0.95) / printOption.installments_qty : 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                <span className="text-slate-700 font-medium">Parcelado em {printOption.installments_qty}x{printOption.installments_qty <= 5 ? ' (5% desc)' : ''}:</span>
+                <span className="text-slate-800 font-medium">{printOption.installments_qty}x de R$ {(printOption.installments_qty > 0 ? (printOption.installments_qty <= 5 ? getOptionTotalAmount(printOption) * 0.95 : getOptionTotalAmount(printOption)) / printOption.installments_qty : 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-700 font-medium">Pix / Dinheiro (10% Desc):</span>
@@ -1211,7 +1213,9 @@ ${productsText}
                     const totalAmount = getOptionTotalAmount(option)
                     const installment10x = totalAmount - option.downpayment > 0 ? (totalAmount - option.downpayment) / 10 : 0
                     const total5PercentDesc = totalAmount * 0.95
-                    const installmentDivisor = option.installments_qty > 0 ? total5PercentDesc / option.installments_qty : 0
+                    const has5PercentDesc = option.installments_qty <= 5
+                    const totalInstallmentBase = has5PercentDesc ? total5PercentDesc : totalAmount
+                    const installmentDivisor = option.installments_qty > 0 ? totalInstallmentBase / option.installments_qty : 0
                     const total10PercentDesc = totalAmount * 0.90
 
                     return (
@@ -1358,7 +1362,9 @@ ${productsText}
                                   />
                                 </div>
                                 <div className="space-y-1">
-                                  <label className="text-[10px] font-bold text-indigo-200 uppercase tracking-wider block">Parcelas (5% Desc)</label>
+                                  <label className="text-[10px] font-bold text-indigo-200 uppercase tracking-wider block">
+                                    {has5PercentDesc ? 'Parcelas (5% Desc)' : 'Parcelas'}
+                                  </label>
                                   <select
                                     value={option.installments_qty}
                                     onChange={(e) => handleUpdateOptionInstallments(option.id, Number(e.target.value))}
@@ -1381,7 +1387,7 @@ ${productsText}
                                   <span className="font-semibold text-emerald-300">R$ {total5PercentDesc.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                                 </div>
                                 <div className="flex justify-between">
-                                  <span className="text-slate-400">{option.installments_qty}x (5% desc):</span>
+                                  <span className="text-slate-400">{option.installments_qty}x{has5PercentDesc ? ' (5% desc)' : ''}:</span>
                                   <span>{option.installments_qty}x de R$ {installmentDivisor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                                 </div>
                                 <div className="flex justify-between font-bold text-emerald-400">
@@ -1394,9 +1400,9 @@ ${productsText}
                                 <button
                                   type="button"
                                   onClick={() => handleCopyToClipboard(option)}
-                                  className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-[10px] font-bold uppercase transition"
+                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-100 hover:text-white rounded-xl text-[11px] font-bold uppercase transition cursor-pointer"
                                 >
-                                  <Copy size={10} />
+                                  <Copy size={12} className="text-indigo-300" />
                                   <span>WhatsApp</span>
                                 </button>
                                 <button
@@ -1405,18 +1411,18 @@ ${productsText}
                                     setPrintOption(option)
                                     setTimeout(() => window.print(), 50)
                                   }}
-                                  className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-[10px] font-bold uppercase transition"
+                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-100 hover:text-white rounded-xl text-[11px] font-bold uppercase transition cursor-pointer"
                                 >
-                                  <Printer size={10} />
+                                  <Printer size={12} className="text-indigo-300" />
                                   <span>Imprimir</span>
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => void handleConvertToOrder(option)}
                                   disabled={isConverting}
-                                  className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 rounded-lg text-[10px] font-bold uppercase transition shadow-xs"
+                                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold rounded-xl text-[11px] uppercase transition shadow-sm cursor-pointer"
                                 >
-                                  <FileCheck size={10} />
+                                  <FileCheck size={12} className="text-slate-950" />
                                   <span>Pedido</span>
                                 </button>
                               </div>
