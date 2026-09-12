@@ -504,17 +504,10 @@ export function BemAvivPedidosPage() {
       .eq('company_id', activeCompanyId)
       .order('full_name')
 
-    let relativesRes = await supabase
+    const relativesRes = await supabase
       .from('bem_aviv_client_relatives')
       .select('id, name, relationship, cpf')
       .eq('company_id', activeCompanyId)
-
-    if (relativesRes.error) {
-      relativesRes = await supabase
-        .from('bem_aviv_client_relatives')
-        .select('id, name, relationship')
-        .eq('company_id', activeCompanyId)
-    }
 
     const [ordersRes, clientsRes] = await Promise.all([ordersResPromise, clientsResPromise])
 
