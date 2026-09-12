@@ -79,9 +79,21 @@ type Pedido = {
   delivered_at?: string | null
   client_accepted_at?: string | null
   client_signature?: string | null
+  client_relative_id?: string | null
 }
 
 type ClienteOpt = { id: string; full_name: string }
+
+type RelativeOpt = { id: string; name: string; relationship: string; cpf?: string | null }
+
+function formatCpf(v?: string | null) {
+  const d = (v ?? '').replace(/\D/g, '').slice(0, 11)
+  if (!d) return ''
+  if (d.length <= 3) return d
+  if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`
+  if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`
+}
 
 type OrderItemDetailRow = {
   id: string
@@ -328,11 +340,19 @@ export function BemAvivPedidosPage() {
   const [expectedArrivalOrder, setExpectedArrivalOrder] = useState<Pedido | null>(null)
   const detailModalReopenedRef = useRef(false)
 
+  const [relatives, setRelatives] = useState<RelativeOpt[]>([])
+
   const clientNameById = useMemo(() => {
     const m = new Map<string, string>()
     for (const c of clients) m.set(c.id, c.full_name)
     return m
   }, [clients])
+
+  const relativeNameById = useMemo(() => {
+    const m = new Map<string, RelativeOpt>()
+    for (const r of relatives) m.set(r.id, r)
+    return m
+  }, [relatives])
 
   const dataLoadBanner = useMemo(
     () => [companyCtxError, queryError].filter(Boolean).join(' · '),
@@ -365,7 +385,9 @@ export function BemAvivPedidosPage() {
         const st = (r.status ?? '').toUpperCase()
         const dt = (r.order_date ?? '').toUpperCase()
         const client = r.client_id ? (clientNameById.get(r.client_id) ?? '').toUpperCase() : ''
-        return doc.includes(q) || st.includes(q) || dt.includes(q) || client.includes(q)
+        const relObj = r.client_relative_id ? relativeNameById.get(r.client_relative_id) : null
+        const relName = relObj ? relObj.name.toUpperCase() : ''
+        return doc.includes(q) || st.includes(q) || dt.includes(q) || client.includes(q) || relName.includes(q)
       })
     }
     if (statusFilter !== 'TODOS') {
@@ -384,9 +406,9 @@ export function BemAvivPedidosPage() {
       return (a.order_date ?? '').localeCompare(b.order_date ?? '', 'pt-BR') * mul
     })
     return { filteredRows: list, countOrcamento: o, countPedido: p }
-  }, [rows, typeTab, clientTableFilterId, search, statusFilter, sortBy, sortDir, clientNameById])
+  }, [rows, typeTab, clientTableFilterId, search, statusFilter, sortBy, sortDir, clientNameById, relativeNameById])
 
-  // KPIs dinâmicos para a aba selecionada
+  // KPIs dinâmicos para a aba selecionada (desconsiderando pedidos com status CANCELADO)
   const kpis = useMemo(() => {
     let totalCount = 0
     let totalValue = 0
@@ -407,11 +429,13 @@ export function BemAvivPedidosPage() {
     )
 
     for (const r of currentRows) {
+      const status = String(r.status ?? '').trim().toUpperCase()
+      if (status === 'CANCELADO') continue
+
       const val = displayTotalPedido(r)
       totalCount++
       totalValue += val
 
-      const status = String(r.status ?? '').trim().toUpperCase()
       const isConverted = !!r.converted_order_id || status === 'FECHADO'
 
       if (typeTab === 'ORCAMENTO') {
@@ -468,7 +492,7 @@ export function BemAvivPedidosPage() {
     }
     setLoading(true)
     setQueryError(null)
-    const [ordersRes, clientsRes] = await Promise.all([
+    const [ordersRes, clientsRes, relativesRes] = await Promise.all([
       supabase
         .from('bem_aviv_sales_orders')
         .select('*')
@@ -479,16 +503,23 @@ export function BemAvivPedidosPage() {
         .select('id, full_name')
         .eq('company_id', activeCompanyId)
         .order('full_name'),
+      supabase
+        .from('bem_aviv_client_relatives')
+        .select('id, name, relationship, cpf')
+        .eq('company_id', activeCompanyId),
     ])
     const ordersErr = ordersRes.error?.message
     const clientsErr = clientsRes.error?.message
-    if (ordersErr || clientsErr) {
-      setQueryError([ordersErr, clientsErr].filter(Boolean).join(' · '))
+    const relativesErr = relativesRes.error?.message
+    if (ordersErr || clientsErr || relativesErr) {
+      setQueryError([ordersErr, clientsErr, relativesErr].filter(Boolean).join(' · '))
       setRows([])
       setClients([])
+      setRelatives([])
     } else {
       setRows(((ordersRes.data ?? []) as Pedido[]) ?? [])
       setClients(((clientsRes.data ?? []) as ClienteOpt[]) ?? [])
+      setRelatives(((relativesRes.data ?? []) as RelativeOpt[]) ?? [])
     }
     setLoading(false)
   }, [supabase, activeCompanyId, companyCtxLoading])
@@ -1304,8 +1335,15 @@ export function BemAvivPedidosPage() {
                       <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-500 font-medium">
                         {r.order_date ? r.order_date.split('-').reverse().join('/') : '—'}
                       </td>
-                      <td className="max-w-[15rem] truncate px-4 py-4 text-sm font-semibold text-slate-800" title={r.client_id ? clientNameById.get(r.client_id) : undefined}>
-                        {r.client_id ? clientNameById.get(r.client_id) ?? '—' : '—'}
+                      <td className="max-w-[15rem] px-4 py-4 text-sm font-semibold text-slate-800">
+                        <div className="flex flex-col">
+                          <span className="truncate">{r.client_id ? clientNameById.get(r.client_id) ?? '—' : '—'}</span>
+                          {r.client_relative_id && relativeNameById.has(r.client_relative_id) && (
+                            <span className="text-[10px] text-amber-800 font-bold uppercase tracking-wide truncate">
+                              Familiar: {relativeNameById.get(r.client_relative_id)?.name} ({relativeNameById.get(r.client_relative_id)?.relationship})
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="whitespace-nowrap px-4 py-4">
                         {renderStatusBadge(r.status, r.document_type)}
@@ -1609,6 +1647,14 @@ export function BemAvivPedidosPage() {
                     <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Dados do Registro</h4>
                     <div className="text-xs font-medium text-slate-600 space-y-1">
                       <p><span className="text-slate-400">Cliente:</span> <span className="font-semibold text-slate-800">{detailModalPedido.client_id ? clientNameById.get(detailModalPedido.client_id) ?? '—' : '—'}</span></p>
+                      {detailModalPedido.client_relative_id && relativeNameById.has(detailModalPedido.client_relative_id) && (
+                        <p>
+                          <span className="text-slate-400">Familiar / Dependente:</span>{' '}
+                          <span className="font-semibold text-amber-800">
+                            {relativeNameById.get(detailModalPedido.client_relative_id)?.name} ({relativeNameById.get(detailModalPedido.client_relative_id)?.relationship}){relativeNameById.get(detailModalPedido.client_relative_id)?.cpf ? ` - CPF: ${formatCpf(relativeNameById.get(detailModalPedido.client_relative_id)?.cpf)}` : ''}
+                          </span>
+                        </p>
+                      )}
                       <p><span className="text-slate-400">Data de emissão:</span> <span className="font-semibold text-slate-800 tabular-nums">{detailModalPedido.order_date ? detailModalPedido.order_date.split('-').reverse().join('/') : '—'}</span></p>
                       <p><span className="text-slate-400">Status atual:</span> <span className="font-semibold text-slate-800">{detailModalPedido.status}</span></p>
                       {detailModalPedido.document_type === 'PEDIDO' ? (

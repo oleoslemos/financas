@@ -25,8 +25,29 @@ import {
   Search,
   Minus,
   Plus,
-  Package
+  Package,
+  Users
 } from 'lucide-react'
+import { onlyDigits } from '../lib/format'
+
+type Familiar = {
+  id: string
+  client_id: string
+  name: string
+  relationship: string
+  birth_date: string | null
+  phone: string | null
+  cpf?: string | null
+}
+
+function formatCpf(v?: string | null) {
+  const d = onlyDigits(v ?? '').slice(0, 11)
+  if (!d) return ''
+  if (d.length <= 3) return d
+  if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`
+  if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`
+}
 
 type SelectedProductItem = {
   productId: string
@@ -288,6 +309,8 @@ export function CalculadoraOrcamentoPage() {
   // Editor States — persisted across navigation
   const [clientName, setClientName] = useSessionState('calc:clientName', '')
   const [clientBirthDate, setClientBirthDate] = useSessionState('calc:clientBirthDate', '')
+  const [selectedRelativeId, setSelectedRelativeId] = useSessionState<string | null>('calc:selectedRelativeId', null)
+  const [clientRelatives, setClientRelatives] = useState<Familiar[]>([])
   const [quoteOptions, setQuoteOptions] = useSessionState<QuoteOption[]>('calc:quoteOptions', [
     { id: crypto.randomUUID ? crypto.randomUUID() : String(Math.random()), name: 'Opção 1', items: [], downpayment: 0, installments_qty: 5 }
   ])
@@ -298,6 +321,37 @@ export function CalculadoraOrcamentoPage() {
   const [tableItems, setTableItems] = useState<OfferPriceTableItemRow[]>([])
   const [dbClients, setDbClients] = useState<{ id: string; full_name: string; birth_date: string | null }[]>([])
   const [showClientSuggestions, setShowClientSuggestions] = useState(false)
+
+  const matchedClient = useMemo(() => {
+    const q = clientName.trim().toUpperCase()
+    if (!q) return null
+    return dbClients.find((c) => (c.full_name ?? '').trim().toUpperCase() === q) ?? null
+  }, [clientName, dbClients])
+
+  useEffect(() => {
+    if (!matchedClient || !supabase || !activeCompanyId) {
+      setClientRelatives([])
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      const { data, error } = await supabase
+        .from('bem_aviv_client_relatives')
+        .select('id, client_id, name, relationship, birth_date, phone, cpf')
+        .eq('company_id', activeCompanyId)
+        .eq('client_id', matchedClient.id)
+        .order('name')
+      if (cancelled) return
+      if (!error && data) {
+        setClientRelatives(data as Familiar[])
+      } else {
+        setClientRelatives([])
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [matchedClient, activeCompanyId])
 
   // Status & History
   const [isSaving, setIsSaving] = useState(false)
@@ -675,6 +729,7 @@ export function CalculadoraOrcamentoPage() {
           user_id: ownerUserId,
           company_id: activeCompanyId,
           client_id: clientId,
+          client_relative_id: selectedRelativeId || null,
           order_date: new Date().toISOString().split('T')[0],
           status: 'ORÇAMENTO',
           notes: `CONVERTIDO DA CALCULADORA DE ORÇAMENTOS RÁPIDOS (${option.name.toUpperCase()})`,
@@ -1188,6 +1243,33 @@ ${productsText}
                     </div>
                   </div>
                 </div>
+
+                {clientRelatives.length > 0 && (
+                  <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/70 p-3.5 text-xs shadow-2xs">
+                    <div className="flex items-center gap-1.5 font-semibold text-amber-900 mb-2">
+                      <Users size={14} className="text-amber-700" />
+                      <span>Este cliente possui {clientRelatives.length} familiar(es) cadastrado(s):</span>
+                    </div>
+                    <div className="space-y-1">
+                      <label htmlFor="calc-familiar" className="text-[10px] font-bold uppercase tracking-wide text-amber-950 block">
+                        Vincular Familiar / Dependente ao Orçamento
+                      </label>
+                      <select
+                        id="calc-familiar"
+                        className="w-full bg-white border border-amber-300 rounded-xl py-2 px-3 text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                        value={selectedRelativeId ?? ''}
+                        onChange={(e) => setSelectedRelativeId(e.target.value || null)}
+                      >
+                        <option value="">— Titular (Sem familiar vinculado) —</option>
+                        {clientRelatives.map((rel) => (
+                          <option key={rel.id} value={rel.id}>
+                            {rel.name} ({rel.relationship}){rel.cpf ? ` - CPF: ${formatCpf(rel.cpf)}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
               </section>
 
               {/* Step 2: Budget Options */}

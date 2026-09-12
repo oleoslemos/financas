@@ -79,6 +79,14 @@ interface OrderItemRow {
   discount_amount: number | null
 }
 
+interface RelativeRow {
+  id: string
+  name: string
+  relationship: string | null
+  cpf: string | null
+  phone: string | null
+}
+
 export function BemAvivPedidoPrintPage() {
   const { orderId } = useParams<{ orderId: string }>()
   const supabase = useSupabase()
@@ -90,6 +98,7 @@ export function BemAvivPedidoPrintPage() {
   
   const [order, setOrder] = useState<OrderRow | null>(null)
   const [client, setClient] = useState<ClientRow | null>(null)
+  const [relative, setRelative] = useState<RelativeRow | null>(null)
   const [company, setCompany] = useState<CompanyRow | null>(null)
   const [items, setItems] = useState<OrderItemRow[]>([])
 
@@ -125,12 +134,14 @@ export function BemAvivPedidoPrintPage() {
         const res = data as {
           order: OrderRow
           client: ClientRow | null
+          relative?: RelativeRow | null
           company: CompanyRow | null
           items: OrderItemRow[]
         }
 
         setOrder(res.order)
         setClient(res.client)
+        setRelative(res.relative ?? null)
         setCompany(res.company)
         setItems(res.items)
         setLoading(false)
@@ -354,6 +365,16 @@ export function BemAvivPedidoPrintPage() {
                   ) : 'Endereço não cadastrado.'}
                 </p>
               </div>
+              {relative && (
+                <div className="sm:col-span-2 md:col-span-3 mt-2 pt-2 border-t border-slate-200/60">
+                  <p className="text-slate-400 font-extrabold uppercase text-[10px] tracking-wider">Familiar / Beneficiário do Pedido</p>
+                  <p className="font-bold text-slate-800 text-xs mt-0.5">
+                    {relative.name} {relative.relationship ? `(${relative.relationship})` : ''}
+                    {relative.cpf ? ` — CPF: ${relative.cpf.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4')}` : ''}
+                    {relative.phone ? ` — Tel: ${relative.phone}` : ''}
+                  </p>
+                </div>
+              )}
             </div>
           ) : (
             <p className="text-xs text-slate-500 font-medium">Cliente não vinculado.</p>

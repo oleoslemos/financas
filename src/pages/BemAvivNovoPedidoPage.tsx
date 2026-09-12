@@ -14,6 +14,7 @@ import {
   Plus,
   Search,
   Trash2,
+  Users,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -49,6 +50,25 @@ const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
 }
 
 type ClienteOpt = { id: string; full_name: string }
+
+type Familiar = {
+  id: string
+  client_id: string
+  name: string
+  relationship: string
+  birth_date: string | null
+  phone: string | null
+  cpf?: string | null
+}
+
+function formatCpf(v?: string | null) {
+  const d = onlyDigits(v ?? '').slice(0, 11)
+  if (!d) return ''
+  if (d.length <= 3) return d
+  if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`
+  if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`
+}
 
 type OfferPriceTableRow = { id: string; name: string; is_default: boolean }
 
@@ -181,6 +201,7 @@ function pedidosListReturnState(
 type SalesOrderHeaderRow = {
   id: string
   client_id: string | null
+  client_relative_id?: string | null
   order_date: string
   document_type: 'ORCAMENTO' | 'PEDIDO'
   document_number: string | null
@@ -714,12 +735,15 @@ export function BemAvivNovoPedidoPage() {
   const [selectedPriceTableId, setSelectedPriceTableId] = useState('')
   const editTableInferredRef = useRef(false)
 
+  const [clientRelatives, setClientRelatives] = useState<Familiar[]>([])
+
   const [form, setForm] = useState(() => {
     const st = location.state as NovoPedidoNavState | null
     const document_type: 'ORCAMENTO' | 'PEDIDO' =
       isEditMode ? 'ORCAMENTO' : st?.document_type === 'PEDIDO' ? 'PEDIDO' : 'ORCAMENTO'
     return {
       client_id: '',
+      client_relative_id: '',
       order_date: new Date().toISOString().slice(0, 10),
       document_type,
       status: 'ABERTO',
@@ -734,6 +758,34 @@ export function BemAvivNovoPedidoPage() {
       other_expenses: '',
     }
   })
+
+  // Carregar familiares sempre que o cliente selecionado mudar
+  useEffect(() => {
+    if (!form.client_id || !supabase || !activeCompanyId) {
+      setClientRelatives([])
+      setForm((prev) => (prev.client_relative_id ? { ...prev, client_relative_id: '' } : prev))
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      const { data, error } = await supabase
+        .from('bem_aviv_client_relatives')
+        .select('id, client_id, name, relationship, birth_date, phone, cpf')
+        .eq('company_id', activeCompanyId)
+        .eq('client_id', form.client_id)
+        .order('name')
+
+      if (cancelled) return
+      if (!error && data) {
+        setClientRelatives(data as Familiar[])
+      } else {
+        setClientRelatives([])
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [form.client_id, supabase, activeCompanyId])
 
   const [lineItems, setLineItems] = useState<LinhaItem[]>([])
   const [liquidTotalDigits, setLiquidTotalDigits] = useState('')
@@ -854,7 +906,7 @@ export function BemAvivNovoPedidoPage() {
       const { data: order, error: oErr } = await supabase
         .from('bem_aviv_sales_orders')
         .select(
-          'id, client_id, order_date, document_type, document_number, converted_order_id, status, total_amount, notes, discount_total, installments_count, payment_option, payment_method, down_payment_amount, down_payment_method, freight_amount, other_expenses',
+          'id, client_id, client_relative_id, order_date, document_type, document_number, converted_order_id, status, total_amount, notes, discount_total, installments_count, payment_option, payment_method, down_payment_amount, down_payment_method, freight_amount, other_expenses',
         )
         .eq('id', editOrderId)
         .eq('company_id', activeCompanyId)
@@ -926,6 +978,7 @@ export function BemAvivNovoPedidoPage() {
 
       setForm({
         client_id: quote.client_id ?? '',
+        client_relative_id: quote.client_relative_id ?? '',
         order_date: quote.order_date,
         document_type: quote.document_type,
         status: quote.status,
@@ -1234,6 +1287,7 @@ export function BemAvivNovoPedidoPage() {
         user_id: ownerUserId,
         company_id: activeCompanyId,
         client_id: form.client_id || null,
+        client_relative_id: form.client_relative_id || null,
         order_date: form.order_date,
         document_type: form.document_type,
         status: toUpperTrim(form.status),
@@ -1251,6 +1305,7 @@ export function BemAvivNovoPedidoPage() {
       if (editOrderId) {
         const cleanUpdate = {
           client_id: headerPayload.client_id,
+          client_relative_id: headerPayload.client_relative_id,
           order_date: headerPayload.order_date,
           document_type: headerPayload.document_type,
           status: headerPayload.status,
@@ -1489,6 +1544,32 @@ export function BemAvivNovoPedidoPage() {
                     ))}
                   </select>
                 </div>
+                {clientRelatives.length > 0 && (
+                  <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/70 p-3 text-xs shadow-2xs">
+                    <div className="flex items-center gap-1.5 font-semibold text-amber-900 mb-1.5">
+                      <Users size={14} className="text-amber-700" />
+                      <span>Este cliente possui {clientRelatives.length} familiar(es) cadastrado(s):</span>
+                    </div>
+                    <div className="np-field">
+                      <label className="np-label text-amber-950 font-semibold" htmlFor="np-familiar">
+                        Vincular Familiar / Dependente ao {form.document_type === 'ORCAMENTO' ? 'Orçamento' : 'Pedido'}
+                      </label>
+                      <select
+                        id="np-familiar"
+                        className="np-select border-amber-300 bg-white"
+                        value={form.client_relative_id}
+                        onChange={(e) => setForm({ ...form, client_relative_id: e.target.value })}
+                      >
+                        <option value="">— Titular (Sem familiar vinculado) —</option>
+                        {clientRelatives.map((rel) => (
+                          <option key={rel.id} value={rel.id}>
+                            {rel.name} ({rel.relationship}){rel.cpf ? ` - CPF: ${formatCpf(rel.cpf)}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
                 <div className="np-row-cols-3">
                   <div className="np-field">
                     <label className="np-label" htmlFor="np-data">

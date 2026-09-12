@@ -227,6 +227,7 @@ export interface Familiar {
   relationship: string
   birth_date: string | null
   phone: string | null
+  cpf?: string | null
 }
 
 type SortKey = 'full_name' | 'phones' | 'client_status'
@@ -403,6 +404,8 @@ export function BemAvivClientesPage() {
   const [newRelativeRelationship, setNewRelativeRelationship] = useState('')
   const [newRelativeBirthDate, setNewRelativeBirthDate] = useState('')
   const [newRelativePhone, setNewRelativePhone] = useState('')
+  const [newRelativeCpf, setNewRelativeCpf] = useState('')
+  const [editingRelativeId, setEditingRelativeId] = useState<string | null>(null)
   const [relativeLoading, setRelativeLoading] = useState(false)
 
   const [pedidosModalRows, setPedidosModalRows] = useState<OrderRow[]>([])
@@ -666,7 +669,7 @@ export function BemAvivClientesPage() {
     if (!supabase || !activeCompanyId) return []
     const { data, error } = await supabase
       .from('bem_aviv_client_relatives')
-      .select('id, client_id, name, relationship, birth_date, phone')
+      .select('id, client_id, name, relationship, birth_date, phone, cpf')
       .eq('company_id', activeCompanyId)
       .eq('client_id', clientId)
       .order('name')
@@ -687,6 +690,8 @@ export function BemAvivClientesPage() {
     setNewRelativeRelationship('')
     setNewRelativeBirthDate('')
     setNewRelativePhone('')
+    setNewRelativeCpf('')
+    setEditingRelativeId(null)
     
     if (!supabase || !activeCompanyId) return
     setDrawerLoading(true)
@@ -724,6 +729,24 @@ export function BemAvivClientesPage() {
     setRelatives(relativesRows)
   }
 
+  function resetRelativeForm() {
+    setNewRelativeName('')
+    setNewRelativeRelationship('')
+    setNewRelativeBirthDate('')
+    setNewRelativePhone('')
+    setNewRelativeCpf('')
+    setEditingRelativeId(null)
+  }
+
+  function startEditRelative(rel: Familiar) {
+    setEditingRelativeId(rel.id)
+    setNewRelativeName(rel.name || '')
+    setNewRelativeRelationship(rel.relationship || '')
+    setNewRelativeBirthDate(rel.birth_date || '')
+    setNewRelativePhone(rel.phone || '')
+    setNewRelativeCpf(rel.cpf || '')
+  }
+
   async function handleAddRelative(e: React.FormEvent) {
     e.preventDefault()
     if (!supabase || !activeCompanyId || !selectedClient) return
@@ -732,23 +755,38 @@ export function BemAvivClientesPage() {
       return
     }
     setRelativeLoading(true)
-    const { error } = await supabase.from('bem_aviv_client_relatives').insert({
+    const payload = {
       company_id: activeCompanyId,
       client_id: selectedClient.id,
       name: newRelativeName.trim(),
       relationship: newRelativeRelationship.trim(),
       birth_date: newRelativeBirthDate || null,
       phone: onlyDigits(newRelativePhone),
-    })
-    if (error) {
-      alert(error.message)
+      cpf: onlyDigits(newRelativeCpf),
+    }
+
+    if (editingRelativeId) {
+      const { error } = await supabase
+        .from('bem_aviv_client_relatives')
+        .update(payload)
+        .eq('id', editingRelativeId)
+        .eq('company_id', activeCompanyId)
+      if (error) {
+        alert(error.message)
+      } else {
+        resetRelativeForm()
+        const updated = await fetchRelativesData(selectedClient.id)
+        setRelatives(updated)
+      }
     } else {
-      setNewRelativeName('')
-      setNewRelativeRelationship('')
-      setNewRelativeBirthDate('')
-      setNewRelativePhone('')
-      const updated = await fetchRelativesData(selectedClient.id)
-      setRelatives(updated)
+      const { error } = await supabase.from('bem_aviv_client_relatives').insert(payload)
+      if (error) {
+        alert(error.message)
+      } else {
+        resetRelativeForm()
+        const updated = await fetchRelativesData(selectedClient.id)
+        setRelatives(updated)
+      }
     }
     setRelativeLoading(false)
   }
@@ -765,6 +803,7 @@ export function BemAvivClientesPage() {
     if (error) {
       alert(error.message)
     } else {
+      if (editingRelativeId === id) resetRelativeForm()
       const updated = await fetchRelativesData(selectedClient.id)
       setRelatives(updated)
     }
@@ -2125,11 +2164,22 @@ export function BemAvivClientesPage() {
     if (!selectedClient) return null
     return (
       <div className="space-y-6">
-        {/* Form to add a new relative */}
+        {/* Form to add or edit a relative */}
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
-          <h4 className="text-xs font-bold uppercase tracking-wide text-slate-700 border-b border-slate-100 pb-2 mb-3">
-            Adicionar Familiar
-          </h4>
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2 mb-3">
+            <h4 className="text-xs font-bold uppercase tracking-wide text-slate-700">
+              {editingRelativeId ? 'Editar Familiar' : 'Adicionar Familiar'}
+            </h4>
+            {editingRelativeId && (
+              <button
+                type="button"
+                className="text-xs text-slate-500 hover:text-slate-800 underline"
+                onClick={resetRelativeForm}
+              >
+                Cancelar Edição
+              </button>
+            )}
+          </div>
           <form onSubmit={handleAddRelative} className="grid grid-cols-1 gap-3 sm:grid-cols-12 sm:gap-4">
             <div className="sm:col-span-6">
               <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Nome Completo</label>
@@ -2151,7 +2201,16 @@ export function BemAvivClientesPage() {
                 className="mt-1 w-full"
               />
             </div>
-            <div className="sm:col-span-5">
+            <div className="sm:col-span-4">
+              <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">CPF</label>
+              <input
+                value={formatCpf(newRelativeCpf)}
+                onChange={(e) => setNewRelativeCpf(onlyDigits(e.target.value))}
+                placeholder="000.000.000-00"
+                className="mt-1 w-full"
+              />
+            </div>
+            <div className="sm:col-span-4">
               <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Aniversário</label>
               <input
                 type="date"
@@ -2160,7 +2219,7 @@ export function BemAvivClientesPage() {
                 className="mt-1 w-full"
               />
             </div>
-            <div className="sm:col-span-5">
+            <div className="sm:col-span-4">
               <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Telefone</label>
               <input
                 value={formatPhone(newRelativePhone)}
@@ -2169,9 +2228,22 @@ export function BemAvivClientesPage() {
                 className="mt-1 w-full"
               />
             </div>
-            <div className="sm:col-span-2 flex items-end">
-              <Button variant="primary" type="submit" className="w-full justify-center h-10" disabled={relativeLoading}>
-                <Plus size={16} className="mr-1" /> Add
+            <div className="sm:col-span-12 flex justify-end gap-2 pt-1">
+              {editingRelativeId && (
+                <Button variant="secondary" type="button" onClick={resetRelativeForm} disabled={relativeLoading}>
+                  Cancelar
+                </Button>
+              )}
+              <Button variant="primary" type="submit" className="min-w-[120px] justify-center" disabled={relativeLoading}>
+                {editingRelativeId ? (
+                  <>
+                    <Save size={15} className="mr-1" /> Salvar
+                  </>
+                ) : (
+                  <>
+                    <Plus size={16} className="mr-1" /> Add
+                  </>
+                )}
               </Button>
             </div>
           </form>
@@ -2191,6 +2263,7 @@ export function BemAvivClientesPage() {
                   <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wide">
                     <th className="py-2 pr-2">Nome</th>
                     <th className="py-2 px-2">Parentesco</th>
+                    <th className="py-2 px-2">CPF</th>
                     <th className="py-2 px-2">Aniversário</th>
                     <th className="py-2 px-2">Telefone</th>
                     <th className="py-2 pl-2 text-right">Ações</th>
@@ -2206,12 +2279,24 @@ export function BemAvivClientesPage() {
                         </span>
                       </td>
                       <td className="py-2.5 px-2 font-medium">
+                        {rel.cpf ? formatCpf(rel.cpf) : '—'}
+                      </td>
+                      <td className="py-2.5 px-2 font-medium">
                         {rel.birth_date ? formatDateOnly(rel.birth_date) : '—'}
                       </td>
                       <td className="py-2.5 px-2 font-medium">
                         {rel.phone ? formatPhone(rel.phone) : '—'}
                       </td>
-                      <td className="py-2.5 pl-2 text-right">
+                      <td className="py-2.5 pl-2 text-right space-x-1">
+                        <button
+                          type="button"
+                          className="inline-flex h-6 w-6 items-center justify-center rounded border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 active:scale-95"
+                          onClick={() => startEditRelative(rel)}
+                          title="Editar familiar"
+                          disabled={relativeLoading}
+                        >
+                          <Pencil size={12} strokeWidth={2.2} />
+                        </button>
                         <button
                           type="button"
                           className="inline-flex h-6 w-6 items-center justify-center rounded border border-red-100 bg-white text-red-500 hover:bg-red-50 active:scale-95"
