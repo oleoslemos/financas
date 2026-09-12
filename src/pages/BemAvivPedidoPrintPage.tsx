@@ -336,20 +336,52 @@ export function BemAvivPedidoPrintPage() {
           <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 mb-3">Dados do Cliente</h3>
           {client ? (
             <div className="grid grid-cols-1 gap-y-2 gap-x-4 text-xs sm:grid-cols-2 md:grid-cols-3">
+
+              {/* Primary name: relative if exists, otherwise the client */}
               <div>
                 <p className="text-slate-400">Nome / Razão Social</p>
-                <p className="font-bold text-slate-800 text-sm">{client.full_name}</p>
+                <p className="font-bold text-slate-800 text-sm">
+                  {relative ? relative.name : client.full_name}
+                </p>
               </div>
+
+              {/* CPF: relative's if exists, otherwise client's */}
               <div>
                 <p className="text-slate-400">CPF / CNPJ</p>
-                <p className="font-semibold text-slate-800 tabular-nums">{client.cpf ? client.cpf.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4') : '—'}</p>
+                <p className="font-semibold text-slate-800 tabular-nums">
+                  {relative
+                    ? (relative.cpf ? relative.cpf.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4') : '—')
+                    : (client.cpf ? client.cpf.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4') : '—')}
+                </p>
               </div>
+
+              {/* Contact: relative's phone if exists, otherwise client's */}
               <div>
                 <p className="text-slate-400">Contato</p>
                 <p className="font-semibold text-slate-800 tabular-nums">
-                  {client.phone_1 || client.phone_2 ? [client.phone_1, client.phone_2].filter(Boolean).join(' / ') : '—'}
+                  {relative
+                    ? (relative.phone ?? '—')
+                    : (client.phone_1 || client.phone_2 ? [client.phone_1, client.phone_2].filter(Boolean).join(' / ') : '—')}
                 </p>
               </div>
+
+              {/* Parente: show relationship when relative exists */}
+              {relative && (
+                <div>
+                  <p className="text-slate-400">Grau de Parentesco</p>
+                  <p className="font-semibold text-slate-800">{relative.relationship ?? '—'}</p>
+                </div>
+              )}
+
+              {/* Titular: shown only when order belongs to a relative */}
+              {relative && (
+                <div className={relative ? 'sm:col-span-1 md:col-span-2' : ''}>
+                  <p className="text-slate-400">Titular da Conta</p>
+                  <p className="font-semibold text-slate-700">{client.full_name}</p>
+                </div>
+              )}
+
+              {/* Delivery Address: always from the main client */}
               <div className="sm:col-span-2 md:col-span-3 mt-1">
                 <p className="text-slate-400">Endereço de Entrega</p>
                 <p className="font-semibold text-slate-800 leading-normal">
@@ -365,16 +397,6 @@ export function BemAvivPedidoPrintPage() {
                   ) : 'Endereço não cadastrado.'}
                 </p>
               </div>
-              {relative && (
-                <div className="sm:col-span-2 md:col-span-3 mt-2 pt-2 border-t border-slate-200/60">
-                  <p className="text-slate-400 font-extrabold uppercase text-[10px] tracking-wider">Familiar / Beneficiário do Pedido</p>
-                  <p className="font-bold text-slate-800 text-xs mt-0.5">
-                    {relative.name} {relative.relationship ? `(${relative.relationship})` : ''}
-                    {relative.cpf ? ` — CPF: ${relative.cpf.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4')}` : ''}
-                    {relative.phone ? ` — Tel: ${relative.phone}` : ''}
-                  </p>
-                </div>
-              )}
             </div>
           ) : (
             <p className="text-xs text-slate-500 font-medium">Cliente não vinculado.</p>
@@ -615,7 +637,7 @@ export function BemAvivPedidoPrintPage() {
               ) : (
                 <div className="mx-auto w-64 border-b border-slate-400 h-9"></div>
               )}
-              <p className="font-bold text-slate-700 uppercase">{client?.full_name ?? 'Cliente'}</p>
+              <p className="font-bold text-slate-700 uppercase">{relative ? relative.name : (client?.full_name ?? 'Cliente')}</p>
               <p className="text-[10px] text-slate-400 uppercase tracking-wider">Assinatura do Cliente</p>
             </div>
             
