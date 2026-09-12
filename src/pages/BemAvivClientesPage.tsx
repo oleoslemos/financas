@@ -11,6 +11,7 @@ import {
   Pencil,
   Plus,
   Presentation,
+  Save,
   Search,
   Trash2,
   X,
