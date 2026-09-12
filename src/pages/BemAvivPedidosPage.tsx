@@ -492,27 +492,36 @@ export function BemAvivPedidosPage() {
     }
     setLoading(true)
     setQueryError(null)
-    const [ordersRes, clientsRes, relativesRes] = await Promise.all([
-      supabase
-        .from('bem_aviv_sales_orders')
-        .select('*')
-        .eq('company_id', activeCompanyId)
-        .order('order_date', { ascending: false }),
-      supabase
-        .from('bem_aviv_clients')
-        .select('id, full_name')
-        .eq('company_id', activeCompanyId)
-        .order('full_name'),
-      supabase
+    const ordersResPromise = supabase
+      .from('bem_aviv_sales_orders')
+      .select('*')
+      .eq('company_id', activeCompanyId)
+      .order('order_date', { ascending: false })
+
+    const clientsResPromise = supabase
+      .from('bem_aviv_clients')
+      .select('id, full_name')
+      .eq('company_id', activeCompanyId)
+      .order('full_name')
+
+    let relativesRes = await supabase
+      .from('bem_aviv_client_relatives')
+      .select('id, name, relationship, cpf')
+      .eq('company_id', activeCompanyId)
+
+    if (relativesRes.error) {
+      relativesRes = await supabase
         .from('bem_aviv_client_relatives')
-        .select('id, name, relationship, cpf')
-        .eq('company_id', activeCompanyId),
-    ])
+        .select('id, name, relationship')
+        .eq('company_id', activeCompanyId)
+    }
+
+    const [ordersRes, clientsRes] = await Promise.all([ordersResPromise, clientsResPromise])
+
     const ordersErr = ordersRes.error?.message
     const clientsErr = clientsRes.error?.message
-    const relativesErr = relativesRes.error?.message
-    if (ordersErr || clientsErr || relativesErr) {
-      setQueryError([ordersErr, clientsErr, relativesErr].filter(Boolean).join(' · '))
+    if (ordersErr || clientsErr) {
+      setQueryError([ordersErr, clientsErr].filter(Boolean).join(' · '))
       setRows([])
       setClients([])
       setRelatives([])
@@ -1337,11 +1346,17 @@ export function BemAvivPedidosPage() {
                       </td>
                       <td className="max-w-[15rem] px-4 py-4 text-sm font-semibold text-slate-800">
                         <div className="flex flex-col">
-                          <span className="truncate">{r.client_id ? clientNameById.get(r.client_id) ?? '—' : '—'}</span>
-                          {r.client_relative_id && relativeNameById.has(r.client_relative_id) && (
-                            <span className="text-[10px] text-amber-800 font-bold uppercase tracking-wide truncate">
-                              Familiar: {relativeNameById.get(r.client_relative_id)?.name} ({relativeNameById.get(r.client_relative_id)?.relationship})
-                            </span>
+                          {r.client_relative_id && relativeNameById.has(r.client_relative_id) ? (
+                            <>
+                              <span className="truncate font-bold text-slate-900">
+                                {relativeNameById.get(r.client_relative_id)?.name}
+                              </span>
+                              <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wide truncate">
+                                Titular: {r.client_id ? clientNameById.get(r.client_id) ?? '—' : '—'}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="truncate">{r.client_id ? clientNameById.get(r.client_id) ?? '—' : '—'}</span>
                           )}
                         </div>
                       </td>
