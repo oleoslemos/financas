@@ -41,6 +41,7 @@ import { isDeliveryPendingStatus, remainingQty } from '../lib/bemAvivOrderDelive
 import { PartialDeliveryModal } from '../components/bemAviv/PartialDeliveryModal'
 import { FullDeliveryModal } from '../components/bemAviv/FullDeliveryModal'
 import { ExpectedArrivalModal } from '../components/bemAviv/ExpectedArrivalModal'
+import { ConfirmPaymentModal } from '../components/bemAviv/ConfirmPaymentModal'
 import { formatBRL } from '../lib/format'
 import { formatDateOnly } from '../lib/dates'
 import { fetchOrderDeliveryHistory, type OrderDeliveryHistoryRow } from '../lib/bemAvivOrderDeliveries'
@@ -154,7 +155,7 @@ function canFecharGerarPedido(r: Pedido) {
 }
 
 function canEditPedido(r: Pedido) {
-  return r.document_type === 'PEDIDO' && r.status === 'ABERTO' && !r.client_accepted_at
+  return r.document_type === 'PEDIDO' && (r.status === 'ABERTO' || r.status === 'ENTRADA_PAGA') && !r.client_accepted_at
 }
 
 function canCancelPedido(r: Pedido) {
@@ -162,7 +163,7 @@ function canCancelPedido(r: Pedido) {
 }
 
 function canConfirmPayment(r: Pedido) {
-  return r.document_type === 'PEDIDO' && r.status === 'ABERTO'
+  return r.document_type === 'PEDIDO' && (r.status === 'ABERTO' || r.status === 'ENTRADA_PAGA')
 }
 
 function canConfirmDelivery(r: Pedido) {
@@ -195,6 +196,7 @@ function canReopenPedido(r: Pedido) {
       s === 'ENTREGUE' ||
       s === 'ENTREGA PENDENTE' ||
       s === 'ENTREGA PARCIAL' ||
+      s === 'ENTRADA_PAGA' ||
       s === 'FINALIZADO')
   )
 }
@@ -238,6 +240,14 @@ function renderStatusBadge(status: string, docType: 'ORCAMENTO' | 'PEDIDO') {
         <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 border border-blue-100">
           <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
           Aberto
+        </span>
+      )
+    }
+    if (s === 'ENTRADA_PAGA') {
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-cyan-50 px-2.5 py-1 text-xs font-semibold text-cyan-700 border border-cyan-100">
+          <span className="h-1.5 w-1.5 rounded-full bg-cyan-500 animate-pulse" />
+          Entrada Paga
         </span>
       )
     }
@@ -338,6 +348,7 @@ export function BemAvivPedidosPage() {
   const [partialDeliveryOrder, setPartialDeliveryOrder] = useState<Pedido | null>(null)
   const [fullDeliveryOrder, setFullDeliveryOrder] = useState<Pedido | null>(null)
   const [expectedArrivalOrder, setExpectedArrivalOrder] = useState<Pedido | null>(null)
+  const [confirmPaymentOrder, setConfirmPaymentOrder] = useState<Pedido | null>(null)
   const detailModalReopenedRef = useRef(false)
 
   const [relatives, setRelatives] = useState<RelativeOpt[]>([])
@@ -450,6 +461,10 @@ export function BemAvivPedidosPage() {
         if (status === 'ABERTO') {
           openCount++
           openValue += val
+        } else if (status === 'ENTRADA_PAGA') {
+          openCount++
+          const entrada = downVal(r)
+          openValue += clampMoney(val - entrada)
         } else if (status === 'ENTREGA PENDENTE' || status === 'ENTREGA PARCIAL') {
           pendingCount++
           pendingValue += val
@@ -848,9 +863,9 @@ export function BemAvivPedidosPage() {
     await load()
   }
 
-  async function updateOrderStatus(order: Pedido, nextStatus: string, confirmMessage: string) {
+  async function updateOrderStatus(order: Pedido, nextStatus: string, confirmMessage?: string | null) {
     if (!supabase || !ownerUserId || !activeCompanyId) return
-    if (!confirm(confirmMessage)) return
+    if (confirmMessage && !confirm(confirmMessage)) return
 
     if (nextStatus === 'ABERTO' && order.document_type === 'PEDIDO') {
       const { error: resetErr } = await supabase
@@ -1117,7 +1132,7 @@ export function BemAvivPedidosPage() {
               {formatBRL(kpis.openValue)}
             </h3>
             <p className="mt-1 text-xs text-slate-500 font-medium normal-case">
-              {kpis.openCount} no status <span className="font-semibold text-blue-600">ABERTO</span>
+              {kpis.openCount} no status <span className="font-semibold text-blue-600">{typeTab === 'ORCAMENTO' ? 'ABERTO' : 'ABERTO / ENTRADA PAGA'}</span>
             </p>
           </div>
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-400" />
@@ -1265,6 +1280,7 @@ export function BemAvivPedidosPage() {
           >
             <option value="TODOS">Status: Todos</option>
             <option value="ABERTO">Aberto</option>
+            <option value="ENTRADA_PAGA">Entrada paga</option>
             <option value="ENTREGA PENDENTE">Entrega pendente</option>
             <option value="ENTREGA PARCIAL">Entrega parcial</option>
             <option value="ENTREGUE">Entregue</option>
@@ -1419,13 +1435,7 @@ export function BemAvivPedidosPage() {
                               className={`${iconBtn} border-emerald-100 text-emerald-700 hover:bg-emerald-50`}
                               title="Confirmar pagamento"
                               aria-label="Confirmar pagamento"
-                              onClick={() =>
-                                void updateOrderStatus(
-                                  r,
-                                  'ENTREGA PENDENTE',
-                                  `CONFIRMAR PAGAMENTO DO PEDIDO ${r.document_number ?? ''}? O STATUS SERÁ ENTREGA PENDENTE ATÉ CONFIRMAR A ENTREGA.`,
-                                )
-                              }
+                              onClick={() => setConfirmPaymentOrder(r)}
                             >
                               <CircleDollarSign size={16} />
                             </button>
@@ -1833,6 +1843,16 @@ export function BemAvivPedidosPage() {
         companyId={activeCompanyId}
         onClose={() => setExpectedArrivalOrder(null)}
         onSaved={() => void load()}
+      />
+      <ConfirmPaymentModal
+        order={confirmPaymentOrder}
+        onClose={() => setConfirmPaymentOrder(null)}
+        onConfirm={async (orderId, nextStatus) => {
+          const order = rows.find((item) => item.id === orderId)
+          if (order) {
+            await updateOrderStatus(order, nextStatus)
+          }
+        }}
       />
     </div>
   )
