@@ -2,15 +2,8 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { loginV2User, registerV2User } from '../services/v2AuthService'
 import {
-  Sparkles,
-  User,
-  Lock,
-  Mail,
-  UserCheck,
   Eye,
   EyeOff,
-  ArrowRight,
-  ShieldCheck,
   Building2,
   CheckCircle2,
   AlertCircle,
@@ -19,7 +12,7 @@ import {
 
 export function V2SignInPage() {
   const navigate = useNavigate()
-  const [tab, setTab] = useState<'login' | 'register'>('login')
+  const [view, setView] = useState<'login' | 'register'>('login')
 
   // Common Form States
   const [showPassword, setShowPassword] = useState(false)
@@ -36,7 +29,6 @@ export function V2SignInPage() {
   const [regUsername, setRegUsername] = useState('')
   const [regEmail, setRegEmail] = useState('')
   const [regPassword, setRegPassword] = useState('')
-  const [regConfirmPassword, setRegConfirmPassword] = useState('')
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -56,12 +48,12 @@ export function V2SignInPage() {
         return
       }
 
-      setSuccessMessage(`Bem-vindo de volta, ${user.full_name}!`)
+      setSuccessMessage(`Bem-vindo, ${user.full_name}!`)
       setTimeout(() => {
         navigate('/v2')
-      }, 700)
+      }, 600)
     } catch (err) {
-      setErrorMessage('Erro inesperado ao realizar login.')
+      setErrorMessage('Erro ao realizar login. Verifique seu usuário e senha.')
     } finally {
       setLoading(false)
     }
@@ -72,8 +64,8 @@ export function V2SignInPage() {
     setErrorMessage(null)
     setSuccessMessage(null)
 
-    if (regPassword !== regConfirmPassword) {
-      setErrorMessage('As senhas não coincidem.')
+    if (!regName.trim() || !regUsername.trim() || !regPassword.trim()) {
+      setErrorMessage('Preencha todos os campos obrigatórios.')
       return
     }
 
@@ -93,127 +85,78 @@ export function V2SignInPage() {
         return
       }
 
-      setSuccessMessage(`Conta criada com sucesso para ${user.full_name}! Redirecionando...`)
+      setSuccessMessage(`Cadastro de ${user.full_name} realizado com sucesso! Redirecionando...`)
       setTimeout(() => {
         navigate('/v2')
-      }, 900)
+      }, 800)
     } catch (err) {
-      setErrorMessage('Erro ao realizar o cadastro. Tente novamente.')
+      setErrorMessage('Erro ao criar seu acesso. Tente novamente.')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col justify-center items-center p-4 sm:p-6 lg:p-8 relative overflow-hidden font-sans selection:bg-indigo-600 selection:text-white">
-      {/* Luminous Light Ambient Background Highlights */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-gradient-to-b from-indigo-100/60 via-sky-50/40 to-transparent blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-[-100px] right-[-100px] w-96 h-96 bg-indigo-50/80 rounded-full blur-[100px] pointer-events-none" />
-      <div className="absolute top-[10%] left-[-100px] w-80 h-80 bg-sky-100/50 rounded-full blur-[100px] pointer-events-none" />
-
-      {/* Center Container Card */}
-      <main className="w-full max-w-lg bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-10 shadow-2xl shadow-slate-300/40 relative z-10 space-y-8 backdrop-blur-md">
-        {/* Brand Header */}
-        <div className="text-center space-y-3">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold tracking-wide">
-            <Sparkles className="h-3.5 w-3.5 text-indigo-600" />
-            <span>FINANÇAS PRO V2</span>
+    <div className="min-h-screen bg-[#FFFFFF] text-slate-900 flex flex-col justify-center items-center p-4 sm:p-6 lg:p-8 font-sans selection:bg-[#059669] selection:text-white">
+      {/* Light Clean Card Container */}
+      <main className="w-full max-w-[420px] bg-white border border-slate-200/90 rounded-[28px] p-7 sm:p-9 shadow-xl shadow-slate-200/60 relative z-10 space-y-7">
+        {/* Brand Logo & Header (Matching Reference Design) */}
+        <div className="text-center space-y-2">
+          {/* Emerald Green Icon Logo */}
+          <div className="inline-flex items-center justify-center gap-2.5 mb-1">
+            <div className="h-11 w-11 rounded-2xl bg-[#059669] text-white flex items-center justify-center font-black text-xl shadow-md shadow-emerald-700/20">
+              F
+            </div>
+            <span className="text-2xl font-black text-slate-900 tracking-tight">Finanças</span>
           </div>
 
-          <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900">
-            {tab === 'login' ? 'Acesse sua Conta' : 'Criar Nova Conta'}
-          </h1>
+          <p className="text-xs font-semibold text-slate-400">Gestão Financeira & Comercial</p>
 
-          <p className="text-xs sm:text-sm text-slate-500 max-w-xs mx-auto leading-relaxed">
-            Plataforma Financeira & Comercial Multiempresa por Usuário e Senha.
-          </p>
+          <h2 className="text-lg font-bold text-slate-800 pt-1">
+            {view === 'login' ? 'Entre na sua conta' : 'Crie seu acesso'}
+          </h2>
         </div>
 
-        {/* Tab Selector */}
-        <div className="bg-slate-100 p-1.5 rounded-2xl border border-slate-200/80 grid grid-cols-2 gap-1 text-xs font-bold">
-          <button
-            type="button"
-            onClick={() => {
-              setTab('login')
-              setErrorMessage(null)
-              setSuccessMessage(null)
-            }}
-            className={`py-2.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 ${
-              tab === 'login'
-                ? 'bg-white text-slate-900 shadow-md shadow-slate-200/60 font-black'
-                : 'text-slate-500 hover:text-slate-900 hover:bg-white/50'
-            }`}
-          >
-            <User className="h-4 w-4 text-indigo-600" />
-            <span>Entrar</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setTab('register')
-              setErrorMessage(null)
-              setSuccessMessage(null)
-            }}
-            className={`py-2.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 ${
-              tab === 'register'
-                ? 'bg-white text-slate-900 shadow-md shadow-slate-200/60 font-black'
-                : 'text-slate-500 hover:text-slate-900 hover:bg-white/50'
-            }`}
-          >
-            <UserCheck className="h-4 w-4 text-indigo-600" />
-            <span>Criar Conta</span>
-          </button>
-        </div>
-
-        {/* Feedback Notifications */}
+        {/* Notifications */}
         {errorMessage && (
-          <div className="bg-rose-50 border border-rose-200/80 rounded-2xl p-4 flex items-center gap-3 text-xs text-rose-700 font-semibold animate-in fade-in slide-in-from-top-2">
-            <AlertCircle className="h-5 w-5 text-rose-600 shrink-0" />
+          <div className="bg-rose-50 border border-rose-200/80 rounded-2xl p-3.5 flex items-center gap-2.5 text-xs text-rose-700 font-medium">
+            <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
             <span>{errorMessage}</span>
           </div>
         )}
 
         {successMessage && (
-          <div className="bg-emerald-50 border border-emerald-200/80 rounded-2xl p-4 flex items-center gap-3 text-xs text-emerald-800 font-semibold animate-in fade-in slide-in-from-top-2">
-            <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+          <div className="bg-emerald-50 border border-emerald-200/80 rounded-2xl p-3.5 flex items-center gap-2.5 text-xs text-emerald-800 font-medium">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
             <span>{successMessage}</span>
           </div>
         )}
 
-        {/* Form: LOGIN */}
-        {tab === 'login' ? (
-          <form onSubmit={handleLoginSubmit} className="space-y-4 text-xs">
+        {/* VIEW: LOGIN */}
+        {view === 'login' ? (
+          <form onSubmit={handleLoginSubmit} className="space-y-4">
             <div>
-              <label className="block text-slate-700 font-bold mb-1.5 uppercase text-[10px] tracking-wider">
-                Usuário
-              </label>
               <div className="relative">
-                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <input
                   type="text"
                   required
-                  placeholder="Seu nome de usuário"
+                  placeholder="Usuário ou E-mail"
                   value={loginUsername}
                   onChange={(e) => setLoginUsername(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-2xl pl-10 pr-4 py-3 text-slate-900 text-xs font-medium placeholder-slate-400 outline-none focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 transition shadow-sm"
+                  className="w-full bg-white border border-slate-200/90 rounded-2xl px-4 py-3.5 text-slate-900 text-sm font-medium placeholder-slate-400 outline-none focus:border-[#059669] focus:ring-2 focus:ring-[#059669]/20 transition shadow-sm"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-slate-700 font-bold mb-1.5 uppercase text-[10px] tracking-wider">
-                Senha
-              </label>
               <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   required
-                  placeholder="Sua senha secreta"
+                  placeholder="Senha"
                   value={loginPassword}
                   onChange={(e) => setLoginPassword(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-2xl pl-10 pr-11 py-3 text-slate-900 text-xs font-medium placeholder-slate-400 outline-none focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 transition shadow-sm"
+                  className="w-full bg-white border border-slate-200/90 rounded-2xl px-4 py-3.5 pr-11 text-slate-900 text-sm font-medium placeholder-slate-400 outline-none focus:border-[#059669] focus:ring-2 focus:ring-[#059669]/20 transition shadow-sm"
                 />
                 <button
                   type="button"
@@ -225,120 +168,122 @@ export function V2SignInPage() {
               </div>
             </div>
 
+            {/* Forgot password link */}
+            <div className="text-right">
+              <button
+                type="button"
+                onClick={() => alert('Para redefinir sua senha, entre em contato com o administrador do sistema.')}
+                className="text-xs font-semibold text-[#059669] hover:underline"
+              >
+                Esqueci minha senha
+              </button>
+            </div>
+
+            {/* Primary Action Button */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-slate-900 hover:bg-indigo-600 text-white font-bold py-3.5 px-5 rounded-2xl shadow-xl shadow-slate-900/10 transition-all duration-200 flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-70 disabled:cursor-not-allowed text-xs sm:text-sm mt-2"
+              className="w-full bg-[#059669] hover:bg-[#047857] text-white font-bold py-3.5 px-4 rounded-2xl shadow-lg shadow-emerald-700/20 transition-all duration-150 flex items-center justify-center gap-2 text-sm disabled:opacity-70 disabled:cursor-not-allowed mt-2"
             >
               {loading ? (
                 <>
                   <Loader2 className="animate-spin h-4 w-4 text-white" />
-                  <span>Autenticando...</span>
+                  <span>Entrando...</span>
                 </>
               ) : (
-                <>
-                  <span>Entrar no Sistema</span>
-                  <ArrowRight className="h-4 w-4" />
-                </>
+                <span>Entrar</span>
               )}
             </button>
+
+            {/* Bottom Register Link */}
+            <div className="text-center pt-3 text-xs text-slate-500 font-medium">
+              <span>Ainda não tem conta? </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setView('register')
+                  setErrorMessage(null)
+                  setSuccessMessage(null)
+                }}
+                className="font-bold text-[#059669] hover:underline"
+              >
+                Criar meu acesso
+              </button>
+            </div>
           </form>
         ) : (
-          /* Form: CADASTRO (REGISTER) */
-          <form onSubmit={handleRegisterSubmit} className="space-y-4 text-xs">
+          /* VIEW: REGISTER (CADASTRO) */
+          <form onSubmit={handleRegisterSubmit} className="space-y-4">
             <div>
-              <label className="block text-slate-700 font-bold mb-1.5 uppercase text-[10px] tracking-wider">
+              <label className="block text-slate-700 font-bold mb-1 text-[11px] uppercase tracking-wider">
                 Nome Completo
               </label>
+              <input
+                type="text"
+                required
+                placeholder="Seu nome completo"
+                value={regName}
+                onChange={(e) => setRegName(e.target.value)}
+                className="w-full bg-white border border-slate-200/90 rounded-2xl px-4 py-3 text-slate-900 text-xs font-medium placeholder-slate-400 outline-none focus:border-[#059669] focus:ring-2 focus:ring-[#059669]/20 transition shadow-sm"
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-700 font-bold mb-1 text-[11px] uppercase tracking-wider">
+                Nome de Usuário (Login)
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="Ex: carlos.silva"
+                value={regUsername}
+                onChange={(e) => setRegUsername(e.target.value)}
+                className="w-full bg-white border border-slate-200/90 rounded-2xl px-4 py-3 text-slate-900 text-xs font-medium placeholder-slate-400 outline-none focus:border-[#059669] focus:ring-2 focus:ring-[#059669]/20 transition shadow-sm"
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-700 font-bold mb-1 text-[11px] uppercase tracking-wider">
+                E-mail
+              </label>
+              <input
+                type="email"
+                required
+                placeholder="seu.email@empresa.com"
+                value={regEmail}
+                onChange={(e) => setRegEmail(e.target.value)}
+                className="w-full bg-white border border-slate-200/90 rounded-2xl px-4 py-3 text-slate-900 text-xs font-medium placeholder-slate-400 outline-none focus:border-[#059669] focus:ring-2 focus:ring-[#059669]/20 transition shadow-sm"
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-700 font-bold mb-1 text-[11px] uppercase tracking-wider">
+                Senha
+              </label>
               <div className="relative">
-                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <input
-                  type="text"
+                  type={showPassword ? 'text' : 'password'}
                   required
-                  placeholder="Ex: Carlos Eduardo Silva"
-                  value={regName}
-                  onChange={(e) => setRegName(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-2xl pl-10 pr-4 py-3 text-slate-900 text-xs font-medium placeholder-slate-400 outline-none focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 transition shadow-sm"
+                  placeholder="Sua senha secreta"
+                  value={regPassword}
+                  onChange={(e) => setRegPassword(e.target.value)}
+                  className="w-full bg-white border border-slate-200/90 rounded-2xl px-4 py-3 pr-11 text-slate-900 text-xs font-medium placeholder-slate-400 outline-none focus:border-[#059669] focus:ring-2 focus:ring-[#059669]/20 transition shadow-sm"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-slate-700 font-bold mb-1.5 uppercase text-[10px] tracking-wider">
-                  Usuário (Login)
-                </label>
-                <div className="relative">
-                  <UserCheck className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <input
-                    type="text"
-                    required
-                    placeholder="carlos.silva"
-                    value={regUsername}
-                    onChange={(e) => setRegUsername(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-2xl pl-10 pr-4 py-3 text-slate-900 text-xs font-medium placeholder-slate-400 outline-none focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 transition shadow-sm"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-bold mb-1.5 uppercase text-[10px] tracking-wider">
-                  E-mail
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <input
-                    type="email"
-                    required
-                    placeholder="carlos@empresa.com"
-                    value={regEmail}
-                    onChange={(e) => setRegEmail(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-2xl pl-10 pr-4 py-3 text-slate-900 text-xs font-medium placeholder-slate-400 outline-none focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 transition shadow-sm"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-slate-700 font-bold mb-1.5 uppercase text-[10px] tracking-wider">
-                  Senha
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    placeholder="Sua senha"
-                    value={regPassword}
-                    onChange={(e) => setRegPassword(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-2xl pl-10 pr-4 py-3 text-slate-900 text-xs font-medium placeholder-slate-400 outline-none focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 transition shadow-sm"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-bold mb-1.5 uppercase text-[10px] tracking-wider">
-                  Confirmar Senha
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    placeholder="Repita a senha"
-                    value={regConfirmPassword}
-                    onChange={(e) => setRegConfirmPassword(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-2xl pl-10 pr-4 py-3 text-slate-900 text-xs font-medium placeholder-slate-400 outline-none focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 transition shadow-sm"
-                  />
-                </div>
-              </div>
-            </div>
-
+            {/* Submit Register */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 px-5 rounded-2xl shadow-xl shadow-indigo-600/20 transition-all duration-200 flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-70 disabled:cursor-not-allowed text-xs sm:text-sm mt-2"
+              className="w-full bg-[#059669] hover:bg-[#047857] text-white font-bold py-3.5 px-4 rounded-2xl shadow-lg shadow-emerald-700/20 transition-all duration-150 flex items-center justify-center gap-2 text-sm disabled:opacity-70 disabled:cursor-not-allowed mt-2"
             >
               {loading ? (
                 <>
@@ -346,30 +291,33 @@ export function V2SignInPage() {
                   <span>Cadastrando...</span>
                 </>
               ) : (
-                <>
-                  <span>Criar minha conta</span>
-                  <ArrowRight className="h-4 w-4" />
-                </>
+                <span>Criar Meu Acesso</span>
               )}
             </button>
+
+            {/* Back to Login Link */}
+            <div className="text-center pt-2 text-xs text-slate-500 font-medium">
+              <span>Já possui uma conta? </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setView('login')
+                  setErrorMessage(null)
+                  setSuccessMessage(null)
+                }}
+                className="font-bold text-[#059669] hover:underline"
+              >
+                Voltar para o login
+              </button>
+            </div>
           </form>
         )}
 
-        {/* Future Multi-company info notice */}
-        <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 flex items-center gap-3 text-[11px] text-slate-600">
-          <Building2 className="h-4 w-4 text-indigo-600 shrink-0" />
-          <span>
-            <strong>Vínculo Futuro:</strong> Este usuário poderá criar e se vincular a empresas cadastradas no sistema.
-          </span>
+        {/* Multi-company info notice */}
+        <div className="bg-slate-50 border border-slate-200/70 rounded-2xl p-3 flex items-center gap-2.5 text-[11px] text-slate-500">
+          <Building2 className="h-4 w-4 text-[#059669] shrink-0" />
+          <span>Este usuário futuramente será vinculado à empresa que cadastrar.</span>
         </div>
-
-        {/* Footer */}
-        <footer className="text-center pt-1 border-t border-slate-100">
-          <p className="text-[11px] text-slate-400 flex items-center justify-center gap-1.5">
-            <ShieldCheck className="h-3.5 w-3.5 text-indigo-600" />
-            <span>Acesso Seguro por Usuário e Senha (Sem Envio de E-mail)</span>
-          </p>
-        </footer>
       </main>
     </div>
   )
