@@ -71,6 +71,8 @@ const ProjectAssigneesPage = lazy(() => import('./pages/ProjectAssigneesPage').t
 const V2SignInPage = lazy(() => import('./v2/pages/V2SignInPage').then((m) => ({ default: m.V2SignInPage })))
 const V2AppLayout = lazy(() => import('./v2/components/V2AppLayout').then((m) => ({ default: m.V2AppLayout })))
 const V2AdminUsersPage = lazy(() => import('./v2/pages/V2AdminUsersPage').then((m) => ({ default: m.V2AdminUsersPage })))
+const V2WelcomePage = lazy(() => import('./v2/pages/V2WelcomePage').then((m) => ({ default: m.V2WelcomePage })))
+const V2SettingsPage = lazy(() => import('./v2/pages/V2SettingsPage').then((m) => ({ default: m.V2SettingsPage })))
 
 function HomeRedirect() {
   const { user } = useUser()
@@ -97,7 +99,9 @@ export default function App() {
         <Route path="/v2/login" element={<V2SignInPage />} />
         <Route path="/v2/admin/usuarios" element={<V2AdminUsersPage />} />
         <Route element={<V2AppLayout />}>
-          <Route path="/v2" element={<Navigate to="/v2/login" replace />} />
+          <Route path="/v2" element={<Navigate to="/v2/inicio" replace />} />
+          <Route path="/v2/inicio" element={<V2WelcomePage />} />
+          <Route path="/v2/configuracoes" element={<V2SettingsPage />} />
         </Route>
 
         <Route path="/sign-in/*" element={<SignInPage />} />

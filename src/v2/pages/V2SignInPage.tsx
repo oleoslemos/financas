@@ -97,37 +97,63 @@ export function V2SignInPage() {
   }
 
   return (
-    <div className="normal-case min-h-screen bg-[#FFFFFF] text-slate-900 flex flex-col justify-center items-center p-4 sm:p-6 lg:p-8 font-sans selection:bg-[#059669] selection:text-white">
+    <div
+      className="normal-case min-h-screen text-slate-900 flex flex-col justify-center items-center p-4 sm:p-6 lg:p-8 font-sans"
+      style={{ background: 'linear-gradient(135deg, #EEF5F9 0%, #F0F7EE 100%)', selection: undefined }}
+    >
+      {/* Decorative blobs */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden>
+        <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full opacity-10" style={{ background: 'radial-gradient(circle, #1A6BAA, transparent 70%)' }} />
+        <div className="absolute -bottom-32 -right-32 w-96 h-96 rounded-full opacity-10" style={{ background: 'radial-gradient(circle, #5BA341, transparent 70%)' }} />
+      </div>
+
       {/* Light Clean Card Container */}
-      <main className="normal-case w-full max-w-[420px] bg-white border border-slate-200/90 rounded-[28px] p-7 sm:p-9 shadow-xl shadow-slate-200/60 relative z-10 space-y-7">
+      <main
+        className="normal-case w-full max-w-[420px] rounded-[28px] p-7 sm:p-9 relative z-10 space-y-7"
+        style={{ background: 'rgba(255,255,255,0.92)', border: '1px solid #C1D9EE', boxShadow: '0 8px 40px rgba(26,107,170,0.10)' }}
+      >
         {/* Brand Logo & Header */}
         <div className="text-center space-y-2 normal-case">
-          {/* Emerald Green Icon Logo */}
-          <div className="inline-flex items-center justify-center gap-2.5 mb-1">
-            <div className="h-11 w-11 rounded-2xl bg-[#059669] text-white flex items-center justify-center font-black text-xl shadow-md shadow-emerald-700/20">
-              F
+          {/* Bem Aviv Logo Mark */}
+          <div className="inline-flex flex-col items-center gap-1 mb-1">
+            <div className="flex items-center gap-2.5">
+              {/* Leaf icon */}
+              <div
+                className="h-12 w-12 rounded-2xl flex items-center justify-center shadow-md"
+                style={{ background: 'linear-gradient(135deg, #1A6BAA, #155490)', boxShadow: '0 4px 14px rgba(26,107,170,0.3)' }}
+              >
+                <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none">
+                  <path d="M12 3C8 3 4 7 4 12C4 15 6 18 9 19.5L12 21L15 19.5C18 18 20 15 20 12C20 7 16 3 12 3Z" fill="#5BA341" />
+                  <path d="M12 3 L12 21" stroke="rgba(255,255,255,0.5)" strokeWidth="1.5" strokeLinecap="round" />
+                  <path d="M12 10 C10 8 7 8 6 10" stroke="rgba(255,255,255,0.45)" strokeWidth="1.2" strokeLinecap="round" />
+                  <path d="M12 14 C14 12 17 12 18 14" stroke="rgba(255,255,255,0.45)" strokeWidth="1.2" strokeLinecap="round" />
+                </svg>
+              </div>
+              <div className="text-left">
+                <span className="block text-2xl font-black tracking-tight normal-case" style={{ color: '#1A6BAA' }}>Bem Aviv</span>
+                <span className="block text-[10px] font-semibold normal-case" style={{ color: '#5BA341' }}>Saúde e Longevidade</span>
+              </div>
             </div>
-            <span className="text-2xl font-black text-slate-900 tracking-tight normal-case">Finanças</span>
           </div>
 
-          <p className="text-xs font-semibold text-slate-400 normal-case">Gestão Financeira & Comercial</p>
+          <p className="text-xs font-semibold normal-case" style={{ color: '#8AAAC0' }}>Gestão Financeira & Comercial</p>
 
-          <h2 className="text-lg font-bold text-slate-800 pt-1 normal-case">
+          <h2 className="text-lg font-bold pt-1 normal-case" style={{ color: '#1A2E1A' }}>
             {view === 'login' ? 'Entre na sua conta' : 'Crie seu acesso'}
           </h2>
         </div>
 
         {/* Notifications */}
         {errorMessage && (
-          <div className="normal-case bg-rose-50 border border-rose-200/80 rounded-2xl p-3.5 flex items-center gap-2.5 text-xs text-rose-700 font-medium">
-            <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
+          <div className="normal-case rounded-2xl p-3.5 flex items-center gap-2.5 text-xs font-medium" style={{ background: '#FEE8E8', border: '1px solid #FFCDD2', color: '#C62828' }}>
+            <AlertCircle className="h-4 w-4 shrink-0" style={{ color: '#E53935' }} />
             <span className="normal-case">{errorMessage}</span>
           </div>
         )}
 
         {successMessage && (
-          <div className="normal-case bg-emerald-50 border border-emerald-200/80 rounded-2xl p-3.5 flex items-center gap-2.5 text-xs text-emerald-800 font-medium">
-            <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+          <div className="normal-case rounded-2xl p-3.5 flex items-center gap-2.5 text-xs font-medium" style={{ background: '#EBF5E8', border: '1px solid #C8E6C0', color: '#2E7D32' }}>
+            <CheckCircle2 className="h-4 w-4 shrink-0" style={{ color: '#5BA341' }} />
             <span className="normal-case">{successMessage}</span>
           </div>
         )}
@@ -143,7 +169,10 @@ export function V2SignInPage() {
                   placeholder="Usuário ou E-mail"
                   value={loginUsername}
                   onChange={(e) => setLoginUsername(e.target.value)}
-                  className="normal-case placeholder:normal-case w-full bg-white border border-slate-200/90 rounded-2xl px-4 py-3.5 text-slate-900 text-sm font-medium placeholder-slate-400 outline-none focus:border-[#059669] focus:ring-2 focus:ring-[#059669]/20 transition shadow-sm"
+                  className="normal-case placeholder:normal-case w-full rounded-2xl px-4 py-3.5 text-sm font-medium outline-none transition shadow-sm"
+                  style={{ background: '#F5F9FC', border: '1px solid #C1D9EE', color: '#1A2E1A' }}
+                  onFocus={(e) => { e.currentTarget.style.border = '1px solid #1A6BAA'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(26,107,170,0.12)' }}
+                  onBlur={(e) => { e.currentTarget.style.border = '1px solid #C1D9EE'; e.currentTarget.style.boxShadow = 'none' }}
                 />
               </div>
             </div>
@@ -156,12 +185,16 @@ export function V2SignInPage() {
                   placeholder="Senha"
                   value={loginPassword}
                   onChange={(e) => setLoginPassword(e.target.value)}
-                  className="normal-case placeholder:normal-case w-full bg-white border border-slate-200/90 rounded-2xl px-4 py-3.5 pr-11 text-slate-900 text-sm font-medium placeholder-slate-400 outline-none focus:border-[#059669] focus:ring-2 focus:ring-[#059669]/20 transition shadow-sm"
+                  className="normal-case placeholder:normal-case w-full rounded-2xl px-4 py-3.5 pr-11 text-sm font-medium outline-none transition shadow-sm"
+                  style={{ background: '#F5F9FC', border: '1px solid #C1D9EE', color: '#1A2E1A' }}
+                  onFocus={(e) => { e.currentTarget.style.border = '1px solid #1A6BAA'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(26,107,170,0.12)' }}
+                  onBlur={(e) => { e.currentTarget.style.border = '1px solid #C1D9EE'; e.currentTarget.style.boxShadow = 'none' }}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="normal-case absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                  className="normal-case absolute right-3.5 top-1/2 -translate-y-1/2 p-1"
+                  style={{ color: '#8AAAC0' }}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
@@ -173,7 +206,8 @@ export function V2SignInPage() {
               <button
                 type="button"
                 onClick={() => alert('Para redefinir sua senha, entre em contato com o administrador do sistema.')}
-                className="normal-case text-xs font-semibold text-[#059669] hover:underline"
+                className="normal-case text-xs font-semibold hover:underline"
+                style={{ color: '#1A6BAA' }}
               >
                 Esqueci minha senha
               </button>
@@ -183,7 +217,8 @@ export function V2SignInPage() {
             <button
               type="submit"
               disabled={loading}
-              className="normal-case w-full bg-[#059669] hover:bg-[#047857] text-white font-bold py-3.5 px-4 rounded-2xl shadow-lg shadow-emerald-700/20 transition-all duration-150 flex items-center justify-center gap-2 text-sm disabled:opacity-70 disabled:cursor-not-allowed mt-2"
+              className="normal-case w-full text-white font-bold py-3.5 px-4 rounded-2xl transition-all duration-150 flex items-center justify-center gap-2 text-sm disabled:opacity-70 disabled:cursor-not-allowed mt-2"
+              style={{ background: loading ? '#7AAACF' : '#1A6BAA', boxShadow: '0 4px 16px rgba(26,107,170,0.35)' }}
             >
               {loading ? (
                 <>
@@ -196,7 +231,7 @@ export function V2SignInPage() {
             </button>
 
             {/* Bottom Register Link */}
-            <div className="normal-case text-center pt-3 text-xs text-slate-500 font-medium">
+            <div className="normal-case text-center pt-3 text-xs font-medium" style={{ color: '#8AAAC0' }}>
               <span className="normal-case">Ainda não tem conta? </span>
               <button
                 type="button"
@@ -205,7 +240,8 @@ export function V2SignInPage() {
                   setErrorMessage(null)
                   setSuccessMessage(null)
                 }}
-                className="normal-case font-bold text-[#059669] hover:underline"
+                className="normal-case font-bold hover:underline"
+                style={{ color: '#1A6BAA' }}
               >
                 Criar meu acesso
               </button>
@@ -283,7 +319,8 @@ export function V2SignInPage() {
             <button
               type="submit"
               disabled={loading}
-              className="normal-case w-full bg-[#059669] hover:bg-[#047857] text-white font-bold py-3.5 px-4 rounded-2xl shadow-lg shadow-emerald-700/20 transition-all duration-150 flex items-center justify-center gap-2 text-sm disabled:opacity-70 disabled:cursor-not-allowed mt-2"
+              className="normal-case w-full text-white font-bold py-3.5 px-4 rounded-2xl transition-all duration-150 flex items-center justify-center gap-2 text-sm disabled:opacity-70 disabled:cursor-not-allowed mt-2"
+              style={{ background: loading ? '#7AAACF' : '#1A6BAA', boxShadow: '0 4px 16px rgba(26,107,170,0.35)' }}
             >
               {loading ? (
                 <>
@@ -296,7 +333,7 @@ export function V2SignInPage() {
             </button>
 
             {/* Back to Login Link */}
-            <div className="normal-case text-center pt-2 text-xs text-slate-500 font-medium">
+            <div className="normal-case text-center pt-2 text-xs font-medium" style={{ color: '#8AAAC0' }}>
               <span className="normal-case">Já possui uma conta? </span>
               <button
                 type="button"
@@ -305,7 +342,8 @@ export function V2SignInPage() {
                   setErrorMessage(null)
                   setSuccessMessage(null)
                 }}
-                className="normal-case font-bold text-[#059669] hover:underline"
+                className="normal-case font-bold hover:underline"
+                style={{ color: '#1A6BAA' }}
               >
                 Voltar para o login
               </button>
@@ -314,8 +352,11 @@ export function V2SignInPage() {
         )}
 
         {/* Multi-company info notice */}
-        <div className="normal-case bg-slate-50 border border-slate-200/70 rounded-2xl p-3 flex items-center gap-2.5 text-[11px] text-slate-500">
-          <Building2 className="h-4 w-4 text-[#059669] shrink-0" />
+        <div
+          className="normal-case rounded-2xl p-3 flex items-center gap-2.5 text-[11px]"
+          style={{ background: '#E8F1F8', border: '1px solid #C1D9EE', color: '#3A6090' }}
+        >
+          <Building2 className="h-4 w-4 shrink-0" style={{ color: '#1A6BAA' }} />
           <span className="normal-case">Este usuário futuramente será vinculado à empresa que cadastrar.</span>
         </div>
 
@@ -323,7 +364,8 @@ export function V2SignInPage() {
         <div className="normal-case text-center">
           <Link
             to="/v2/admin/usuarios"
-            className="normal-case text-[10px] text-slate-300 hover:text-slate-500 transition font-medium"
+            className="normal-case text-[10px] font-medium transition hover:underline"
+            style={{ color: '#AACCE0' }}
           >
             Administração de usuários
           </Link>
