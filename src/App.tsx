@@ -13,6 +13,7 @@ import {
   isBemAvivOnlyUser,
   isMultiSystemUser,
 } from './lib/userAccess'
+import { isV2DefaultActive } from './v2/config/cutover'
 
 const SignInPage = lazy(() => import('./pages/SignInPage').then((m) => ({ default: m.SignInPage })))
 const SignUpPage = lazy(() => import('./pages/SignUpPage').then((m) => ({ default: m.SignUpPage })))
@@ -67,9 +68,26 @@ const ProjectActivitiesPage = lazy(() => import('./pages/ProjectActivitiesPage')
 const ProjectClientsPage = lazy(() => import('./pages/ProjectClientsPage').then((m) => ({ default: m.ProjectClientsPage })))
 const ProjectAssigneesPage = lazy(() => import('./pages/ProjectAssigneesPage').then((m) => ({ default: m.ProjectAssigneesPage })))
 
+// V2 Imports
+const V2SignInPage = lazy(() => import('./v2/pages/V2SignInPage').then((m) => ({ default: m.V2SignInPage })))
+const V2AppLayout = lazy(() => import('./v2/components/V2AppLayout').then((m) => ({ default: m.V2AppLayout })))
+const V2Dashboard = lazy(() => import('./v2/pages/V2Dashboard').then((m) => ({ default: m.V2Dashboard })))
+const V2CashflowPage = lazy(() => import('./v2/pages/V2CashflowPage').then((m) => ({ default: m.V2CashflowPage })))
+const V2BankAccounts = lazy(() => import('./v2/pages/V2BankAccounts').then((m) => ({ default: m.V2BankAccounts })))
+const V2CreditCardsPage = lazy(() => import('./v2/pages/V2CreditCardsPage').then((m) => ({ default: m.V2CreditCardsPage })))
+const V2CategoriesPage = lazy(() => import('./v2/pages/V2CategoriesPage').then((m) => ({ default: m.V2CategoriesPage })))
+const V2FamilyMembersPage = lazy(() => import('./v2/pages/V2FamilyMembersPage').then((m) => ({ default: m.V2FamilyMembersPage })))
+const V2AgendaPage = lazy(() => import('./v2/pages/V2AgendaPage').then((m) => ({ default: m.V2AgendaPage })))
+const V2TasksPage = lazy(() => import('./v2/pages/V2TasksPage').then((m) => ({ default: m.V2TasksPage })))
+
 function HomeRedirect() {
   const { user } = useUser()
   const emails = clerkEmailCandidates(user)
+
+  if (isV2DefaultActive()) {
+    return <Navigate to="/v2/resumo" replace />
+  }
+
   if (isBemAvivOnlyUser(emails)) {
     return <Navigate to="/bem-aviv" replace />
   }
@@ -84,10 +102,26 @@ function HomeRedirect() {
 }
 
 export default function App() {
+  const v2Active = isV2DefaultActive()
+
   return (
-    <Suspense fallback={<p className="text-sm text-slate-500">Carregando módulo...</p>}>
+    <Suspense fallback={<p className="text-sm text-slate-500 p-4">Carregando módulo...</p>}>
       <Routes>
-        <Route path="/sign-in/*" element={<SignInPage />} />
+        {/* Rotas V2 */}
+        <Route path="/v2/login" element={<V2SignInPage />} />
+        <Route element={<V2AppLayout />}>
+          <Route path="/v2" element={<Navigate to="/v2/resumo" replace />} />
+          <Route path="/v2/resumo" element={<V2Dashboard />} />
+          <Route path="/v2/fluxo" element={<V2CashflowPage />} />
+          <Route path="/v2/contas-bancarias" element={<V2BankAccounts />} />
+          <Route path="/v2/cartoes" element={<V2CreditCardsPage />} />
+          <Route path="/v2/categorias" element={<V2CategoriesPage />} />
+          <Route path="/v2/familiares" element={<V2FamilyMembersPage />} />
+          <Route path="/v2/agenda" element={<V2AgendaPage />} />
+          <Route path="/v2/tarefas" element={<V2TasksPage />} />
+        </Route>
+
+        <Route path="/sign-in/*" element={v2Active ? <Navigate to="/v2/login" replace /> : <SignInPage />} />
         <Route path="/sign-up/*" element={<SignUpPage />} />
         <Route path="/bem-aviv/pedidos/imprimir/:orderId" element={<BemAvivPedidoPrintPage />} />
         <Route element={<RequireAuth />}>
@@ -164,3 +198,4 @@ export default function App() {
     </Suspense>
   )
 }
+
