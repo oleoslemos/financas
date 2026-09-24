@@ -187,3 +187,45 @@ export async function loginV2User(data: {
 export function logoutV2User(): void {
   setV2Session(null)
 }
+
+export function listAllLocalV2Users(): (V2User & { password_hash: string })[] {
+  return getLocalUsers()
+}
+
+export async function deleteV2UserByUsername(username: string): Promise<{ error: string | null }> {
+  const cleanUsername = username.trim().toLowerCase()
+
+  // Remove from local DB
+  const localUsers = getLocalUsers()
+  const filtered = localUsers.filter((u) => u.username !== cleanUsername)
+  saveLocalUsers(filtered)
+
+  // Remove from current session if matches
+  const session = getCurrentV2User()
+  if (session?.username === cleanUsername) {
+    setV2Session(null)
+  }
+
+  // Remove from Supabase
+  if (supabase) {
+    try {
+      await supabase.from('v2_users').delete().eq('username', cleanUsername)
+    } catch (e) {
+      console.warn('Falha ao remover do Supabase:', e)
+    }
+  }
+
+  return { error: null }
+}
+
+export async function clearAllV2Users(): Promise<void> {
+  saveLocalUsers([])
+  setV2Session(null)
+  if (supabase) {
+    try {
+      await supabase.from('v2_users').delete().neq('id', 'x')
+    } catch (e) {
+      console.warn('Falha ao limpar usuários do Supabase:', e)
+    }
+  }
+}

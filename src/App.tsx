@@ -70,6 +70,7 @@ const ProjectAssigneesPage = lazy(() => import('./pages/ProjectAssigneesPage').t
 // V2 Imports
 const V2SignInPage = lazy(() => import('./v2/pages/V2SignInPage').then((m) => ({ default: m.V2SignInPage })))
 const V2AppLayout = lazy(() => import('./v2/components/V2AppLayout').then((m) => ({ default: m.V2AppLayout })))
+const V2AdminUsersPage = lazy(() => import('./v2/pages/V2AdminUsersPage').then((m) => ({ default: m.V2AdminUsersPage })))
 
 function HomeRedirect() {
   const { user } = useUser()
@@ -94,6 +95,7 @@ export default function App() {
       <Routes>
         {/* Rotas V2 */}
         <Route path="/v2/login" element={<V2SignInPage />} />
+        <Route path="/v2/admin/usuarios" element={<V2AdminUsersPage />} />
         <Route element={<V2AppLayout />}>
           <Route path="/v2" element={<Navigate to="/v2/login" replace />} />
         </Route>
