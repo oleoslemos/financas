@@ -127,18 +127,27 @@ export async function loginV2User(data: {
   username: string
   password: string
 }): Promise<{ user: V2User; error: string | null }> {
-  const cleanUsername = data.username.trim().toLowerCase()
-  if (!cleanUsername) return { user: null as any, error: 'Informe seu usuário.' }
+  // Normaliza: pode ser username OU e-mail
+  const cleanInput = data.username.trim().toLowerCase()
+  const isEmail = cleanInput.includes('@')
+
+  if (!cleanInput) return { user: null as any, error: 'Informe seu usuário ou e-mail.' }
   if (!data.password) return { user: null as any, error: 'Informe sua senha.' }
 
-  // 1. Try Supabase
+  // 1. Try Supabase — busca por username OU email
   if (supabase) {
     try {
-      const { data: supaUser, error: supaErr } = await supabase
+      let query = supabase
         .from('v2_users')
         .select('id, full_name, username, email, password_hash, created_at')
-        .eq('username', cleanUsername)
-        .maybeSingle()
+
+      if (isEmail) {
+        query = query.eq('email', cleanInput)
+      } else {
+        query = query.eq('username', cleanInput)
+      }
+
+      const { data: supaUser, error: supaErr } = await query.maybeSingle()
 
       if (!supaErr && supaUser) {
         if (supaUser.password_hash === data.password) {
@@ -160,12 +169,15 @@ export async function loginV2User(data: {
     }
   }
 
-  // 2. Try Local Users DB
+  // 2. Try Local Users DB — busca por username OU email
   const localUsers = getLocalUsers()
-  const found = localUsers.find((u) => u.username === cleanUsername)
+  const found = localUsers.find((u) =>
+    isEmail ? u.email === cleanInput : u.username === cleanInput
+  )
 
   if (!found) {
-    return { user: null as any, error: 'Usuário não encontrado.' }
+    const label = isEmail ? 'E-mail não encontrado.' : 'Usuário não encontrado.'
+    return { user: null as any, error: label }
   }
 
   if (found.password_hash !== data.password) {
