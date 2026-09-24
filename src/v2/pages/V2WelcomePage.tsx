@@ -85,11 +85,11 @@ export function V2WelcomePage() {
       >
         <div
           className="absolute -top-40 -left-40 w-[500px] h-[500px] rounded-full opacity-10"
-          style={{ background: 'radial-gradient(circle, #1A6BAA, transparent 70%)' }}
+          style={{ background: 'radial-gradient(circle, #0D6BAF, transparent 70%)' }}
         />
         <div
           className="absolute -bottom-40 -right-40 w-[500px] h-[500px] rounded-full opacity-10"
-          style={{ background: 'radial-gradient(circle, #5BA341, transparent 70%)' }}
+          style={{ background: 'radial-gradient(circle, #7DC344, transparent 70%)' }}
         />
       </div>
 
@@ -101,9 +101,9 @@ export function V2WelcomePage() {
         <div className="flex items-center gap-2 mb-10">
           <div
             className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold"
-            style={{ background: '#E8F1F8', color: '#1A6BAA', border: '1px solid #C1D9EE' }}
+            style={{ background: '#E8F1F8', color: '#0D6BAF', border: '1px solid #C1D9EE' }}
           >
-            <Leaf className="h-3.5 w-3.5" style={{ color: '#5BA341' }} />
+            <Leaf className="h-3.5 w-3.5" style={{ color: '#7DC344' }} />
             Bem Aviv · Saúde e Longevidade
           </div>
         </div>
@@ -111,8 +111,8 @@ export function V2WelcomePage() {
         {/* Greeting */}
         <div className="mb-10">
           <div className="flex items-center gap-2 mb-2">
-            <GreetIcon className="h-5 w-5" style={{ color: '#5BA341' }} />
-            <span className="text-sm font-semibold" style={{ color: '#5BA341' }}>
+            <GreetIcon className="h-5 w-5" style={{ color: '#7DC344' }} />
+            <span className="text-sm font-semibold" style={{ color: '#7DC344' }}>
               {greetText}!
             </span>
           </div>
@@ -120,7 +120,7 @@ export function V2WelcomePage() {
             Olá,{' '}
             <span
               className="bg-clip-text text-transparent"
-              style={{ backgroundImage: 'linear-gradient(135deg, #1A6BAA, #5BA341)' }}
+              style={{ backgroundImage: 'linear-gradient(135deg, #0D6BAF, #7DC344)' }}
             >
               {userName}
             </span>
@@ -137,8 +137,8 @@ export function V2WelcomePage() {
         {/* Quick Access Cards */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-5">
-            <Sparkles className="h-4 w-4" style={{ color: '#1A6BAA' }} />
-            <h2 className="text-sm font-bold uppercase tracking-widest" style={{ color: '#1A6BAA' }}>
+            <Sparkles className="h-4 w-4" style={{ color: '#0D6BAF' }} />
+            <h2 className="text-sm font-bold uppercase tracking-widest" style={{ color: '#0D6BAF' }}>
               Acesso Rápido
             </h2>
           </div>
@@ -163,7 +163,7 @@ export function V2WelcomePage() {
                 >
                   <card.icon
                     className="h-5 w-5"
-                    style={{ color: card.accent === 'blue' ? '#1A6BAA' : '#5BA341' }}
+                    style={{ color: card.accent === 'blue' ? '#0D6BAF' : '#7DC344' }}
                   />
                 </div>
                 <div>
@@ -176,7 +176,7 @@ export function V2WelcomePage() {
                 </div>
                 <ArrowRight
                   className="absolute top-5 right-5 h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity"
-                  style={{ color: card.accent === 'blue' ? '#1A6BAA' : '#5BA341' }}
+                  style={{ color: card.accent === 'blue' ? '#0D6BAF' : '#7DC344' }}
                 />
               </Link>
             ))}
@@ -188,9 +188,9 @@ export function V2WelcomePage() {
           className="rounded-2xl p-4 flex items-start gap-3"
           style={{ background: '#E8F1F8', border: '1px solid #C1D9EE' }}
         >
-          <Building2 className="h-4 w-4 mt-0.5 shrink-0" style={{ color: '#1A6BAA' }} />
+          <Building2 className="h-4 w-4 mt-0.5 shrink-0" style={{ color: '#0D6BAF' }} />
           <div>
-            <p className="text-xs font-bold" style={{ color: '#1A6BAA' }}>
+            <p className="text-xs font-bold" style={{ color: '#0D6BAF' }}>
               Configure sua empresa
             </p>
             <p className="text-xs font-medium mt-0.5" style={{ color: '#3A6090' }}>
@@ -198,7 +198,7 @@ export function V2WelcomePage() {
               <Link
                 to="/v2/configuracoes"
                 className="underline underline-offset-2 font-bold"
-                style={{ color: '#1A6BAA' }}
+                style={{ color: '#0D6BAF' }}
               >
                 Configurações
               </Link>{' '}
@@ -210,3 +210,4 @@ export function V2WelcomePage() {
     </div>
   )
 }
+

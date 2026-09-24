@@ -81,11 +81,15 @@ export async function registerV2User(data: {
 
   if (supabase) {
     try {
-      const { data: existingSupabaseUser } = await supabase
+      const { data: existingSupabaseUser, error: selErr } = await supabase
         .from('v2_users')
         .select('id')
         .eq('username', cleanUsername)
         .maybeSingle()
+
+      if (selErr) {
+        return { user: null as any, error: 'Erro ao verificar usuário no banco de dados.' }
+      }
 
       if (existingSupabaseUser) {
         return { user: null as any, error: 'Este nome de usuário já está cadastrado no banco.' }
@@ -100,16 +104,16 @@ export async function registerV2User(data: {
       })
 
       if (insErr) {
-        console.warn('Tabela v2_users no Supabase indisponível ou RLS ativo, salvando localmente:', insErr.message)
+        console.error('Erro ao salvar usuário no Supabase:', insErr)
+        return { user: null as any, error: 'Falha ao salvar os dados de acesso no banco.' }
       }
     } catch (e) {
-      console.warn('Falha no Supabase, mantendo persistência local:', e)
+      console.error('Erro de conexão com o Supabase:', e)
+      return { user: null as any, error: 'Erro de conexão com o banco de dados.' }
     }
+  } else {
+    return { user: null as any, error: 'Cliente do banco de dados não configurado.' }
   }
-
-  // Save in Local DB & Session
-  localUsers.push(newUserRecord)
-  saveLocalUsers(localUsers)
 
   const userSession: V2User = {
     id: newUserRecord.id,
@@ -149,7 +153,11 @@ export async function loginV2User(data: {
 
       const { data: supaUser, error: supaErr } = await query.maybeSingle()
 
-      if (!supaErr && supaUser) {
+      if (supaErr) {
+        return { user: null as any, error: 'Erro ao consultar banco de dados.' }
+      }
+
+      if (supaUser) {
         if (supaUser.password_hash === data.password) {
           const userSession: V2User = {
             id: supaUser.id,
@@ -163,37 +171,17 @@ export async function loginV2User(data: {
         } else {
           return { user: null as any, error: 'Senha incorreta.' }
         }
+      } else {
+        const label = isEmail ? 'E-mail não encontrado.' : 'Usuário não encontrado.'
+        return { user: null as any, error: label }
       }
     } catch (e) {
-      console.warn('Erro ao consultar Supabase, verificando banco local:', e)
+      console.error('Erro ao consultar Supabase:', e)
+      return { user: null as any, error: 'Erro de conexão com o banco de dados.' }
     }
+  } else {
+    return { user: null as any, error: 'Cliente do banco de dados não configurado.' }
   }
-
-  // 2. Try Local Users DB — busca por username OU email
-  const localUsers = getLocalUsers()
-  const found = localUsers.find((u) =>
-    isEmail ? u.email === cleanInput : u.username === cleanInput
-  )
-
-  if (!found) {
-    const label = isEmail ? 'E-mail não encontrado.' : 'Usuário não encontrado.'
-    return { user: null as any, error: label }
-  }
-
-  if (found.password_hash !== data.password) {
-    return { user: null as any, error: 'Senha incorreta.' }
-  }
-
-  const userSession: V2User = {
-    id: found.id,
-    full_name: found.full_name,
-    username: found.username,
-    email: found.email,
-    created_at: found.created_at,
-  }
-
-  setV2Session(userSession)
-  return { user: userSession, error: null }
 }
 
 export function logoutV2User(): void {

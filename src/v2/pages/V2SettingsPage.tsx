@@ -72,7 +72,7 @@ function Section({
   children: React.ReactNode
   accent?: 'blue' | 'green'
 }) {
-  const color = accent === 'blue' ? '#1A6BAA' : '#5BA341'
+  const color = accent === 'blue' ? '#0D6BAF' : '#7DC344'
   const bg = accent === 'blue' ? '#E8F1F8' : '#EBF5E8'
   const border = accent === 'blue' ? '#C1D9EE' : '#C8E6C0'
 
@@ -192,11 +192,11 @@ export function V2SettingsPage() {
       <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden>
         <div
           className="absolute -top-40 -left-40 w-96 h-96 rounded-full opacity-10"
-          style={{ background: 'radial-gradient(circle, #1A6BAA, transparent 70%)' }}
+          style={{ background: 'radial-gradient(circle, #0D6BAF, transparent 70%)' }}
         />
         <div
           className="absolute -bottom-40 -right-20 w-96 h-96 rounded-full opacity-10"
-          style={{ background: 'radial-gradient(circle, #5BA341, transparent 70%)' }}
+          style={{ background: 'radial-gradient(circle, #7DC344, transparent 70%)' }}
         />
       </div>
 
@@ -223,7 +223,7 @@ export function V2SettingsPage() {
             <div>
               <label
                 className="block text-xs font-bold mb-1.5"
-                style={{ color: '#1A6BAA' }}
+                style={{ color: '#0D6BAF' }}
                 htmlFor="tradeName"
               >
                 Nome Fantasia <span style={{ color: '#E53935' }}>*</span>
@@ -242,8 +242,8 @@ export function V2SettingsPage() {
                   background: '#F5F9FC',
                 }}
                 onFocus={(e) => {
-                  e.currentTarget.style.border = '1px solid #1A6BAA'
-                  e.currentTarget.style.boxShadow = '0 0 0 3px rgba(26,107,170,0.12)'
+                  e.currentTarget.style.border = '1px solid #0D6BAF'
+                  e.currentTarget.style.boxShadow = '0 0 0 3px rgba(13,107,175,0.12)'
                 }}
                 onBlur={(e) => {
                   e.currentTarget.style.border = '1px solid #C1D9EE'
@@ -256,7 +256,7 @@ export function V2SettingsPage() {
             <div>
               <label
                 className="block text-xs font-bold mb-1.5"
-                style={{ color: '#1A6BAA' }}
+                style={{ color: '#0D6BAF' }}
                 htmlFor="legalName"
               >
                 Razão Social
@@ -274,8 +274,8 @@ export function V2SettingsPage() {
                   background: '#F5F9FC',
                 }}
                 onFocus={(e) => {
-                  e.currentTarget.style.border = '1px solid #1A6BAA'
-                  e.currentTarget.style.boxShadow = '0 0 0 3px rgba(26,107,170,0.12)'
+                  e.currentTarget.style.border = '1px solid #0D6BAF'
+                  e.currentTarget.style.boxShadow = '0 0 0 3px rgba(13,107,175,0.12)'
                 }}
                 onBlur={(e) => {
                   e.currentTarget.style.border = '1px solid #C1D9EE'
@@ -288,7 +288,7 @@ export function V2SettingsPage() {
             <div>
               <label
                 className="block text-xs font-bold mb-1.5"
-                style={{ color: '#1A6BAA' }}
+                style={{ color: '#0D6BAF' }}
                 htmlFor="cnpj"
               >
                 CNPJ
@@ -308,8 +308,8 @@ export function V2SettingsPage() {
                   fontVariantNumeric: 'tabular-nums',
                 }}
                 onFocus={(e) => {
-                  e.currentTarget.style.border = '1px solid #1A6BAA'
-                  e.currentTarget.style.boxShadow = '0 0 0 3px rgba(26,107,170,0.12)'
+                  e.currentTarget.style.border = '1px solid #0D6BAF'
+                  e.currentTarget.style.boxShadow = '0 0 0 3px rgba(13,107,175,0.12)'
                 }}
                 onBlur={(e) => {
                   e.currentTarget.style.border = '1px solid #C1D9EE'
@@ -323,8 +323,8 @@ export function V2SettingsPage() {
               disabled={savingCompany}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
               style={{
-                background: savingCompany ? '#7AAACF' : '#1A6BAA',
-                boxShadow: '0 2px 10px rgba(26,107,170,0.3)',
+                background: savingCompany ? '#78B2DF' : '#0D6BAF',
+                boxShadow: '0 2px 10px rgba(13,107,175,0.3)',
               }}
             >
               {savingCompany ? (
@@ -366,7 +366,7 @@ export function V2SettingsPage() {
                   <div className="flex items-center gap-3">
                     <div
                       className="h-9 w-9 rounded-xl flex items-center justify-center font-black text-sm shrink-0"
-                      style={{ background: '#EBF5E8', color: '#5BA341' }}
+                      style={{ background: '#EBF5E8', color: '#7DC344' }}
                     >
                       {u.full_name.charAt(0).toUpperCase()}
                     </div>
@@ -401,7 +401,7 @@ export function V2SettingsPage() {
             <button
               onClick={() => setInviteOpen(true)}
               className="flex items-center gap-2 w-full justify-center py-2.5 rounded-xl text-sm font-bold transition-all border-2 border-dashed"
-              style={{ color: '#5BA341', borderColor: '#C8E6C0', background: '#F0F7EE' }}
+              style={{ color: '#7DC344', borderColor: '#C8E6C0', background: '#F0F7EE' }}
             >
               <UserPlus className="h-4 w-4" />
               Convidar Novo Usuário
@@ -413,7 +413,7 @@ export function V2SettingsPage() {
               style={{ background: '#F0F7EE', border: '1px solid #C8E6C0' }}
             >
               <div className="flex items-center justify-between mb-1">
-                <p className="text-xs font-black" style={{ color: '#5BA341' }}>
+                <p className="text-xs font-black" style={{ color: '#7DC344' }}>
                   Novo Usuário
                 </p>
                 <button
@@ -436,7 +436,7 @@ export function V2SettingsPage() {
                 className="w-full rounded-xl px-3.5 py-2.5 text-sm font-medium outline-none transition"
                 style={{ border: '1px solid #C8E6C0', background: '#FFFFFF', color: '#1A2E1A' }}
                 onFocus={(e) => {
-                  e.currentTarget.style.border = '1px solid #5BA341'
+                  e.currentTarget.style.border = '1px solid #7DC344'
                   e.currentTarget.style.boxShadow = '0 0 0 3px rgba(91,163,65,0.12)'
                 }}
                 onBlur={(e) => {
@@ -455,7 +455,7 @@ export function V2SettingsPage() {
                 className="w-full rounded-xl px-3.5 py-2.5 text-sm font-medium outline-none transition"
                 style={{ border: '1px solid #C8E6C0', background: '#FFFFFF', color: '#1A2E1A' }}
                 onFocus={(e) => {
-                  e.currentTarget.style.border = '1px solid #5BA341'
+                  e.currentTarget.style.border = '1px solid #7DC344'
                   e.currentTarget.style.boxShadow = '0 0 0 3px rgba(91,163,65,0.12)'
                 }}
                 onBlur={(e) => {
@@ -473,7 +473,7 @@ export function V2SettingsPage() {
                 className="w-full rounded-xl px-3.5 py-2.5 text-sm font-medium outline-none transition"
                 style={{ border: '1px solid #C8E6C0', background: '#FFFFFF', color: '#1A2E1A' }}
                 onFocus={(e) => {
-                  e.currentTarget.style.border = '1px solid #5BA341'
+                  e.currentTarget.style.border = '1px solid #7DC344'
                   e.currentTarget.style.boxShadow = '0 0 0 3px rgba(91,163,65,0.12)'
                 }}
                 onBlur={(e) => {
@@ -493,7 +493,7 @@ export function V2SettingsPage() {
                   className="w-full rounded-xl px-3.5 py-2.5 pr-10 text-sm font-medium outline-none transition"
                   style={{ border: '1px solid #C8E6C0', background: '#FFFFFF', color: '#1A2E1A' }}
                   onFocus={(e) => {
-                    e.currentTarget.style.border = '1px solid #5BA341'
+                    e.currentTarget.style.border = '1px solid #7DC344'
                     e.currentTarget.style.boxShadow = '0 0 0 3px rgba(91,163,65,0.12)'
                   }}
                   onBlur={(e) => {
@@ -516,7 +516,7 @@ export function V2SettingsPage() {
                 disabled={inviting}
                 className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-bold text-white transition-all"
                 style={{
-                  background: inviting ? '#8BC67A' : '#5BA341',
+                  background: inviting ? '#8BC67A' : '#7DC344',
                   boxShadow: '0 2px 10px rgba(91,163,65,0.3)',
                 }}
               >
@@ -590,7 +590,7 @@ export function V2SettingsPage() {
               <button
                 onClick={() => setConfirmDelete(null)}
                 className="flex-1 py-2.5 rounded-xl text-sm font-bold transition"
-                style={{ border: '1px solid #C1D9EE', color: '#1A6BAA' }}
+                style={{ border: '1px solid #C1D9EE', color: '#0D6BAF' }}
               >
                 Cancelar
               </button>
@@ -610,3 +610,4 @@ export function V2SettingsPage() {
     </div>
   )
 }
+
