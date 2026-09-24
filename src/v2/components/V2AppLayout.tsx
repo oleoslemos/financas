@@ -231,7 +231,7 @@ function V2AppLayoutInner() {
               key={to}
               to={to}
               onClick={() => setMobileMenuOpen(false)}
-              className={({ isActive }) =>
+              className={() =>
                 `flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all`
               }
               style={({ isActive }) => ({

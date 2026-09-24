@@ -99,7 +99,7 @@ export function V2SignInPage() {
   return (
     <div
       className="normal-case min-h-screen text-slate-900 flex flex-col justify-center items-center p-4 sm:p-6 lg:p-8 font-sans"
-      style={{ background: 'linear-gradient(135deg, #EEF5F9 0%, #F0F7EE 100%)', selection: undefined }}
+      style={{ background: 'linear-gradient(135deg, #EEF5F9 0%, #F0F7EE 100%)' }}
     >
       {/* Decorative blobs */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden>
