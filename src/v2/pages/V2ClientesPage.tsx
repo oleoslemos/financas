@@ -38,6 +38,7 @@ import {
   fetchClients,
   fetchRelatives,
   formatClientPhone,
+  formatPhone,
   updateClient,
   updateRelative,
 } from '../services/v2ClientesService'
@@ -394,15 +395,15 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
                 rel="noreferrer"
                 title="Abrir conversa no WhatsApp"
                 style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  padding: '5px 12px', borderRadius: 8,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: 32, height: 32, borderRadius: 8,
                   background: '#25D366', color: '#FFFFFF',
-                  fontSize: 12, fontWeight: 700, textDecoration: 'none',
+                  textDecoration: 'none',
                   boxShadow: '0 2px 8px rgba(37,211,102,0.3)',
+                  flexShrink: 0,
                 }}
               >
-                <MessageCircle size={14} />
-                WhatsApp
+                <MessageCircle size={18} />
               </a>
             )}
           </div>
@@ -638,46 +639,72 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
                         <p style={{ margin: 0, fontSize: 13, color: '#9CA3AF' }}>Nenhum familiar cadastrado para este cliente.</p>
                       </div>
                     ) : (
-                      <div style={{ border: '1px solid #E5E7EB', borderRadius: 10, overflow: 'hidden' }}>
+                      <div style={{ border: '1px solid #E5E7EB', borderRadius: 10, overflowX: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                           <thead>
                             <tr style={{ background: '#F9FAFB', borderBottom: '1px solid #E5E7EB', textAlign: 'left', color: '#6B7280', fontWeight: 700 }}>
-                              <th style={{ padding: '8px 12px' }}>NOME</th>
-                              <th style={{ padding: '8px 12px' }}>PARENTESCO</th>
-                              <th style={{ padding: '8px 12px' }}>CPF</th>
-                              <th style={{ padding: '8px 12px' }}>ANIVERSÁRIO</th>
-                              <th style={{ padding: '8px 12px' }}>TELEFONE</th>
-                              <th style={{ padding: '8px 12px', textAlign: 'right' }}>AÇÕES</th>
+                              <th style={{ padding: '8px 10px' }}>NOME</th>
+                              <th style={{ padding: '8px 10px' }}>PARENTESCO</th>
+                              <th style={{ padding: '8px 10px' }}>CPF</th>
+                              <th style={{ padding: '8px 10px' }}>ANIVERSÁRIO</th>
+                              <th style={{ padding: '8px 10px' }}>TELEFONE</th>
+                              <th style={{ padding: '8px 10px', textAlign: 'right', minWidth: 70 }}>AÇÕES</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {relatives.map((rel, idx) => (
-                              <tr key={rel.id} style={{ borderBottom: idx < relatives.length - 1 ? '1px solid #F3F4F6' : 'none', background: idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA' }}>
-                                <td style={{ padding: '8px 12px', fontWeight: 700, color: '#111827' }}>{rel.name}</td>
-                                <td style={{ padding: '8px 12px', color: '#4B5563' }}>{rel.relationship}</td>
-                                <td style={{ padding: '8px 12px', color: '#6B7280' }}>{rel.cpf || '—'}</td>
-                                <td style={{ padding: '8px 12px', color: '#6B7280' }}>{formatDate(rel.birth_date)}</td>
-                                <td style={{ padding: '8px 12px', color: '#6B7280' }}>{rel.phone || '—'}</td>
-                                <td style={{ padding: '8px 12px', textAlign: 'right' }}>
-                                  <div style={{ display: 'inline-flex', gap: 6 }}>
-                                    <button
-                                      onClick={() => handleStartEditRelative(rel)}
-                                      style={{ border: 'none', background: 'none', cursor: 'pointer', color: BRAND_BLUE, padding: 4 }}
-                                      title="Editar familiar"
-                                    >
-                                      <Pencil size={14} />
-                                    </button>
-                                    <button
-                                      onClick={() => handleDeleteRelative(rel.id, rel.name)}
-                                      style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#EF4444', padding: 4 }}
-                                      title="Remover familiar"
-                                    >
-                                      <Trash2 size={14} />
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))}
+                            {relatives.map((rel, idx) => {
+                              const waUrl = getWhatsappUrl(rel.phone)
+                              return (
+                                <tr key={rel.id} style={{ borderBottom: idx < relatives.length - 1 ? '1px solid #F3F4F6' : 'none', background: idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA' }}>
+                                  <td style={{ padding: '8px 10px', fontWeight: 700, color: '#111827' }}>{rel.name}</td>
+                                  <td style={{ padding: '8px 10px', color: '#4B5563' }}>{rel.relationship}</td>
+                                  <td style={{ padding: '8px 10px', color: '#6B7280', whiteSpace: 'nowrap' }}>{rel.cpf || '—'}</td>
+                                  <td style={{ padding: '8px 10px', color: '#6B7280', whiteSpace: 'nowrap' }}>{formatDate(rel.birth_date)}</td>
+                                  <td style={{ padding: '8px 10px', color: '#6B7280', whiteSpace: 'nowrap' }}>
+                                    {rel.phone ? (
+                                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                        <span>{formatPhone(rel.phone)}</span>
+                                        {waUrl && (
+                                          <a
+                                            href={waUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            onClick={(e) => e.stopPropagation()}
+                                            title="Enviar mensagem no WhatsApp"
+                                            style={{
+                                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                              width: 20, height: 20, borderRadius: 6,
+                                              background: '#25D366', color: '#FFFFFF',
+                                              textDecoration: 'none', flexShrink: 0,
+                                            }}
+                                          >
+                                            <MessageCircle size={11} />
+                                          </a>
+                                        )}
+                                      </div>
+                                    ) : '—'}
+                                  </td>
+                                  <td style={{ padding: '8px 10px', textAlign: 'right', whiteSpace: 'nowrap', minWidth: 70 }}>
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                      <button
+                                        onClick={() => handleStartEditRelative(rel)}
+                                        style={{ border: 'none', background: 'none', cursor: 'pointer', color: BRAND_BLUE, padding: 4 }}
+                                        title="Editar familiar"
+                                      >
+                                        <Pencil size={14} />
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteRelative(rel.id, rel.name)}
+                                        style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#EF4444', padding: 4 }}
+                                        title="Remover familiar"
+                                      >
+                                        <Trash2 size={14} />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )
+                            })}
                           </tbody>
                         </table>
                       </div>
