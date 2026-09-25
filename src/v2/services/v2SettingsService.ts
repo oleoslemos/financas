@@ -18,16 +18,18 @@ export interface Fornecedor {
   created_at: string
 }
 
+export type RepresentanteRole = 'DISTRIBUIDOR' | 'REPRESENTANTE'
+
 export interface Representante {
   id: string
   code?: string
   name: string
+  role: RepresentanteRole
   cpf_cnpj?: string
   commission_rate: number
   phone?: string
   email?: string
   region?: string
-  monthly_target: number
   active: boolean
   created_at: string
 }
@@ -87,12 +89,12 @@ const INITIAL_REPRESENTANTES: Representante[] = [
     id: 'rep-1',
     code: 'REP-001',
     name: 'Carlos Eduardo Santos',
+    role: 'REPRESENTANTE',
     cpf_cnpj: '123.456.789-00',
     commission_rate: 5.0,
     phone: '(11) 97111-2233',
     email: 'carlos.representante@bemaviv.com.br',
     region: 'São Paulo - SP',
-    monthly_target: 50000,
     active: true,
     created_at: new Date().toISOString(),
   },
@@ -100,12 +102,12 @@ const INITIAL_REPRESENTANTES: Representante[] = [
     id: 'rep-2',
     code: 'REP-002',
     name: 'Fernanda Lima Consultoria',
+    role: 'DISTRIBUIDOR',
     cpf_cnpj: '98.765.432/0001-88',
     commission_rate: 6.5,
     phone: '(21) 98222-3344',
     email: 'fernanda.vendas@bemaviv.com.br',
     region: 'Rio de Janeiro / Minas Gerais',
-    monthly_target: 40000,
     active: true,
     created_at: new Date().toISOString(),
   },
@@ -167,27 +169,20 @@ const INITIAL_FORMAS_PAGAMENTO: FormaPagamento[] = [
 // ─── FORNECEDORES ────────────────────────────────────────────────────────────
 
 export async function listFornecedores(): Promise<Fornecedor[]> {
-  // Try Supabase first
   if (supabase) {
     try {
       const { data, error } = await supabase.from('suppliers').select('*').order('trade_name')
       if (!error && data && data.length > 0) {
         return data as Fornecedor[]
       }
-    } catch {
-      // Fall through to localStorage
-    }
+    } catch {}
   }
 
-  // LocalStorage fallback
   try {
     const raw = localStorage.getItem(KEY_FORNECEDORES)
-    if (raw) {
-      return JSON.parse(raw)
-    }
+    if (raw) return JSON.parse(raw)
   } catch {}
 
-  // Initialize with demo data if empty
   localStorage.setItem(KEY_FORNECEDORES, JSON.stringify(INITIAL_FORNECEDORES))
   return INITIAL_FORNECEDORES
 }
@@ -202,7 +197,6 @@ export async function saveFornecedor(item: Omit<Fornecedor, 'id' | 'created_at'>
     created_at: item.id ? (current.find(c => c.id === item.id)?.created_at || new Date().toISOString()) : new Date().toISOString(),
   }
 
-  // Save to Supabase if connected
   if (supabase) {
     try {
       await supabase.from('suppliers').upsert({
@@ -225,7 +219,6 @@ export async function saveFornecedor(item: Omit<Fornecedor, 'id' | 'created_at'>
     }
   }
 
-  // Save to LocalStorage
   let updatedList: Fornecedor[]
   if (isEdit) {
     updatedList = current.map(f => f.id === id ? fullItem : f)
@@ -256,14 +249,23 @@ export async function listRepresentantes(): Promise<Representante[]> {
     try {
       const { data, error } = await supabase.from('representatives').select('*').order('name')
       if (!error && data && data.length > 0) {
-        return data as Representante[]
+        return data.map((r: any) => ({
+          ...r,
+          role: r.role || 'REPRESENTANTE',
+        })) as Representante[]
       }
     } catch {}
   }
 
   try {
     const raw = localStorage.getItem(KEY_REPRESENTANTES)
-    if (raw) return JSON.parse(raw)
+    if (raw) {
+      const parsed = JSON.parse(raw) as Representante[]
+      return parsed.map((r) => ({
+        ...r,
+        role: r.role || 'REPRESENTANTE',
+      }))
+    }
   } catch {}
 
   localStorage.setItem(KEY_REPRESENTANTES, JSON.stringify(INITIAL_REPRESENTANTES))
@@ -276,6 +278,7 @@ export async function saveRepresentante(item: Omit<Representante, 'id' | 'create
   const id = item.id || 'rep-' + Date.now()
   const fullItem: Representante = {
     ...item,
+    role: item.role || 'REPRESENTANTE',
     id,
     created_at: item.id ? (current.find(c => c.id === item.id)?.created_at || new Date().toISOString()) : new Date().toISOString(),
   }
@@ -286,12 +289,12 @@ export async function saveRepresentante(item: Omit<Representante, 'id' | 'create
         id: fullItem.id,
         code: fullItem.code || null,
         name: fullItem.name,
+        role: fullItem.role,
         cpf_cnpj: fullItem.cpf_cnpj || null,
         commission_rate: fullItem.commission_rate,
         phone: fullItem.phone || null,
         email: fullItem.email || null,
         region: fullItem.region || null,
-        monthly_target: fullItem.monthly_target,
         active: fullItem.active,
         updated_at: new Date().toISOString()
       })

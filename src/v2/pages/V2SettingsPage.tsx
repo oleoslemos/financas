@@ -17,6 +17,7 @@ import {
   saveRepresentante,
   deleteRepresentante,
   Representante,
+  RepresentanteRole,
   listFormasPagamento,
   saveFormaPagamento,
   deleteFormaPagamento,
@@ -43,6 +44,7 @@ import {
   Percent,
   ToggleLeft,
   ToggleRight,
+  Tag,
 } from 'lucide-react'
 
 // ─── Company config helpers ────────────────────────────────────────────────
@@ -127,10 +129,6 @@ function maskPhone(value: string): string {
   if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`
   if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`
   return d
-}
-
-function formatCurrency(val: number): string {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)
 }
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -422,15 +420,25 @@ export function V2SettingsPage() {
   const [editingRep, setEditingRep] = useState<Representante | null>(null)
   const [savingRep, setSavingRep] = useState(false)
 
-  const [repForm, setRepForm] = useState({
+  const [repForm, setRepForm] = useState<{
+    code: string
+    name: string
+    role: RepresentanteRole
+    cpf_cnpj: string
+    commission_rate: number
+    phone: string
+    email: string
+    region: string
+    active: boolean
+  }>({
     code: '',
     name: '',
+    role: 'REPRESENTANTE',
     cpf_cnpj: '',
     commission_rate: 5.0,
     phone: '',
     email: '',
     region: '',
-    monthly_target: 30000,
     active: true,
   })
 
@@ -454,12 +462,12 @@ export function V2SettingsPage() {
     setRepForm({
       code: codeStr,
       name: '',
+      role: 'REPRESENTANTE',
       cpf_cnpj: '',
       commission_rate: 5.0,
       phone: '',
       email: '',
       region: 'São Paulo - SP',
-      monthly_target: 30000,
       active: true,
     })
     setModalRepOpen(true)
@@ -470,12 +478,12 @@ export function V2SettingsPage() {
     setRepForm({
       code: item.code || '',
       name: item.name || '',
+      role: item.role || 'REPRESENTANTE',
       cpf_cnpj: item.cpf_cnpj || '',
       commission_rate: item.commission_rate ?? 5.0,
       phone: item.phone || '',
       email: item.email || '',
       region: item.region || '',
-      monthly_target: item.monthly_target ?? 0,
       active: item.active,
     })
     setModalRepOpen(true)
@@ -497,7 +505,7 @@ export function V2SettingsPage() {
     await loadRepData()
     showToast({
       type: 'success',
-      text: editingRep ? 'Representante atualizado com sucesso!' : 'Representante cadastrado com sucesso!',
+      text: editingRep ? 'Cadastro atualizado com sucesso!' : 'Cadastro efetuado com sucesso!',
     })
   }
 
@@ -506,15 +514,15 @@ export function V2SettingsPage() {
     await loadRepData()
     showToast({
       type: 'success',
-      text: `Representante ${!item.active ? 'ativado' : 'desativado'} com sucesso!`,
+      text: `Cadastro ${!item.active ? 'ativado' : 'desativado'} com sucesso!`,
     })
   }
 
   const handleDeleteRep = async (id: string) => {
-    if (window.confirm('Tem certeza que deseja remover este representante?')) {
+    if (window.confirm('Tem certeza que deseja remover este cadastro?')) {
       await deleteRepresentante(id)
       await loadRepData()
-      showToast({ type: 'success', text: 'Representante removido.' })
+      showToast({ type: 'success', text: 'Cadastro removido.' })
     }
   }
 
@@ -524,7 +532,8 @@ export function V2SettingsPage() {
       r.name.toLowerCase().includes(q) ||
       (r.code && r.code.toLowerCase().includes(q)) ||
       (r.cpf_cnpj && r.cpf_cnpj.includes(q)) ||
-      (r.region && r.region.toLowerCase().includes(q))
+      (r.region && r.region.toLowerCase().includes(q)) ||
+      (r.role && r.role.toLowerCase().includes(q))
     )
   })
 
@@ -641,7 +650,7 @@ export function V2SettingsPage() {
   const tabsList = [
     { id: 'empresa' as const, label: 'EMPRESA', icon: Building2, desc: 'Dados cadastrais & equipe' },
     { id: 'fornecedor' as const, label: 'FORNECEDOR', icon: Truck, desc: 'Gestão de fornecedores' },
-    { id: 'representante' as const, label: 'REPRESENTANTE', icon: Briefcase, desc: 'Vendedores & comissões' },
+    { id: 'representante' as const, label: 'REPRESENTANTE', icon: Briefcase, desc: 'Distribuidores & Representantes' },
     { id: 'formas_pagamento' as const, label: 'FORMAS DE PAGAMENTO', icon: CreditCard, desc: 'Condições & taxas' },
   ]
 
@@ -1146,26 +1155,26 @@ export function V2SettingsPage() {
           <div className="space-y-6">
             <SectionCard
               icon={Briefcase}
-              title="Cadastro & Gestão de Representantes"
-              subtitle="Controle de representantes comerciais, comissões e metas de venda"
+              title="Cadastro de Distribuidores & Representantes"
+              subtitle="Gerencie sua equipe comercial, perfil de atuação e comissões"
               accent="purple"
             >
               {/* Top stats */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                 <div className="bg-purple-50/60 border border-purple-100 p-4 rounded-xl">
-                  <p className="text-xs font-bold text-purple-700">Total de Representantes</p>
+                  <p className="text-xs font-bold text-purple-700">Total de Cadastros</p>
                   <p className="text-2xl font-black text-purple-900 mt-1">{representantes.length}</p>
                 </div>
-                <div className="bg-emerald-50/60 border border-emerald-100 p-4 rounded-xl">
-                  <p className="text-xs font-bold text-emerald-700">Representantes Ativos</p>
-                  <p className="text-2xl font-black text-emerald-900 mt-1">
-                    {representantes.filter((r) => r.active).length}
+                <div className="bg-blue-50/60 border border-blue-100 p-4 rounded-xl">
+                  <p className="text-xs font-bold text-blue-700">Distribuidores</p>
+                  <p className="text-2xl font-black text-blue-900 mt-1">
+                    {representantes.filter((r) => r.role === 'DISTRIBUIDOR').length}
                   </p>
                 </div>
-                <div className="bg-blue-50/60 border border-blue-100 p-4 rounded-xl">
-                  <p className="text-xs font-bold text-blue-700">Meta Mensal Acumulada</p>
-                  <p className="text-2xl font-black text-blue-900 mt-1">
-                    {formatCurrency(representantes.reduce((acc, r) => acc + (r.monthly_target || 0), 0))}
+                <div className="bg-emerald-50/60 border border-emerald-100 p-4 rounded-xl">
+                  <p className="text-xs font-bold text-emerald-700">Representantes</p>
+                  <p className="text-2xl font-black text-emerald-900 mt-1">
+                    {representantes.filter((r) => r.role === 'REPRESENTANTE').length}
                   </p>
                 </div>
               </div>
@@ -1176,7 +1185,7 @@ export function V2SettingsPage() {
                   <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   <input
                     type="text"
-                    placeholder="Buscar representante por nome, código ou região..."
+                    placeholder="Buscar por nome, tipo, código ou região..."
                     value={searchRep}
                     onChange={(e) => setSearchRep(e.target.value)}
                     className="w-full pl-10 pr-4 py-2.5 rounded-xl text-sm border border-slate-200 bg-slate-50 outline-none focus:border-purple-500"
@@ -1188,7 +1197,7 @@ export function V2SettingsPage() {
                   style={{ background: '#7C3AED' }}
                 >
                   <Plus className="h-4 w-4" />
-                  Novo Representante
+                  Novo Cadastro
                 </button>
               </div>
 
@@ -1196,12 +1205,12 @@ export function V2SettingsPage() {
               {loadingRep ? (
                 <div className="py-12 text-center">
                   <Loader2 className="h-8 w-8 animate-spin mx-auto text-purple-600 mb-2" />
-                  <p className="text-sm font-medium text-slate-500">Carregando representantes...</p>
+                  <p className="text-sm font-medium text-slate-500">Carregando dados...</p>
                 </div>
               ) : filteredRepresentantes.length === 0 ? (
                 <div className="py-12 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                   <Briefcase className="h-10 w-10 text-slate-300 mx-auto mb-2" />
-                  <p className="text-sm font-bold text-slate-600">Nenhum representante encontrado</p>
+                  <p className="text-sm font-bold text-slate-600">Nenhum cadastro encontrado</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto rounded-xl border border-slate-200">
@@ -1209,9 +1218,9 @@ export function V2SettingsPage() {
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-black uppercase text-slate-500 tracking-wider">
                         <th className="p-3.5">Código / Nome</th>
+                        <th className="p-3.5">Tipo / Função</th>
                         <th className="p-3.5">CPF / CNPJ</th>
                         <th className="p-3.5">Comissão (%)</th>
-                        <th className="p-3.5">Meta Mensal</th>
                         <th className="p-3.5">Região</th>
                         <th className="p-3.5">Status</th>
                         <th className="p-3.5 text-right">Ações</th>
@@ -1226,15 +1235,24 @@ export function V2SettingsPage() {
                             </span>
                             <span className="font-bold text-slate-900 text-sm">{item.name}</span>
                           </td>
+                          <td className="p-3.5">
+                            <span
+                              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider border shadow-2xs ${
+                                item.role === 'DISTRIBUIDOR'
+                                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                  : 'bg-purple-50 text-purple-700 border-purple-200'
+                              }`}
+                            >
+                              <Tag className="h-3 w-3" />
+                              {item.role === 'DISTRIBUIDOR' ? 'DISTRIBUIDOR' : 'REPRESENTANTE'}
+                            </span>
+                          </td>
                           <td className="p-3.5 font-mono text-slate-600">{item.cpf_cnpj || '—'}</td>
                           <td className="p-3.5">
                             <span className="inline-flex items-center gap-1 font-bold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-lg">
                               <Percent className="h-3 w-3" />
                               {item.commission_rate}%
                             </span>
-                          </td>
-                          <td className="p-3.5 font-bold text-emerald-700">
-                            {formatCurrency(item.monthly_target)}
                           </td>
                           <td className="p-3.5 text-slate-600">{item.region || '—'}</td>
                           <td className="p-3.5">
@@ -1563,9 +1581,9 @@ export function V2SettingsPage() {
                 </div>
                 <div>
                   <h3 className="text-base font-black text-slate-900">
-                    {editingRep ? 'Editar Representante' : 'Novo Representante'}
+                    {editingRep ? 'Editar Cadastro' : 'Novo Cadastro Comercial'}
                   </h3>
-                  <p className="text-xs text-slate-500">Dados do agente comercial e comissionamento</p>
+                  <p className="text-xs text-slate-500">Selecione a função (Distribuidor ou Representante) e dados de contato</p>
                 </div>
               </div>
               <button
@@ -1577,9 +1595,43 @@ export function V2SettingsPage() {
             </div>
 
             <form onSubmit={handleSaveRepresentante} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+              {/* TAG / ROLE SELECTOR */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider">
+                  Tipo / Função no Canal (Tag Identificadora) *
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setRepForm({ ...repForm, role: 'DISTRIBUIDOR' })}
+                    className={`flex items-center justify-center gap-2 p-3.5 rounded-2xl text-xs font-black uppercase transition border shadow-2xs ${
+                      repForm.role === 'DISTRIBUIDOR'
+                        ? 'bg-blue-600 text-white border-blue-600 ring-2 ring-blue-300'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    <Tag className="h-4 w-4" />
+                    DISTRIBUIDOR
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setRepForm({ ...repForm, role: 'REPRESENTANTE' })}
+                    className={`flex items-center justify-center gap-2 p-3.5 rounded-2xl text-xs font-black uppercase transition border shadow-2xs ${
+                      repForm.role === 'REPRESENTANTE'
+                        ? 'bg-purple-600 text-white border-purple-600 ring-2 ring-purple-300'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    <Tag className="h-4 w-4" />
+                    REPRESENTANTE
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs pt-1">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Código do Representante</label>
+                  <label className="block font-bold text-slate-700 mb-1">Código de Identificação</label>
                   <input
                     type="text"
                     placeholder="Ex: REP-001"
@@ -1590,7 +1642,7 @@ export function V2SettingsPage() {
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Nome Completo *</label>
+                  <label className="block font-bold text-slate-700 mb-1">Nome Completo / Razão Social *</label>
                   <input
                     type="text"
                     required
@@ -1626,19 +1678,7 @@ export function V2SettingsPage() {
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Meta Mensal (R$)</label>
-                  <input
-                    type="number"
-                    step="1000"
-                    min="0"
-                    value={repForm.monthly_target}
-                    onChange={(e) => setRepForm({ ...repForm, monthly_target: parseFloat(e.target.value) || 0 })}
-                    className="w-full rounded-xl px-3.5 py-2.5 border border-slate-200 font-medium text-sm outline-none focus:border-purple-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Telefone</label>
+                  <label className="block font-bold text-slate-700 mb-1">Telefone / WhatsApp</label>
                   <input
                     type="text"
                     placeholder="(00) 00000-0000"
@@ -1652,15 +1692,15 @@ export function V2SettingsPage() {
                   <label className="block font-bold text-slate-700 mb-1">E-mail</label>
                   <input
                     type="email"
-                    placeholder="representante@email.com"
+                    placeholder="contato@email.com"
                     value={repForm.email}
                     onChange={(e) => setRepForm({ ...repForm, email: e.target.value })}
                     className="w-full rounded-xl px-3.5 py-2.5 border border-slate-200 font-medium text-sm outline-none focus:border-purple-500"
                   />
                 </div>
 
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Região de Atuação</label>
+                <div className="md:col-span-2">
+                  <label className="block font-bold text-slate-700 mb-1">Região / UF de Atuação</label>
                   <input
                     type="text"
                     placeholder="Ex: São Paulo - SP / Grande SP"
@@ -1685,7 +1725,7 @@ export function V2SettingsPage() {
                   className="px-6 py-2.5 rounded-xl text-xs font-bold text-white shadow-sm"
                   style={{ background: '#7C3AED' }}
                 >
-                  {savingRep ? 'Salvando...' : 'Salvar Representante'}
+                  {savingRep ? 'Salvando...' : 'Salvar Cadastro'}
                 </button>
               </div>
             </form>
