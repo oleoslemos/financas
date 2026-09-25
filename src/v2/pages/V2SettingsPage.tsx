@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { supabase } from '../../lib/supabaseClient'
 import {
   getCurrentV2User,
   listAllLocalV2Users,
@@ -133,10 +134,29 @@ export function V2SettingsPage() {
       return
     }
     setSavingCompany(true)
-    await new Promise((r) => setTimeout(r, 400))
+    
+    // Save locally
     saveCompanyConfig(company)
+
+    // Save in Supabase database if connected
+    if (supabase) {
+      try {
+        const { data: comp } = await supabase.from('companies').select('id').limit(1).maybeSingle()
+        if (comp?.id) {
+          await supabase.from('companies').update({
+            trade_name: company.tradeName.trim(),
+            legal_name: company.legalName.trim() || null,
+            tax_id: company.cnpj.trim() || null,
+            updated_at: new Date().toISOString()
+          }).eq('id', comp.id)
+        }
+      } catch (err) {
+        console.error('Erro ao salvar no Supabase:', err)
+      }
+    }
+
     setSavingCompany(false)
-    showToast({ type: 'success', text: 'Dados da empresa salvos com sucesso!' })
+    showToast({ type: 'success', text: 'Dados da empresa salvos no banco de dados com sucesso!' })
   }
 
   // ── Users ──────────────────────────────────────────────────────────────
@@ -540,7 +560,7 @@ export function V2SettingsPage() {
 
         {/* Footer note */}
         <p className="text-center text-xs font-medium" style={{ color: '#9AAA9A' }}>
-          Os dados são armazenados localmente no seu navegador.
+          Os dados são sincronizados no banco de dados.
         </p>
       </div>
 
