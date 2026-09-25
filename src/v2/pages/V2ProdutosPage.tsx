@@ -27,6 +27,10 @@ import {
   ChevronDown,
   ChevronUp,
   DollarSign,
+  Copy,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react'
 
 function formatCurrency(val: number): string {
@@ -341,6 +345,60 @@ export function V2ProdutosPage() {
     }
   }
 
+  const handleDuplicate = async (p: V2Product) => {
+    const nextSku = generateNextSku(products)
+    const newName = `${p.name} (Cópia)`
+
+    const duplicatedVariations = p.variations
+      ? p.variations.map((v, idx) => ({
+          ...v,
+          id: 'v-' + Date.now() + '-' + (idx + 1),
+          sku: `${nextSku}-V${idx + 1}`,
+        }))
+      : undefined
+
+    const duplicatedKitItems = p.kit_items ? [...p.kit_items] : undefined
+
+    await saveV2Product({
+      code_sku: nextSku,
+      name: newName,
+      type: p.type,
+      category: p.category,
+      product_line: p.product_line,
+      model: p.model,
+      description: p.description,
+      unit: p.unit,
+      cost_price: p.cost_price,
+      sale_price: p.sale_price,
+      dim_width_cm: p.dim_width_cm,
+      dim_length_cm: p.dim_length_cm,
+      dim_height_cm: p.dim_height_cm,
+      variations: duplicatedVariations,
+      kit_items: duplicatedKitItems,
+      kit_price_mode: p.kit_price_mode,
+      active: p.active,
+    })
+
+    await loadData()
+    showToast({
+      type: 'success',
+      text: `Produto "${newName}" duplicado com sucesso! (SKU: ${nextSku})`,
+    })
+  }
+
+  // Sort State
+  const [sortField, setSortField] = useState<'sku' | 'name' | 'sale_price' | 'category'>('sku')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
+
+  const handleSort = (field: 'sku' | 'name' | 'sale_price' | 'category') => {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortField(field)
+      setSortDirection('asc')
+    }
+  }
+
   // Filtered products
   const filteredProducts = products.filter((p) => {
     const q = search.toLowerCase()
@@ -354,6 +412,23 @@ export function V2ProdutosPage() {
     const matchesType = filterType === 'TODOS' || p.type === filterType
 
     return matchesSearch && matchesCategory && matchesType
+  })
+
+  // Sorted products
+  const sortedProducts = [...filteredProducts].sort((a, b) => {
+    let comp = 0
+    if (sortField === 'sku') {
+      const skuA = a.code_sku || ''
+      const skuB = b.code_sku || ''
+      comp = skuA.localeCompare(skuB, undefined, { numeric: true, sensitivity: 'base' })
+    } else if (sortField === 'name') {
+      comp = a.name.localeCompare(b.name)
+    } else if (sortField === 'sale_price') {
+      comp = (a.sale_price || 0) - (b.sale_price || 0)
+    } else if (sortField === 'category') {
+      comp = a.category.localeCompare(b.category)
+    }
+    return sortDirection === 'asc' ? comp : -comp
   })
 
   const categoryList: (ProductCategory | 'TODOS')[] = [
@@ -459,7 +534,7 @@ export function V2ProdutosPage() {
         {/* ── SEARCH & FILTER BAR ── */}
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
           <div className="flex flex-col md:flex-row items-center gap-3 justify-between">
-            <div className="relative w-full md:w-96">
+            <div className="relative w-full md:w-80">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
                 type="text"
@@ -470,22 +545,45 @@ export function V2ProdutosPage() {
               />
             </div>
 
-            {/* Type selector pills */}
-            <div className="flex items-center gap-1.5 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
-              <span className="text-[11px] font-bold text-slate-400 mr-1 uppercase">Tipo:</span>
-              {typeList.map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setFilterType(t)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition whitespace-nowrap ${
-                    filterType === t
-                      ? 'bg-blue-600 text-white shadow-2xs'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
+            {/* Sort & Type selector */}
+            <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+              <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Ordenar por:</span>
+                <select
+                  value={`${sortField}-${sortDirection}`}
+                  onChange={(e) => {
+                    const [f, d] = e.target.value.split('-') as ['sku' | 'name' | 'sale_price' | 'category', 'asc' | 'desc']
+                    setSortField(f)
+                    setSortDirection(d)
+                  }}
+                  className="text-xs font-bold bg-transparent text-slate-800 outline-none cursor-pointer"
                 >
-                  {t === 'VARIACAO' ? 'VARIAÇÃO' : t}
-                </button>
-              ))}
+                  <option value="sku-asc">SKU (Crescente 001 ➔ 008)</option>
+                  <option value="sku-desc">SKU (Decrescente 008 ➔ 001)</option>
+                  <option value="name-asc">Nome (A ➔ Z)</option>
+                  <option value="name-desc">Nome (Z ➔ A)</option>
+                  <option value="sale_price-desc">Maior Preço Venda</option>
+                  <option value="sale_price-asc">Menor Preço Venda</option>
+                </select>
+              </div>
+
+              {/* Type selector pills */}
+              <div className="flex items-center gap-1.5 overflow-x-auto">
+                <span className="text-[11px] font-bold text-slate-400 mr-1 uppercase">Tipo:</span>
+                {typeList.map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setFilterType(t)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition whitespace-nowrap ${
+                      filterType === t
+                        ? 'bg-blue-600 text-white shadow-2xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {t === 'VARIACAO' ? 'VARIAÇÃO' : t}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -514,7 +612,7 @@ export function V2ProdutosPage() {
             <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600 mb-2" />
             <p className="text-sm font-medium text-slate-500">Carregando produtos...</p>
           </div>
-        ) : filteredProducts.length === 0 ? (
+        ) : sortedProducts.length === 0 ? (
           <div className="py-16 text-center bg-white rounded-2xl border border-dashed border-slate-200">
             <Package className="h-10 w-10 text-slate-300 mx-auto mb-2" />
             <p className="text-sm font-bold text-slate-600">Nenhum produto encontrado</p>
@@ -526,18 +624,69 @@ export function V2ProdutosPage() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-black uppercase text-slate-500 tracking-wider">
-                    <th className="p-3.5">SKU / Produto</th>
+                    <th
+                      onClick={() => handleSort('sku')}
+                      className="p-3.5 cursor-pointer hover:bg-slate-100/80 transition select-none group"
+                      title="Clique para ordenar por SKU"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span>SKU / Produto</span>
+                        {sortField === 'sku' ? (
+                          sortDirection === 'asc' ? (
+                            <ArrowUp className="h-3.5 w-3.5 text-blue-600 font-black" />
+                          ) : (
+                            <ArrowDown className="h-3.5 w-3.5 text-blue-600 font-black" />
+                          )
+                        ) : (
+                          <ArrowUpDown className="h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 transition" />
+                        )}
+                      </div>
+                    </th>
                     <th className="p-3.5">Tipo</th>
-                    <th className="p-3.5">Categoria / Linha</th>
+                    <th
+                      onClick={() => handleSort('category')}
+                      className="p-3.5 cursor-pointer hover:bg-slate-100/80 transition select-none group"
+                      title="Clique para ordenar por Categoria"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span>Categoria / Linha</span>
+                        {sortField === 'category' ? (
+                          sortDirection === 'asc' ? (
+                            <ArrowUp className="h-3.5 w-3.5 text-blue-600 font-black" />
+                          ) : (
+                            <ArrowDown className="h-3.5 w-3.5 text-blue-600 font-black" />
+                          )
+                        ) : (
+                          <ArrowUpDown className="h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 transition" />
+                        )}
+                      </div>
+                    </th>
                     <th className="p-3.5">Dimensões</th>
                     <th className="p-3.5">Preço Custo</th>
-                    <th className="p-3.5">Preço Venda</th>
+                    <th
+                      onClick={() => handleSort('sale_price')}
+                      className="p-3.5 cursor-pointer hover:bg-slate-100/80 transition select-none group"
+                      title="Clique para ordenar por Preço de Venda"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span>Preço Venda</span>
+                        {sortField === 'sale_price' ? (
+                          sortDirection === 'asc' ? (
+                            <ArrowUp className="h-3.5 w-3.5 text-blue-600 font-black" />
+                          ) : (
+                            <ArrowDown className="h-3.5 w-3.5 text-blue-600 font-black" />
+                          )
+                        ) : (
+                          <ArrowUpDown className="h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 transition" />
+                        )}
+                      </div>
+                    </th>
                     <th className="p-3.5">Status</th>
-                    <th className="p-3.5 text-right">Ações</th>
+                    <th className="p-3.5 text-center">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs font-medium text-slate-700">
-                  {filteredProducts.map((p) => {
+                  {sortedProducts.map((p) => {
                     const isExpanded = expandedRows[p.id] || false
                     const hasDetails = (p.variations && p.variations.length > 0) || (p.kit_items && p.kit_items.length > 0)
 
@@ -556,7 +705,7 @@ export function V2ProdutosPage() {
                                 </button>
                               )}
                               <div>
-                                <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded mr-2">
+                                <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded mr-2 font-mono">
                                   {p.code_sku || 'SKU'}
                                 </span>
                                 <span className="font-bold text-slate-900 text-sm">{p.name}</span>
@@ -611,21 +760,30 @@ export function V2ProdutosPage() {
                             </button>
                           </td>
 
-                          <td className="p-3.5 text-right space-x-2">
-                            <button
-                              onClick={() => openEditModal(p)}
-                              className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition"
-                              title="Editar Produto"
-                            >
-                              <Edit2 className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(p.id)}
-                              className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 transition"
-                              title="Excluir Produto"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                          <td className="p-3.5 text-center">
+                            <div className="inline-flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200 shadow-2xs">
+                              <button
+                                onClick={() => openEditModal(p)}
+                                className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-100 hover:text-blue-700 transition"
+                                title="Editar Produto"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDuplicate(p)}
+                                className="p-1.5 rounded-lg text-purple-600 hover:bg-purple-100 hover:text-purple-700 transition"
+                                title="Duplicar Produto"
+                              >
+                                <Copy className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDelete(p.id)}
+                                className="p-1.5 rounded-lg text-red-500 hover:bg-red-100 hover:text-red-600 transition"
+                                title="Excluir Produto"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
 
@@ -1132,22 +1290,39 @@ export function V2ProdutosPage() {
                 </div>
               )}
 
-              <div className="pt-3 border-t border-slate-100 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 border border-slate-200 hover:bg-slate-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="px-6 py-2.5 rounded-xl text-xs font-bold text-white shadow-sm"
-                  style={{ background: '#0D6BAF' }}
-                >
-                  {saving ? 'Salvando...' : 'Salvar Produto'}
-                </button>
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                <div>
+                  {editingProd && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleDuplicate(editingProd)
+                        setModalOpen(false)
+                      }}
+                      className="px-4 py-2.5 rounded-xl border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 font-bold text-xs flex items-center gap-1.5 transition"
+                    >
+                      <Copy className="h-4 w-4" />
+                      Duplicar este Produto
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setModalOpen(false)}
+                    className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 border border-slate-200 hover:bg-slate-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="px-6 py-2.5 rounded-xl text-xs font-bold text-white shadow-sm"
+                    style={{ background: '#0D6BAF' }}
+                  >
+                    {saving ? 'Salvando...' : 'Salvar Produto'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
