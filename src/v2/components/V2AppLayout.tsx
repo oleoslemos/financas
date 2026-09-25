@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { getCurrentV2User, logoutV2User } from '../../v2/services/v2AuthService'
 import { CompanyProvider, useCompany } from '../../context/CompanyContext'
 import {

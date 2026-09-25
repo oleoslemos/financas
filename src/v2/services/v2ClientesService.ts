@@ -117,7 +117,7 @@ export async function fetchClients(companyId: string | null): Promise<{
     return { data: [], error: error.message }
   }
 
-  return { data: (data as BemAvivClient[]) ?? [], error: null }
+  return { data: (data as unknown as BemAvivClient[]) ?? [], error: null }
 }
 
 export async function fetchClient(id: string): Promise<{
@@ -133,7 +133,7 @@ export async function fetchClient(id: string): Promise<{
     .maybeSingle()
 
   if (error) return { data: null, error: error.message }
-  return { data: data as BemAvivClient | null, error: null }
+  return { data: (data as unknown as BemAvivClient | null), error: null }
 }
 
 export async function createClient(
@@ -152,7 +152,7 @@ export async function createClient(
     return { data: null, error: error.message }
   }
 
-  return { data: data as BemAvivClient | null, error: null }
+  return { data: (data as unknown as BemAvivClient | null), error: null }
 }
 
 export async function updateClient(
@@ -173,7 +173,7 @@ export async function updateClient(
     return { data: null, error: error.message }
   }
 
-  return { data: data as BemAvivClient | null, error: null }
+  return { data: (data as unknown as BemAvivClient | null), error: null }
 }
 
 export async function deleteClient(id: string): Promise<{ error: string | null }> {

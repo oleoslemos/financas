@@ -10,7 +10,6 @@ import {
   Mail,
   MapPin,
   Calendar,
-  Clock,
   CheckCircle2,
   AlertCircle,
   Loader2,
@@ -19,7 +18,6 @@ import {
   RefreshCw,
   Users,
   TrendingUp,
-  Bed,
   Sparkles,
 } from 'lucide-react'
 import {
@@ -39,13 +37,6 @@ import { useCompany } from '../../context/CompanyContext'
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants / helpers
 // ─────────────────────────────────────────────────────────────────────────────
-
-const CLIENT_STATUSES: { value: ClientStatus; label: string }[] = [
-  { value: 'PROSPECÇÃO', label: 'Prospecção' },
-  { value: 'CLIENTE - COLCHÃO', label: 'Cliente – Colchão' },
-  { value: 'CLIENTE - DIVERSOS', label: 'Cliente – Diversos' },
-  { value: 'CLIENTE - COLCHÃO/DIVERSOS', label: 'Cliente – Colchão/Diversos' },
-]
 
 const COMMERCIAL_STAGES: { value: CommercialStage; label: string }[] = [
   { value: 'CONTATO', label: 'Contato' },
