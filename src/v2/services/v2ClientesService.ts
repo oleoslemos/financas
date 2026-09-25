@@ -216,3 +216,63 @@ export function computeKpi(clients: BemAvivClient[]): ClientesKpi {
 
   return { total, prospects, clientesAtivos, clientesColchao, clientesDiversos, clientesMix, comColchao, comEko7 }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Relatives & Orders helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface Familiar {
+  id: string
+  client_id: string
+  company_id?: string | null
+  name: string
+  relationship: string
+  birth_date: string | null
+  phone: string | null
+  cpf?: string | null
+}
+
+export interface ClientOrderRow {
+  id: string
+  order_date: string
+  document_type: 'ORCAMENTO' | 'PEDIDO'
+  document_number: string | null
+  status: string
+  total_amount: number
+}
+
+export async function fetchRelatives(clientId: string, companyId?: string | null): Promise<Familiar[]> {
+  if (!supabase) return []
+  let query = supabase
+    .from('bem_aviv_client_relatives')
+    .select('id, client_id, name, relationship, birth_date, phone, cpf')
+    .eq('client_id', clientId)
+  if (companyId) query = query.eq('company_id', companyId)
+  const { data } = await query.order('name', { ascending: true })
+  return (data as unknown as Familiar[]) ?? []
+}
+
+export async function createRelative(input: Omit<Familiar, 'id'>): Promise<{ data: Familiar | null; error: string | null }> {
+  if (!supabase) return { data: null, error: 'Supabase não configurado.' }
+  const { data, error } = await supabase.from('bem_aviv_client_relatives').insert(input).select().maybeSingle()
+  if (error) return { data: null, error: error.message }
+  return { data: data as unknown as Familiar, error: null }
+}
+
+export async function deleteRelative(id: string): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'Supabase não configurado.' }
+  const { error } = await supabase.from('bem_aviv_client_relatives').delete().eq('id', id)
+  if (error) return { error: error.message }
+  return { error: null }
+}
+
+export async function fetchClientOrders(clientId: string, companyId?: string | null): Promise<ClientOrderRow[]> {
+  if (!supabase) return []
+  let query = supabase
+    .from('bem_aviv_sales_orders')
+    .select('id, order_date, document_type, document_number, status, total_amount')
+    .eq('client_id', clientId)
+  if (companyId) query = query.eq('company_id', companyId)
+  const { data } = await query.order('order_date', { ascending: false })
+  return (data as unknown as ClientOrderRow[]) ?? []
+}

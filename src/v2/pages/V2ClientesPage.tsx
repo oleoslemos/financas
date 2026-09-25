@@ -19,15 +19,22 @@ import {
   Users,
   TrendingUp,
   Sparkles,
+  Lock,
 } from 'lucide-react'
 import {
   BemAvivClient,
+  ClientOrderRow,
   ClientStatus,
   CommercialStage,
+  Familiar,
   computeKpi,
   createClient,
+  createRelative,
   deleteClient,
+  deleteRelative,
+  fetchClientOrders,
   fetchClients,
+  fetchRelatives,
   formatClientPhone,
   updateClient,
 } from '../services/v2ClientesService'
@@ -129,12 +136,31 @@ interface DrawerProps {
   onDeleted: (id: string) => void
 }
 
+type DrawerTab = 'dados' | 'contato' | 'familiares' | 'followup' | 'pedidos'
+
 function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: DrawerProps) {
   const [form, setForm] = useState<Partial<BemAvivClient>>(emptyForm(companyId))
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState<'dados' | 'contato' | 'followup'>('dados')
+  const [tab, setTab] = useState<DrawerTab>('dados')
+
+  // Relatives state
+  const [relatives, setRelatives] = useState<Familiar[]>([])
+  const [loadingRelatives, setLoadingRelatives] = useState(false)
+  const [newRelative, setNewRelative] = useState({
+    name: '',
+    relationship: 'CÔNJUGE',
+    cpf: '',
+    birth_date: '',
+    phone: '',
+  })
+  const [addingRelative, setAddingRelative] = useState(false)
+
+  // Orders state
+  const [orders, setOrders] = useState<ClientOrderRow[]>([])
+  const [loadingOrders, setLoadingOrders] = useState(false)
+
   const overlayRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -142,6 +168,23 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
       setForm(client ? { ...client } : emptyForm(companyId))
       setError(null)
       setTab('dados')
+
+      if (client?.id) {
+        setLoadingRelatives(true)
+        fetchRelatives(client.id, companyId).then((r) => {
+          setRelatives(r)
+          setLoadingRelatives(false)
+        })
+
+        setLoadingOrders(true)
+        fetchClientOrders(client.id, companyId).then((o) => {
+          setOrders(o)
+          setLoadingOrders(false)
+        })
+      } else {
+        setRelatives([])
+        setOrders([])
+      }
     }
   }, [open, client, companyId])
 
@@ -161,14 +204,14 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
     if (!payload.company_id) payload.company_id = companyId ?? undefined
 
     if (client?.id) {
-      const { data, error: e } = await updateClient(client.id, payload)
+      const { data, error: err } = await updateClient(client.id, payload)
       setSaving(false)
-      if (e) { setError(e); return }
+      if (err) { setError(err); return }
       if (data) onSaved(data)
     } else {
-      const { data, error: e } = await createClient(payload as Parameters<typeof createClient>[0])
+      const { data, error: err } = await createClient(payload as Parameters<typeof createClient>[0])
       setSaving(false)
-      if (e) { setError(e); return }
+      if (err) { setError(err); return }
       if (data) onSaved(data)
     }
   }
@@ -177,12 +220,63 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
     if (!client?.id) return
     if (!confirm(`Excluir "${client.full_name}"? Esta ação não pode ser desfeita.`)) return
     setDeleting(true)
-    const { error: e } = await deleteClient(client.id)
+    const { error: err } = await deleteClient(client.id)
     setDeleting(false)
-    if (e) { setError(e); return }
+    if (err) { setError(err); return }
     onDeleted(client.id)
   }
 
+  const handleAddRelative = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!client?.id) return
+    if (!newRelative.name.trim()) {
+      setError('Informe o nome completo do familiar.')
+      return
+    }
+    setAddingRelative(true)
+    setError(null)
+
+    const { data, error: relErr } = await createRelative({
+      client_id: client.id,
+      company_id: companyId,
+      name: newRelative.name.trim().toUpperCase(),
+      relationship: (newRelative.relationship || 'OUTRO').trim().toUpperCase(),
+      cpf: newRelative.cpf.trim() || null,
+      birth_date: newRelative.birth_date || null,
+      phone: newRelative.phone.trim() || null,
+    })
+
+    setAddingRelative(false)
+    if (relErr) {
+      setError(relErr)
+      return
+    }
+    if (data) {
+      setRelatives((prev) => [...prev, data])
+      setNewRelative({ name: '', relationship: 'CÔNJUGE', cpf: '', birth_date: '', phone: '' })
+    }
+  }
+
+  const handleDeleteRelative = async (relId: string, relName: string) => {
+    if (!confirm(`Excluir familiar "${relName}"?`)) return
+    setError(null)
+    const { error: delErr } = await deleteRelative(relId)
+    if (delErr) {
+      setError(delErr)
+      return
+    }
+    setRelatives((prev) => prev.filter((r) => r.id !== relId))
+  }
+
+  const orderStats = useMemo(() => {
+    const total = orders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0)
+    const count = orders.length
+    const average = count > 0 ? total / count : 0
+    const lastOrderDate = orders[0]?.order_date ? formatDate(orders[0].order_date) : '—'
+    return { total, count, average, lastOrderDate }
+  }, [orders])
+
+  const formatBRL = (val: number) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
   const BRAND_BLUE = '#0D6BAF'
 
   const inputClass = (disabled = false) => ({
@@ -217,7 +311,7 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
       <div
         style={{
           position: 'fixed', top: 0, right: 0, bottom: 0,
-          width: '100%', maxWidth: 520,
+          width: '100%', maxWidth: 640,
           background: '#FFFFFF',
           boxShadow: '-8px 0 40px rgba(0,0,0,0.15)',
           zIndex: 999,
@@ -249,23 +343,29 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
         </div>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', borderBottom: '1px solid #F3F4F6', background: '#FAFAFA' }}>
-          {(['dados', 'contato', 'followup'] as const).map((t) => {
-            const labels = { dados: 'Dados Pessoais', contato: 'Endereço', followup: 'Follow-up' }
-            const isActive = tab === t
+        <div style={{ display: 'flex', borderBottom: '1px solid #F3F4F6', background: '#FAFAFA', overflowX: 'auto' }}>
+          {[
+            { id: 'dados', label: 'Dados Pessoais' },
+            { id: 'contato', label: 'Endereço' },
+            { id: 'familiares', label: `Familiares (${relatives.length})` },
+            { id: 'followup', label: 'Follow-up' },
+            { id: 'pedidos', label: `Pedidos (${orders.length})` },
+          ].map((t) => {
+            const isActive = tab === t.id
             return (
               <button
-                key={t}
-                onClick={() => setTab(t)}
+                key={t.id}
+                onClick={() => setTab(t.id as DrawerTab)}
                 style={{
-                  flex: 1, padding: '12px 8px', fontSize: 12, fontWeight: 700,
+                  flex: 1, padding: '12px 10px', fontSize: 12, fontWeight: 700,
                   border: 'none', borderBottom: isActive ? `2px solid ${BRAND_BLUE}` : '2px solid transparent',
                   background: 'none', cursor: 'pointer',
                   color: isActive ? BRAND_BLUE : '#9CA3AF',
+                  whiteSpace: 'nowrap',
                   transition: 'all 0.15s',
                 }}
               >
-                {labels[t]}
+                {t.label}
               </button>
             )
           })}
@@ -280,7 +380,7 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
             </div>
           )}
 
-          {/* ── Aba: Dados Pessoais ── */}
+          {/* ── Aba 1: Dados Pessoais ── */}
           {tab === 'dados' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
@@ -347,7 +447,7 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
             </div>
           )}
 
-          {/* ── Aba: Endereço ── */}
+          {/* ── Aba 2: Endereço ── */}
           {tab === 'contato' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -385,34 +485,239 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
             </div>
           )}
 
-          {/* ── Aba: Follow-up ── */}
+          {/* ── Aba 3: Familiares ── */}
+          {tab === 'familiares' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {!client?.id ? (
+                <div style={{ padding: '24px', textAlign: 'center', background: '#FAFAFA', borderRadius: 10, border: '1px border-dashed #E5E7EB' }}>
+                  <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>
+                    Salve o cadastro do cliente primeiro para adicionar familiares.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <form onSubmit={handleAddRelative} style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 10, padding: 14 }}>
+                    <p style={{ margin: '0 0 10px', fontSize: 12, fontWeight: 800, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Adicionar Familiar
+                    </p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                      <div>
+                        <label style={labelStyle}>Nome Completo *</label>
+                        <input style={inputClass()} value={newRelative.name} onChange={(e) => setNewRelative({ ...newRelative, name: e.target.value.toUpperCase() })} placeholder="EX: MARIA SOUZA" />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Grau de Parentesco *</label>
+                        <select style={{ ...inputClass(), cursor: 'pointer' }} value={newRelative.relationship} onChange={(e) => setNewRelative({ ...newRelative, relationship: e.target.value })}>
+                          <option value="CÔNJUGE">Cônjuge</option>
+                          <option value="FILHO(A)">Filho(a)</option>
+                          <option value="PAI">Pai</option>
+                          <option value="MÃE">Mãe</option>
+                          <option value="IRMÃO(Ã)">Irmão(ã)</option>
+                          <option value="OUTRO">Outro</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
+                      <div>
+                        <label style={labelStyle}>CPF</label>
+                        <input style={inputClass()} value={newRelative.cpf} onChange={(e) => setNewRelative({ ...newRelative, cpf: e.target.value })} placeholder="000.000.000-00" />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Aniversário</label>
+                        <input style={inputClass()} type="date" value={newRelative.birth_date} onChange={(e) => setNewRelative({ ...newRelative, birth_date: e.target.value })} />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Telefone</label>
+                        <input style={inputClass()} value={newRelative.phone} onChange={(e) => setNewRelative({ ...newRelative, phone: e.target.value })} placeholder="(00) 00000-0000" />
+                      </div>
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={addingRelative}
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        width: '100%', padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                        border: 'none', background: '#7DC344', color: '#FFFFFF', cursor: addingRelative ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      {addingRelative ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Plus size={14} />}
+                      Adicionar Familiar
+                    </button>
+                  </form>
+
+                  <div>
+                    <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 800, color: '#6B7280', textTransform: 'uppercase' }}>
+                      Familiares Cadastrados ({relatives.length})
+                    </p>
+                    {loadingRelatives ? (
+                      <p style={{ fontSize: 13, color: '#9CA3AF' }}>Carregando familiares...</p>
+                    ) : relatives.length === 0 ? (
+                      <div style={{ padding: '24px', textAlign: 'center', background: '#FAFAFA', borderRadius: 10, border: '1px border-dashed #E5E7EB' }}>
+                        <p style={{ margin: 0, fontSize: 13, color: '#9CA3AF' }}>Nenhum familiar cadastrado para este cliente.</p>
+                      </div>
+                    ) : (
+                      <div style={{ border: '1px solid #E5E7EB', borderRadius: 10, overflow: 'hidden' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                          <thead>
+                            <tr style={{ background: '#F9FAFB', borderBottom: '1px solid #E5E7EB', textAlign: 'left', color: '#6B7280', fontWeight: 700 }}>
+                              <th style={{ padding: '8px 12px' }}>NOME</th>
+                              <th style={{ padding: '8px 12px' }}>PARENTESCO</th>
+                              <th style={{ padding: '8px 12px' }}>CPF</th>
+                              <th style={{ padding: '8px 12px' }}>ANIVERSÁRIO</th>
+                              <th style={{ padding: '8px 12px' }}>TELEFONE</th>
+                              <th style={{ padding: '8px 12px', textAlign: 'right' }}>AÇÕES</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {relatives.map((rel, idx) => (
+                              <tr key={rel.id} style={{ borderBottom: idx < relatives.length - 1 ? '1px solid #F3F4F6' : 'none', background: idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA' }}>
+                                <td style={{ padding: '8px 12px', fontWeight: 700, color: '#111827' }}>{rel.name}</td>
+                                <td style={{ padding: '8px 12px', color: '#4B5563' }}>{rel.relationship}</td>
+                                <td style={{ padding: '8px 12px', color: '#6B7280' }}>{rel.cpf || '—'}</td>
+                                <td style={{ padding: '8px 12px', color: '#6B7280' }}>{formatDate(rel.birth_date)}</td>
+                                <td style={{ padding: '8px 12px', color: '#6B7280' }}>{rel.phone || '—'}</td>
+                                <td style={{ padding: '8px 12px', textAlign: 'right' }}>
+                                  <button
+                                    onClick={() => handleDeleteRelative(rel.id, rel.name)}
+                                    style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#EF4444', padding: 4 }}
+                                    title="Remover familiar"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── Aba 4: Follow-up (READ ONLY) ── */}
           {tab === 'followup' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 14px', background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: 8 }}>
+                <Lock size={16} color="#B45309" style={{ marginTop: 2, flexShrink: 0 }} />
+                <div>
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#92400E' }}>
+                    Modo de Visualização (Leitura)
+                  </p>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: '#B45309' }}>
+                    A edição direta nesta guia está desativada. Em breve teremos novos recursos para adicionar agendamentos, registrar interações e gerenciar follow-ups.
+                  </p>
+                </div>
+              </div>
+
               {client && (
-                <div style={{ padding: '10px 14px', background: '#F0F7EE', borderRadius: 8, border: '1px solid #C8E6C0' }}>
-                  <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#065F46' }}>Status atual</p>
+                <div style={{ padding: '12px 14px', background: '#F9FAFB', borderRadius: 8, border: '1px solid #E5E7EB' }}>
+                  <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase' }}>Status Atual</p>
                   <div style={{ marginTop: 6 }}>{statusBadge(client.client_status)}</div>
                   {client.last_contact_at && (
-                    <p style={{ margin: '8px 0 0', fontSize: 11, color: '#6B7280' }}>
-                      Último contato: {formatDate(client.last_contact_at)}
+                    <p style={{ margin: '8px 0 0', fontSize: 12, color: '#6B7280' }}>
+                      Último contato: <strong>{formatDate(client.last_contact_at)}</strong>
                     </p>
                   )}
                 </div>
               )}
+
               <div>
                 <label style={labelStyle}>Data do Próximo Follow-up</label>
-                <input style={inputClass()} type="date" value={formatDateInput(form.next_followup_at)} onChange={(e) => set('next_followup_at', e.target.value || null)} />
+                <input style={inputClass(true)} type="date" disabled value={formatDateInput(form.next_followup_at)} readOnly />
               </div>
+
               <div>
                 <label style={labelStyle}>Observação do Follow-up</label>
                 <textarea
                   rows={4}
-                  style={{ ...inputClass(), resize: 'vertical' as const }}
+                  disabled
+                  readOnly
+                  style={{ ...inputClass(true), resize: 'none' }}
                   value={form.next_followup_note ?? ''}
-                  onChange={(e) => set('next_followup_note', e.target.value.toUpperCase())}
-                  placeholder="DESCREVA A AÇÃO PLANEJADA..."
+                  placeholder="Nenhuma observação registrada."
                 />
               </div>
+            </div>
+          )}
+
+          {/* ── Aba 5: Pedidos / Orçamentos ── */}
+          {tab === 'pedidos' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {!client?.id ? (
+                <div style={{ padding: '24px', textAlign: 'center', background: '#FAFAFA', borderRadius: 10, border: '1px border-dashed #E5E7EB' }}>
+                  <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>
+                    Salve o cadastro do cliente primeiro para visualizar os pedidos e orçamentos.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                    <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 10, padding: 12 }}>
+                      <p style={{ margin: 0, fontSize: 10, fontWeight: 800, color: '#6B7280', textTransform: 'uppercase' }}>Total Comprado</p>
+                      <p style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 900, color: '#111827' }}>{formatBRL(orderStats.total)}</p>
+                    </div>
+                    <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 10, padding: 12 }}>
+                      <p style={{ margin: 0, fontSize: 10, fontWeight: 800, color: '#6B7280', textTransform: 'uppercase' }}>Ticket Médio</p>
+                      <p style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 900, color: '#111827' }}>{formatBRL(orderStats.average)}</p>
+                    </div>
+                    <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 10, padding: 12 }}>
+                      <p style={{ margin: 0, fontSize: 10, fontWeight: 800, color: '#6B7280', textTransform: 'uppercase' }}>Última Venda</p>
+                      <p style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 900, color: '#111827' }}>{orderStats.lastOrderDate}</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 800, color: '#6B7280', textTransform: 'uppercase' }}>
+                      Histórico de Pedidos e Orçamentos ({orders.length})
+                    </p>
+                    {loadingOrders ? (
+                      <p style={{ fontSize: 13, color: '#9CA3AF' }}>Carregando pedidos...</p>
+                    ) : orders.length === 0 ? (
+                      <div style={{ padding: '24px', textAlign: 'center', background: '#FAFAFA', borderRadius: 10, border: '1px border-dashed #E5E7EB' }}>
+                        <p style={{ margin: 0, fontSize: 13, color: '#9CA3AF' }}>Nenhum pedido ou orçamento encontrado para este cliente.</p>
+                      </div>
+                    ) : (
+                      <div style={{ border: '1px solid #E5E7EB', borderRadius: 10, overflow: 'hidden' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                          <thead>
+                            <tr style={{ background: '#F9FAFB', borderBottom: '1px solid #E5E7EB', textAlign: 'left', color: '#6B7280', fontWeight: 700 }}>
+                              <th style={{ padding: '8px 12px' }}>DATA</th>
+                              <th style={{ padding: '8px 12px' }}>TIPO</th>
+                              <th style={{ padding: '8px 12px' }}>Nº DOC</th>
+                              <th style={{ padding: '8px 12px' }}>STATUS</th>
+                              <th style={{ padding: '8px 12px', textAlign: 'right' }}>VALOR</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {orders.map((ord, idx) => (
+                              <tr key={ord.id} style={{ borderBottom: idx < orders.length - 1 ? '1px solid #F3F4F6' : 'none', background: idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA' }}>
+                                <td style={{ padding: '8px 12px', color: '#374151' }}>{formatDate(ord.order_date)}</td>
+                                <td style={{ padding: '8px 12px' }}>
+                                  <span style={{
+                                    padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700,
+                                    background: ord.document_type === 'PEDIDO' ? '#DBEAFE' : '#FEF3C7',
+                                    color: ord.document_type === 'PEDIDO' ? '#1E40AF' : '#92400E',
+                                  }}>
+                                    {ord.document_type === 'PEDIDO' ? 'Pedido' : 'Orçamento'}
+                                  </span>
+                                </td>
+                                <td style={{ padding: '8px 12px', fontWeight: 600, color: '#111827' }}>{ord.document_number || '—'}</td>
+                                <td style={{ padding: '8px 12px', color: '#4B5563' }}>{ord.status || '—'}</td>
+                                <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#059669' }}>
+                                  {formatBRL(Number(ord.total_amount) || 0)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
