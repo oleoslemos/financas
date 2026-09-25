@@ -798,22 +798,22 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
                         <p style={{ margin: 0, fontSize: 13, color: '#9CA3AF' }}>Nenhum pedido ou orçamento encontrado para este cliente.</p>
                       </div>
                     ) : (
-                      <div style={{ border: '1px solid #E5E7EB', borderRadius: 10, overflow: 'hidden' }}>
+                      <div style={{ border: '1px solid #E5E7EB', borderRadius: 10, overflowX: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                           <thead>
                             <tr style={{ background: '#F9FAFB', borderBottom: '1px solid #E5E7EB', textAlign: 'left', color: '#6B7280', fontWeight: 700 }}>
-                              <th style={{ padding: '8px 12px' }}>DATA</th>
-                              <th style={{ padding: '8px 12px' }}>TIPO</th>
-                              <th style={{ padding: '8px 12px' }}>Nº DOC</th>
-                              <th style={{ padding: '8px 12px' }}>STATUS</th>
-                              <th style={{ padding: '8px 12px', textAlign: 'right' }}>VALOR</th>
+                              <th style={{ padding: '8px 8px', whiteSpace: 'nowrap' }}>DATA</th>
+                              <th style={{ padding: '8px 8px', whiteSpace: 'nowrap' }}>TIPO</th>
+                              <th style={{ padding: '8px 8px', whiteSpace: 'nowrap' }}>Nº DOC</th>
+                              <th style={{ padding: '8px 8px' }}>STATUS</th>
+                              <th style={{ padding: '8px 8px', textAlign: 'right', whiteSpace: 'nowrap', minWidth: 90 }}>VALOR</th>
                             </tr>
                           </thead>
                           <tbody>
                             {orders.map((ord, idx) => (
                               <tr key={ord.id} style={{ borderBottom: idx < orders.length - 1 ? '1px solid #F3F4F6' : 'none', background: idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA' }}>
-                                <td style={{ padding: '8px 12px', color: '#374151' }}>{formatDate(ord.order_date)}</td>
-                                <td style={{ padding: '8px 12px' }}>
+                                <td style={{ padding: '8px 8px', color: '#374151', whiteSpace: 'nowrap' }}>{formatDate(ord.order_date)}</td>
+                                <td style={{ padding: '8px 8px', whiteSpace: 'nowrap' }}>
                                   <span style={{
                                     padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700,
                                     background: ord.document_type === 'PEDIDO' ? '#DBEAFE' : '#FEF3C7',
@@ -822,9 +822,9 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
                                     {ord.document_type === 'PEDIDO' ? 'Pedido' : 'Orçamento'}
                                   </span>
                                 </td>
-                                <td style={{ padding: '8px 12px', fontWeight: 600, color: '#111827' }}>{ord.document_number || '—'}</td>
-                                <td style={{ padding: '8px 12px', color: '#4B5563' }}>{ord.status || '—'}</td>
-                                <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#059669' }}>
+                                <td style={{ padding: '8px 8px', fontWeight: 600, color: '#111827', whiteSpace: 'nowrap' }}>{ord.document_number || '—'}</td>
+                                <td style={{ padding: '8px 8px', color: '#4B5563', fontSize: 11 }}>{ord.status || '—'}</td>
+                                <td style={{ padding: '8px 8px', textAlign: 'right', fontWeight: 700, color: '#059669', whiteSpace: 'nowrap', minWidth: 90 }}>
                                   {formatBRL(Number(ord.total_amount) || 0)}
                                 </td>
                               </tr>
