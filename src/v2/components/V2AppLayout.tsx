@@ -9,6 +9,11 @@ import {
   Users,
   Menu,
   X,
+  Package,
+  Tag,
+  ShoppingCart,
+  ClipboardList,
+  Warehouse,
 } from 'lucide-react'
 
 export function V2AppLayout() {
@@ -33,11 +38,51 @@ function V2AppLayoutInner() {
     navigate('/v2/login')
   }
 
-  const navItems = [
+  type NavItem = { to: string; icon: typeof Home; label: string }
+  type NavGroup = { group: string; items: NavItem[] }
+  type NavEntry = NavItem | NavGroup
+
+  const navEntries: NavEntry[] = [
     { to: '/v2/inicio', icon: Home, label: 'Início' },
     { to: '/v2/clientes', icon: Users, label: 'Clientes' },
+    {
+      group: 'Comercial',
+      items: [
+        { to: '/v2/produtos', icon: Package, label: 'Produtos' },
+        { to: '/v2/tabela-preco', icon: Tag, label: 'Tabela de Preço' },
+        { to: '/v2/pedido-compra', icon: ShoppingCart, label: 'Ped. de Compra' },
+        { to: '/v2/pedido-vendas', icon: ClipboardList, label: 'Ped. de Vendas' },
+        { to: '/v2/estoque', icon: Warehouse, label: 'Estoque' },
+      ],
+    },
     { to: '/v2/configuracoes', icon: Settings, label: 'Configurações' },
   ]
+
+  // Flat list for mobile nav
+  const flatNavItems: NavItem[] = navEntries.flatMap((entry) =>
+    'group' in entry ? entry.items : [entry]
+  )
+
+  const renderNavLink = (to: string, Icon: typeof Home, label: string) => (
+    <NavLink
+      key={to}
+      to={to}
+      title={!sidebarExpanded ? label : undefined}
+      className={() =>
+        'flex items-center gap-3 rounded-xl text-sm font-bold transition-all hover:bg-white/10 overflow-hidden'
+      }
+      style={({ isActive }) => ({
+        padding: sidebarExpanded ? '9px 12px' : '9px 0',
+        justifyContent: sidebarExpanded ? 'flex-start' : 'center',
+        background: isActive ? 'rgba(255,255,255,0.2)' : undefined,
+        color: isActive ? '#FFFFFF' : 'rgba(255,255,255,0.7)',
+        border: isActive ? '1px solid rgba(255,255,255,0.25)' : '1px solid transparent',
+      })}
+    >
+      <Icon className="h-4 w-4 shrink-0" />
+      {sidebarExpanded && <span className="whitespace-nowrap">{label}</span>}
+    </NavLink>
+  )
 
   return (
     <div className="h-screen w-screen flex overflow-hidden font-sans" style={{ background: '#F0F7EE' }}>
