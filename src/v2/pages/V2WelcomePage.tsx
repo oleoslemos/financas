@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom'
 import { getCurrentV2User } from '../services/v2AuthService'
 import {
   Settings,
-  Users,
   Building2,
   ArrowRight,
   Leaf,
