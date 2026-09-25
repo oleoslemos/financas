@@ -38,7 +38,7 @@ function V2AppLayoutInner() {
     navigate('/v2/login')
   }
 
-  type NavItem = { to: string; icon: typeof Home; label: string }
+  type NavItem = { to: string; icon: React.ComponentType<any>; label: string }
   type NavGroup = { group: string; items: NavItem[] }
   type NavEntry = NavItem | NavGroup
 
@@ -58,8 +58,8 @@ function V2AppLayoutInner() {
     { to: '/v2/configuracoes', icon: Settings, label: 'Configurações' },
   ]
 
-  // Flat list for mobile nav
-  const flatNavItems: NavItem[] = navEntries.flatMap((entry) =>
+  // Flat list for navigation (desktop & mobile)
+  const navItems: NavItem[] = navEntries.flatMap((entry) =>
     'group' in entry ? entry.items : [entry]
   )
 
