@@ -169,31 +169,53 @@ const INITIAL_PRODUCTS: V2Product[] = [
 // ─── CRUD OPERATIONS ─────────────────────────────────────────────────────────
 
 export async function listV2Products(): Promise<V2Product[]> {
+  let list: V2Product[] = []
+
   if (supabase) {
     try {
       const { data, error } = await supabase.from('bem_aviv_products').select('*').order('name')
       if (!error && data && data.length > 0) {
-        return data as V2Product[]
+        list = data as V2Product[]
       }
     } catch {}
   }
 
-  try {
-    const raw = localStorage.getItem(KEY_PRODUCTS)
-    if (raw) return JSON.parse(raw)
-  } catch {}
+  if (list.length === 0) {
+    try {
+      const raw = localStorage.getItem(KEY_PRODUCTS)
+      if (raw) list = JSON.parse(raw)
+    } catch {}
+  }
 
-  localStorage.setItem(KEY_PRODUCTS, JSON.stringify(INITIAL_PRODUCTS))
-  return INITIAL_PRODUCTS
+  if (list.length === 0) {
+    list = INITIAL_PRODUCTS
+    localStorage.setItem(KEY_PRODUCTS, JSON.stringify(INITIAL_PRODUCTS))
+  }
+
+  // Ensure all products have an auto-generated SKU if missing
+  let count = 1
+  const updatedList = list.map((p) => {
+    if (!p.code_sku) {
+      const sku = `EKO-PRD-${String(count++).padStart(3, '0')}`
+      return { ...p, code_sku: sku }
+    }
+    return p
+  })
+
+  return updatedList
 }
 
 export async function saveV2Product(item: Omit<V2Product, 'id' | 'created_at'> & { id?: string }): Promise<V2Product> {
   const current = await listV2Products()
   const isEdit = Boolean(item.id)
   const id = item.id || 'prod-' + Date.now()
+  const nextNum = current.length + 1
+  const autoSku = item.code_sku || `EKO-PRD-${String(nextNum).padStart(3, '0')}`
+
   const fullItem: V2Product = {
     ...item,
     id,
+    code_sku: autoSku,
     created_at: item.id
       ? current.find((c) => c.id === item.id)?.created_at || new Date().toISOString()
       : new Date().toISOString(),

@@ -127,10 +127,21 @@ export function V2ProdutosPage() {
     kit_price_mode: 'AUTO',
   })
 
+  const generateNextSku = (prods: V2Product[]) => {
+    const numbers = prods
+      .map((p) => {
+        const match = (p.code_sku || '').match(/(\d+)/)
+        return match ? parseInt(match[0], 10) : 0
+      })
+      .filter((n) => !isNaN(n))
+    const maxNum = numbers.length > 0 ? Math.max(...numbers) : 0
+    const nextNum = Math.max(maxNum + 1, prods.length + 1)
+    return `EKO-PRD-${String(nextNum).padStart(3, '0')}`
+  }
+
   const openNewModal = () => {
     setEditingProd(null)
-    const nextNum = products.length + 1
-    const sku = `EKO-PRD-${String(nextNum).padStart(3, '0')}`
+    const sku = generateNextSku(products)
 
     setForm({
       code_sku: sku,
@@ -147,28 +158,7 @@ export function V2ProdutosPage() {
       dim_length_cm: '',
       dim_height_cm: '',
       active: true,
-      variations: [
-        {
-          id: 'v-1',
-          name: 'Solteiro (0,78m x 1,88m x 41cm)',
-          sku: `${sku}-SOL`,
-          cost_price: 2000,
-          sale_price: 4000,
-          dim_width_cm: 78,
-          dim_length_cm: 188,
-          dim_height_cm: 41,
-        },
-        {
-          id: 'v-2',
-          name: 'Casal (1,38m x 1,88m x 41cm)',
-          sku: `${sku}-CAS`,
-          cost_price: 2400,
-          sale_price: 4900,
-          dim_width_cm: 138,
-          dim_length_cm: 188,
-          dim_height_cm: 41,
-        },
-      ],
+      variations: [],
       kit_items: [],
       kit_price_mode: 'AUTO',
     })
@@ -177,8 +167,9 @@ export function V2ProdutosPage() {
 
   const openEditModal = (p: V2Product) => {
     setEditingProd(p)
+    const sku = p.code_sku || generateNextSku(products)
     setForm({
-      code_sku: p.code_sku || '',
+      code_sku: sku,
       name: p.name || '',
       type: p.type || 'SIMPLES',
       category: p.category || 'PLATAFORMA DE DESCANSO',
@@ -192,7 +183,7 @@ export function V2ProdutosPage() {
       dim_length_cm: p.dim_length_cm != null ? String(p.dim_length_cm) : '',
       dim_height_cm: p.dim_height_cm != null ? String(p.dim_height_cm) : '',
       active: p.active,
-      variations: p.variations ? [...p.variations] : [],
+      variations: p.variations ? p.variations.map((v, i) => ({ ...v, sku: v.sku || `${sku}-V${i + 1}` })) : [],
       kit_items: p.kit_items ? [...p.kit_items] : [],
       kit_price_mode: p.kit_price_mode || 'AUTO',
     })
@@ -205,7 +196,7 @@ export function V2ProdutosPage() {
     const newVar: ProductVariation = {
       id: 'v-' + Date.now() + '-' + count,
       name: `Nova Variação ${count}`,
-      sku: `${form.code_sku || 'SKU'}-VAR${count}`,
+      sku: `${form.code_sku || 'EKO-PRD'}-V${count}`,
       cost_price: form.cost_price || 0,
       sale_price: form.sale_price || 0,
       dim_width_cm: 138,
@@ -792,14 +783,17 @@ export function V2ProdutosPage() {
               {/* BASIC FIELDS */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Código SKU *</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-bold text-slate-700">Código SKU</label>
+                    <span className="text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-700 px-2 py-0.5 rounded-md">
+                      Automático
+                    </span>
+                  </div>
                   <input
                     type="text"
-                    required
-                    placeholder="Ex: EKO-PRD-001"
-                    value={form.code_sku}
-                    onChange={(e) => setForm({ ...form, code_sku: e.target.value })}
-                    className="w-full rounded-xl px-3.5 py-2.5 border border-slate-200 font-medium text-sm outline-none focus:border-blue-500 uppercase"
+                    readOnly
+                    value={form.code_sku || 'Gerado automaticamente'}
+                    className="w-full rounded-xl px-3.5 py-2.5 border border-slate-200 bg-slate-100 text-slate-600 font-mono font-bold text-sm outline-none cursor-not-allowed select-none"
                   />
                 </div>
 
@@ -962,12 +956,15 @@ export function V2ProdutosPage() {
                             />
                           </div>
                           <div>
-                            <label className="block font-bold text-slate-700 text-[10px] mb-0.5">SKU Variação</label>
+                            <div className="flex items-center justify-between mb-0.5">
+                              <label className="font-bold text-slate-700 text-[10px]">SKU Variação</label>
+                              <span className="text-[9px] font-bold text-purple-600 bg-purple-100 px-1.5 py-0.2 rounded">Auto</span>
+                            </div>
                             <input
                               type="text"
-                              value={v.sku || ''}
-                              onChange={(e) => updateVariationRow(v.id, 'sku', e.target.value)}
-                              className="w-full rounded-lg px-2.5 py-1.5 border border-slate-200 uppercase"
+                              readOnly
+                              value={v.sku || `${form.code_sku}-V`}
+                              className="w-full rounded-lg px-2.5 py-1.5 border border-slate-200 bg-slate-50 font-mono text-slate-600 text-xs cursor-not-allowed select-none"
                             />
                           </div>
                         </div>
