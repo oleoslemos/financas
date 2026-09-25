@@ -22,6 +22,8 @@ import {
   saveFormaPagamento,
   deleteFormaPagamento,
   FormaPagamento,
+  InstallmentRate,
+  generateDefaultInstallmentRates,
 } from '../services/v2SettingsService'
 import {
   Building2,
@@ -45,6 +47,9 @@ import {
   ToggleLeft,
   ToggleRight,
   Tag,
+  ChevronDown,
+  ChevronUp,
+  Sparkles,
 } from 'lucide-react'
 
 // ─── Company config helpers ────────────────────────────────────────────────
@@ -547,6 +552,12 @@ export function V2SettingsPage() {
   const [editingPay, setEditingPay] = useState<FormaPagamento | null>(null)
   const [savingPay, setSavingPay] = useState(false)
 
+  // Card expand details toggle map
+  const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({})
+  const toggleCardExpand = (id: string) => {
+    setExpandedCards((prev) => ({ ...prev, [id]: !prev[id] }))
+  }
+
   const [payForm, setPayForm] = useState<{
     name: string
     category: FormaPagamento['category']
@@ -554,6 +565,7 @@ export function V2SettingsPage() {
     fee_percentage: number
     days_to_receive: number
     active: boolean
+    installment_rates: InstallmentRate[]
   }>({
     name: '',
     category: 'PIX',
@@ -561,6 +573,7 @@ export function V2SettingsPage() {
     fee_percentage: 0.0,
     days_to_receive: 0,
     active: true,
+    installment_rates: [{ installment: 1, fee_percentage: 0.0 }],
   })
 
   const loadPayData = async () => {
@@ -576,21 +589,69 @@ export function V2SettingsPage() {
     }
   }, [currentTab])
 
+  // Update rates when max_installments changes in modal
+  const handleMaxInstallmentsChange = (count: number) => {
+    const validCount = Math.max(1, Math.min(48, count))
+    let rates = [...payForm.installment_rates]
+
+    if (validCount > rates.length) {
+      // Append missing installments
+      const base = rates[0]?.fee_percentage || payForm.fee_percentage || 2.5
+      for (let i = rates.length + 1; i <= validCount; i++) {
+        const fee = i === 1 ? base : parseFloat((base + (i - 1) * 0.6).toFixed(2))
+        rates.push({ installment: i, fee_percentage: fee })
+      }
+    } else if (validCount < rates.length) {
+      rates = rates.slice(0, validCount)
+    }
+
+    setPayForm((prev) => ({
+      ...prev,
+      max_installments: validCount,
+      installment_rates: rates,
+    }))
+  }
+
+  const handleInstallmentRateChange = (installmentNumber: number, newFee: number) => {
+    setPayForm((prev) => ({
+      ...prev,
+      installment_rates: prev.installment_rates.map((r) =>
+        r.installment === installmentNumber ? { ...r, fee_percentage: newFee } : r
+      ),
+    }))
+  }
+
+  const handleAutoFillRates = () => {
+    const base = payForm.installment_rates[0]?.fee_percentage || payForm.fee_percentage || 2.5
+    const rates = generateDefaultInstallmentRates(payForm.max_installments, base)
+    setPayForm((prev) => ({
+      ...prev,
+      installment_rates: rates,
+    }))
+    showToast({ type: 'success', text: 'Taxas progressivas auto-preenchidas!' })
+  }
+
   const openNewPayModal = () => {
     setEditingPay(null)
     setPayForm({
       name: '',
-      category: 'PIX',
-      max_installments: 1,
-      fee_percentage: 0.0,
-      days_to_receive: 0,
+      category: 'CREDIT_CARD',
+      max_installments: 12,
+      fee_percentage: 2.5,
+      days_to_receive: 30,
       active: true,
+      installment_rates: generateDefaultInstallmentRates(12, 2.5),
     })
     setModalPayOpen(true)
   }
 
   const openEditPayModal = (item: FormaPagamento) => {
     setEditingPay(item)
+    const rates =
+      item.installment_rates && item.installment_rates.length > 0
+        ? item.installment_rates
+        : generateDefaultInstallmentRates(item.max_installments || 1, item.fee_percentage || 0)
+
     setPayForm({
       name: item.name,
       category: item.category,
@@ -598,6 +659,7 @@ export function V2SettingsPage() {
       fee_percentage: item.fee_percentage,
       days_to_receive: item.days_to_receive,
       active: item.active,
+      installment_rates: rates,
     })
     setModalPayOpen(true)
   }
@@ -651,7 +713,7 @@ export function V2SettingsPage() {
     { id: 'empresa' as const, label: 'EMPRESA', icon: Building2, desc: 'Dados cadastrais & equipe' },
     { id: 'fornecedor' as const, label: 'FORNECEDOR', icon: Truck, desc: 'Gestão de fornecedores' },
     { id: 'representante' as const, label: 'REPRESENTANTE', icon: Briefcase, desc: 'Distribuidores & Representantes' },
-    { id: 'formas_pagamento' as const, label: 'FORMAS DE PAGAMENTO', icon: CreditCard, desc: 'Condições & taxas' },
+    { id: 'formas_pagamento' as const, label: 'FORMAS DE PAGAMENTO', icon: CreditCard, desc: 'Parcelamentos & taxas' },
   ]
 
   return (
@@ -1301,7 +1363,7 @@ export function V2SettingsPage() {
             <SectionCard
               icon={CreditCard}
               title="Cadastro de Formas & Condições de Pagamento"
-              subtitle="Defina formas de recebimento aceitas nas vendas, taxas e prazos de compensação"
+              subtitle="Configure opções de recebimento, parcelamentos dinâmicos e taxas por parcela"
               accent="amber"
             >
               {/* Header actions */}
@@ -1313,12 +1375,12 @@ export function V2SettingsPage() {
                     placeholder="Buscar forma de pagamento..."
                     value={searchPay}
                     onChange={(e) => setSearchPay(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl text-sm border border-slate-200 bg-slate-50 outline-none focus:border-amber-500"
+                    className="w-full pl-10 pr-4 py-2 rounded-xl text-xs border border-slate-200 bg-slate-50 outline-none focus:border-amber-500"
                   />
                 </div>
                 <button
                   onClick={openNewPayModal}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition shadow-sm w-full md:w-auto justify-center"
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white transition shadow-sm w-full md:w-auto justify-center"
                   style={{ background: '#D97706' }}
                 >
                   <Plus className="h-4 w-4" />
@@ -1326,7 +1388,7 @@ export function V2SettingsPage() {
                 </button>
               </div>
 
-              {/* Cards grid */}
+              {/* Cards grid - COMPACT 4-COLUMNS GRID */}
               {loadingPay ? (
                 <div className="py-12 text-center">
                   <Loader2 className="h-8 w-8 animate-spin mx-auto text-amber-600 mb-2" />
@@ -1338,7 +1400,7 @@ export function V2SettingsPage() {
                   <p className="text-sm font-bold text-slate-600">Nenhuma forma de pagamento cadastrada</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
                   {filteredFormas.map((item) => {
                     const categoryColors = {
                       PIX: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
@@ -1349,17 +1411,27 @@ export function V2SettingsPage() {
                       OTHER: { bg: 'bg-slate-50', text: 'text-slate-700', border: 'border-slate-200' },
                     }
                     const catStyle = categoryColors[item.category] || categoryColors.OTHER
+                    const isExpanded = expandedCards[item.id] || false
+                    const hasMultipleRates =
+                      item.installment_rates && item.installment_rates.length > 1
+
+                    const minFee = item.installment_rates?.[0]?.fee_percentage ?? item.fee_percentage ?? 0
+                    const maxFee =
+                      item.installment_rates?.[item.installment_rates.length - 1]?.fee_percentage ??
+                      item.fee_percentage ??
+                      0
 
                     return (
                       <div
                         key={item.id}
-                        className={`p-5 rounded-2xl border transition-all shadow-xs relative flex flex-col justify-between ${
+                        className={`p-3.5 rounded-2xl border transition-all shadow-2xs relative flex flex-col justify-between ${
                           item.active ? 'bg-white border-slate-200' : 'bg-slate-50 border-slate-200 opacity-60'
                         }`}
                       >
                         <div>
-                          <div className="flex items-start justify-between gap-2 mb-3">
-                            <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border ${catStyle.bg} ${catStyle.text} ${catStyle.border}`}>
+                          {/* Header badge & status toggle */}
+                          <div className="flex items-center justify-between gap-1 mb-2">
+                            <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border ${catStyle.bg} ${catStyle.text} ${catStyle.border}`}>
                               {item.category}
                             </span>
                             <button
@@ -1368,41 +1440,79 @@ export function V2SettingsPage() {
                               title={item.active ? 'Desativar' : 'Ativar'}
                             >
                               {item.active ? (
-                                <ToggleRight className="h-6 w-6 text-emerald-600" />
+                                <ToggleRight className="h-5 w-5 text-emerald-600" />
                               ) : (
-                                <ToggleLeft className="h-6 w-6 text-slate-300" />
+                                <ToggleLeft className="h-5 w-5 text-slate-300" />
                               )}
                             </button>
                           </div>
 
-                          <h3 className="font-black text-slate-900 text-base">{item.name}</h3>
+                          {/* Title */}
+                          <h3 className="font-black text-slate-900 text-xs leading-snug line-clamp-2">
+                            {item.name}
+                          </h3>
 
-                          <div className="mt-4 space-y-2 text-xs text-slate-600">
-                            <div className="flex justify-between">
-                              <span className="text-slate-400 font-medium">Parcelamento Máx:</span>
-                              <span className="font-bold text-slate-800">{item.max_installments}x</span>
+                          {/* Stats summary */}
+                          <div className="mt-3 space-y-1.5 text-[11px] text-slate-600">
+                            <div className="flex justify-between items-center">
+                              <span className="text-slate-400 font-medium">Parcelamento:</span>
+                              <span className="font-bold text-slate-800">
+                                {item.max_installments > 1 ? `1x a ${item.max_installments}x` : '1x (à vista)'}
+                              </span>
                             </div>
-                            <div className="flex justify-between">
+
+                            <div className="flex justify-between items-center">
                               <span className="text-slate-400 font-medium">Taxa Adm (%):</span>
-                              <span className="font-bold text-amber-600">{item.fee_percentage}%</span>
+                              <span className="font-bold text-amber-600">
+                                {hasMultipleRates && minFee !== maxFee
+                                  ? `${minFee}% ~ ${maxFee}%`
+                                  : `${item.fee_percentage}%`}
+                              </span>
                             </div>
-                            <div className="flex justify-between">
-                              <span className="text-slate-400 font-medium">Prazo Recebimento:</span>
-                              <span className="font-bold text-slate-800">{item.days_to_receive} dia(s)</span>
+
+                            <div className="flex justify-between items-center">
+                              <span className="text-slate-400 font-medium">Prazo:</span>
+                              <span className="font-bold text-slate-700">{item.days_to_receive} dia(s)</span>
                             </div>
                           </div>
+
+                          {/* Expanded parcel rates view */}
+                          {hasMultipleRates && (
+                            <div className="mt-3 pt-2 border-t border-slate-100">
+                              <button
+                                type="button"
+                                onClick={() => toggleCardExpand(item.id)}
+                                className="flex items-center justify-between w-full text-[10px] font-bold text-amber-700 hover:text-amber-800"
+                              >
+                                <span>Tabela de parcelas ({item.installment_rates?.length})</span>
+                                {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                              </button>
+
+                              {isExpanded && (
+                                <div className="mt-2 grid grid-cols-2 gap-1 max-h-36 overflow-y-auto pr-1 text-[10px] bg-amber-50/50 p-2 rounded-lg border border-amber-100">
+                                  {item.installment_rates?.map((r) => (
+                                    <div key={r.installment} className="flex justify-between bg-white px-1.5 py-0.5 rounded border border-amber-100">
+                                      <span className="font-bold text-slate-700">{r.installment}x</span>
+                                      <span className="font-black text-amber-700">{r.fee_percentage}%</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
 
-                        <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                        {/* Actions footer */}
+                        <div className="mt-4 pt-2 border-t border-slate-100 flex items-center justify-end gap-1.5">
                           <button
                             onClick={() => openEditPayModal(item)}
-                            className="px-3 py-1.5 rounded-lg text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 transition"
+                            className="px-2.5 py-1 rounded-md text-[11px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 transition"
                           >
                             Editar
                           </button>
                           <button
                             onClick={() => handleDeletePay(item.id)}
-                            className="px-3 py-1.5 rounded-lg text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 transition"
+                            className="px-2.5 py-1 rounded-md text-[11px] font-bold text-red-600 bg-red-50 hover:bg-red-100 transition"
                           >
                             Excluir
                           </button>
@@ -1738,7 +1848,7 @@ export function V2SettingsPage() {
       {/* ────────────────────────────────────────────────────────────────── */}
       {modalPayOpen && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl shadow-2xl p-6 max-w-lg w-full my-8 space-y-5 animate-in fade-in zoom-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl p-6 max-w-xl w-full my-8 space-y-5 animate-in fade-in zoom-in duration-200">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
@@ -1748,7 +1858,7 @@ export function V2SettingsPage() {
                   <h3 className="text-base font-black text-slate-900">
                     {editingPay ? 'Editar Forma de Pagamento' : 'Nova Forma de Pagamento'}
                   </h3>
-                  <p className="text-xs text-slate-500">Parâmetros de recebimento e taxas</p>
+                  <p className="text-xs text-slate-500">Defina o parcelamento e as taxas de administração por parcela</p>
                 </div>
               </div>
               <button
@@ -1766,7 +1876,7 @@ export function V2SettingsPage() {
                   <input
                     type="text"
                     required
-                    placeholder="Ex: Cartão de Crédito 12x"
+                    placeholder="Ex: Cartão de Crédito (Visa / Master)"
                     value={payForm.name}
                     onChange={(e) => setPayForm({ ...payForm, name: e.target.value })}
                     className="w-full rounded-xl px-3.5 py-2.5 border border-slate-200 font-medium text-sm outline-none focus:border-amber-500"
@@ -1782,35 +1892,44 @@ export function V2SettingsPage() {
                     }
                     className="w-full rounded-xl px-3.5 py-2.5 border border-slate-200 font-medium text-sm outline-none focus:border-amber-500 bg-white"
                   >
-                    <option value="PIX">PIX</option>
                     <option value="CREDIT_CARD">Cartão de Crédito</option>
+                    <option value="PIX">PIX</option>
                     <option value="DEBIT_CARD">Cartão de Débito</option>
                     <option value="BOLETO">Boleto Bancário</option>
-                    <option value="CASH">Dinheiro</option>
+                    <option value="CASH">Dinheiro em Espécie</option>
                     <option value="OTHER">Outros</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Parcelas Máximas</label>
+                  <label className="block font-bold text-slate-700 mb-1">Parcelas Máximas (ex: 12x)</label>
                   <input
                     type="number"
                     min="1"
                     max="48"
                     value={payForm.max_installments}
-                    onChange={(e) => setPayForm({ ...payForm, max_installments: parseInt(e.target.value) || 1 })}
+                    onChange={(e) => handleMaxInstallmentsChange(parseInt(e.target.value) || 1)}
                     className="w-full rounded-xl px-3.5 py-2.5 border border-slate-200 font-medium text-sm outline-none focus:border-amber-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Taxa Administrativa (%)</label>
+                  <label className="block font-bold text-slate-700 mb-1">Taxa Base 1x (%)</label>
                   <input
                     type="number"
                     step="0.01"
                     min="0"
                     value={payForm.fee_percentage}
-                    onChange={(e) => setPayForm({ ...payForm, fee_percentage: parseFloat(e.target.value) || 0 })}
+                    onChange={(e) => {
+                      const newFee = parseFloat(e.target.value) || 0
+                      setPayForm((prev) => ({
+                        ...prev,
+                        fee_percentage: newFee,
+                        installment_rates: prev.installment_rates.map((r) =>
+                          r.installment === 1 ? { ...r, fee_percentage: newFee } : r
+                        ),
+                      }))
+                    }}
                     className="w-full rounded-xl px-3.5 py-2.5 border border-slate-200 font-medium text-sm outline-none focus:border-amber-500"
                   />
                 </div>
@@ -1826,6 +1945,64 @@ export function V2SettingsPage() {
                   />
                 </div>
               </div>
+
+              {/* ── PARCELAS E TAXAS POR PARCELA ── */}
+              {payForm.max_installments > 0 && (
+                <div className="bg-amber-50/60 p-4 rounded-2xl border border-amber-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-black uppercase text-amber-900 tracking-wide flex items-center gap-1.5">
+                        <Percent className="h-3.5 w-3.5 text-amber-700" />
+                        Taxas Personalizadas por Parcela ({payForm.max_installments}x)
+                      </h4>
+                      <p className="text-[11px] text-amber-800">
+                        Informe a taxa de administração (%) para cada número de parcelas
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleAutoFillRates}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-bold text-amber-900 bg-amber-200/80 hover:bg-amber-200 transition border border-amber-300 shadow-2xs"
+                      title="Preenche incremento progressivo automático"
+                    >
+                      <Sparkles className="h-3 w-3 text-amber-700" />
+                      Auto-preencher
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-48 overflow-y-auto p-1">
+                    {payForm.installment_rates.map((rateItem) => (
+                      <div
+                        key={rateItem.installment}
+                        className="bg-white p-2 rounded-xl border border-amber-200 shadow-2xs flex items-center justify-between gap-1"
+                      >
+                        <span className="text-xs font-black text-amber-900 shrink-0">
+                          {rateItem.installment}x:
+                        </span>
+                        <div className="relative flex-1">
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={rateItem.fee_percentage}
+                            onChange={(e) =>
+                              handleInstallmentRateChange(
+                                rateItem.installment,
+                                parseFloat(e.target.value) || 0
+                              )
+                            }
+                            className="w-full text-right pr-4 font-bold text-xs py-1 rounded-lg border border-amber-200 outline-none focus:border-amber-500 bg-amber-50/30"
+                          />
+                          <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] font-bold text-amber-700">
+                            %
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="pt-3 border-t border-slate-100 flex justify-end gap-3">
                 <button
