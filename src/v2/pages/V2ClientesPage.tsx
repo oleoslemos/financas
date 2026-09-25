@@ -20,6 +20,7 @@ import {
   TrendingUp,
   Sparkles,
   Lock,
+  MessageCircle,
 } from 'lucide-react'
 import {
   BemAvivClient,
@@ -93,6 +94,14 @@ function formatDate(iso: string | null | undefined): string {
 function formatDateInput(iso: string | null | undefined): string {
   if (!iso) return ''
   return iso.split('T')[0].split(' ')[0]
+}
+
+function getWhatsappUrl(phone?: string | null): string | null {
+  if (!phone) return null
+  const d = phone.replace(/\D/g, '')
+  if (!d || d.length < 8) return null
+  const normalized = d.startsWith('55') ? d : `55${d}`
+  return `https://wa.me/${normalized}`
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -327,14 +336,34 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
           borderBottom: '1px solid #F3F4F6',
           background: BRAND_BLUE,
         }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#FFFFFF' }}>
-              {client ? 'Editar Cliente' : 'Novo Cliente'}
-            </h2>
-            {client && (
-              <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>
-                {client.full_name}
-              </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div>
+              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#FFFFFF' }}>
+                {client ? 'Editar Cliente' : 'Novo Cliente'}
+              </h2>
+              {client && (
+                <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>
+                  {client.full_name}
+                </p>
+              )}
+            </div>
+            {client && (client.phone_1 || client.phone_2) && getWhatsappUrl(client.phone_1 || client.phone_2) && (
+              <a
+                href={getWhatsappUrl(client.phone_1 || client.phone_2)!}
+                target="_blank"
+                rel="noreferrer"
+                title="Abrir conversa no WhatsApp"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '5px 12px', borderRadius: 8,
+                  background: '#25D366', color: '#FFFFFF',
+                  fontSize: 12, fontWeight: 700, textDecoration: 'none',
+                  boxShadow: '0 2px 8px rgba(37,211,102,0.3)',
+                }}
+              >
+                <MessageCircle size={14} />
+                WhatsApp
+              </a>
             )}
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.8)', padding: 4 }}>
@@ -819,6 +848,9 @@ export function V2ClientesPage() {
   // KPI
   const kpi = useMemo(() => computeKpi(clients), [clients])
 
+  const ITEMS_PER_PAGE = 50
+  const [page, setPage] = useState(1)
+
   // Filtered list
   const filtered = useMemo(() => {
     return clients.filter((c) => {
@@ -845,6 +877,18 @@ export function V2ClientesPage() {
       return searchOk && filterOk && eko7Ok
     })
   }, [clients, search, quickFilter, eko7Filter])
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1)
+  }, [search, quickFilter, eko7Filter])
+
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE) || 1
+  const currentPage = Math.min(page, totalPages)
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+  const paginatedClients = useMemo(() => {
+    return filtered.slice(startIndex, startIndex + ITEMS_PER_PAGE)
+  }, [filtered, startIndex])
 
   const openNew = () => { setSelectedClient(null); setDrawerOpen(true) }
   const openEdit = (c: BemAvivClient) => { setSelectedClient(c); setDrawerOpen(true) }
@@ -1062,7 +1106,7 @@ export function V2ClientesPage() {
           {/* Table Header */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '2fr 1fr 1fr 1.5fr 40px',
+            gridTemplateColumns: '2fr 1.6fr 1fr 1.5fr 40px',
             padding: '10px 16px',
             background: '#F9FAFB',
             borderBottom: '1px solid #F3F4F6',
@@ -1085,19 +1129,20 @@ export function V2ClientesPage() {
           )}
 
           {/* Rows */}
-          {!loading && filtered.map((c, i) => {
+          {!loading && paginatedClients.map((c, i) => {
             const hasFollowup = !!c.next_followup_at
             const followupPast = hasFollowup && new Date(c.next_followup_at!) < new Date()
+            const waUrl = getWhatsappUrl(c.phone_1 || c.phone_2)
             return (
               <div
                 key={c.id}
                 onClick={() => openEdit(c)}
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '2fr 1fr 1fr 1.5fr 40px',
+                  gridTemplateColumns: '2fr 1.6fr 1fr 1.5fr 40px',
                   padding: '12px 16px',
                   alignItems: 'center',
-                  borderBottom: i < filtered.length - 1 ? '1px solid #F9FAFB' : 'none',
+                  borderBottom: i < paginatedClients.length - 1 ? '1px solid #F9FAFB' : 'none',
                   background: i % 2 === 1 ? '#FAFAFA' : '#FFFFFF',
                   cursor: 'pointer',
                   transition: 'background 0.12s',
@@ -1118,10 +1163,29 @@ export function V2ClientesPage() {
 
                 {/* Contact */}
                 <div>
-                  <p style={{ margin: 0, fontSize: 12, color: '#374151', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <Phone size={11} color="#9CA3AF" />
-                    {formatClientPhone(c) || '—'}
-                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <p style={{ margin: 0, fontSize: 12, color: '#374151', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Phone size={11} color="#9CA3AF" />
+                      {formatClientPhone(c) || '—'}
+                    </p>
+                    {waUrl && (
+                      <a
+                        href={waUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        title="Enviar mensagem no WhatsApp"
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          padding: '2px 6px', borderRadius: 6,
+                          background: '#25D366', color: '#FFFFFF',
+                          fontSize: 10, fontWeight: 700, textDecoration: 'none',
+                        }}
+                      >
+                        <MessageCircle size={10} /> WhatsApp
+                      </a>
+                    )}
+                  </div>
                   {c.email && (
                     <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9CA3AF', display: 'flex', alignItems: 'center', gap: 3 }}>
                       <Mail size={10} />
@@ -1187,11 +1251,43 @@ export function V2ClientesPage() {
           )}
         </div>
 
-        {/* Count footer */}
+        {/* Pagination & Count footer */}
         {!loading && filtered.length > 0 && (
-          <p style={{ margin: '10px 0 0', fontSize: 11, color: '#9CA3AF', textAlign: 'right' }}>
-            Exibindo {filtered.length} de {clients.length} clientes
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 14, flexWrap: 'wrap', gap: 10 }}>
+            <p style={{ margin: 0, fontSize: 12, color: '#6B7280' }}>
+              Mostrando {startIndex + 1} a {Math.min(startIndex + ITEMS_PER_PAGE, filtered.length)} de {filtered.length} clientes
+              {filtered.length !== clients.length && ` (filtrado de ${clients.length} no total)`}
+            </p>
+            {totalPages > 1 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  style={{
+                    padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                    border: '1px solid #D1D5DB', background: '#FFFFFF', color: currentPage === 1 ? '#9CA3AF' : '#374151',
+                    cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  Anterior
+                </button>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>
+                  Página {currentPage} de {totalPages}
+                </span>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  style={{
+                    padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                    border: '1px solid #D1D5DB', background: '#FFFFFF', color: currentPage === totalPages ? '#9CA3AF' : '#374151',
+                    cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  Próxima
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
