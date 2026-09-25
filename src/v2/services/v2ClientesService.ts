@@ -259,6 +259,21 @@ export async function createRelative(input: Omit<Familiar, 'id'>): Promise<{ dat
   return { data: data as unknown as Familiar, error: null }
 }
 
+export async function updateRelative(
+  id: string,
+  changes: Partial<Omit<Familiar, 'id' | 'client_id'>>,
+): Promise<{ data: Familiar | null; error: string | null }> {
+  if (!supabase) return { data: null, error: 'Supabase não configurado.' }
+  const { data, error } = await supabase
+    .from('bem_aviv_client_relatives')
+    .update(changes)
+    .eq('id', id)
+    .select()
+    .maybeSingle()
+  if (error) return { data: null, error: error.message }
+  return { data: data as unknown as Familiar, error: null }
+}
+
 export async function deleteRelative(id: string): Promise<{ error: string | null }> {
   if (!supabase) return { error: 'Supabase não configurado.' }
   const { error } = await supabase.from('bem_aviv_client_relatives').delete().eq('id', id)

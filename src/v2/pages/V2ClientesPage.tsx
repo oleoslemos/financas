@@ -21,6 +21,7 @@ import {
   Sparkles,
   Lock,
   MessageCircle,
+  Pencil,
 } from 'lucide-react'
 import {
   BemAvivClient,
@@ -38,6 +39,7 @@ import {
   fetchRelatives,
   formatClientPhone,
   updateClient,
+  updateRelative,
 } from '../services/v2ClientesService'
 import { getCurrentV2User } from '../services/v2AuthService'
 import { useCompany } from '../../context/CompanyContext'
@@ -157,6 +159,7 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
   // Relatives state
   const [relatives, setRelatives] = useState<Familiar[]>([])
   const [loadingRelatives, setLoadingRelatives] = useState(false)
+  const [editingRelativeId, setEditingRelativeId] = useState<string | null>(null)
   const [newRelative, setNewRelative] = useState({
     name: '',
     relationship: 'CÔNJUGE',
@@ -177,6 +180,8 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
       setForm(client ? { ...client } : emptyForm(companyId))
       setError(null)
       setTab('dados')
+      setEditingRelativeId(null)
+      setNewRelative({ name: '', relationship: 'CÔNJUGE', cpf: '', birth_date: '', phone: '' })
 
       if (client?.id) {
         setLoadingRelatives(true)
@@ -235,7 +240,23 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
     onDeleted(client.id)
   }
 
-  const handleAddRelative = async (e: React.FormEvent) => {
+  const handleStartEditRelative = (rel: Familiar) => {
+    setEditingRelativeId(rel.id)
+    setNewRelative({
+      name: rel.name || '',
+      relationship: rel.relationship || 'CÔNJUGE',
+      cpf: rel.cpf || '',
+      birth_date: formatDateInput(rel.birth_date),
+      phone: rel.phone || '',
+    })
+  }
+
+  const handleCancelEditRelative = () => {
+    setEditingRelativeId(null)
+    setNewRelative({ name: '', relationship: 'CÔNJUGE', cpf: '', birth_date: '', phone: '' })
+  }
+
+  const handleSaveRelative = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!client?.id) return
     if (!newRelative.name.trim()) {
@@ -245,24 +266,40 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
     setAddingRelative(true)
     setError(null)
 
-    const { data, error: relErr } = await createRelative({
-      client_id: client.id,
-      company_id: companyId,
+    const payload = {
       name: newRelative.name.trim().toUpperCase(),
       relationship: (newRelative.relationship || 'OUTRO').trim().toUpperCase(),
       cpf: newRelative.cpf.trim() || null,
       birth_date: newRelative.birth_date || null,
       phone: newRelative.phone.trim() || null,
-    })
-
-    setAddingRelative(false)
-    if (relErr) {
-      setError(relErr)
-      return
     }
-    if (data) {
-      setRelatives((prev) => [...prev, data])
-      setNewRelative({ name: '', relationship: 'CÔNJUGE', cpf: '', birth_date: '', phone: '' })
+
+    if (editingRelativeId) {
+      const { data, error: relErr } = await updateRelative(editingRelativeId, payload)
+      setAddingRelative(false)
+      if (relErr) {
+        setError(relErr)
+        return
+      }
+      if (data) {
+        setRelatives((prev) => prev.map((r) => (r.id === editingRelativeId ? data : r)))
+        handleCancelEditRelative()
+      }
+    } else {
+      const { data, error: relErr } = await createRelative({
+        ...payload,
+        client_id: client.id,
+        company_id: companyId,
+      })
+      setAddingRelative(false)
+      if (relErr) {
+        setError(relErr)
+        return
+      }
+      if (data) {
+        setRelatives((prev) => [...prev, data])
+        handleCancelEditRelative()
+      }
     }
   }
 
@@ -275,6 +312,9 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
       return
     }
     setRelatives((prev) => prev.filter((r) => r.id !== relId))
+    if (editingRelativeId === relId) {
+      handleCancelEditRelative()
+    }
   }
 
   const orderStats = useMemo(() => {
@@ -525,10 +565,21 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
                 </div>
               ) : (
                 <>
-                  <form onSubmit={handleAddRelative} style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 10, padding: 14 }}>
-                    <p style={{ margin: '0 0 10px', fontSize: 12, fontWeight: 800, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      Adicionar Familiar
-                    </p>
+                  <form onSubmit={handleSaveRelative} style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 10, padding: 14 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        {editingRelativeId ? 'Editar Familiar' : 'Adicionar Familiar'}
+                      </p>
+                      {editingRelativeId && (
+                        <button
+                          type="button"
+                          onClick={handleCancelEditRelative}
+                          style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 12, color: '#6B7280', fontWeight: 600 }}
+                        >
+                          Cancelar Edição
+                        </button>
+                      )}
+                    </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
                       <div>
                         <label style={labelStyle}>Nome Completo *</label>
@@ -560,18 +611,20 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
                         <input style={inputClass()} value={newRelative.phone} onChange={(e) => setNewRelative({ ...newRelative, phone: e.target.value })} placeholder="(00) 00000-0000" />
                       </div>
                     </div>
-                    <button
-                      type="submit"
-                      disabled={addingRelative}
-                      style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                        width: '100%', padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700,
-                        border: 'none', background: '#7DC344', color: '#FFFFFF', cursor: addingRelative ? 'not-allowed' : 'pointer',
-                      }}
-                    >
-                      {addingRelative ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Plus size={14} />}
-                      Adicionar Familiar
-                    </button>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        type="submit"
+                        disabled={addingRelative}
+                        style={{
+                          flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                          padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                          border: 'none', background: editingRelativeId ? BRAND_BLUE : '#7DC344', color: '#FFFFFF', cursor: addingRelative ? 'not-allowed' : 'pointer',
+                        }}
+                      >
+                        {addingRelative ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : (editingRelativeId ? <Save size={14} /> : <Plus size={14} />)}
+                        {editingRelativeId ? 'Salvar Alterações do Familiar' : 'Adicionar Familiar'}
+                      </button>
+                    </div>
                   </form>
 
                   <div>
@@ -606,13 +659,22 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
                                 <td style={{ padding: '8px 12px', color: '#6B7280' }}>{formatDate(rel.birth_date)}</td>
                                 <td style={{ padding: '8px 12px', color: '#6B7280' }}>{rel.phone || '—'}</td>
                                 <td style={{ padding: '8px 12px', textAlign: 'right' }}>
-                                  <button
-                                    onClick={() => handleDeleteRelative(rel.id, rel.name)}
-                                    style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#EF4444', padding: 4 }}
-                                    title="Remover familiar"
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
+                                  <div style={{ display: 'inline-flex', gap: 6 }}>
+                                    <button
+                                      onClick={() => handleStartEditRelative(rel)}
+                                      style={{ border: 'none', background: 'none', cursor: 'pointer', color: BRAND_BLUE, padding: 4 }}
+                                      title="Editar familiar"
+                                    >
+                                      <Pencil size={14} />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteRelative(rel.id, rel.name)}
+                                      style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#EF4444', padding: 4 }}
+                                      title="Remover familiar"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             ))}
