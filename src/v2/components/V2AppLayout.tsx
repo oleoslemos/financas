@@ -38,7 +38,7 @@ function V2AppLayoutInner() {
     navigate('/v2/login')
   }
 
-  type NavItem = { to: string; icon: React.ComponentType<any>; label: string }
+  type NavItem = { to: string; icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; label: string }
   type NavGroup = { group: string; items: NavItem[] }
   type NavEntry = NavItem | NavGroup
 
@@ -63,26 +63,7 @@ function V2AppLayoutInner() {
     'group' in entry ? entry.items : [entry]
   )
 
-  const renderNavLink = (to: string, Icon: typeof Home, label: string) => (
-    <NavLink
-      key={to}
-      to={to}
-      title={!sidebarExpanded ? label : undefined}
-      className={() =>
-        'flex items-center gap-3 rounded-xl text-sm font-bold transition-all hover:bg-white/10 overflow-hidden'
-      }
-      style={({ isActive }) => ({
-        padding: sidebarExpanded ? '9px 12px' : '9px 0',
-        justifyContent: sidebarExpanded ? 'flex-start' : 'center',
-        background: isActive ? 'rgba(255,255,255,0.2)' : undefined,
-        color: isActive ? '#FFFFFF' : 'rgba(255,255,255,0.7)',
-        border: isActive ? '1px solid rgba(255,255,255,0.25)' : '1px solid transparent',
-      })}
-    >
-      <Icon className="h-4 w-4 shrink-0" />
-      {sidebarExpanded && <span className="whitespace-nowrap">{label}</span>}
-    </NavLink>
-  )
+
 
   return (
     <div className="h-screen w-screen flex overflow-hidden font-sans" style={{ background: '#F0F7EE' }}>
