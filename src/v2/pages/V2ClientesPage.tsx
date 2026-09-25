@@ -805,8 +805,8 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
                               <th style={{ padding: '8px 8px', whiteSpace: 'nowrap' }}>DATA</th>
                               <th style={{ padding: '8px 8px', whiteSpace: 'nowrap' }}>TIPO</th>
                               <th style={{ padding: '8px 8px', whiteSpace: 'nowrap' }}>Nº DOC</th>
-                              <th style={{ padding: '8px 8px' }}>STATUS</th>
                               <th style={{ padding: '8px 8px', textAlign: 'right', whiteSpace: 'nowrap', minWidth: 90 }}>VALOR</th>
+                              <th style={{ padding: '8px 8px' }}>STATUS</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -823,10 +823,10 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
                                   </span>
                                 </td>
                                 <td style={{ padding: '8px 8px', fontWeight: 600, color: '#111827', whiteSpace: 'nowrap' }}>{ord.document_number || '—'}</td>
-                                <td style={{ padding: '8px 8px', color: '#4B5563', fontSize: 11 }}>{ord.status || '—'}</td>
                                 <td style={{ padding: '8px 8px', textAlign: 'right', fontWeight: 700, color: '#059669', whiteSpace: 'nowrap', minWidth: 90 }}>
                                   {formatBRL(Number(ord.total_amount) || 0)}
                                 </td>
+                                <td style={{ padding: '8px 8px', color: '#4B5563', fontSize: 11 }}>{ord.status || '—'}</td>
                               </tr>
                             ))}
                           </tbody>
