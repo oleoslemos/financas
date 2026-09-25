@@ -74,6 +74,11 @@ const V2AdminUsersPage = lazy(() => import('./v2/pages/V2AdminUsersPage').then((
 const V2WelcomePage = lazy(() => import('./v2/pages/V2WelcomePage').then((m) => ({ default: m.V2WelcomePage })))
 const V2ClientesPage = lazy(() => import('./v2/pages/V2ClientesPage').then((m) => ({ default: m.V2ClientesPage })))
 const V2SettingsPage = lazy(() => import('./v2/pages/V2SettingsPage').then((m) => ({ default: m.V2SettingsPage })))
+const V2ProdutosPage = lazy(() => import('./v2/pages/V2ProdutosPage').then((m) => ({ default: m.V2ProdutosPage })))
+const V2TabelaPrecoPage = lazy(() => import('./v2/pages/V2TabelaPrecoPage').then((m) => ({ default: m.V2TabelaPrecoPage })))
+const V2PedidoCompraPage = lazy(() => import('./v2/pages/V2PedidoCompraPage').then((m) => ({ default: m.V2PedidoCompraPage })))
+const V2PedidoVendasPage = lazy(() => import('./v2/pages/V2PedidoVendasPage').then((m) => ({ default: m.V2PedidoVendasPage })))
+const V2EstoquePage = lazy(() => import('./v2/pages/V2EstoquePage').then((m) => ({ default: m.V2EstoquePage })))
 
 function HomeRedirect() {
   const { user } = useUser()
@@ -103,6 +108,12 @@ export default function App() {
           <Route path="/v2" element={<Navigate to="/v2/inicio" replace />} />
           <Route path="/v2/inicio" element={<V2WelcomePage />} />
           <Route path="/v2/clientes" element={<V2ClientesPage />} />
+          <Route path="/v2/produtos" element={<V2ProdutosPage />} />
+          <Route path="/v2/tabela-preco" element={<V2TabelaPrecoPage />} />
+          <Route path="/v2/pedido-compra" element={<V2PedidoCompraPage />} />
+          <Route path="/v2/pedido-vendas" element={<V2PedidoVendasPage />} />
+          <Route path="/v2/pedido-vendas-distribuidor" element={<V2PedidoVendasPage />} />
+          <Route path="/v2/estoque" element={<V2EstoquePage />} />
           <Route path="/v2/configuracoes" element={<V2SettingsPage />} />
         </Route>
 
