@@ -38,23 +38,8 @@ const QUICK_CARDS: QuickCard[] = [
     to: '/v2/configuracoes',
     accent: 'blue',
   },
-  {
-    id: 'usuarios',
-    icon: Users,
-    label: 'Usuários',
-    description: 'Administrar acessos e permissões',
-    to: '/v2/admin/usuarios',
-    accent: 'green',
-  },
-  {
-    id: 'empresa',
-    icon: Building2,
-    label: 'Minha Empresa',
-    description: 'Perfil e informações cadastrais',
-    to: '/v2/configuracoes',
-    accent: 'blue',
-  },
 ]
+
 
 export function V2WelcomePage() {
   const navigate = useNavigate()
