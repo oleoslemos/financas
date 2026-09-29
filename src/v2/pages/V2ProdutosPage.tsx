@@ -35,7 +35,6 @@ import {
   Download,
   RotateCcw,
   Tag as TagIcon,
-  Check,
 } from 'lucide-react'
 
 function formatCurrency(val: number): string {
