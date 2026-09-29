@@ -103,8 +103,9 @@ export function V2ProdutosPage() {
   const [editingProd, setEditingProd] = useState<V2Product | null>(null)
   const [saving, setSaving] = useState(false)
 
-  // Tag input state for Linha do Produto
+  // Tag input state for Linha do Produto (multi-tag)
   const [lineInput, setLineInput] = useState('')
+  const [lineTags, setLineTags] = useState<string[]>([])
   const [lineSuggestionsOpen, setLineSuggestionsOpen] = useState(false)
 
   const [form, setForm] = useState<{
@@ -161,7 +162,7 @@ export function V2ProdutosPage() {
       code_sku: sku,
       name: '',
       type: 'SIMPLES',
-      product_line: distinctLines[0] || 'Geral',
+      product_line: '',
       model: '',
       unit: 'UN',
       cost_price: 0,
@@ -174,7 +175,8 @@ export function V2ProdutosPage() {
       kit_items: [],
       kit_price_mode: 'AUTO',
     })
-    setLineInput(distinctLines[0] || 'Geral')
+    setLineTags([])
+    setLineInput('')
     setModalOpen(true)
   }
 
@@ -198,7 +200,11 @@ export function V2ProdutosPage() {
       kit_items: p.kit_items ? [...p.kit_items] : [],
       kit_price_mode: p.kit_price_mode || 'AUTO',
     })
-    setLineInput(p.product_line || '')
+    const tags = p.product_line
+      ? p.product_line.split('|').map(t => t.trim()).filter(Boolean)
+      : []
+    setLineTags(tags)
+    setLineInput('')
     setModalOpen(true)
   }
 
