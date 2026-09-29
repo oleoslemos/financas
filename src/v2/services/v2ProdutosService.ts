@@ -4,19 +4,12 @@ import { supabase } from '../../lib/supabaseClient'
 
 export type ProductType = 'SIMPLES' | 'VARIACAO' | 'KIT'
 
-export type ProductCategory =
-  | 'PLATAFORMA DE DESCANSO'
-  | 'CABECEIRAS'
-  | 'BASES / CAMAS'
-  | 'ACESSÓRIOS'
-  | 'OUTROS'
-
 export interface ProductVariation {
   id: string
   name: string
   sku?: string
-  cost_price: number
-  sale_price: number
+  cost_price: number // Tabela Fábrica
+  sale_price: number // Tabela Vendas Sul
   dim_width_cm?: number | null
   dim_length_cm?: number | null
   dim_height_cm?: number | null
@@ -33,15 +26,14 @@ export interface KitItem {
 export interface V2Product {
   id: string
   code_sku: string
-  name: string
+  name: string // Descrição Produto
   type: ProductType
-  category: ProductCategory
-  product_line?: string
+  category?: string
+  product_line?: string // Linha do Produto
   model?: string
-  description?: string
   unit: string
-  cost_price: number
-  sale_price: number
+  cost_price: number // Tabela Fábrica (R$)
+  sale_price: number // Tabela Vendas Sul (R$)
   dim_width_cm?: number | null
   dim_length_cm?: number | null
   dim_height_cm?: number | null
@@ -63,17 +55,19 @@ export async function listV2Products(): Promise<V2Product[]> {
 
   if (supabase) {
     try {
-      const { data, error } = await supabase.from(SUPABASE_TABLE).select('*').order('name')
+      const { data, error } = await supabase.from(SUPABASE_TABLE).select('*').order('code_sku')
       if (!error && data) {
-        return data as V2Product[]
+        list = data as V2Product[]
       }
     } catch {}
   }
 
-  try {
-    const raw = localStorage.getItem(KEY_PRODUCTS)
-    if (raw) list = JSON.parse(raw)
-  } catch {}
+  if (list.length === 0) {
+    try {
+      const raw = localStorage.getItem(KEY_PRODUCTS)
+      if (raw) list = JSON.parse(raw)
+    } catch {}
+  }
 
   // Ensure all products have an auto-generated SKU if missing
   let count = 1
@@ -99,6 +93,7 @@ export async function saveV2Product(item: Omit<V2Product, 'id' | 'created_at'> &
     ...item,
     id,
     code_sku: autoSku,
+    unit: item.unit || 'UN',
     created_at: item.id
       ? current.find((c) => c.id === item.id)?.created_at || new Date().toISOString()
       : new Date().toISOString(),
@@ -111,10 +106,8 @@ export async function saveV2Product(item: Omit<V2Product, 'id' | 'created_at'> &
         code_sku: fullItem.code_sku,
         name: fullItem.name,
         type: fullItem.type,
-        category: fullItem.category,
         product_line: fullItem.product_line || null,
         model: fullItem.model || null,
-        description: fullItem.description || null,
         unit: fullItem.unit || 'UN',
         cost_price: fullItem.cost_price,
         sale_price: fullItem.sale_price,
@@ -153,4 +146,68 @@ export async function deleteV2Product(id: string): Promise<void> {
   const current = await listV2Products()
   const filtered = current.filter((p) => p.id !== id)
   localStorage.setItem(KEY_PRODUCTS, JSON.stringify(filtered))
+}
+
+export async function clearAllV2Products(): Promise<void> {
+  if (supabase) {
+    try {
+      // Delete all records from Supabase table
+      await supabase.from(SUPABASE_TABLE).delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    } catch (err) {
+      console.warn('Supabase wipe products error:', err)
+    }
+  }
+  localStorage.removeItem(KEY_PRODUCTS)
+}
+
+export async function getDistinctProductLines(): Promise<string[]> {
+  const prods = await listV2Products()
+  const lines = prods.map((p) => p.product_line).filter((l): l is string => Boolean(l && l.trim()))
+  return Array.from(new Set(lines)).sort()
+}
+
+// ─── CSV EXPORT UTILITY ───────────────────────────────────────────────────────
+
+export function exportProductsToCSV(products: V2Product[]): void {
+  const headers = [
+    'SKU',
+    'DESCRIÇÃO PRODUTO',
+    'LINHA DO PRODUTO',
+    'DIMENSÕES',
+    'TABELA FÁBRICA (R$)',
+    'TABELA VENDAS SUL (R$)',
+    'TIPO',
+    'STATUS',
+  ]
+
+  const rows = products.map((p) => {
+    const dim = [
+      p.dim_width_cm ? `${(p.dim_width_cm / 100).toFixed(2).replace('.', ',')}m` : '',
+      p.dim_length_cm ? `${(p.dim_length_cm / 100).toFixed(2).replace('.', ',')}m` : '',
+      p.dim_height_cm ? `${p.dim_height_cm}cm` : '',
+    ]
+      .filter(Boolean)
+      .join(' x ')
+
+    return [
+      `"${p.code_sku || ''}"`,
+      `"${(p.name || '').replace(/"/g, '""')}"`,
+      `"${(p.product_line || '').replace(/"/g, '""')}"`,
+      `"${dim || '—'}"`,
+      `"${(p.cost_price || 0).toFixed(2).replace('.', ',')}"`,
+      `"${(p.sale_price || 0).toFixed(2).replace('.', ',')}"`,
+      `"${p.type || 'SIMPLES'}"`,
+      `"${p.active ? 'Ativo' : 'Inativo'}"`,
+    ].join(';')
+  })
+
+  const csvContent = '\uFEFF' + [headers.join(';'), ...rows].join('\n')
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.setAttribute('href', url)
+  link.setAttribute('download', `Produtos_BemAviv_${new Date().toISOString().slice(0, 10)}.csv`)
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
 }

@@ -5,9 +5,11 @@ import {
   listV2Products,
   saveV2Product,
   deleteV2Product,
+  clearAllV2Products,
+  exportProductsToCSV,
+  getDistinctProductLines,
   V2Product,
   ProductType,
-  ProductCategory,
   ProductVariation,
   KitItem,
 } from '../services/v2ProdutosService'
@@ -26,15 +28,18 @@ import {
   Boxes,
   ChevronDown,
   ChevronUp,
-  DollarSign,
   Copy,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  Download,
+  RotateCcw,
+  Tag as TagIcon,
+  Check,
 } from 'lucide-react'
 
 function formatCurrency(val: number): string {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0)
 }
 
 function maskDimensions(w?: number | null, l?: number | null, h?: number | null): string {
@@ -57,8 +62,9 @@ export function V2ProdutosPage() {
   const [products, setProducts] = useState<V2Product[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [filterCategory, setFilterCategory] = useState<string>('TODOS')
+  const [filterLine, setFilterLine] = useState<string>('TODAS')
   const [filterType, setFilterType] = useState<string>('TODOS')
+  const [distinctLines, setDistinctLines] = useState<string[]>([])
 
   // Expanded rows state (for variations & kit items preview)
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({})
@@ -75,6 +81,10 @@ export function V2ProdutosPage() {
     setLoading(true)
     const data = await listV2Products()
     setProducts(data)
+
+    const lines = await getDistinctProductLines()
+    setDistinctLines(lines)
+
     setLoading(false)
   }
 
@@ -93,17 +103,19 @@ export function V2ProdutosPage() {
   const [editingProd, setEditingProd] = useState<V2Product | null>(null)
   const [saving, setSaving] = useState(false)
 
+  // Tag input state for Linha do Produto
+  const [lineInput, setLineInput] = useState('')
+  const [lineSuggestionsOpen, setLineSuggestionsOpen] = useState(false)
+
   const [form, setForm] = useState<{
     code_sku: string
-    name: string
+    name: string // Descrição Produto
     type: ProductType
-    category: ProductCategory
-    product_line: string
+    product_line: string // Linha do Produto
     model: string
-    description: string
     unit: string
-    cost_price: number
-    sale_price: number
+    cost_price: number // Tabela Fábrica (R$)
+    sale_price: number // Tabela Vendas Sul (R$)
     dim_width_cm: string
     dim_length_cm: string
     dim_height_cm: string
@@ -115,10 +127,8 @@ export function V2ProdutosPage() {
     code_sku: '',
     name: '',
     type: 'SIMPLES',
-    category: 'PLATAFORMA DE DESCANSO',
-    product_line: 'SUPER PREMIUM',
+    product_line: '',
     model: '',
-    description: '',
     unit: 'UN',
     cost_price: 0,
     sale_price: 0,
@@ -151,10 +161,8 @@ export function V2ProdutosPage() {
       code_sku: sku,
       name: '',
       type: 'SIMPLES',
-      category: 'PLATAFORMA DE DESCANSO',
-      product_line: 'SUPER PREMIUM',
+      product_line: distinctLines[0] || 'Geral',
       model: '',
-      description: '',
       unit: 'UN',
       cost_price: 0,
       sale_price: 0,
@@ -166,6 +174,7 @@ export function V2ProdutosPage() {
       kit_items: [],
       kit_price_mode: 'AUTO',
     })
+    setLineInput(distinctLines[0] || 'Geral')
     setModalOpen(true)
   }
 
@@ -176,10 +185,8 @@ export function V2ProdutosPage() {
       code_sku: sku,
       name: p.name || '',
       type: p.type || 'SIMPLES',
-      category: p.category || 'PLATAFORMA DE DESCANSO',
-      product_line: p.product_line || 'SUPER PREMIUM',
+      product_line: p.product_line || '',
       model: p.model || '',
-      description: p.description || '',
       unit: p.unit || 'UN',
       cost_price: p.cost_price || 0,
       sale_price: p.sale_price || 0,
@@ -191,6 +198,7 @@ export function V2ProdutosPage() {
       kit_items: p.kit_items ? [...p.kit_items] : [],
       kit_price_mode: p.kit_price_mode || 'AUTO',
     })
+    setLineInput(p.product_line || '')
     setModalOpen(true)
   }
 
@@ -237,7 +245,6 @@ export function V2ProdutosPage() {
     }
     setForm((prev) => {
       const updatedKit = [...prev.kit_items, newItem]
-      // Recalculate auto kit sale price
       const autoPrice = updatedKit.reduce((sum, item) => sum + item.quantity * item.unit_price, 0)
       return {
         ...prev,
@@ -249,8 +256,8 @@ export function V2ProdutosPage() {
 
   const updateKitItemRow = (index: number, quantity: number, unit_price: number) => {
     setForm((prev) => {
-      const updatedKit = prev.kit_items.map((item, i) =>
-        i === index ? { ...item, quantity, unit_price } : item
+      const updatedKit = prev.kit_items.map((item, idx) =>
+        idx === index ? { ...item, quantity, unit_price } : item
       )
       const autoPrice = updatedKit.reduce((sum, item) => sum + item.quantity * item.unit_price, 0)
       return {
@@ -263,7 +270,7 @@ export function V2ProdutosPage() {
 
   const removeKitItemRow = (index: number) => {
     setForm((prev) => {
-      const updatedKit = prev.kit_items.filter((_, i) => i !== index)
+      const updatedKit = prev.kit_items.filter((_, idx) => idx !== index)
       const autoPrice = updatedKit.reduce((sum, item) => sum + item.quantity * item.unit_price, 0)
       return {
         ...prev,
@@ -273,11 +280,12 @@ export function V2ProdutosPage() {
     })
   }
 
-  // Save product
-  const handleSaveProduct = async (e: React.FormEvent) => {
+  // ── SAVE & SUBMIT ──
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
+
     if (!form.name.trim()) {
-      showToast({ type: 'error', text: 'Informe o nome do produto.' })
+      showToast({ type: 'error', text: 'Preencha a Descrição do Produto.' })
       return
     }
 
@@ -293,7 +301,6 @@ export function V2ProdutosPage() {
 
     setSaving(true)
 
-    // Calculate prices for variations or kits
     let finalSalePrice = form.sale_price
     let finalCostPrice = form.cost_price
 
@@ -301,15 +308,15 @@ export function V2ProdutosPage() {
       finalSalePrice = form.kit_items.reduce((sum, i) => sum + i.quantity * i.unit_price, 0)
     }
 
+    const finalLine = lineInput.trim() || form.product_line || 'Geral'
+
     await saveV2Product({
       ...(editingProd ? { id: editingProd.id } : {}),
       code_sku: form.code_sku,
       name: form.name,
       type: form.type,
-      category: form.category,
-      product_line: form.product_line,
+      product_line: finalLine,
       model: form.model,
-      description: form.description,
       unit: form.unit,
       cost_price: finalCostPrice,
       sale_price: finalSalePrice,
@@ -363,10 +370,8 @@ export function V2ProdutosPage() {
       code_sku: nextSku,
       name: newName,
       type: p.type,
-      category: p.category,
       product_line: p.product_line,
       model: p.model,
-      description: p.description,
       unit: p.unit,
       cost_price: p.cost_price,
       sale_price: p.sale_price,
@@ -386,11 +391,20 @@ export function V2ProdutosPage() {
     })
   }
 
+  const handleWipeDatabase = async () => {
+    if (window.confirm('ATENÇÃO: Deseja realmente EXCLUIR TODOS OS PRODUTOS do banco de dados e reiniciar o contador de SKU? Esta ação não poderá ser desfeita.')) {
+      setLoading(true)
+      await clearAllV2Products()
+      await loadData()
+      showToast({ type: 'success', text: 'Todos os produtos foram excluídos. Contador de SKU reiniciado para EKO-PRD-001.' })
+    }
+  }
+
   // Sort State
-  const [sortField, setSortField] = useState<'sku' | 'name' | 'sale_price' | 'category'>('sku')
+  const [sortField, setSortField] = useState<'sku' | 'name' | 'sale_price' | 'line'>('sku')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
 
-  const handleSort = (field: 'sku' | 'name' | 'sale_price' | 'category') => {
+  const handleSort = (field: 'sku' | 'name' | 'sale_price' | 'line') => {
     if (sortField === field) {
       setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))
     } else {
@@ -408,10 +422,10 @@ export function V2ProdutosPage() {
       (p.model && p.model.toLowerCase().includes(q)) ||
       (p.product_line && p.product_line.toLowerCase().includes(q))
 
-    const matchesCategory = filterCategory === 'TODOS' || p.category === filterCategory
+    const matchesLine = filterLine === 'TODAS' || p.product_line === filterLine
     const matchesType = filterType === 'TODOS' || p.type === filterType
 
-    return matchesSearch && matchesCategory && matchesType
+    return matchesSearch && matchesLine && matchesType
   })
 
   // Sorted products
@@ -425,20 +439,11 @@ export function V2ProdutosPage() {
       comp = a.name.localeCompare(b.name)
     } else if (sortField === 'sale_price') {
       comp = (a.sale_price || 0) - (b.sale_price || 0)
-    } else if (sortField === 'category') {
-      comp = a.category.localeCompare(b.category)
+    } else if (sortField === 'line') {
+      comp = (a.product_line || '').localeCompare(b.product_line || '')
     }
     return sortDirection === 'asc' ? comp : -comp
   })
-
-  const categoryList: (ProductCategory | 'TODOS')[] = [
-    'TODOS',
-    'PLATAFORMA DE DESCANSO',
-    'CABECEIRAS',
-    'BASES / CAMAS',
-    'ACESSÓRIOS',
-    'OUTROS',
-  ]
 
   const typeList: (ProductType | 'TODOS')[] = ['TODOS', 'SIMPLES', 'VARIACAO', 'KIT']
 
@@ -459,7 +464,7 @@ export function V2ProdutosPage() {
         />
       </div>
 
-      <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
         {/* Title Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
@@ -470,14 +475,35 @@ export function V2ProdutosPage() {
               Cadastre e gerencie produtos simples, grupos com variações de medidas e kits promocionais.
             </p>
           </div>
-          <button
-            onClick={openNewModal}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition shadow-sm justify-center"
-            style={{ background: '#0D6BAF' }}
-          >
-            <Plus className="h-4 w-4" />
-            Novo Produto
-          </button>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => exportProductsToCSV(sortedProducts)}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition shadow-2xs"
+              title="Exportar catálogo atual para CSV"
+            >
+              <Download className="h-4 w-4 text-emerald-600" />
+              Exportar CSV
+            </button>
+
+            <button
+              onClick={handleWipeDatabase}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 transition shadow-2xs"
+              title="Excluir todos os produtos e reiniciar SKU para EKO-PRD-001"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Zerar Banco
+            </button>
+
+            <button
+              onClick={openNewModal}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition shadow-sm justify-center"
+              style={{ background: '#0D6BAF' }}
+            >
+              <Plus className="h-4 w-4" />
+              Novo Produto
+            </button>
+          </div>
         </div>
 
         {/* ── TOP STATS BAR ── */}
@@ -518,15 +544,11 @@ export function V2ProdutosPage() {
 
           <div className="bg-white p-4 rounded-2xl border border-emerald-100 shadow-2xs flex items-center gap-3">
             <div className="h-10 w-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-              <DollarSign className="h-5 w-5" />
+              <TagIcon className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Valor em Catálogo</p>
-              <p className="text-lg font-black text-emerald-800">
-                {formatCurrency(
-                  products.reduce((acc, p) => acc + (p.sale_price || 0), 0)
-                )}
-              </p>
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Linhas Ativas</p>
+              <p className="text-xl font-black text-emerald-800">{distinctLines.length}</p>
             </div>
           </div>
         </div>
@@ -538,7 +560,7 @@ export function V2ProdutosPage() {
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
                 type="text"
-                placeholder="Buscar por nome, SKU, linha ou modelo..."
+                placeholder="Buscar por descrição, SKU ou linha..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl text-xs border border-slate-200 bg-slate-50 outline-none focus:border-blue-500"
@@ -552,7 +574,7 @@ export function V2ProdutosPage() {
                 <select
                   value={`${sortField}-${sortDirection}`}
                   onChange={(e) => {
-                    const [f, d] = e.target.value.split('-') as ['sku' | 'name' | 'sale_price' | 'category', 'asc' | 'desc']
+                    const [f, d] = e.target.value.split('-') as ['sku' | 'name' | 'sale_price' | 'line', 'asc' | 'desc']
                     setSortField(f)
                     setSortDirection(d)
                   }}
@@ -560,10 +582,10 @@ export function V2ProdutosPage() {
                 >
                   <option value="sku-asc">SKU (Crescente 001 ➔ 008)</option>
                   <option value="sku-desc">SKU (Decrescente 008 ➔ 001)</option>
-                  <option value="name-asc">Nome (A ➔ Z)</option>
-                  <option value="name-desc">Nome (Z ➔ A)</option>
-                  <option value="sale_price-desc">Maior Preço Venda</option>
-                  <option value="sale_price-asc">Menor Preço Venda</option>
+                  <option value="name-asc">Descrição (A ➔ Z)</option>
+                  <option value="name-desc">Descrição (Z ➔ A)</option>
+                  <option value="sale_price-desc">Maior Tabela Vendas Sul</option>
+                  <option value="sale_price-asc">Menor Tabela Vendas Sul</option>
                 </select>
               </div>
 
@@ -587,20 +609,20 @@ export function V2ProdutosPage() {
             </div>
           </div>
 
-          {/* Category Tabs */}
+          {/* Line Filter Tabs */}
           <div className="flex items-center gap-2 overflow-x-auto pt-2 border-t border-slate-100">
-            <span className="text-[11px] font-bold text-slate-400 mr-1 uppercase">Categoria:</span>
-            {categoryList.map((cat) => (
+            <span className="text-[11px] font-bold text-slate-400 mr-1 uppercase">Linha:</span>
+            {['TODAS', ...distinctLines].map((line) => (
               <button
-                key={cat}
-                onClick={() => setFilterCategory(cat)}
+                key={line}
+                onClick={() => setFilterLine(line)}
                 className={`px-3 py-1 rounded-full text-xs font-bold transition whitespace-nowrap border ${
-                  filterCategory === cat
+                  filterLine === line
                     ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
                     : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                 }`}
               >
-                {cat}
+                {line}
               </button>
             ))}
           </div>
@@ -615,8 +637,8 @@ export function V2ProdutosPage() {
         ) : sortedProducts.length === 0 ? (
           <div className="py-16 text-center bg-white rounded-2xl border border-dashed border-slate-200">
             <Package className="h-10 w-10 text-slate-300 mx-auto mb-2" />
-            <p className="text-sm font-bold text-slate-600">Nenhum produto encontrado</p>
-            <p className="text-xs text-slate-400 mt-1">Tente ajustar a busca ou adicionar um novo produto.</p>
+            <p className="text-sm font-bold text-slate-600">Nenhum produto cadastrado</p>
+            <p className="text-xs text-slate-400 mt-1">Clique em "Novo Produto" para iniciar o cadastro.</p>
           </div>
         ) : (
           <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
@@ -630,7 +652,7 @@ export function V2ProdutosPage() {
                       title="Clique para ordenar por SKU"
                     >
                       <div className="flex items-center gap-1.5">
-                        <span>SKU / Produto</span>
+                        <span>SKU / Descrição Produto</span>
                         {sortField === 'sku' ? (
                           sortDirection === 'asc' ? (
                             <ArrowUp className="h-3.5 w-3.5 text-blue-600 font-black" />
@@ -644,13 +666,13 @@ export function V2ProdutosPage() {
                     </th>
                     <th className="p-3.5">Tipo</th>
                     <th
-                      onClick={() => handleSort('category')}
+                      onClick={() => handleSort('line')}
                       className="p-3.5 cursor-pointer hover:bg-slate-100/80 transition select-none group"
-                      title="Clique para ordenar por Categoria"
+                      title="Clique para ordenar por Linha"
                     >
                       <div className="flex items-center gap-1.5">
-                        <span>Categoria / Linha</span>
-                        {sortField === 'category' ? (
+                        <span>Linha do Produto</span>
+                        {sortField === 'line' ? (
                           sortDirection === 'asc' ? (
                             <ArrowUp className="h-3.5 w-3.5 text-blue-600 font-black" />
                           ) : (
@@ -662,14 +684,14 @@ export function V2ProdutosPage() {
                       </div>
                     </th>
                     <th className="p-3.5">Dimensões</th>
-                    <th className="p-3.5">Preço Custo</th>
+                    <th className="p-3.5">Tabela Fábrica (R$)</th>
                     <th
                       onClick={() => handleSort('sale_price')}
                       className="p-3.5 cursor-pointer hover:bg-slate-100/80 transition select-none group"
-                      title="Clique para ordenar por Preço de Venda"
+                      title="Clique para ordenar por Tabela Vendas Sul"
                     >
                       <div className="flex items-center gap-1.5">
-                        <span>Preço Venda</span>
+                        <span>Tabela Vendas Sul (R$)</span>
                         {sortField === 'sale_price' ? (
                           sortDirection === 'asc' ? (
                             <ArrowUp className="h-3.5 w-3.5 text-blue-600 font-black" />
@@ -731,19 +753,20 @@ export function V2ProdutosPage() {
                           </td>
 
                           <td className="p-3.5">
-                            <p className="font-bold text-slate-800">{p.category}</p>
-                            {p.product_line && <p className="text-[10px] text-slate-400">{p.product_line}</p>}
+                            <span className="inline-block font-bold text-slate-800 bg-slate-100 px-2.5 py-1 rounded-lg text-xs">
+                              {p.product_line || 'Geral'}
+                            </span>
                           </td>
 
                           <td className="p-3.5 text-slate-600">
                             {maskDimensions(p.dim_width_cm, p.dim_length_cm, p.dim_height_cm)}
                           </td>
 
-                          <td className="p-3.5 font-medium text-slate-500">
+                          <td className="p-3.5 font-medium text-slate-600">
                             {formatCurrency(p.cost_price || 0)}
                           </td>
 
-                          <td className="p-3.5 font-bold text-emerald-700">
+                          <td className="p-3.5 font-bold text-emerald-700 text-sm">
                             {formatCurrency(p.sale_price || 0)}
                           </td>
 
@@ -808,9 +831,7 @@ export function V2ProdutosPage() {
                                         </div>
                                         <div className="text-right">
                                           <p className="font-bold text-emerald-700">{formatCurrency(v.sale_price)}</p>
-                                          <p className="text-[10px] text-slate-400 font-medium">
-                                            Custo: {formatCurrency(v.cost_price)}
-                                          </p>
+                                          <p className="text-[10px] text-slate-400">Fábrica: {formatCurrency(v.cost_price)}</p>
                                         </div>
                                       </div>
                                     ))}
@@ -821,7 +842,7 @@ export function V2ProdutosPage() {
                               {p.type === 'KIT' && p.kit_items && (
                                 <div className="space-y-2">
                                   <p className="text-[11px] font-black uppercase tracking-wider text-amber-800">
-                                    Itens Inclusos no Kit Combo ({p.kit_items.length})
+                                    Componentes do Kit ({p.kit_items.length})
                                   </p>
                                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                                     {p.kit_items.map((item, idx) => (
@@ -831,16 +852,11 @@ export function V2ProdutosPage() {
                                       >
                                         <div>
                                           <p className="font-bold text-slate-800">{item.product_name}</p>
-                                          <p className="text-[10px] font-semibold text-slate-500">
-                                            Qtd: {item.quantity}x
-                                          </p>
+                                          <p className="text-[10px] text-slate-400">Qtd: {item.quantity}x</p>
                                         </div>
                                         <div className="text-right">
                                           <p className="font-bold text-emerald-700">
-                                            {formatCurrency(item.unit_price * item.quantity)}
-                                          </p>
-                                          <p className="text-[10px] text-slate-400">
-                                            Un: {formatCurrency(item.unit_price)}
+                                            {formatCurrency(item.quantity * item.unit_price)}
                                           </p>
                                         </div>
                                       </div>
@@ -861,39 +877,36 @@ export function V2ProdutosPage() {
         )}
       </div>
 
-      {/* ────────────────────────────────────────────────────────────────── */}
-      {/* MODAL DE CADASTRO / EDIÇÃO DE PRODUTO */}
-      {/* ────────────────────────────────────────────────────────────────── */}
+      {/* ── MODAL DE PRODUCT CADASTRO / EDIÇÃO ── */}
       {modalOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl shadow-2xl p-6 max-w-2xl w-full my-8 space-y-5 animate-in fade-in zoom-in duration-200">
-            {/* Header */}
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-3xl w-full p-6 shadow-2xl space-y-5 my-8">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+                <div className="h-10 w-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
                   <Package className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-slate-900">
+                  <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">
                     {editingProd ? 'Editar Produto' : 'Novo Produto'}
                   </h3>
-                  <p className="text-xs text-slate-500">
-                    Escolha o tipo (Simples, Variação ou Kit) e configure os preços
+                  <p className="text-xs font-medium text-slate-500">
+                    Preencha os dados abaixo para cadastrar no catálogo
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600"
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-xl transition"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveProduct} className="space-y-4">
-              {/* SELECTOR DE TIPO (3 MODOS) */}
+            <form onSubmit={handleSave} className="space-y-4">
+              {/* PRODUCT TYPE SELECTOR */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider">
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wide">
                   Tipo de Produto *
                 </label>
                 <div className="grid grid-cols-3 gap-2">
@@ -907,7 +920,7 @@ export function V2ProdutosPage() {
                     }`}
                   >
                     <Box className="h-4 w-4" />
-                    SIMPLES
+                    Simples
                   </button>
 
                   <button
@@ -920,7 +933,7 @@ export function V2ProdutosPage() {
                     }`}
                   >
                     <Layers className="h-4 w-4" />
-                    COM VARIAÇÃO
+                    Com Variação
                   </button>
 
                   <button
@@ -933,7 +946,7 @@ export function V2ProdutosPage() {
                     }`}
                   >
                     <Boxes className="h-4 w-4" />
-                    KIT / COMBO
+                    KIT / Combo
                   </button>
                 </div>
               </div>
@@ -956,68 +969,111 @@ export function V2ProdutosPage() {
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Nome do Produto / Grupo *</label>
+                  <label className="block font-bold text-slate-700 mb-1">Descrição Produto *</label>
                   <input
                     type="text"
                     required
-                    placeholder="Ex: Plataforma Conforto Super Premium"
+                    placeholder="Ex: RENOVA [0,88 x 1,88 x 0,20m] [Quântica + Vibro]"
                     value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
                     className="w-full rounded-xl px-3.5 py-2.5 border border-slate-200 font-medium text-sm outline-none focus:border-blue-500"
                   />
                 </div>
 
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Categoria</label>
-                  <select
-                    value={form.category}
-                    onChange={(e) => setForm({ ...form, category: e.target.value as ProductCategory })}
-                    className="w-full rounded-xl px-3.5 py-2.5 border border-slate-200 font-medium text-sm outline-none focus:border-blue-500 bg-white"
-                  >
-                    <option value="PLATAFORMA DE DESCANSO">PLATAFORMA DE DESCANSO</option>
-                    <option value="CABECEIRAS">CABECEIRAS</option>
-                    <option value="BASES / CAMAS">BASES / CAMAS</option>
-                    <option value="ACESSÓRIOS">ACESSÓRIOS</option>
-                    <option value="OUTROS">OUTROS</option>
-                  </select>
+                {/* LINHA DO PRODUTO - TAGS / AUTOCOMPLETE */}
+                <div className="relative md:col-span-2">
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Linha do Produto (Etiqueta/Tag) *
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      required
+                      placeholder="Digite o nome da Linha (ex: Colchões Relax, Colchões Premium)..."
+                      value={lineInput}
+                      onFocus={() => setLineSuggestionsOpen(true)}
+                      onChange={(e) => {
+                        setLineInput(e.target.value)
+                        setForm({ ...form, product_line: e.target.value })
+                        setLineSuggestionsOpen(true)
+                      }}
+                      onBlur={() => setTimeout(() => setLineSuggestionsOpen(false), 200)}
+                      className="w-full rounded-xl px-3.5 py-2.5 border border-slate-200 font-medium text-sm outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  {/* Existing Line Tags suggestions */}
+                  {distinctLines.length > 0 && (
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">Sugestões existentes:</span>
+                      {distinctLines.map((line) => (
+                        <button
+                          key={line}
+                          type="button"
+                          onClick={() => {
+                            setLineInput(line)
+                            setForm({ ...form, product_line: line })
+                            setLineSuggestionsOpen(false)
+                          }}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 border ${
+                            lineInput.trim().toLowerCase() === line.toLowerCase()
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                              : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+                          }`}
+                        >
+                          {lineInput.trim().toLowerCase() === line.toLowerCase() && <Check className="h-3 w-3" />}
+                          {line}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Dropdown Suggestions */}
+                  {lineSuggestionsOpen && distinctLines.filter((l) => l.toLowerCase().includes(lineInput.toLowerCase())).length > 0 && (
+                    <div className="absolute z-50 left-0 right-0 top-14 bg-white border border-slate-200 rounded-xl shadow-xl max-h-40 overflow-y-auto">
+                      {distinctLines
+                        .filter((l) => l.toLowerCase().includes(lineInput.toLowerCase()))
+                        .map((line) => (
+                          <div
+                            key={line}
+                            onMouseDown={() => {
+                              setLineInput(line)
+                              setForm({ ...form, product_line: line })
+                              setLineSuggestionsOpen(false)
+                            }}
+                            className="px-3.5 py-2 hover:bg-blue-50 cursor-pointer text-xs font-bold text-slate-700 flex items-center justify-between"
+                          >
+                            <span>{line}</span>
+                            <span className="text-[10px] text-blue-600">Usar esta linha</span>
+                          </div>
+                        ))}
+                    </div>
+                  )}
                 </div>
 
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Linha do Produto</label>
-                  <select
-                    value={form.product_line}
-                    onChange={(e) => setForm({ ...form, product_line: e.target.value })}
-                    className="w-full rounded-xl px-3.5 py-2.5 border border-slate-200 font-medium text-sm outline-none focus:border-blue-500 bg-white"
-                  >
-                    <option value="SUPER PREMIUM">SUPER PREMIUM</option>
-                    <option value="PREMIUM">PREMIUM</option>
-                    <option value="EXECUTIVE">EXECUTIVE</option>
-                    <option value="PADRÃO">PADRÃO</option>
-                  </select>
-                </div>
-
-                {form.type === 'SIMPLES' && (
+                {/* PRICES */}
+                {form.type !== 'KIT' && (
                   <>
                     <div>
-                      <label className="block font-bold text-slate-700 mb-1">Preço de Custo (R$)</label>
+                      <label className="block font-bold text-slate-700 mb-1">Tabela Fábrica (R$)</label>
                       <input
                         type="number"
                         step="0.01"
-                        min="0"
-                        value={form.cost_price}
+                        placeholder="Ex: 858.49"
+                        value={form.cost_price || ''}
                         onChange={(e) => setForm({ ...form, cost_price: parseFloat(e.target.value) || 0 })}
-                        className="w-full rounded-xl px-3.5 py-2.5 border border-slate-200 font-medium text-sm outline-none focus:border-blue-500"
+                        className="w-full rounded-xl px-3.5 py-2.5 border border-slate-200 font-bold text-sm text-slate-700 outline-none focus:border-blue-500"
                       />
                     </div>
 
                     <div>
-                      <label className="block font-bold text-slate-700 mb-1">Preço de Venda Padrão (R$) *</label>
+                      <label className="block font-bold text-emerald-800 mb-1">Tabela Vendas Sul (R$) *</label>
                       <input
                         type="number"
                         step="0.01"
-                        min="0"
                         required
-                        value={form.sale_price}
+                        placeholder="Ex: 2002.57"
+                        value={form.sale_price || ''}
                         onChange={(e) => setForm({ ...form, sale_price: parseFloat(e.target.value) || 0 })}
                         className="w-full rounded-xl px-3.5 py-2.5 border border-slate-200 font-bold text-sm text-emerald-800 outline-none focus:border-blue-500"
                       />
@@ -1029,7 +1085,7 @@ export function V2ProdutosPage() {
                         <label className="block font-bold text-slate-600 mb-1 text-[11px]">Largura (cm)</label>
                         <input
                           type="number"
-                          placeholder="Ex: 158"
+                          placeholder="Ex: 88"
                           value={form.dim_width_cm}
                           onChange={(e) => setForm({ ...form, dim_width_cm: e.target.value })}
                           className="w-full rounded-lg px-2.5 py-1.5 border border-slate-200 text-xs bg-white"
@@ -1039,7 +1095,7 @@ export function V2ProdutosPage() {
                         <label className="block font-bold text-slate-600 mb-1 text-[11px]">Comprimento (cm)</label>
                         <input
                           type="number"
-                          placeholder="Ex: 198"
+                          placeholder="Ex: 188"
                           value={form.dim_length_cm}
                           onChange={(e) => setForm({ ...form, dim_length_cm: e.target.value })}
                           className="w-full rounded-lg px-2.5 py-1.5 border border-slate-200 text-xs bg-white"
@@ -1049,7 +1105,7 @@ export function V2ProdutosPage() {
                         <label className="block font-bold text-slate-600 mb-1 text-[11px]">Altura (cm)</label>
                         <input
                           type="number"
-                          placeholder="Ex: 41"
+                          placeholder="Ex: 20"
                           value={form.dim_height_cm}
                           onChange={(e) => setForm({ ...form, dim_height_cm: e.target.value })}
                           className="w-full rounded-lg px-2.5 py-1.5 border border-slate-200 text-xs bg-white"
@@ -1058,17 +1114,6 @@ export function V2ProdutosPage() {
                     </div>
                   </>
                 )}
-
-                <div className="md:col-span-2">
-                  <label className="block font-bold text-slate-700 mb-1">Descrição / Detalhes</label>
-                  <textarea
-                    rows={2}
-                    placeholder="Descrição para catálogo e propostas comercial..."
-                    value={form.description}
-                    onChange={(e) => setForm({ ...form, description: e.target.value })}
-                    className="w-full rounded-xl p-3 border border-slate-200 font-medium text-sm outline-none focus:border-blue-500"
-                  />
-                </div>
               </div>
 
               {/* ── MODE 2: VARIAÇÕES ── */}
@@ -1080,15 +1125,11 @@ export function V2ProdutosPage() {
                         <Layers className="h-4 w-4 text-purple-700" />
                         Lista de Variações do Grupo ({form.variations.length})
                       </h4>
-                      <p className="text-[11px] text-purple-800">
-                        Cada variação possui seu tamanho, SKU e preço de venda individual
-                      </p>
                     </div>
-
                     <button
                       type="button"
                       onClick={addVariationRow}
-                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 transition shadow-2xs"
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-600 text-white hover:bg-purple-700 transition flex items-center gap-1 shadow-2xs"
                     >
                       <Plus className="h-3.5 w-3.5" />
                       Adicionar Variação
@@ -1104,7 +1145,7 @@ export function V2ProdutosPage() {
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                           <div className="sm:col-span-2">
                             <label className="block font-bold text-slate-700 text-[10px] mb-0.5">
-                              Nome da Variação (ex: Casal 1,38m x 1,88m x 41cm)
+                              Descrição da Variação (ex: Casal 1,38m x 1,88m x 41cm)
                             </label>
                             <input
                               type="text"
@@ -1129,7 +1170,7 @@ export function V2ProdutosPage() {
 
                         <div className="grid grid-cols-3 gap-2">
                           <div>
-                            <label className="block font-bold text-slate-600 text-[10px] mb-0.5">Custo (R$)</label>
+                            <label className="block font-bold text-slate-600 text-[10px] mb-0.5">Tabela Fábrica (R$)</label>
                             <input
                               type="number"
                               step="0.01"
@@ -1139,20 +1180,20 @@ export function V2ProdutosPage() {
                             />
                           </div>
                           <div>
-                            <label className="block font-bold text-emerald-800 text-[10px] mb-0.5">Preço Venda (R$)</label>
+                            <label className="block font-bold text-emerald-800 text-[10px] mb-0.5">Tabela Vendas Sul (R$)</label>
                             <input
                               type="number"
                               step="0.01"
                               value={v.sale_price}
                               onChange={(e) => updateVariationRow(v.id, 'sale_price', parseFloat(e.target.value) || 0)}
-                              className="w-full rounded-lg px-2.5 py-1 border border-emerald-300 font-bold text-emerald-800 bg-emerald-50/40"
+                              className="w-full rounded-lg px-2.5 py-1 border border-slate-200 font-bold text-emerald-800"
                             />
                           </div>
                           <div className="flex items-end justify-end">
                             <button
                               type="button"
                               onClick={() => removeVariationRow(v.id)}
-                              className="px-2.5 py-1 text-red-600 hover:bg-red-50 rounded-lg text-xs font-bold transition flex items-center gap-1"
+                              className="text-red-500 hover:text-red-700 p-1 flex items-center gap-1 font-bold text-[10px]"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                               Remover
@@ -1172,39 +1213,46 @@ export function V2ProdutosPage() {
                     <div>
                       <h4 className="text-xs font-black uppercase text-amber-900 tracking-wide flex items-center gap-1.5">
                         <Boxes className="h-4 w-4 text-amber-700" />
-                        Composição do Kit Combo ({form.kit_items.length} itens)
+                        Componentes do Kit / Combo ({form.kit_items.length})
                       </h4>
-                      <p className="text-[11px] text-amber-800">
-                        Selecione produtos existentes para compor o combo promocional
-                      </p>
                     </div>
+                  </div>
 
+                  {/* Add Product selector to Kit */}
+                  <div className="flex gap-2">
                     <select
-                      onChange={(e) => {
-                        if (e.target.value) {
-                          addKitItemRow(e.target.value)
-                          e.target.value = ''
-                        }
-                      }}
-                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-600 text-white outline-none cursor-pointer"
+                      id="kitProdSelect"
+                      className="flex-1 rounded-xl px-3 py-2 border border-amber-300 text-xs font-bold bg-white text-slate-800 outline-none"
                     >
-                      <option value="">+ Incluir Produto no Kit</option>
-                      {products.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} ({formatCurrency(p.sale_price)})
-                        </option>
-                      ))}
+                      <option value="">Selecione um produto para incluir no Kit...</option>
+                      {products
+                        .filter((p) => p.id !== editingProd?.id)
+                        .map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.code_sku} - {p.name} ({formatCurrency(p.sale_price)})
+                          </option>
+                        ))}
                     </select>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const sel = (document.getElementById('kitProdSelect') as HTMLSelectElement)?.value
+                        if (sel) addKitItemRow(sel)
+                      }}
+                      className="px-3.5 py-2 bg-amber-600 text-white rounded-xl text-xs font-bold hover:bg-amber-700 transition"
+                    >
+                      + Incluir no Kit
+                    </button>
                   </div>
 
                   <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                     {form.kit_items.map((item, idx) => (
                       <div
                         key={idx}
-                        className="bg-white p-2.5 rounded-xl border border-amber-200 text-xs flex items-center justify-between gap-2 shadow-2xs"
+                        className="bg-white p-3 rounded-xl border border-amber-200 text-xs flex items-center justify-between shadow-2xs"
                       >
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-slate-800 truncate">{item.product_name}</p>
+                        <div>
+                          <p className="font-bold text-slate-900">{item.product_name}</p>
                           <p className="text-[10px] text-slate-400">Preço Unitário: {formatCurrency(item.unit_price)}</p>
                         </div>
 
@@ -1269,7 +1317,7 @@ export function V2ProdutosPage() {
                     </div>
 
                     <div className="text-right">
-                      <span className="text-[10px] text-amber-800 font-bold uppercase block">Preço Final Kit</span>
+                      <span className="text-[10px] text-amber-800 font-bold uppercase block">Tabela Vendas Sul Kit</span>
                       {form.kit_price_mode === 'AUTO' ? (
                         <span className="text-base font-black text-emerald-800">
                           {formatCurrency(
