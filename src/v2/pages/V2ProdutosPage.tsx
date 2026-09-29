@@ -314,7 +314,12 @@ export function V2ProdutosPage() {
       finalSalePrice = form.kit_items.reduce((sum, i) => sum + i.quantity * i.unit_price, 0)
     }
 
-    const finalLine = lineInput.trim() || form.product_line || 'Geral'
+    const pendingTag = lineInput.trim()
+    const tagsToSave = [...lineTags]
+    if (pendingTag && !tagsToSave.includes(pendingTag)) {
+      tagsToSave.push(pendingTag)
+    }
+    const finalLine = tagsToSave.join(' | ')
 
     await saveV2Product({
       ...(editingProd ? { id: editingProd.id } : {}),
@@ -989,68 +994,74 @@ export function V2ProdutosPage() {
                 {/* LINHA DO PRODUTO - TAGS / AUTOCOMPLETE */}
                 <div className="relative md:col-span-2">
                   <label className="block font-bold text-slate-700 mb-1">
-                    Linha do Produto (Etiqueta/Tag) *
+                    Linha do Produto (Etiqueta/Tag)
                   </label>
+                  
+                  {/* Selected Tags */}
+                  {lineTags.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {lineTags.map((tag) => (
+                        <span key={tag} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-100 text-blue-700">
+                          {tag}
+                          <button
+                            type="button"
+                            onClick={() => setLineTags(lineTags.filter(t => t !== tag))}
+                            className="hover:text-blue-900 focus:outline-none"
+                          >
+                            &times;
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
                   <div className="flex items-center gap-2">
                     <input
                       type="text"
-                      required
-                      placeholder="Digite o nome da Linha (ex: Colchões Relax, Colchões Premium)..."
+                      required={lineTags.length === 0}
+                      placeholder="Digite o nome da Linha e pressione Enter..."
                       value={lineInput}
                       onFocus={() => setLineSuggestionsOpen(true)}
                       onChange={(e) => {
                         setLineInput(e.target.value)
-                        setForm({ ...form, product_line: e.target.value })
                         setLineSuggestionsOpen(true)
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          const val = lineInput.trim()
+                          if (val && !lineTags.includes(val)) {
+                            setLineTags([...lineTags, val])
+                          }
+                          setLineInput('')
+                          setLineSuggestionsOpen(false)
+                        }
                       }}
                       onBlur={() => setTimeout(() => setLineSuggestionsOpen(false), 200)}
                       className="w-full rounded-xl px-3.5 py-2.5 border border-slate-200 font-medium text-sm outline-none focus:border-blue-500"
                     />
                   </div>
 
-                  {/* Existing Line Tags suggestions */}
-                  {distinctLines.length > 0 && (
-                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase">Sugestões existentes:</span>
-                      {distinctLines.map((line) => (
-                        <button
-                          key={line}
-                          type="button"
-                          onClick={() => {
-                            setLineInput(line)
-                            setForm({ ...form, product_line: line })
-                            setLineSuggestionsOpen(false)
-                          }}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 border ${
-                            lineInput.trim().toLowerCase() === line.toLowerCase()
-                              ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
-                              : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
-                          }`}
-                        >
-                          {lineInput.trim().toLowerCase() === line.toLowerCase() && <Check className="h-3 w-3" />}
-                          {line}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
                   {/* Dropdown Suggestions */}
-                  {lineSuggestionsOpen && distinctLines.filter((l) => l.toLowerCase().includes(lineInput.toLowerCase())).length > 0 && (
-                    <div className="absolute z-50 left-0 right-0 top-14 bg-white border border-slate-200 rounded-xl shadow-xl max-h-40 overflow-y-auto">
+                  {lineSuggestionsOpen && lineInput.trim().length > 0 && distinctLines.filter((l) => l.toLowerCase().includes(lineInput.toLowerCase()) && !lineTags.includes(l)).length > 0 && (
+                    <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-40 overflow-y-auto">
                       {distinctLines
-                        .filter((l) => l.toLowerCase().includes(lineInput.toLowerCase()))
+                        .filter((l) => l.toLowerCase().includes(lineInput.toLowerCase()) && !lineTags.includes(l))
                         .map((line) => (
                           <div
                             key={line}
-                            onMouseDown={() => {
-                              setLineInput(line)
-                              setForm({ ...form, product_line: line })
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              if (!lineTags.includes(line)) {
+                                setLineTags([...lineTags, line])
+                              }
+                              setLineInput('')
                               setLineSuggestionsOpen(false)
                             }}
                             className="px-3.5 py-2 hover:bg-blue-50 cursor-pointer text-xs font-bold text-slate-700 flex items-center justify-between"
                           >
                             <span>{line}</span>
-                            <span className="text-[10px] text-blue-600">Usar esta linha</span>
+                            <span className="text-[10px] text-blue-600">Adicionar</span>
                           </div>
                         ))}
                     </div>

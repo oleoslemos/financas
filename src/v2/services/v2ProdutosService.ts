@@ -162,7 +162,8 @@ export async function clearAllV2Products(): Promise<void> {
 
 export async function getDistinctProductLines(): Promise<string[]> {
   const prods = await listV2Products()
-  const lines = prods.map((p) => p.product_line).filter((l): l is string => Boolean(l && l.trim()))
+  const lines = prods.flatMap((p) => p.product_line ? p.product_line.split('|').map(l => l.trim()) : [])
+    .filter((l): l is string => Boolean(l && l.trim()))
   return Array.from(new Set(lines)).sort()
 }
 
