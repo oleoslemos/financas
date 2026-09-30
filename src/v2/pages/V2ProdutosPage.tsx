@@ -559,22 +559,21 @@ export function V2ProdutosPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-start lg:justify-end">
-              {/* Line Filter Tabs (substituiu o Ordenar por) */}
-              <div className="flex items-center gap-1.5 overflow-x-auto">
-                <span className="text-[11px] font-bold text-slate-400 mr-1 uppercase whitespace-nowrap">Linha:</span>
-                {['TODAS', ...distinctLines].map((line) => (
-                  <button
-                    key={line}
-                    onClick={() => setFilterLine(line)}
-                    className={`px-3 py-1 rounded-full text-xs font-bold transition whitespace-nowrap border ${
-                      filterLine === line
-                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                    }`}
-                  >
-                    {line}
-                  </button>
-                ))}
+              {/* Line Filter Combobox */}
+              <div className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Linha:</span>
+                <select
+                  value={filterLine}
+                  onChange={(e) => setFilterLine(e.target.value)}
+                  className="text-xs font-bold bg-transparent text-slate-800 outline-none cursor-pointer max-w-[200px]"
+                >
+                  <option value="TODAS">TODAS</option>
+                  {distinctLines.map((line) => (
+                    <option key={line} value={line}>
+                      {line}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Type selector pills */}
