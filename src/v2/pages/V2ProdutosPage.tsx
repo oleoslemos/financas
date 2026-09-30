@@ -42,13 +42,6 @@ function formatCurrency(val: number): string {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0)
 }
 
-function maskDimensions(w?: number | null, l?: number | null, h?: number | null): string {
-  if (!w && !l && !h) return '—'
-  const wStr = w ? `${(w / 100).toFixed(2).replace('.', ',')}m` : ''
-  const lStr = l ? `${(l / 100).toFixed(2).replace('.', ',')}m` : ''
-  const hStr = h ? `${h}cm` : ''
-  return [wStr, lStr, hStr].filter(Boolean).join(' x ')
-}
 
 type Toast = { type: 'success' | 'error'; text: string }
 
