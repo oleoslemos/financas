@@ -35,7 +35,6 @@ import {
   ArrowDown,
   Download,
   RotateCcw,
-  Tag as TagIcon,
 } from 'lucide-react'
 
 function formatCurrency(val: number): string {
@@ -371,6 +370,10 @@ export function V2ProdutosPage() {
       await deleteV2Product(id)
       await loadData()
       showToast({ type: 'success', text: 'Produto removido com sucesso.' })
+      if (editingProd && editingProd.id === id) {
+        setModalOpen(false)
+        setEditingProd(null)
+      }
     }
   }
 
@@ -469,6 +472,19 @@ export function V2ProdutosPage() {
 
   const typeList: (ProductType | 'TODOS')[] = ['TODOS', 'SIMPLES', 'VARIACAO', 'KIT']
 
+  // Pagination (50 produtos por página)
+  const ITEMS_PER_PAGE = 50
+  const [page, setPage] = useState(1)
+
+  useEffect(() => {
+    setPage(1)
+  }, [search, filterLine, filterType])
+
+  const totalPages = Math.max(1, Math.ceil(sortedProducts.length / ITEMS_PER_PAGE))
+  const currentPage = Math.min(page, totalPages)
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+  const paginatedProducts = sortedProducts.slice(startIndex, startIndex + ITEMS_PER_PAGE)
+
   return (
     <div
       className="min-h-screen font-sans pb-16"
@@ -528,57 +544,10 @@ export function V2ProdutosPage() {
           </div>
         </div>
 
-        {/* ── TOP STATS BAR ── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="bg-white p-4 rounded-2xl border border-blue-100 shadow-2xs flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-              <Box className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total de Produtos</p>
-              <p className="text-xl font-black text-slate-900">{products.length}</p>
-            </div>
-          </div>
-
-          <div className="bg-white p-4 rounded-2xl border border-purple-100 shadow-2xs flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
-              <Layers className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Com Variações</p>
-              <p className="text-xl font-black text-slate-900">
-                {products.filter((p) => p.type === 'VARIACAO').length}
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-white p-4 rounded-2xl border border-amber-100 shadow-2xs flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-              <Boxes className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Kits / Combos</p>
-              <p className="text-xl font-black text-slate-900">
-                {products.filter((p) => p.type === 'KIT').length}
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-white p-4 rounded-2xl border border-emerald-100 shadow-2xs flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-              <TagIcon className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Linhas Ativas</p>
-              <p className="text-xl font-black text-emerald-800">{distinctLines.length}</p>
-            </div>
-          </div>
-        </div>
-
         {/* ── SEARCH & FILTER BAR ── */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
-          <div className="flex flex-col md:flex-row items-center gap-3 justify-between">
-            <div className="relative w-full md:w-80">
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
+          <div className="flex flex-col lg:flex-row items-center gap-3 justify-between">
+            <div className="relative w-full lg:flex-1 lg:max-w-lg">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
                 type="text"
@@ -589,31 +558,28 @@ export function V2ProdutosPage() {
               />
             </div>
 
-            {/* Sort & Type selector */}
-            <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
-              <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Ordenar por:</span>
-                <select
-                  value={`${sortField}-${sortDirection}`}
-                  onChange={(e) => {
-                    const [f, d] = e.target.value.split('-') as ['sku' | 'name' | 'sale_price' | 'line', 'asc' | 'desc']
-                    setSortField(f)
-                    setSortDirection(d)
-                  }}
-                  className="text-xs font-bold bg-transparent text-slate-800 outline-none cursor-pointer"
-                >
-                  <option value="sku-asc">SKU (Crescente 001 ➔ 008)</option>
-                  <option value="sku-desc">SKU (Decrescente 008 ➔ 001)</option>
-                  <option value="name-asc">Descrição (A ➔ Z)</option>
-                  <option value="name-desc">Descrição (Z ➔ A)</option>
-                  <option value="sale_price-desc">Maior Tabela Vendas Sul</option>
-                  <option value="sale_price-asc">Menor Tabela Vendas Sul</option>
-                </select>
+            <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-start lg:justify-end">
+              {/* Line Filter Tabs (substituiu o Ordenar por) */}
+              <div className="flex items-center gap-1.5 overflow-x-auto">
+                <span className="text-[11px] font-bold text-slate-400 mr-1 uppercase whitespace-nowrap">Linha:</span>
+                {['TODAS', ...distinctLines].map((line) => (
+                  <button
+                    key={line}
+                    onClick={() => setFilterLine(line)}
+                    className={`px-3 py-1 rounded-full text-xs font-bold transition whitespace-nowrap border ${
+                      filterLine === line
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    {line}
+                  </button>
+                ))}
               </div>
 
               {/* Type selector pills */}
               <div className="flex items-center gap-1.5 overflow-x-auto">
-                <span className="text-[11px] font-bold text-slate-400 mr-1 uppercase">Tipo:</span>
+                <span className="text-[11px] font-bold text-slate-400 mr-1 uppercase whitespace-nowrap">Tipo:</span>
                 {typeList.map((t) => (
                   <button
                     key={t}
@@ -629,24 +595,6 @@ export function V2ProdutosPage() {
                 ))}
               </div>
             </div>
-          </div>
-
-          {/* Line Filter Tabs */}
-          <div className="flex items-center gap-2 overflow-x-auto pt-2 border-t border-slate-100">
-            <span className="text-[11px] font-bold text-slate-400 mr-1 uppercase">Linha:</span>
-            {['TODAS', ...distinctLines].map((line) => (
-              <button
-                key={line}
-                onClick={() => setFilterLine(line)}
-                className={`px-3 py-1 rounded-full text-xs font-bold transition whitespace-nowrap border ${
-                  filterLine === line
-                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                }`}
-              >
-                {line}
-              </button>
-            ))}
           </div>
         </div>
 
@@ -705,31 +653,12 @@ export function V2ProdutosPage() {
                         )}
                       </div>
                     </th>
-                    <th className="p-3.5">Tabela Fábrica (R$)</th>
-                    <th
-                      onClick={() => handleSort('sale_price')}
-                      className="p-3.5 cursor-pointer hover:bg-slate-100/80 transition select-none group"
-                      title="Clique para ordenar por Tabela Vendas Sul"
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <span>Tabela Vendas Sul (R$)</span>
-                        {sortField === 'sale_price' ? (
-                          sortDirection === 'asc' ? (
-                            <ArrowUp className="h-3.5 w-3.5 text-blue-600 font-black" />
-                          ) : (
-                            <ArrowDown className="h-3.5 w-3.5 text-blue-600 font-black" />
-                          )
-                        ) : (
-                          <ArrowUpDown className="h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 transition" />
-                        )}
-                      </div>
-                    </th>
                     <th className="p-3.5">Status</th>
                     <th className="p-3.5 text-center">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs font-medium text-slate-700">
-                  {sortedProducts.map((p) => {
+                  {paginatedProducts.map((p) => {
                     const isExpanded = expandedRows[p.id] || false
                     const hasDetails = (p.variations && p.variations.length > 0) || (p.kit_items && p.kit_items.length > 0)
 
@@ -779,14 +708,6 @@ export function V2ProdutosPage() {
                             </span>
                           </td>
 
-                          <td className="p-3.5 font-medium text-slate-600">
-                            {formatCurrency(activePrices[p.id]?.fabrica ?? 0)}
-                          </td>
-
-                          <td className="p-3.5 font-bold text-emerald-700 text-sm">
-                            {formatCurrency(activePrices[p.id]?.vendas ?? 0)}
-                          </td>
-
                           <td className="p-3.5">
                             <button
                               onClick={() => handleToggleActive(p)}
@@ -801,36 +722,20 @@ export function V2ProdutosPage() {
                           </td>
 
                           <td className="p-3.5 text-center">
-                            <div className="inline-flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200 shadow-2xs">
-                              <button
-                                onClick={() => openEditModal(p)}
-                                className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-100 hover:text-blue-700 transition"
-                                title="Editar Produto"
-                              >
-                                <Edit2 className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => handleDuplicate(p)}
-                                className="p-1.5 rounded-lg text-purple-600 hover:bg-purple-100 hover:text-purple-700 transition"
-                                title="Duplicar Produto"
-                              >
-                                <Copy className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => handleDelete(p.id)}
-                                className="p-1.5 rounded-lg text-red-500 hover:bg-red-100 hover:text-red-600 transition"
-                                title="Excluir Produto"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </div>
+                            <button
+                              onClick={() => openEditModal(p)}
+                              className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-100 hover:text-blue-700 transition border border-slate-200 bg-slate-50 shadow-2xs inline-flex items-center justify-center"
+                              title="Editar Produto"
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </button>
                           </td>
                         </tr>
 
                         {/* EXPANDABLE DETAILS ROW */}
                         {isExpanded && hasDetails && (
                           <tr className="bg-slate-50/70 border-b border-slate-200">
-                            <td colSpan={8} className="p-4 pl-12">
+                            <td colSpan={5} className="p-4 pl-12">
                               {p.type === 'VARIACAO' && p.variations && (
                                 <div className="space-y-2">
                                   <p className="text-[11px] font-black uppercase tracking-wider text-purple-800">
@@ -890,6 +795,49 @@ export function V2ProdutosPage() {
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination & Count footer */}
+            {!loading && sortedProducts.length > 0 && (
+              <div className="flex items-center justify-between p-4 border-t border-slate-100 flex-wrap gap-3 bg-white">
+                <p className="text-xs font-medium text-slate-500">
+                  Mostrando <span className="font-bold text-slate-700">{startIndex + 1}</span> a{' '}
+                  <span className="font-bold text-slate-700">
+                    {Math.min(startIndex + ITEMS_PER_PAGE, sortedProducts.length)}
+                  </span>{' '}
+                  de <span className="font-bold text-slate-700">{sortedProducts.length}</span> produtos
+                  {sortedProducts.length !== products.length && ` (filtrado de ${products.length} no total)`}
+                </p>
+                {totalPages > 1 && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
+                        currentPage === 1
+                          ? 'border-slate-200 text-slate-300 cursor-not-allowed bg-slate-50'
+                          : 'border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer bg-white'
+                      }`}
+                    >
+                      Anterior
+                    </button>
+                    <span className="text-xs font-bold text-slate-700 px-1">
+                      Página {currentPage} de {totalPages}
+                    </span>
+                    <button
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
+                        currentPage === totalPages
+                          ? 'border-slate-200 text-slate-300 cursor-not-allowed bg-slate-50'
+                          : 'border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer bg-white'
+                      }`}
+                    >
+                      Próxima
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1318,19 +1266,29 @@ export function V2ProdutosPage() {
               )}
 
               <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                <div>
+                <div className="flex items-center gap-2">
                   {editingProd && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleDuplicate(editingProd)
-                        setModalOpen(false)
-                      }}
-                      className="px-4 py-2.5 rounded-xl border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 font-bold text-xs flex items-center gap-1.5 transition"
-                    >
-                      <Copy className="h-4 w-4" />
-                      Duplicar este Produto
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleDuplicate(editingProd)
+                          setModalOpen(false)
+                        }}
+                        className="p-2.5 rounded-xl border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 transition shadow-2xs"
+                        title="Duplicar Produto"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(editingProd.id)}
+                        className="p-2.5 rounded-xl border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition shadow-2xs"
+                        title="Excluir Produto"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </>
                   )}
                 </div>
                 <div className="flex items-center gap-3">
