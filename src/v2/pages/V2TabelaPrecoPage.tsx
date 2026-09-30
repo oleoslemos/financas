@@ -5,6 +5,8 @@ import {
   listPriceTables,
   savePriceTable,
   deletePriceTable,
+  renamePriceTable,
+  setDefaultPriceTable,
   createPriceTableWithAllProducts,
   syncMissingProductsToPriceTable,
   calcSugestaoVendas,
@@ -32,6 +34,8 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  Edit2,
+  Star,
 } from 'lucide-react'
 
 function formatCurrency(val: number): string {
@@ -61,17 +65,32 @@ export function V2TabelaPrecoPage() {
     setTimeout(() => setToast(null), 4000)
   }
 
-  // Modals state
+  // Modals state - Criar Tabela
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [newTableName, setNewTableName] = useState('')
   const [newTableReajuste, setNewTableReajuste] = useState<number>(1.0)
+  const [newTableIsDefault, setNewTableIsDefault] = useState(false)
   const [creatingTable, setCreatingTable] = useState(false)
+
+  // Modal state - Renomear Tabela
+  const [renameModalOpen, setRenameModalOpen] = useState(false)
+  const [renameTableName, setRenameTableName] = useState('')
+  const [renamingTable, setRenamingTable] = useState(false)
 
   // Import Modal state
   const [importModalOpen, setImportModalOpen] = useState(false)
   const [importRawText, setImportRawText] = useState('')
   const [parsedRows, setParsedRows] = useState<ParsedImportRow[]>([])
   const [importing, setImporting] = useState(false)
+
+  // Pagination state
+  const ITEMS_PER_PAGE = 50
+  const [page, setPage] = useState(1)
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1)
+  }, [search, filterLine, selectedTableId])
 
   // Sorting
   const [sortField, setSortField] = useState<'sku' | 'name' | 'line' | 'fabrica' | 'sul' | 'sugestao'>('sku')
@@ -93,7 +112,11 @@ export function V2TabelaPrecoPage() {
     setTables(list)
 
     if (list.length > 0) {
-      const activeTbl = list.find((t) => t.id === selectedTableId) || list[0]
+      const activeTbl =
+        list.find((t) => t.id === selectedTableId) ||
+        list.find((t) => t.is_default) ||
+        list.find((t) => t.active) ||
+        list[0]
       setSelectedTableId(activeTbl.id)
       setSelectedTable(activeTbl)
     } else {
@@ -124,10 +147,11 @@ export function V2TabelaPrecoPage() {
     }
 
     setCreatingTable(true)
-    const created = await createPriceTableWithAllProducts(newTableName.trim(), newTableReajuste)
+    const created = await createPriceTableWithAllProducts(newTableName.trim(), newTableReajuste, newTableIsDefault)
     setCreatingTable(false)
     setCreateModalOpen(false)
     setNewTableName('')
+    setNewTableIsDefault(false)
 
     await loadData()
     setSelectedTableId(created.id)
@@ -135,6 +159,55 @@ export function V2TabelaPrecoPage() {
       type: 'success',
       text: `Tabela "${created.name}" criada com sucesso contendo ${created.items.length} produtos!`,
     })
+  }
+
+  // Handle Opening Rename Modal
+  const openRenameModal = (table: V2PriceTable) => {
+    setRenameTableName(table.name)
+    setRenameModalOpen(true)
+  }
+
+  // Handle Renaming Price Table
+  const handleRenameTable = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedTable) return
+    const trimmed = renameTableName.trim()
+    if (!trimmed) {
+      showToast({ type: 'error', text: 'Informe um nome válido para a tabela de preço.' })
+      return
+    }
+
+    setRenamingTable(true)
+    const updated = await renamePriceTable(selectedTable.id, trimmed)
+    setRenamingTable(false)
+
+    if (updated) {
+      setSelectedTable(updated)
+      setTables((prev) => prev.map((t) => (t.id === updated.id ? updated : t)))
+      setRenameModalOpen(false)
+      showToast({
+        type: 'success',
+        text: `Tabela de preço renomeada para "${updated.name}" com sucesso!`,
+      })
+    } else {
+      showToast({ type: 'error', text: 'Erro ao renomear a tabela de preço.' })
+    }
+  }
+
+  // Handle Setting Default Price Table
+  const handleSetDefaultTable = async (tableId: string) => {
+    setLoading(true)
+    const updatedList = await setDefaultPriceTable(tableId)
+    setTables(updatedList)
+    const current = updatedList.find((t) => t.id === tableId) || null
+    setSelectedTable(current)
+    setLoading(false)
+    if (current) {
+      showToast({
+        type: 'success',
+        text: `Tabela "${current.name}" definida como a Tabela Padrão do sistema!`,
+      })
+    }
   }
 
   // Handle Sync Missing Products
@@ -242,6 +315,12 @@ export function V2TabelaPrecoPage() {
     return sortDirection === 'asc' ? comp : -comp
   })
 
+  // Pagination calculations (seguindo padrão do menu produtos)
+  const totalPages = Math.max(1, Math.ceil(sortedItems.length / ITEMS_PER_PAGE))
+  const currentPage = Math.min(page, totalPages)
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+  const paginatedItems = sortedItems.slice(startIndex, startIndex + ITEMS_PER_PAGE)
+
   return (
     <div
       className="min-h-screen font-sans pb-16"
@@ -324,17 +403,55 @@ export function V2TabelaPrecoPage() {
               {tables.length === 0 ? (
                 <p className="text-xs text-slate-400 font-bold">Nenhuma tabela cadastrada</p>
               ) : (
-                <select
-                  value={selectedTableId}
-                  onChange={(e) => setSelectedTableId(e.target.value)}
-                  className="rounded-xl px-4 py-2.5 border border-purple-200 text-sm font-black bg-purple-50/50 text-purple-900 outline-none focus:ring-2 focus:ring-purple-400 min-w-64"
-                >
-                  {tables.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name} ({t.items.length} itens - {t.reajuste_percent}% Reajuste)
-                    </option>
-                  ))}
-                </select>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={selectedTableId}
+                    onChange={(e) => setSelectedTableId(e.target.value)}
+                    className="rounded-xl px-4 py-2.5 border border-purple-200 text-sm font-black bg-purple-50/50 text-purple-900 outline-none focus:ring-2 focus:ring-purple-400 min-w-64 cursor-pointer"
+                  >
+                    {tables.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.is_default ? '⭐ ' : ''}{t.name} ({t.items.length} itens - {t.reajuste_percent}% Reajuste){t.is_default ? ' [PADRÃO]' : ''}
+                      </option>
+                    ))}
+                  </select>
+
+                  {selectedTable && (
+                    <>
+                      {/* Botão Renomear */}
+                      <button
+                        type="button"
+                        onClick={() => openRenameModal(selectedTable)}
+                        className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-purple-50 hover:text-purple-700 hover:border-purple-200 transition shadow-2xs"
+                        title="Renomear o nome desta Tabela de Preço"
+                      >
+                        <Edit2 className="h-3.5 w-3.5 text-purple-600" />
+                        Renomear
+                      </button>
+
+                      {/* Botão / Badge Tabela Padrão */}
+                      {selectedTable.is_default ? (
+                        <span
+                          className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-black bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs"
+                          title="Esta é a tabela de preço padrão do sistema (utilizada no catálogo e pedidos)"
+                        >
+                          <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" />
+                          Tabela Padrão
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleSetDefaultTable(selectedTable.id)}
+                          className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-600 bg-white border border-slate-200 hover:bg-amber-50 hover:text-amber-800 hover:border-amber-300 transition shadow-2xs"
+                          title="Definir esta tabela como a tabela de preço padrão do sistema"
+                        >
+                          <Star className="h-3.5 w-3.5 text-slate-400" />
+                          Definir como Padrão
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
               )}
             </div>
 
@@ -377,10 +494,10 @@ export function V2TabelaPrecoPage() {
           )}
         </div>
 
-        {/* ── SEARCH & LINE FILTERS BAR ── */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
-          <div className="flex flex-col md:flex-row items-center gap-3 justify-between">
-            <div className="relative w-full md:w-80">
+        {/* ── SEARCH & FILTER BAR (PADRÃO DO MENU PRODUTOS) ── */}
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
+          <div className="flex flex-col lg:flex-row items-center gap-3 justify-between">
+            <div className="relative w-full lg:flex-1 lg:max-w-lg">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
                 type="text"
@@ -391,47 +508,50 @@ export function V2TabelaPrecoPage() {
               />
             </div>
 
-            {/* Sort Selector */}
-            <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 w-full md:w-auto">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Ordenar por:</span>
-              <select
-                value={`${sortField}-${sortDirection}`}
-                onChange={(e) => {
-                  const [f, d] = e.target.value.split('-') as ['sku' | 'name' | 'line' | 'fabrica' | 'sul' | 'sugestao', 'asc' | 'desc']
-                  setSortField(f)
-                  setSortDirection(d)
-                }}
-                className="text-xs font-bold bg-transparent text-slate-800 outline-none cursor-pointer"
-              >
-                <option value="sku-asc">SKU (Crescente 001 ➔ 008)</option>
-                <option value="sku-desc">SKU (Decrescente 008 ➔ 001)</option>
-                <option value="name-asc">Descrição Produto (A ➔ Z)</option>
-                <option value="name-desc">Descrição Produto (Z ➔ A)</option>
-                <option value="sugestao-desc">Maior Sugestão Vendas</option>
-                <option value="sugestao-asc">Menor Sugestão Vendas</option>
-              </select>
+            <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-start lg:justify-end">
+              {/* Line Filter Combobox (mesmo padrão do menu produtos) */}
+              <div className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Linha:</span>
+                <select
+                  value={filterLine}
+                  onChange={(e) => setFilterLine(e.target.value)}
+                  className="text-xs font-bold bg-transparent text-slate-800 outline-none cursor-pointer max-w-[200px]"
+                >
+                  <option value="TODAS">TODAS</option>
+                  {distinctLines.map((line) => (
+                    <option key={line} value={line}>
+                      {line}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Sort Selector */}
+              <div className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Ordenar por:</span>
+                <select
+                  value={`${sortField}-${sortDirection}`}
+                  onChange={(e) => {
+                    const [f, d] = e.target.value.split('-') as ['sku' | 'name' | 'line' | 'fabrica' | 'sul' | 'sugestao', 'asc' | 'desc']
+                    setSortField(f)
+                    setSortDirection(d)
+                  }}
+                  className="text-xs font-bold bg-transparent text-slate-800 outline-none cursor-pointer max-w-[220px]"
+                >
+                  <option value="sku-asc">SKU (Crescente 001 ➔ 008)</option>
+                  <option value="sku-desc">SKU (Decrescente 008 ➔ 001)</option>
+                  <option value="name-asc">Descrição Produto (A ➔ Z)</option>
+                  <option value="name-desc">Descrição Produto (Z ➔ A)</option>
+                  <option value="fabrica-asc">Menor Preço Fábrica</option>
+                  <option value="fabrica-desc">Maior Preço Fábrica</option>
+                  <option value="sul-asc">Menor Tabela Sul</option>
+                  <option value="sul-desc">Maior Tabela Sul</option>
+                  <option value="sugestao-desc">Maior Sugestão Vendas</option>
+                  <option value="sugestao-asc">Menor Sugestão Vendas</option>
+                </select>
+              </div>
             </div>
           </div>
-
-          {/* Line Filters */}
-          {distinctLines.length > 0 && (
-            <div className="flex items-center gap-2 overflow-x-auto pt-2 border-t border-slate-100">
-              <span className="text-[11px] font-bold text-slate-400 mr-1 uppercase">Linha:</span>
-              {['TODAS', ...distinctLines].map((line) => (
-                <button
-                  key={line}
-                  onClick={() => setFilterLine(line)}
-                  className={`px-3 py-1 rounded-full text-xs font-bold transition whitespace-nowrap border ${
-                    filterLine === line
-                      ? 'bg-purple-50 text-purple-800 border-purple-300'
-                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  {line}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* ── PRICE TABLE GRID ── */}
@@ -576,7 +696,7 @@ export function V2TabelaPrecoPage() {
                 </thead>
 
                 <tbody className="divide-y divide-slate-100 text-xs font-medium text-slate-700">
-                  {sortedItems.map((item, idx) => {
+                  {paginatedItems.map((item, idx) => {
                     const sugestaoCalculada = calcSugestaoVendas(item.tabela_vendas_sul, selectedTable.reajuste_percent)
 
                     return (
@@ -614,6 +734,49 @@ export function V2TabelaPrecoPage() {
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination & Count footer (Seguindo o padrão de Produtos) */}
+            {!loading && sortedItems.length > 0 && (
+              <div className="flex items-center justify-between p-4 border-t border-slate-100 flex-wrap gap-3 bg-white">
+                <p className="text-xs font-medium text-slate-500">
+                  Mostrando <span className="font-bold text-slate-700">{startIndex + 1}</span> a{' '}
+                  <span className="font-bold text-slate-700">
+                    {Math.min(startIndex + ITEMS_PER_PAGE, sortedItems.length)}
+                  </span>{' '}
+                  de <span className="font-bold text-slate-700">{sortedItems.length}</span> produtos
+                  {sortedItems.length !== items.length && ` (filtrado de ${items.length} no total)`}
+                </p>
+                {totalPages > 1 && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
+                        currentPage === 1
+                          ? 'border-slate-200 text-slate-300 cursor-not-allowed bg-slate-50'
+                          : 'border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer bg-white'
+                      }`}
+                    >
+                      Anterior
+                    </button>
+                    <span className="text-xs font-bold text-slate-700 px-1">
+                      Página {currentPage} de {totalPages}
+                    </span>
+                    <button
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
+                        currentPage === totalPages
+                          ? 'border-slate-200 text-slate-300 cursor-not-allowed bg-slate-50'
+                          : 'border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer bg-white'
+                      }`}
+                    >
+                      Próxima
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -666,6 +829,27 @@ export function V2TabelaPrecoPage() {
                 </p>
               </div>
 
+              {/* Opção Marcar como Tabela Padrão */}
+              <div className="p-3 bg-amber-50/70 rounded-xl border border-amber-200/80">
+                <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={newTableIsDefault}
+                    onChange={(e) => setNewTableIsDefault(e.target.checked)}
+                    className="h-4 w-4 rounded text-amber-600 focus:ring-amber-400 border-slate-300 cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                      <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" />
+                      Definir como Tabela de Preço Padrão
+                    </span>
+                    <p className="text-[10px] text-amber-800/80 font-normal mt-0.5">
+                      Esta tabela será usada prioritariamente em todo o sistema (produtos e pedidos).
+                    </p>
+                  </div>
+                </label>
+              </div>
+
               <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-purple-900 text-[11px] font-medium leading-snug">
                 ✨ Todos os produtos cadastrados no menu Produtos serão incluídos automaticamente nesta nova tabela.
               </div>
@@ -684,6 +868,63 @@ export function V2TabelaPrecoPage() {
                   className="px-6 py-2.5 rounded-xl text-white font-bold bg-purple-600 hover:bg-purple-700 transition"
                 >
                   {creatingTable ? 'Criando...' : 'Criar Tabela'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL RENOMEAR TABELA DE PREÇO ── */}
+      {renameModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="h-9 w-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+                  <Edit2 className="h-5 w-5" />
+                </div>
+                <h3 className="text-base font-black text-slate-900 uppercase">Renomear Tabela de Preço</h3>
+              </div>
+              <button
+                onClick={() => setRenameModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-xl"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleRenameTable} className="space-y-4 text-xs font-bold text-slate-700">
+              <div>
+                <label className="block mb-1">Nome da Tabela de Preço *</label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  placeholder="Ex: Tabela Padrão 2026, Vendas Sul..."
+                  value={renameTableName}
+                  onChange={(e) => setRenameTableName(e.target.value)}
+                  className="w-full rounded-xl px-3.5 py-2.5 border border-slate-200 font-medium text-sm outline-none focus:border-purple-500"
+                />
+                <p className="text-[10px] text-slate-400 font-medium mt-1">
+                  Corrija o nome digitado anteriormente para manter suas tabelas organizadas.
+                </p>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setRenameModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl text-slate-600 border border-slate-200 hover:bg-slate-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={renamingTable || !renameTableName.trim()}
+                  className="px-6 py-2.5 rounded-xl text-white font-bold bg-purple-600 hover:bg-purple-700 transition"
+                >
+                  {renamingTable ? 'Salvando...' : 'Salvar Nome'}
                 </button>
               </div>
             </form>

@@ -81,7 +81,7 @@ export function V2ProdutosPage() {
     setDistinctLines(lines)
 
     const tables = await listPriceTables()
-    const activeTable = tables.find(t => t.active)
+    const activeTable = tables.find((t) => t.is_default) || tables.find((t) => t.active) || tables[0]
     if (activeTable) {
       const priceMap: Record<string, {fabrica: number, vendas: number}> = {}
       activeTable.items.forEach(item => {

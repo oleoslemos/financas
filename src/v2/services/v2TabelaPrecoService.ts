@@ -19,6 +19,7 @@ export interface V2PriceTable {
   reajuste_percent: number
   items: V2PriceTableItem[]
   active: boolean
+  is_default?: boolean
   created_at: string
   updated_at: string
 }
@@ -89,6 +90,7 @@ export async function savePriceTable(table: Omit<V2PriceTable, 'id' | 'created_a
   const fullTable: V2PriceTable = {
     ...table,
     id,
+    is_default: table.is_default ?? (current.length === 0 ? true : false),
     items: updatedItems,
     created_at: table.id
       ? current.find((c) => c.id === table.id)?.created_at || new Date().toISOString()
@@ -98,14 +100,21 @@ export async function savePriceTable(table: Omit<V2PriceTable, 'id' | 'created_a
 
   if (supabase) {
     try {
-      await supabase.from(SUPABASE_TABLE).upsert({
+      const payload: any = {
         id: fullTable.id,
         name: fullTable.name,
         reajuste_percent: fullTable.reajuste_percent,
         items: fullTable.items,
         active: fullTable.active,
+        is_default: fullTable.is_default,
         updated_at: fullTable.updated_at,
-      })
+      }
+      const { error } = await supabase.from(SUPABASE_TABLE).upsert(payload)
+      if (error && (error.message?.includes('is_default') || error.code === '42703')) {
+        // Fallback caso a coluna is_default ainda não exista na tabela do Supabase
+        delete payload.is_default
+        await supabase.from(SUPABASE_TABLE).upsert(payload)
+      }
     } catch (err) {
       console.warn('Supabase price table upsert fallback:', err)
     }
@@ -121,6 +130,63 @@ export async function savePriceTable(table: Omit<V2PriceTable, 'id' | 'created_a
   return fullTable
 }
 
+export async function renamePriceTable(id: string, newName: string): Promise<V2PriceTable | null> {
+  const trimmed = newName.trim()
+  if (!trimmed) return null
+
+  const current = await listPriceTables()
+  const table = current.find((t) => t.id === id)
+  if (!table) return null
+
+  return savePriceTable({
+    ...table,
+    name: trimmed,
+  })
+}
+
+export async function setDefaultPriceTable(id: string): Promise<V2PriceTable[]> {
+  const current = await listPriceTables()
+  const updatedList: V2PriceTable[] = current.map((t) => ({
+    ...t,
+    is_default: t.id === id,
+    active: t.id === id ? true : t.active,
+    updated_at: new Date().toISOString(),
+  }))
+
+  localStorage.setItem(KEY_PRICE_TABLES, JSON.stringify(updatedList))
+
+  if (supabase) {
+    try {
+      for (const t of updatedList) {
+        const payload: any = {
+          id: t.id,
+          name: t.name,
+          reajuste_percent: t.reajuste_percent,
+          items: t.items,
+          active: t.active,
+          is_default: t.is_default,
+          updated_at: t.updated_at,
+        }
+        const { error } = await supabase.from(SUPABASE_TABLE).upsert(payload)
+        if (error && (error.message?.includes('is_default') || error.code === '42703')) {
+          delete payload.is_default
+          await supabase.from(SUPABASE_TABLE).upsert(payload)
+        }
+      }
+    } catch (err) {
+      console.warn('Supabase setDefaultPriceTable error:', err)
+    }
+  }
+
+  return updatedList
+}
+
+export async function getDefaultPriceTable(): Promise<V2PriceTable | null> {
+  const list = await listPriceTables()
+  if (list.length === 0) return null
+  return list.find((t) => t.is_default) || list.find((t) => t.active) || list[0]
+}
+
 export async function deletePriceTable(id: string): Promise<void> {
   if (supabase) {
     try {
@@ -131,14 +197,24 @@ export async function deletePriceTable(id: string): Promise<void> {
   }
   const current = await listPriceTables()
   const filtered = current.filter((t) => t.id !== id)
+  // Se a tabela excluída era a default e restam outras tabelas, define a primeira como default
+  const wasDefault = current.find((t) => t.id === id)?.is_default
+  if (wasDefault && filtered.length > 0) {
+    filtered[0].is_default = true
+  }
   localStorage.setItem(KEY_PRICE_TABLES, JSON.stringify(filtered))
 }
 
 /**
  * Cria uma nova Tabela de Preço incluindo AUTOMATICAMENTE todos os produtos já cadastrados no menu Produtos
  */
-export async function createPriceTableWithAllProducts(name: string, reajustePercent: number): Promise<V2PriceTable> {
+export async function createPriceTableWithAllProducts(
+  name: string,
+  reajustePercent: number,
+  isDefault: boolean = false
+): Promise<V2PriceTable> {
   const products = await listV2Products()
+  const currentTables = await listPriceTables()
 
   const items: V2PriceTableItem[] = products.map((p) => ({
     product_id: p.id,
@@ -150,12 +226,21 @@ export async function createPriceTableWithAllProducts(name: string, reajustePerc
     sugestao_vendas: calcSugestaoVendas(p.sale_price || 0, reajustePercent),
   }))
 
-  return savePriceTable({
+  const shouldBeDefault = isDefault || currentTables.length === 0
+
+  const newTable = await savePriceTable({
     name,
     reajuste_percent: reajustePercent,
     items,
     active: true,
+    is_default: shouldBeDefault,
   })
+
+  if (shouldBeDefault && currentTables.length > 0) {
+    await setDefaultPriceTable(newTable.id)
+  }
+
+  return newTable
 }
 
 /**
