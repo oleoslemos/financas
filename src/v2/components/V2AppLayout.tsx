@@ -14,6 +14,7 @@ import {
   ShoppingCart,
   ClipboardList,
   Warehouse,
+  Wallet,
 } from 'lucide-react'
 
 export function V2AppLayout() {
@@ -54,6 +55,8 @@ function V2AppLayoutInner() {
         { to: '/v2/pedido-vendas', icon: ClipboardList, label: 'Vendas Rep.' },
         { to: '/v2/pedido-vendas-distribuidor', icon: ClipboardList, label: 'Vendas Dist.' },
         { to: '/v2/estoque', icon: Warehouse, label: 'Estoque' },
+        { to: '/v2/contas-pagar', icon: Wallet, label: 'Contas a Pagar' },
+        { to: '/v2/tags', icon: Tag, label: 'Tags' },
       ],
     },
     { to: '/v2/configuracoes', icon: Settings, label: 'Configurações' },
