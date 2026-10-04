@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Warehouse,
   Search,
@@ -9,50 +9,19 @@ import {
   TrendingDown,
   Package,
 } from 'lucide-react'
+import {
+  listSaldosEstoque,
+  listMovimentacoesEstoque,
+  ItemSaldoEstoque,
+  MovimentacaoEstoqueV2,
+  TipoMovimentacaoEstoque,
+} from '../services/v2EstoqueService'
+import { formatarMoeda } from '../../modules/lib/money'
 
-type TipoMovimentacao = 'entrada' | 'saida' | 'ajuste'
-
-type ItemEstoque = {
-  id: string
-  codigo: string
-  produto: string
-  categoria: string
-  saldo: number
-  unidade: string
-  custoMedio: number
-  ultimoCusto: number
-  ultimaMovimentacao: string
-}
-
-type Movimentacao = {
-  id: string
-  produto: string
-  tipo: TipoMovimentacao
-  quantidade: number
-  origem: string
-  data: string
-  custo: number | null
-}
-
-const ESTOQUE_DEMO: ItemEstoque[] = [
-  { id: '1', codigo: 'COL-1001', produto: 'Colchão Solteiro Molas', categoria: 'Colchões', saldo: 12, unidade: 'un', custoMedio: 280.00, ultimoCusto: 280.00, ultimaMovimentacao: '2026-09-28' },
-  { id: '2', codigo: 'COL-1002', produto: 'Colchão Casal Espuma D33', categoria: 'Colchões', saldo: 8, unidade: 'un', custoMedio: 195.00, ultimoCusto: 210.00, ultimaMovimentacao: '2026-10-01' },
-  { id: '3', codigo: 'CAB-2001', produto: 'Cabeceira Estofada Queen', categoria: 'Cabeceiras', saldo: 5, unidade: 'un', custoMedio: 320.50, ultimoCusto: 320.50, ultimaMovimentacao: '2026-09-15' },
-  { id: '4', codigo: 'BAS-3001', produto: 'Base Box Solteiro', categoria: 'Bases', saldo: 3, unidade: 'un', custoMedio: 125.00, ultimoCusto: 130.00, ultimaMovimentacao: '2026-09-20' },
-  { id: '5', codigo: 'ACE-4001', produto: 'Travesseiro Látex', categoria: 'Acessórios', saldo: 0, unidade: 'un', custoMedio: 68.00, ultimoCusto: 68.00, ultimaMovimentacao: '2026-09-10' },
-  { id: '6', codigo: 'COL-1003', produto: 'Colchão King Molas Ensacadas', categoria: 'Colchões', saldo: 2, unidade: 'un', custoMedio: 890.00, ultimoCusto: 900.00, ultimaMovimentacao: '2026-10-02' },
-]
-
-const MOVIMENTACOES_DEMO: Movimentacao[] = [
-  { id: 'm1', produto: 'Colchão Solteiro Molas', tipo: 'entrada', quantidade: 5, origem: 'Pedido #1001', data: '2026-10-01', custo: 280.00 },
-  { id: 'm2', produto: 'Colchão Casal Espuma D33', tipo: 'saida', quantidade: -2, origem: 'Venda #5020', data: '2026-10-01', custo: null },
-  { id: 'm3', produto: 'Colchão Casal Espuma D33', tipo: 'entrada', quantidade: 3, origem: 'Pedido #1002', data: '2026-09-28', custo: 210.00 },
-  { id: 'm4', produto: 'Travesseiro Látex', tipo: 'saida', quantidade: -6, origem: 'Venda #5018', data: '2026-09-25', custo: null },
-  { id: 'm5', produto: 'Base Box Solteiro', tipo: 'ajuste', quantidade: -1, origem: 'Ajuste manual: Avaria', data: '2026-09-20', custo: null },
-  { id: 'm6', produto: 'Colchão King Molas Ensacadas', tipo: 'entrada', quantidade: 2, origem: 'Pedido #1000', data: '2026-10-02', custo: 900.00 },
-]
-
-const TIPO_MOV_CONFIG: Record<TipoMovimentacao, { label: string; color: string; bg: string; icon: React.ReactNode; sinal: string }> = {
+const TIPO_MOV_CONFIG: Record<
+  TipoMovimentacaoEstoque,
+  { label: string; color: string; bg: string; icon: React.ReactNode; sinal: string }
+> = {
   entrada: { label: 'Entrada', color: '#16A34A', bg: '#F0FDF4', icon: <ArrowUpCircle size={14} />, sinal: '+' },
   saida: { label: 'Saída', color: '#DC2626', bg: '#FEF2F2', icon: <ArrowDownCircle size={14} />, sinal: '-' },
   ajuste: { label: 'Ajuste', color: '#D97706', bg: '#FFFBEB', icon: <Wrench size={14} />, sinal: '' },
@@ -63,19 +32,34 @@ type TabAtiva = 'posicao' | 'movimentacoes'
 export function V2EstoquePage() {
   const [tab, setTab] = useState<TabAtiva>('posicao')
   const [busca, setBusca] = useState('')
+  const [saldos, setSaldos] = useState<ItemSaldoEstoque[]>([])
+  const [movimentacoes, setMovimentacoes] = useState<MovimentacaoEstoqueV2[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const itensFiltrados = ESTOQUE_DEMO.filter(
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      const s = await listSaldosEstoque()
+      const m = await listMovimentacoesEstoque()
+      setSaldos(s)
+      setMovimentacoes(m)
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  const itensFiltrados = saldos.filter(
     (i) =>
       !busca ||
-      i.produto.toLowerCase().includes(busca.toLowerCase()) ||
-      i.codigo.toLowerCase().includes(busca.toLowerCase()) ||
+      i.produto_nome.toLowerCase().includes(busca.toLowerCase()) ||
+      i.codigo_sku.toLowerCase().includes(busca.toLowerCase()) ||
       i.categoria.toLowerCase().includes(busca.toLowerCase()),
   )
 
-  const totalSKUs = ESTOQUE_DEMO.length
-  const emEstoque = ESTOQUE_DEMO.filter((i) => i.saldo > 0).length
-  const zerados = ESTOQUE_DEMO.filter((i) => i.saldo === 0).length
-  const valorTotalEstoque = ESTOQUE_DEMO.reduce((acc, i) => acc + i.saldo * i.custoMedio, 0)
+  const totalSKUs = saldos.length
+  const emEstoque = saldos.filter((i) => i.saldo > 0).length
+  const zerados = saldos.filter((i) => i.saldo === 0).length
+  const valorTotalEstoque = saldos.reduce((acc, i) => acc + i.saldo * i.custo_medio, 0)
 
   return (
     <div style={{ padding: '24px', maxWidth: 1100, margin: '0 auto' }}>
@@ -98,7 +82,7 @@ export function V2EstoquePage() {
         <div>
           <h1 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: '#111827' }}>Estoque</h1>
           <p style={{ margin: 0, fontSize: 13, color: '#6B7280', marginTop: 2 }}>
-            Posição e movimentações de estoque
+            Posição e movimentações de estoque em tempo real
           </p>
         </div>
       </div>
@@ -124,7 +108,7 @@ export function V2EstoquePage() {
         <div style={{ padding: '16px', borderRadius: 12, background: '#FFFFFF', border: '1.5px solid #E5E7EB' }}>
           <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Valor em Estoque</p>
           <p style={{ margin: 0, fontSize: 18, fontWeight: 900, color: '#111827' }}>
-            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valorTotalEstoque)}
+            {formatarMoeda(valorTotalEstoque)}
           </p>
         </div>
       </div>
@@ -181,11 +165,15 @@ export function V2EstoquePage() {
       </div>
 
       {/* Conteúdo da tab */}
-      {tab === 'posicao' ? (
+      {loading ? (
+        <div style={{ padding: '40px', textAlign: 'center', color: '#9CA3AF' }}>
+          Carregando dados de estoque...
+        </div>
+      ) : tab === 'posicao' ? (
         <div style={{ background: '#FFFFFF', borderRadius: 14, border: '1.5px solid #E5E7EB', overflow: 'hidden' }}>
           {itensFiltrados.map((item, idx) => (
             <div
-              key={item.id}
+              key={item.produto_id}
               style={{
                 padding: '14px 20px',
                 borderBottom: idx < itensFiltrados.length - 1 ? '1px solid #F3F4F6' : 'none',
@@ -210,9 +198,9 @@ export function V2EstoquePage() {
                 <Package size={18} color={item.saldo === 0 ? '#DC2626' : '#16A34A'} />
               </div>
               <div style={{ flex: 1, minWidth: 160 }}>
-                <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#111827' }}>{item.produto}</p>
+                <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#111827' }}>{item.produto_nome}</p>
                 <p style={{ margin: '2px 0 0', fontSize: 12, color: '#9CA3AF' }}>
-                  {item.codigo} · {item.categoria}
+                  {item.codigo_sku} · {item.categoria}
                 </p>
               </div>
               <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
@@ -232,13 +220,13 @@ export function V2EstoquePage() {
                 <div style={{ textAlign: 'right' }}>
                   <p style={{ margin: 0, fontSize: 11, color: '#9CA3AF', fontWeight: 600 }}>CUSTO MÉDIO</p>
                   <p style={{ margin: '2px 0 0', fontSize: 14, fontWeight: 700, color: '#374151' }}>
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.custoMedio)}
+                    {formatarMoeda(item.custo_medio)}
                   </p>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <p style={{ margin: 0, fontSize: 11, color: '#9CA3AF', fontWeight: 600 }}>VALOR TOTAL</p>
                   <p style={{ margin: '2px 0 0', fontSize: 14, fontWeight: 700, color: '#374151' }}>
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.saldo * item.custoMedio)}
+                    {formatarMoeda(item.saldo * item.custo_medio)}
                   </p>
                 </div>
               </div>
@@ -247,76 +235,81 @@ export function V2EstoquePage() {
           {itensFiltrados.length === 0 && (
             <div style={{ padding: '40px', textAlign: 'center', color: '#9CA3AF' }}>
               <Package size={32} style={{ marginBottom: 8 }} />
-              <p style={{ margin: 0, fontWeight: 700 }}>Nenhum produto encontrado</p>
+              <p style={{ margin: 0, fontWeight: 700 }}>Nenhum produto em estoque</p>
             </div>
           )}
         </div>
       ) : (
         <div style={{ background: '#FFFFFF', borderRadius: 14, border: '1.5px solid #E5E7EB', overflow: 'hidden' }}>
-          {MOVIMENTACOES_DEMO.filter(
-            (m) => !busca || m.produto.toLowerCase().includes(busca.toLowerCase()),
-          ).map((mov, idx, arr) => {
-            const cfg = TIPO_MOV_CONFIG[mov.tipo]
-            const qtdAbs = Math.abs(mov.quantidade)
-            return (
-              <div
-                key={mov.id}
-                style={{
-                  padding: '14px 20px',
-                  borderBottom: idx < arr.length - 1 ? '1px solid #F3F4F6' : 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 14,
-                  flexWrap: 'wrap',
-                }}
-              >
+          {movimentacoes
+            .filter((m) => !busca || m.produto_nome.toLowerCase().includes(busca.toLowerCase()))
+            .map((mov, idx, arr) => {
+              const cfg = TIPO_MOV_CONFIG[mov.tipo] || TIPO_MOV_CONFIG.entrada
+              const qtdAbs = Math.abs(mov.quantidade)
+              return (
                 <div
+                  key={mov.id}
                   style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 10,
-                    background: cfg.bg,
+                    padding: '14px 20px',
+                    borderBottom: idx < arr.length - 1 ? '1px solid #F3F4F6' : 'none',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                    color: cfg.color,
+                    gap: 14,
+                    flexWrap: 'wrap',
                   }}
                 >
-                  {cfg.icon}
-                </div>
-                <div style={{ flex: 1, minWidth: 140 }}>
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#111827' }}>{mov.produto}</p>
-                  <p style={{ margin: '2px 0 0', fontSize: 12, color: '#9CA3AF' }}>{mov.origem}</p>
-                </div>
-                <div style={{ display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <span
+                  <div
                     style={{
-                      padding: '3px 10px',
-                      borderRadius: 20,
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: cfg.color,
+                      width: 36,
+                      height: 36,
+                      borderRadius: 10,
                       background: cfg.bg,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      color: cfg.color,
                     }}
                   >
-                    {cfg.label}
-                  </span>
-                  <span style={{ fontSize: 15, fontWeight: 900, color: cfg.color }}>
-                    {cfg.sinal}{qtdAbs} un
-                  </span>
-                  {mov.custo && (
-                    <span style={{ fontSize: 13, color: '#6B7280' }}>
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(mov.custo)}/un
+                    {cfg.icon}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 140 }}>
+                    <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#111827' }}>{mov.produto_nome}</p>
+                    <p style={{ margin: '2px 0 0', fontSize: 12, color: '#9CA3AF' }}>{mov.referencia || mov.origem}</p>
+                  </div>
+                  <div style={{ display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <span
+                      style={{
+                        padding: '3px 10px',
+                        borderRadius: 20,
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: cfg.color,
+                        background: cfg.bg,
+                      }}
+                    >
+                      {cfg.label}
                     </span>
-                  )}
-                  <span style={{ fontSize: 12, color: '#9CA3AF' }}>
-                    {mov.data.split('-').reverse().join('/')}
-                  </span>
+                    <span style={{ fontSize: 15, fontWeight: 900, color: cfg.color }}>
+                      {cfg.sinal}{qtdAbs} un
+                    </span>
+                    {mov.custo_unitario && (
+                      <span style={{ fontSize: 13, color: '#6B7280' }}>
+                        {formatarMoeda(mov.custo_unitario)}/un
+                      </span>
+                    )}
+                    <span style={{ fontSize: 12, color: '#9CA3AF' }}>
+                      {mov.data.split('-').reverse().join('/')}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            )
-          })}
+              )
+            })}
+          {movimentacoes.length === 0 && (
+            <div style={{ padding: '40px', textAlign: 'center', color: '#9CA3AF' }}>
+              <p style={{ margin: 0, fontWeight: 700 }}>Nenhuma movimentação de estoque registrada ainda.</p>
+            </div>
+          )}
         </div>
       )}
     </div>
