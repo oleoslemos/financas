@@ -24,7 +24,7 @@ export type PedidoCompraItem = {
 
 export type PedidoCompra = {
   id: string
-  numero: number
+  numero: number | string
   fornecedor: string
   status: StatusPedido
   dataEmissao: string | null
@@ -61,12 +61,30 @@ export async function listPedidosCompra(): Promise<PedidoCompra[]> {
 
 export async function savePedidoCompra(pedido: Omit<PedidoCompra, 'id' | 'numero' | 'created_at' | 'updated_at'>): Promise<PedidoCompra> {
   const current = await listPedidosCompra()
-  const novoNumero = current.length > 0 ? Math.max(...current.map((p) => p.numero || 0)) + 1 : 1001
+  
+  const now = new Date()
+  const yyyy = now.getFullYear()
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  const dd = String(now.getDate()).padStart(2, '0')
+  const datePrefix = `${yyyy}${mm}${dd}`
+
+  const todayOrders = current.filter((p) => String(p.numero).startsWith(datePrefix))
+  let seq = 1
+  if (todayOrders.length > 0) {
+    const seqs = todayOrders.map((p) => {
+      const numStr = String(p.numero).substring(datePrefix.length)
+      return parseInt(numStr, 10) || 0
+    })
+    seq = Math.max(...seqs) + 1
+  }
+
+  const seqStr = String(seq).padStart(3, '0')
+  const novoNumeroStr = `${datePrefix}${seqStr}`
 
   const newPedido: PedidoCompra = {
     ...pedido,
     id: crypto.randomUUID(),
-    numero: novoNumero,
+    numero: novoNumeroStr,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   }

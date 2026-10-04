@@ -30,6 +30,7 @@ import {
 } from '../services/v2PedidoCompraService'
 import { saveContaPagar, StatusConta } from '../services/v2ContasPagarService'
 import { listV2Products, V2Product } from '../services/v2ProdutosService'
+import { listFornecedores, Fornecedor } from '../services/v2SettingsService'
 
 const STATUS_CONFIG: Record<
   StatusPedido,
@@ -106,6 +107,7 @@ export function V2PedidoCompraPage() {
   const [mostrarFiltros, setMostrarFiltros] = useState(false)
   const [pedidos, setPedidos] = useState<PedidoCompra[]>([])
   const [produtosDisponiveis, setProdutosDisponiveis] = useState<V2Product[]>([])
+  const [fornecedoresCadastrados, setFornecedoresCadastrados] = useState<Fornecedor[]>([])
 
   // Modal States
   const [isModalCreateOpen, setIsModalCreateOpen] = useState(false)
@@ -124,8 +126,10 @@ export function V2PedidoCompraPage() {
   const loadData = async () => {
     const p = await listPedidosCompra()
     const prods = await listV2Products()
+    const forns = await listFornecedores()
     setPedidos(p)
     setProdutosDisponiveis(prods)
+    setFornecedoresCadastrados(forns)
   }
 
   useEffect(() => {
@@ -235,14 +239,7 @@ export function V2PedidoCompraPage() {
     return matchBusca && matchStatus
   })
 
-  const totaisPorStatus = pedidos.reduce(
-    (acc, p) => {
-      if (p.status !== 'cancelado') acc.total += p.total
-      acc[p.status] = (acc[p.status] ?? 0) + 1
-      return acc
-    },
-    { total: 0 } as Record<string, number>,
-  )
+
 
   const handleSalvarPedido = async () => {
     if (!formFornecedor.trim()) {
@@ -385,9 +382,6 @@ export function V2PedidoCompraPage() {
           </div>
           <div>
             <h1 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: '#111827' }}>Pedidos de Compra</h1>
-            <p style={{ margin: 0, fontSize: 13, color: '#6B7280', marginTop: 2 }}>
-              {pedidos.length} pedidos · Volume ativo: {formatarMoeda(totaisPorStatus.total)}
-            </p>
           </div>
         </div>
         <button
@@ -409,34 +403,6 @@ export function V2PedidoCompraPage() {
           <Plus size={16} />
           Novo Pedido
         </button>
-      </div>
-
-      {/* Cards de resumo */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 24 }}>
-        {(['rascunho', 'emitido', 'recebido_parcial', 'recebido'] as StatusPedido[]).map((status) => {
-          const cfg = STATUS_CONFIG[status]
-          const qtd = pedidos.filter((p) => p.status === status).length
-          return (
-            <button
-              key={status}
-              onClick={() => setFiltroStatus(filtroStatus === status ? 'todos' : status)}
-              style={{
-                padding: '14px 16px',
-                borderRadius: 12,
-                background: filtroStatus === status ? cfg.bg : '#FFFFFF',
-                border: `1.5px solid ${filtroStatus === status ? cfg.color + '66' : '#E5E7EB'}`,
-                textAlign: 'left',
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-              }}
-            >
-              <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: cfg.color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                {cfg.label}
-              </p>
-              <p style={{ margin: '4px 0 0', fontSize: 24, fontWeight: 900, color: '#111827' }}>{qtd}</p>
-            </button>
-          )
-        })}
       </div>
 
       {/* Barra de busca e filtros */}
@@ -573,16 +539,9 @@ export function V2PedidoCompraPage() {
                   {/* Fornecedor */}
                   <td style={{ padding: '14px 16px', fontSize: 14, fontWeight: 700, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 240 }}>
                     {pedido.fornecedor}
-                    {pedido.itens && pedido.itens.length > 0 && (
-                      <span style={{ display: 'block', fontSize: 11, fontWeight: 500, color: '#9CA3AF', marginTop: 2 }}>
-                        {pedido.itens.length === 1
-                          ? `${pedido.itens[0].produto_nome} (${pedido.itens[0].quantidade}x)`
-                          : `${pedido.itens[0].produto_nome} (${pedido.itens[0].quantidade}x) + ${pedido.itens.length - 1} outro(s)`}
-                      </span>
-                    )}
                     {pedido.observacao && (
-                      <span style={{ display: 'block', fontSize: 11, fontStyle: 'italic', color: '#6B7280', marginTop: 2 }}>
-                        Obs: {pedido.observacao}
+                      <span style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#6B7280', marginTop: 2 }}>
+                        {pedido.observacao}
                       </span>
                     )}
                   </td>
@@ -710,11 +669,19 @@ export function V2PedidoCompraPage() {
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Fornecedor *</label>
                 <input
                   type="text"
+                  list="fornecedores-list"
                   value={formFornecedor}
                   onChange={(e) => setFormFornecedor(e.target.value)}
-                  placeholder="Nome do fornecedor"
+                  placeholder="Digite ou selecione o fornecedor (Nome Fantasia)"
                   style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1.5px solid #D1D5DB', fontSize: 14, boxSizing: 'border-box' }}
                 />
+                <datalist id="fornecedores-list">
+                  {fornecedoresCadastrados.map((f) => (
+                    <option key={f.id} value={f.trade_name}>
+                      {f.legal_name ? `${f.trade_name} (${f.legal_name})` : f.trade_name}
+                    </option>
+                  ))}
+                </datalist>
               </div>
 
               {/* Lista de Produtos / Itens */}

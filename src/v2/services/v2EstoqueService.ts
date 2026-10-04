@@ -95,7 +95,7 @@ export async function listSaldosEstoque(): Promise<ItemSaldoEstoque[]> {
 
 export async function registrarEntradaCompra(params: {
   pedidoId: string
-  pedidoNumero: number
+  pedidoNumero: number | string
   itens: Array<{ produto_id: string; produto_nome: string; quantidade: number; preco_unitario: number }>
 }): Promise<void> {
   const movsAtuais = await listMovimentacoesEstoque()
@@ -137,7 +137,7 @@ export async function validarConsumoEstoque(itens: Array<{ produto_id: string; p
 
 export async function desfazerEntradaCompra(params: {
   pedidoId: string
-  pedidoNumero: number
+  pedidoNumero: number | string
   itens: Array<{ produto_id: string; produto_nome: string; quantidade: number; preco_unitario: number }>
 }): Promise<{ ok: true } | { ok: false; erro: string }> {
   const validacao = await validarConsumoEstoque(params.itens)
