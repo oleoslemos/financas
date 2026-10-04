@@ -9,7 +9,6 @@ import {
   AlertCircle,
   ChevronDown,
   Filter,
-  RefreshCw,
 } from 'lucide-react'
 
 type StatusConta = 'aberta' | 'parcial' | 'paga' | 'cancelada' | 'vencida'
