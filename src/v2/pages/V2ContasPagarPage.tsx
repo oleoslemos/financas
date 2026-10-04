@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Wallet,
   Search,
@@ -10,21 +10,7 @@ import {
   ChevronDown,
   Filter,
 } from 'lucide-react'
-
-type StatusConta = 'aberta' | 'parcial' | 'paga' | 'cancelada' | 'vencida'
-type OrigemConta = 'compra' | 'avulsa' | 'recorrente'
-
-type ContaPagar = {
-  id: string
-  descricao: string
-  fornecedor: string | null
-  origem: OrigemConta
-  categoria: string | null
-  total: number
-  totalPago: number
-  status: StatusConta
-  parcelas: { numero: number; vencimento: string; valor: number; status: StatusConta }[]
-}
+import { listContasPagar, ContaPagar, StatusConta, OrigemConta } from '../services/v2ContasPagarService'
 
 const STATUS_CONFIG: Record<StatusConta, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
   aberta: { label: 'Aberta', color: '#2563EB', bg: '#EFF6FF', icon: <Clock size={13} /> },
@@ -39,64 +25,6 @@ const ORIGEM_CONFIG: Record<OrigemConta, { label: string; icon: React.ReactNode 
   avulsa: { label: 'Avulsa', icon: <span style={{ fontSize: 10 }}>📋</span> },
   recorrente: { label: 'Recorrente', icon: <span style={{ fontSize: 10 }}>🔄</span> },
 }
-
-const CONTAS_DEMO: ContaPagar[] = [
-  {
-    id: '1',
-    descricao: 'Compra #1001 — Distribuidora Nacional',
-    fornecedor: 'Distribuidora Nacional Ltda',
-    origem: 'compra',
-    categoria: 'Mercadoria',
-    total: 8750.00,
-    totalPago: 2916.67,
-    status: 'parcial',
-    parcelas: [
-      { numero: 1, vencimento: '2026-10-10', valor: 2916.67, status: 'paga' },
-      { numero: 2, vencimento: '2026-11-10', valor: 2916.67, status: 'aberta' },
-      { numero: 3, vencimento: '2026-12-10', valor: 2916.66, status: 'aberta' },
-    ],
-  },
-  {
-    id: '2',
-    descricao: 'Contabilidade — Outubro/2026',
-    fornecedor: 'Contabilidade XYZ',
-    origem: 'recorrente',
-    categoria: 'Contabilidade',
-    total: 850.00,
-    totalPago: 0,
-    status: 'vencida',
-    parcelas: [
-      { numero: 1, vencimento: '2026-09-30', valor: 850.00, status: 'vencida' },
-    ],
-  },
-  {
-    id: '3',
-    descricao: 'Aluguel do Galpão',
-    fornecedor: null,
-    origem: 'avulsa',
-    categoria: 'Aluguel',
-    total: 3200.00,
-    totalPago: 3200.00,
-    status: 'paga',
-    parcelas: [
-      { numero: 1, vencimento: '2026-10-01', valor: 3200.00, status: 'paga' },
-    ],
-  },
-  {
-    id: '4',
-    descricao: 'Compra #1002 — Bem Estar Colchões',
-    fornecedor: 'Bem Estar Colchões ME',
-    origem: 'compra',
-    categoria: 'Mercadoria',
-    total: 3200.00,
-    totalPago: 0,
-    status: 'aberta',
-    parcelas: [
-      { numero: 1, vencimento: '2026-10-20', valor: 1600.00, status: 'aberta' },
-      { numero: 2, vencimento: '2026-11-20', valor: 1600.00, status: 'aberta' },
-    ],
-  },
-]
 
 function StatusBadge({ status }: { status: StatusConta }) {
   const cfg = STATUS_CONFIG[status]
@@ -127,8 +55,17 @@ export function V2ContasPagarPage() {
   const [filtroStatus, setFiltroStatus] = useState<string>('todos')
   const [contaExpandida, setContaExpandida] = useState<string | null>(null)
   const [mostrarFiltros, setMostrarFiltros] = useState(false)
+  const [contas, setContas] = useState<ContaPagar[]>([])
+  
+  useEffect(() => {
+    async function load() {
+      const data = await listContasPagar()
+      setContas(data)
+    }
+    load()
+  }, [])
 
-  const contasFiltradas = CONTAS_DEMO.filter((c) => {
+  const contasFiltradas = contas.filter((c) => {
     const matchBusca =
       !busca ||
       c.descricao.toLowerCase().includes(busca.toLowerCase()) ||
@@ -138,9 +75,9 @@ export function V2ContasPagarPage() {
     return matchBusca && matchStatus
   })
 
-  const totalAberto = CONTAS_DEMO.filter((c) => c.status === 'aberta' || c.status === 'parcial' || c.status === 'vencida')
+  const totalAberto = contas.filter((c) => c.status === 'aberta' || c.status === 'parcial' || c.status === 'vencida')
     .reduce((acc, c) => acc + (c.total - c.totalPago), 0)
-  const totalVencido = CONTAS_DEMO.filter((c) => c.status === 'vencida')
+  const totalVencido = contas.filter((c) => c.status === 'vencida')
     .reduce((acc, c) => acc + (c.total - c.totalPago), 0)
 
   const fmt = (v: number) =>
@@ -201,7 +138,7 @@ export function V2ContasPagarPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 24 }}>
         {(['aberta', 'vencida', 'parcial', 'paga'] as StatusConta[]).map((status) => {
           const cfg = STATUS_CONFIG[status]
-          const qtd = CONTAS_DEMO.filter((c) => c.status === status).length
+          const qtd = contas.filter((c) => c.status === status).length
           return (
             <button
               key={status}

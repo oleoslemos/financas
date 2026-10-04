@@ -1,20 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ShoppingCart, Plus, Search, Filter, ChevronDown, CheckCircle2, Clock, XCircle, Package } from 'lucide-react'
 import { formatarMoeda } from '../../modules/lib/money'
 import { formatarData } from '../../modules/lib/datas'
-
-type StatusPedido = 'rascunho' | 'emitido' | 'recebido_parcial' | 'recebido' | 'cancelado'
-
-type PedidoCompra = {
-  id: string
-  numero: number
-  fornecedor: string
-  status: StatusPedido
-  dataEmissao: string | null
-  dataPrevistaEntrega: string | null
-  total: number
-  numeroParcelas: number
-}
+import { listPedidosCompra, savePedidoCompra, PedidoCompra, StatusPedido } from '../services/v2PedidoCompraService'
+import { saveContaPagar, StatusConta } from '../services/v2ContasPagarService'
+import { listV2Products, V2Product } from '../services/v2ProdutosService'
 
 const STATUS_CONFIG: Record<
   StatusPedido,
@@ -51,60 +41,6 @@ const STATUS_CONFIG: Record<
     icon: <XCircle size={13} />,
   },
 }
-
-// Dados de demonstração
-const PEDIDOS_DEMO: PedidoCompra[] = [
-  {
-    id: '1',
-    numero: 1001,
-    fornecedor: 'Distribuidora Nacional Ltda',
-    status: 'emitido',
-    dataEmissao: '2026-09-15',
-    dataPrevistaEntrega: '2026-10-10',
-    total: 8750.00,
-    numeroParcelas: 3,
-  },
-  {
-    id: '2',
-    numero: 1002,
-    fornecedor: 'Bem Estar Colchões ME',
-    status: 'recebido_parcial',
-    dataEmissao: '2026-09-20',
-    dataPrevistaEntrega: '2026-10-05',
-    total: 3200.00,
-    numeroParcelas: 2,
-  },
-  {
-    id: '3',
-    numero: 1003,
-    fornecedor: 'Tecidos Premium Ind. Com.',
-    status: 'recebido',
-    dataEmissao: '2026-09-01',
-    dataPrevistaEntrega: '2026-09-25',
-    total: 12400.50,
-    numeroParcelas: 1,
-  },
-  {
-    id: '4',
-    numero: 1004,
-    fornecedor: 'Distribuidora Nacional Ltda',
-    status: 'rascunho',
-    dataEmissao: null,
-    dataPrevistaEntrega: null,
-    total: 4980.00,
-    numeroParcelas: 4,
-  },
-  {
-    id: '5',
-    numero: 1000,
-    fornecedor: 'Madeireira do Vale S/A',
-    status: 'cancelado',
-    dataEmissao: '2026-08-10',
-    dataPrevistaEntrega: '2026-09-01',
-    total: 2100.00,
-    numeroParcelas: 1,
-  },
-]
 
 function StatusBadge({ status }: { status: StatusPedido }) {
   const cfg = STATUS_CONFIG[status]
@@ -144,8 +80,26 @@ export function V2PedidoCompraPage() {
   const [filtroStatus, setFiltroStatus] = useState<string>('todos')
   const [mostrarFiltros, setMostrarFiltros] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [pedidos, setPedidos] = useState<PedidoCompra[]>([])
+  const [produtosDisponiveis, setProdutosDisponiveis] = useState<V2Product[]>([])
 
-  const pedidosFiltrados = PEDIDOS_DEMO.filter((p) => {
+  // Form states
+  const [formFornecedor, setFormFornecedor] = useState('')
+  const [formProdutoId, setFormProdutoId] = useState('')
+  const [formQuantidade, setFormQuantidade] = useState(1)
+  const [formParcelas, setFormParcelas] = useState(1)
+
+  useEffect(() => {
+    async function load() {
+      const p = await listPedidosCompra()
+      const prods = await listV2Products()
+      setPedidos(p)
+      setProdutosDisponiveis(prods)
+    }
+    load()
+  }, [])
+
+  const pedidosFiltrados = pedidos.filter((p) => {
     const matchBusca =
       !busca ||
       p.fornecedor.toLowerCase().includes(busca.toLowerCase()) ||
@@ -154,7 +108,7 @@ export function V2PedidoCompraPage() {
     return matchBusca && matchStatus
   })
 
-  const totaisPorStatus = PEDIDOS_DEMO.reduce(
+  const totaisPorStatus = pedidos.reduce(
     (acc, p) => {
       if (p.status !== 'cancelado') acc.total += p.total
       acc[p.status] = (acc[p.status] ?? 0) + 1
@@ -162,6 +116,75 @@ export function V2PedidoCompraPage() {
     },
     { total: 0 } as Record<string, number>,
   )
+
+  const handleSalvarNovoPedido = async () => {
+    if (!formFornecedor || !formProdutoId || formQuantidade <= 0 || formParcelas <= 0) {
+      alert('Preencha todos os campos.')
+      return
+    }
+
+    const produtoSelecionado = produtosDisponiveis.find((p) => p.id === formProdutoId)
+    if (!produtoSelecionado) return
+
+    const totalCalculado = produtoSelecionado.cost_price * formQuantidade
+
+    try {
+      const novoPedido = await savePedidoCompra({
+        fornecedor: formFornecedor,
+        status: 'emitido',
+        dataEmissao: new Date().toISOString().split('T')[0],
+        dataPrevistaEntrega: null,
+        total: totalCalculado,
+        numeroParcelas: formParcelas,
+        itens: [
+          {
+            produto_id: produtoSelecionado.id,
+            produto_nome: produtoSelecionado.name,
+            quantidade: formQuantidade,
+            preco_unitario: produtoSelecionado.cost_price,
+            total: totalCalculado,
+          },
+        ],
+      })
+
+      const parcelasArray = []
+      const valorParcela = totalCalculado / formParcelas
+      const dataHoje = new Date()
+      for (let i = 1; i <= formParcelas; i++) {
+        const vencimento = new Date(dataHoje)
+        vencimento.setMonth(vencimento.getMonth() + i)
+        parcelasArray.push({
+          numero: i,
+          vencimento: vencimento.toISOString().split('T')[0],
+          valor: valorParcela,
+          status: 'aberta' as StatusConta,
+        })
+      }
+
+      await saveContaPagar({
+        descricao: `Pedido de Compra #${novoPedido.numero} - ${produtoSelecionado.name}`,
+        fornecedor: formFornecedor,
+        origem: 'compra',
+        categoria: 'Mercadoria',
+        total: totalCalculado,
+        totalPago: 0,
+        status: 'aberta',
+        parcelas: parcelasArray,
+      })
+
+      const atualizados = await listPedidosCompra()
+      setPedidos(atualizados)
+      setIsModalOpen(false)
+      setFormFornecedor('')
+      setFormProdutoId('')
+      setFormQuantidade(1)
+      setFormParcelas(1)
+      alert('Pedido criado e Contas a Pagar gerado com sucesso!')
+    } catch (err) {
+      alert('Erro ao criar pedido.')
+    }
+  }
+
 
   return (
     <div style={{ padding: '24px', maxWidth: 1100, margin: '0 auto' }}>
@@ -185,7 +208,7 @@ export function V2PedidoCompraPage() {
           <div>
             <h1 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: '#111827' }}>Pedidos de Compra</h1>
             <p style={{ margin: 0, fontSize: 13, color: '#6B7280', marginTop: 2 }}>
-              {PEDIDOS_DEMO.length} pedidos · Volume ativo: {formatarMoeda(totaisPorStatus.total)}
+              {pedidos.length} pedidos · Volume ativo: {formatarMoeda(totaisPorStatus.total)}
             </p>
           </div>
         </div>
@@ -214,7 +237,7 @@ export function V2PedidoCompraPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 24 }}>
         {(['rascunho', 'emitido', 'recebido_parcial', 'recebido'] as StatusPedido[]).map((status) => {
           const cfg = STATUS_CONFIG[status]
-          const qtd = PEDIDOS_DEMO.filter((p) => p.status === status).length
+          const qtd = pedidos.filter((p) => p.status === status).length
           return (
             <button
               key={status}
@@ -417,14 +440,79 @@ export function V2PedidoCompraPage() {
       
       {isModalOpen && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
-          <div style={{ background: '#fff', padding: 24, borderRadius: 12, width: '100%', maxWidth: 400 }}>
-            <h2 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, color: '#111827' }}>Novo Pedido de Compra</h2>
-            <p style={{ color: '#6B7280', fontSize: 14, marginBottom: 24 }}>
-              A funcionalidade de criação de pedidos de compra está em desenvolvimento. Em breve você poderá adicionar produtos e gerenciar o estoque.
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button onClick={() => setIsModalOpen(false)} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#E5E7EB', color: '#374151', cursor: 'pointer', fontWeight: 600 }}>
-                Fechar
+          <div style={{ background: '#fff', padding: 24, borderRadius: 12, width: '100%', maxWidth: 450 }}>
+            <h2 style={{ marginTop: 0, marginBottom: 20, fontSize: 18, color: '#111827' }}>Novo Pedido de Compra</h2>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 24 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Fornecedor</label>
+                <input
+                  type="text"
+                  value={formFornecedor}
+                  onChange={(e) => setFormFornecedor(e.target.value)}
+                  placeholder="Nome do fornecedor"
+                  style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #D1D5DB', fontSize: 14 }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Produto</label>
+                <select
+                  value={formProdutoId}
+                  onChange={(e) => setFormProdutoId(e.target.value)}
+                  style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #D1D5DB', fontSize: 14, backgroundColor: '#fff' }}
+                >
+                  <option value="">Selecione um produto</option>
+                  {produtosDisponiveis.map(p => (
+                    <option key={p.id} value={p.id}>{p.name} ({formatarMoeda(p.cost_price)})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Quantidade</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={formQuantidade}
+                    onChange={(e) => setFormQuantidade(Number(e.target.value))}
+                    style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #D1D5DB', fontSize: 14 }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Nº de Parcelas</label>
+                  <select
+                    value={formParcelas}
+                    onChange={(e) => setFormParcelas(Number(e.target.value))}
+                    style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #D1D5DB', fontSize: 14, backgroundColor: '#fff' }}
+                  >
+                    <option value={1}>À vista (1x)</option>
+                    <option value={2}>2x</option>
+                    <option value={3}>3x</option>
+                    <option value={4}>4x</option>
+                    <option value={5}>5x</option>
+                    <option value={6}>6x</option>
+                  </select>
+                </div>
+              </div>
+              
+              {formProdutoId && (
+                <div style={{ padding: '12px', background: '#F3F4F6', borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 14, color: '#4B5563' }}>Total estimado:</span>
+                  <strong style={{ fontSize: 16, color: '#111827' }}>
+                    {formatarMoeda((produtosDisponiveis.find(p => p.id === formProdutoId)?.cost_price || 0) * formQuantidade)}
+                  </strong>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+              <button onClick={() => setIsModalOpen(false)} style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid #D1D5DB', background: '#fff', color: '#374151', cursor: 'pointer', fontWeight: 600 }}>
+                Cancelar
+              </button>
+              <button onClick={handleSalvarNovoPedido} style={{ padding: '10px 16px', borderRadius: 8, border: 'none', background: '#0D6BAF', color: '#fff', cursor: 'pointer', fontWeight: 600 }}>
+                Criar Pedido e Gerar Contas a Pagar
               </button>
             </div>
           </div>
