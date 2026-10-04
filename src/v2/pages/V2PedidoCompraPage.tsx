@@ -25,6 +25,7 @@ import {
   desfazerRecebimentoPedidoCompra,
   deletePedidoCompra,
   PedidoCompra,
+  PedidoCompraItem,
   StatusPedido,
 } from '../services/v2PedidoCompraService'
 import { saveContaPagar, StatusConta } from '../services/v2ContasPagarService'
@@ -115,8 +116,7 @@ export function V2PedidoCompraPage() {
 
   // Form states (Novo/Edição)
   const [formFornecedor, setFormFornecedor] = useState('')
-  const [formProdutoId, setFormProdutoId] = useState('')
-  const [formQuantidade, setFormQuantidade] = useState(1)
+  const [formItens, setFormItens] = useState<PedidoCompraItem[]>([])
   const [formParcelas, setFormParcelas] = useState(1)
   const [formDataEntrega, setFormDataEntrega] = useState('')
   const [formObservacao, setFormObservacao] = useState('')
@@ -135,8 +135,20 @@ export function V2PedidoCompraPage() {
   const abrirModalCriar = () => {
     setPedidoEdicao(null)
     setFormFornecedor('')
-    setFormProdutoId(produtosDisponiveis[0]?.id || '')
-    setFormQuantidade(1)
+    const prodPadrao = produtosDisponiveis[0]
+    setFormItens(
+      prodPadrao
+        ? [
+            {
+              produto_id: prodPadrao.id,
+              produto_nome: prodPadrao.name,
+              quantidade: 1,
+              preco_unitario: prodPadrao.cost_price,
+              total: prodPadrao.cost_price,
+            },
+          ]
+        : []
+    )
     setFormParcelas(1)
     setFormDataEntrega('')
     setFormObservacao('')
@@ -146,13 +158,73 @@ export function V2PedidoCompraPage() {
   const abrirModalEditar = (pedido: PedidoCompra) => {
     setPedidoEdicao(pedido)
     setFormFornecedor(pedido.fornecedor)
-    setFormProdutoId(pedido.itens[0]?.produto_id || '')
-    setFormQuantidade(pedido.itens[0]?.quantidade || 1)
+    setFormItens(pedido.itens ? pedido.itens.map((i) => ({ ...i })) : [])
     setFormParcelas(pedido.numeroParcelas || 1)
     setFormDataEntrega(pedido.dataPrevistaEntrega || '')
     setFormObservacao(pedido.observacao || '')
     setIsModalCreateOpen(true)
   }
+
+  const handleAdicionarItem = () => {
+    const prodPadrao = produtosDisponiveis[0]
+    if (!prodPadrao) {
+      alert('Nenhum produto cadastrado.')
+      return
+    }
+    setFormItens((prev) => [
+      ...prev,
+      {
+        produto_id: prodPadrao.id,
+        produto_nome: prodPadrao.name,
+        quantidade: 1,
+        preco_unitario: prodPadrao.cost_price,
+        total: prodPadrao.cost_price,
+      },
+    ])
+  }
+
+  const handleRemoverItem = (index: number) => {
+    if (formItens.length <= 1) {
+      alert('O pedido deve conter pelo menos 1 produto.')
+      return
+    }
+    setFormItens((prev) => prev.filter((_, idx) => idx !== index))
+  }
+
+  const handleItemProdutoChange = (index: number, produtoId: string) => {
+    const prod = produtosDisponiveis.find((p) => p.id === produtoId)
+    if (!prod) return
+    setFormItens((prev) =>
+      prev.map((item, idx) => {
+        if (idx !== index) return item
+        const preco = prod.cost_price
+        const qtd = item.quantidade || 1
+        return {
+          ...item,
+          produto_id: prod.id,
+          produto_nome: prod.name,
+          preco_unitario: preco,
+          total: preco * qtd,
+        }
+      })
+    )
+  }
+
+  const handleItemQuantidadeChange = (index: number, quantidade: number) => {
+    const qtd = Math.max(1, quantidade)
+    setFormItens((prev) =>
+      prev.map((item, idx) => {
+        if (idx !== index) return item
+        return {
+          ...item,
+          quantidade: qtd,
+          total: (item.preco_unitario || 0) * qtd,
+        }
+      })
+    )
+  }
+
+  const totalCalculado = formItens.reduce((acc, item) => acc + (item.total || 0), 0)
 
   const pedidosFiltrados = pedidos.filter((p) => {
     const matchBusca =
@@ -173,15 +245,22 @@ export function V2PedidoCompraPage() {
   )
 
   const handleSalvarPedido = async () => {
-    if (!formFornecedor.trim() || !formProdutoId || formQuantidade <= 0 || formParcelas <= 0) {
-      alert('Preencha todos os campos obrigatórios.')
+    if (!formFornecedor.trim()) {
+      alert('Informe o fornecedor.')
       return
     }
-
-    const produtoSelecionado = produtosDisponiveis.find((p) => p.id === formProdutoId)
-    if (!produtoSelecionado) return
-
-    const totalCalculado = produtoSelecionado.cost_price * formQuantidade
+    if (formItens.length === 0) {
+      alert('Adicione pelo menos 1 produto ao pedido.')
+      return
+    }
+    if (formItens.some((i) => !i.produto_id || i.quantidade <= 0)) {
+      alert('Verifique os produtos e quantidades selecionadas.')
+      return
+    }
+    if (formParcelas <= 0) {
+      alert('Selecione o número de parcelas.')
+      return
+    }
 
     try {
       if (pedidoEdicao) {
@@ -193,15 +272,7 @@ export function V2PedidoCompraPage() {
           observacao: formObservacao || null,
           total: totalCalculado,
           numeroParcelas: formParcelas,
-          itens: [
-            {
-              produto_id: produtoSelecionado.id,
-              produto_nome: produtoSelecionado.name,
-              quantidade: formQuantidade,
-              preco_unitario: produtoSelecionado.cost_price,
-              total: totalCalculado,
-            },
-          ],
+          itens: formItens,
         }
         await updatePedidoCompra(pedidoAtualizado)
       } else {
@@ -214,15 +285,7 @@ export function V2PedidoCompraPage() {
           observacao: formObservacao || null,
           total: totalCalculado,
           numeroParcelas: formParcelas,
-          itens: [
-            {
-              produto_id: produtoSelecionado.id,
-              produto_nome: produtoSelecionado.name,
-              quantidade: formQuantidade,
-              preco_unitario: produtoSelecionado.cost_price,
-              total: totalCalculado,
-            },
-          ],
+          itens: formItens,
         })
 
         // Gerar parcelas do Contas a Pagar
@@ -240,9 +303,14 @@ export function V2PedidoCompraPage() {
           })
         }
 
+        const descricaoItens =
+          formItens.length > 1
+            ? `${formItens[0]?.produto_nome || 'Item'} (+${formItens.length - 1} itens)`
+            : (formItens[0]?.produto_nome || 'Item')
+
         await saveContaPagar({
           pedido_id: novoPedido.id,
-          descricao: `Pedido de Compra #${novoPedido.numero} - ${produtoSelecionado.name}`,
+          descricao: `Pedido de Compra #${novoPedido.numero} - ${descricaoItens}`,
           fornecedor: formFornecedor,
           origem: 'compra',
           categoria: 'Mercadoria',
@@ -503,11 +571,13 @@ export function V2PedidoCompraPage() {
                   </td>
 
                   {/* Fornecedor */}
-                  <td style={{ padding: '14px 16px', fontSize: 14, fontWeight: 700, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220 }}>
+                  <td style={{ padding: '14px 16px', fontSize: 14, fontWeight: 700, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 240 }}>
                     {pedido.fornecedor}
                     {pedido.itens && pedido.itens.length > 0 && (
                       <span style={{ display: 'block', fontSize: 11, fontWeight: 500, color: '#9CA3AF', marginTop: 2 }}>
-                        {pedido.itens[0].produto_nome} ({pedido.itens[0].quantidade}x)
+                        {pedido.itens.length === 1
+                          ? `${pedido.itens[0].produto_nome} (${pedido.itens[0].quantidade}x)`
+                          : `${pedido.itens[0].produto_nome} (${pedido.itens[0].quantidade}x) + ${pedido.itens.length - 1} outro(s)`}
                       </span>
                     )}
                     {pedido.observacao && (
@@ -629,12 +699,13 @@ export function V2PedidoCompraPage() {
       {/* Modal Criar / Editar Pedido */}
       {isModalCreateOpen && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}>
-          <div style={{ background: '#fff', padding: 24, borderRadius: 12, width: '100%', maxWidth: 480, boxShadow: '0 10px 25px rgba(0,0,0,0.15)' }}>
+          <div style={{ background: '#fff', padding: 24, borderRadius: 14, width: '100%', maxWidth: 560, boxShadow: '0 10px 25px rgba(0,0,0,0.15)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
             <h2 style={{ marginTop: 0, marginBottom: 20, fontSize: 18, fontWeight: 800, color: '#111827' }}>
               {pedidoEdicao ? `Editar Pedido #${pedidoEdicao.numero}` : 'Novo Pedido de Compra'}
             </h2>
             
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 24 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto', paddingRight: 4, marginBottom: 20 }}>
+              {/* Fornecedor */}
               <div>
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Fornecedor *</label>
                 <input
@@ -646,31 +717,124 @@ export function V2PedidoCompraPage() {
                 />
               </div>
 
+              {/* Lista de Produtos / Itens */}
               <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Produto *</label>
-                <select
-                  value={formProdutoId}
-                  onChange={(e) => setFormProdutoId(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1.5px solid #D1D5DB', fontSize: 14, backgroundColor: '#fff', boxSizing: 'border-box' }}
-                >
-                  <option value="">Selecione um produto</option>
-                  {produtosDisponiveis.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name} ({formatarMoeda(p.cost_price)})</option>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <label style={{ fontSize: 13, fontWeight: 700, color: '#374151' }}>Produtos do Pedido *</label>
+                  <button
+                    type="button"
+                    onClick={handleAdicionarItem}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      padding: '5px 10px',
+                      borderRadius: 6,
+                      background: '#EFF6FF',
+                      color: '#2563EB',
+                      border: '1px solid #BFDBFE',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Plus size={14} /> Adicionar Item
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {formItens.map((item, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 85px 100px 32px',
+                        gap: 8,
+                        alignItems: 'center',
+                        background: '#F9FAFB',
+                        padding: '10px 12px',
+                        borderRadius: 8,
+                        border: '1px solid #E5E7EB',
+                      }}
+                    >
+                      {/* Seleção do Produto */}
+                      <div>
+                        <select
+                          value={item.produto_id}
+                          onChange={(e) => handleItemProdutoChange(idx, e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '8px 10px',
+                            borderRadius: 6,
+                            border: '1px solid #D1D5DB',
+                            fontSize: 13,
+                            backgroundColor: '#fff',
+                            boxSizing: 'border-box',
+                          }}
+                        >
+                          <option value="">Selecione um produto</option>
+                          {produtosDisponiveis.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name} ({formatarMoeda(p.cost_price)})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Quantidade */}
+                      <div>
+                        <input
+                          type="number"
+                          min="1"
+                          value={item.quantidade}
+                          onChange={(e) => handleItemQuantidadeChange(idx, Number(e.target.value))}
+                          placeholder="Qtd"
+                          style={{
+                            width: '100%',
+                            padding: '8px 10px',
+                            borderRadius: 6,
+                            border: '1px solid #D1D5DB',
+                            fontSize: 13,
+                            boxSizing: 'border-box',
+                            textAlign: 'center',
+                          }}
+                        />
+                      </div>
+
+                      {/* Subtotal */}
+                      <div style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, color: '#111827', whiteSpace: 'nowrap' }}>
+                        {formatarMoeda(item.total)}
+                      </div>
+
+                      {/* Botão Remover */}
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoverItem(idx)}
+                          disabled={formItens.length <= 1}
+                          title="Remover item"
+                          style={{
+                            padding: '6px',
+                            borderRadius: 6,
+                            border: formItens.length <= 1 ? '1px solid #E5E7EB' : '1px solid #FECACA',
+                            background: formItens.length <= 1 ? '#F3F4F6' : '#FEF2F2',
+                            color: formItens.length <= 1 ? '#9CA3AF' : '#DC2626',
+                            cursor: formItens.length <= 1 ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
                   ))}
-                </select>
+                </div>
               </div>
 
+              {/* Parcelas e Previsão */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Quantidade *</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={formQuantidade}
-                    onChange={(e) => setFormQuantidade(Number(e.target.value))}
-                    style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1.5px solid #D1D5DB', fontSize: 14, boxSizing: 'border-box' }}
-                  />
-                </div>
                 <div>
                   <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Nº de Parcelas *</label>
                   <select
@@ -686,21 +850,21 @@ export function V2PedidoCompraPage() {
                     <option value={6}>6x</option>
                   </select>
                 </div>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Previsão de Entrega</label>
-                <div style={{ position: 'relative' }}>
-                  <Calendar size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF' }} />
-                  <input
-                    type="date"
-                    value={formDataEntrega}
-                    onChange={(e) => setFormDataEntrega(e.target.value)}
-                    style={{ width: '100%', padding: '10px 12px 10px 36px', borderRadius: 8, border: '1.5px solid #D1D5DB', fontSize: 14, boxSizing: 'border-box' }}
-                  />
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Previsão de Entrega</label>
+                  <div style={{ position: 'relative' }}>
+                    <Calendar size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF' }} />
+                    <input
+                      type="date"
+                      value={formDataEntrega}
+                      onChange={(e) => setFormDataEntrega(e.target.value)}
+                      style={{ width: '100%', padding: '10px 12px 10px 36px', borderRadius: 8, border: '1.5px solid #D1D5DB', fontSize: 14, boxSizing: 'border-box' }}
+                    />
+                  </div>
                 </div>
               </div>
 
+              {/* Observação */}
               <div>
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Observação</label>
                 <textarea
@@ -712,17 +876,18 @@ export function V2PedidoCompraPage() {
                 />
               </div>
               
-              {formProdutoId && (
-                <div style={{ padding: '12px 16px', background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 13, color: '#4B5563', fontWeight: 600 }}>Total Estimado:</span>
-                  <strong style={{ fontSize: 16, color: '#111827', fontWeight: 900 }}>
-                    {formatarMoeda((produtosDisponiveis.find((p) => p.id === formProdutoId)?.cost_price || 0) * formQuantidade)}
-                  </strong>
-                </div>
-              )}
+              {/* Total Estimado Card */}
+              <div style={{ padding: '12px 16px', background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 13, color: '#4B5563', fontWeight: 600 }}>
+                  Total Estimado ({formItens.length} {formItens.length === 1 ? 'item' : 'itens'}):
+                </span>
+                <strong style={{ fontSize: 16, color: '#111827', fontWeight: 900 }}>
+                  {formatarMoeda(totalCalculado)}
+                </strong>
+              </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, paddingTop: 12, borderTop: '1px solid #F3F4F6' }}>
               <button
                 onClick={() => setIsModalCreateOpen(false)}
                 style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid #D1D5DB', background: '#fff', color: '#374151', cursor: 'pointer', fontWeight: 600 }}

@@ -102,7 +102,9 @@ export async function updatePedidoCompra(pedido: PedidoCompra): Promise<PedidoCo
   // Atualizar Contas a Pagar associado
   const contaExistente = await getContaPagarPorPedidoId(pedido.id)
   if (contaExistente) {
-    const itemNome = pedido.itens[0]?.produto_nome || 'Itens'
+    const itemNome = pedido.itens.length > 1
+      ? `${pedido.itens[0]?.produto_nome || 'Item'} (+${pedido.itens.length - 1} itens)`
+      : (pedido.itens[0]?.produto_nome || 'Item')
     const parcelasArray = []
     const valorParcela = pedido.total / (pedido.numeroParcelas || 1)
     const dataHoje = new Date()
