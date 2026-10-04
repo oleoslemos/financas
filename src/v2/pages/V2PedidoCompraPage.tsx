@@ -143,6 +143,7 @@ export function V2PedidoCompraPage() {
   const [busca, setBusca] = useState('')
   const [filtroStatus, setFiltroStatus] = useState<string>('todos')
   const [mostrarFiltros, setMostrarFiltros] = useState(false)
+  const [isModalOpen, setIsModalOpen] = useState(false)
 
   const pedidosFiltrados = PEDIDOS_DEMO.filter((p) => {
     const matchBusca =
@@ -189,6 +190,7 @@ export function V2PedidoCompraPage() {
           </div>
         </div>
         <button
+          onClick={() => setIsModalOpen(true)}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -410,6 +412,22 @@ export function V2PedidoCompraPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+      
+      {isModalOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
+          <div style={{ background: '#fff', padding: 24, borderRadius: 12, width: '100%', maxWidth: 400 }}>
+            <h2 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, color: '#111827' }}>Novo Pedido de Compra</h2>
+            <p style={{ color: '#6B7280', fontSize: 14, marginBottom: 24 }}>
+              A funcionalidade de criação de pedidos de compra está em desenvolvimento. Em breve você poderá adicionar produtos e gerenciar o estoque.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button onClick={() => setIsModalOpen(false)} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#E5E7EB', color: '#374151', cursor: 'pointer', fontWeight: 600 }}>
+                Fechar
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
