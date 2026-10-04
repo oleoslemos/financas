@@ -29,6 +29,7 @@ export type PedidoCompra = {
   status: StatusPedido
   dataEmissao: string | null
   dataPrevistaEntrega: string | null
+  observacao?: string | null
   total: number
   numeroParcelas: number
   itens: PedidoCompraItem[]

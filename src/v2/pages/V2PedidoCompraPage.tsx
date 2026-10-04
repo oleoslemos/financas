@@ -119,6 +119,7 @@ export function V2PedidoCompraPage() {
   const [formQuantidade, setFormQuantidade] = useState(1)
   const [formParcelas, setFormParcelas] = useState(1)
   const [formDataEntrega, setFormDataEntrega] = useState('')
+  const [formObservacao, setFormObservacao] = useState('')
 
   const loadData = async () => {
     const p = await listPedidosCompra()
@@ -138,6 +139,7 @@ export function V2PedidoCompraPage() {
     setFormQuantidade(1)
     setFormParcelas(1)
     setFormDataEntrega('')
+    setFormObservacao('')
     setIsModalCreateOpen(true)
   }
 
@@ -148,6 +150,7 @@ export function V2PedidoCompraPage() {
     setFormQuantidade(pedido.itens[0]?.quantidade || 1)
     setFormParcelas(pedido.numeroParcelas || 1)
     setFormDataEntrega(pedido.dataPrevistaEntrega || '')
+    setFormObservacao(pedido.observacao || '')
     setIsModalCreateOpen(true)
   }
 
@@ -187,6 +190,7 @@ export function V2PedidoCompraPage() {
           ...pedidoEdicao,
           fornecedor: formFornecedor,
           dataPrevistaEntrega: formDataEntrega || null,
+          observacao: formObservacao || null,
           total: totalCalculado,
           numeroParcelas: formParcelas,
           itens: [
@@ -207,6 +211,7 @@ export function V2PedidoCompraPage() {
           status: 'emitido',
           dataEmissao: new Date().toISOString().split('T')[0],
           dataPrevistaEntrega: formDataEntrega || null,
+          observacao: formObservacao || null,
           total: totalCalculado,
           numeroParcelas: formParcelas,
           itens: [
@@ -505,6 +510,11 @@ export function V2PedidoCompraPage() {
                         {pedido.itens[0].produto_nome} ({pedido.itens[0].quantidade}x)
                       </span>
                     )}
+                    {pedido.observacao && (
+                      <span style={{ display: 'block', fontSize: 11, fontStyle: 'italic', color: '#6B7280', marginTop: 2 }}>
+                        Obs: {pedido.observacao}
+                      </span>
+                    )}
                   </td>
 
                   {/* Emissão */}
@@ -557,21 +567,17 @@ export function V2PedidoCompraPage() {
                           onClick={() => handleReceberPedido(pedido)}
                           title="Receber (Dar entrada no estoque)"
                           style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 4,
-                            padding: '6px 10px',
+                            padding: '6px',
                             borderRadius: 6,
                             border: '1px solid #16A34A',
                             background: '#F0FDF4',
                             color: '#16A34A',
-                            fontSize: 12,
-                            fontWeight: 700,
                             cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
                           }}
                         >
-                          <Package size={13} />
-                          Receber
+                          <Package size={14} />
                         </button>
                       )}
 
@@ -580,21 +586,17 @@ export function V2PedidoCompraPage() {
                           onClick={() => handleDesfazerRecebimento(pedido)}
                           title="Desfazer recebimento (Estornar estoque)"
                           style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 4,
-                            padding: '6px 10px',
+                            padding: '6px',
                             borderRadius: 6,
                             border: '1px solid #D97706',
                             background: '#FFFBEB',
                             color: '#D97706',
-                            fontSize: 12,
-                            fontWeight: 700,
                             cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
                           }}
                         >
-                          <RotateCcw size={13} />
-                          Desfazer
+                          <RotateCcw size={14} />
                         </button>
                       )}
 
@@ -697,6 +699,17 @@ export function V2PedidoCompraPage() {
                     style={{ width: '100%', padding: '10px 12px 10px 36px', borderRadius: 8, border: '1.5px solid #D1D5DB', fontSize: 14, boxSizing: 'border-box' }}
                   />
                 </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Observação</label>
+                <textarea
+                  value={formObservacao}
+                  onChange={(e) => setFormObservacao(e.target.value)}
+                  placeholder="Observações do pedido..."
+                  rows={2}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1.5px solid #D1D5DB', fontSize: 14, boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit' }}
+                />
               </div>
               
               {formProdutoId && (
