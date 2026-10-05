@@ -1,6 +1,7 @@
 import { supabase } from '../../lib/supabaseClient'
 import {
   getContaPagarPorPedidoId,
+  saveContaPagar,
   updateContaPagar,
   verificarSePedidoTemPagamento,
   deleteContaPagarPorPedidoId,
@@ -196,11 +197,68 @@ export async function desfazerRecebimentoPedidoCompra(pedidoId: string): Promise
   return { ok: true }
 }
 
+export async function emitirPedidoCompra(pedidoId: string): Promise<{ ok: true } | { ok: false; erro: string }> {
+  const current = await listPedidosCompra()
+  const pedido = current.find((p) => p.id === pedidoId)
+  if (!pedido) return { ok: false, erro: 'Pedido não encontrado.' }
+
+  if (pedido.status !== 'rascunho') {
+    return { ok: false, erro: 'Pedido já foi emitido.' }
+  }
+
+  // Gerar Contas a Pagar se ainda não existir
+  const parcelasArray = []
+  const valorParcela = pedido.total / (pedido.numeroParcelas || 1)
+  const dataHojeObj = new Date()
+  for (let i = 1; i <= (pedido.numeroParcelas || 1); i++) {
+    const vencimento = new Date(dataHojeObj)
+    vencimento.setMonth(vencimento.getMonth() + i)
+    parcelasArray.push({
+      numero: i,
+      vencimento: vencimento.toISOString().split('T')[0],
+      valor: valorParcela,
+      status: 'aberta' as StatusConta,
+    })
+  }
+
+  const descricaoItens =
+    pedido.itens && pedido.itens.length > 1
+      ? `${pedido.itens[0]?.produto_nome || 'Item'} (+${pedido.itens.length - 1} itens)`
+      : (pedido.itens?.[0]?.produto_nome || 'Item')
+
+  await saveContaPagar({
+    pedido_id: pedido.id,
+    descricao: `Pedido de Compra #${pedido.numero} - ${descricaoItens}`,
+    fornecedor: pedido.fornecedor,
+    origem: 'compra',
+    categoria: 'Mercadoria',
+    total: pedido.total,
+    totalPago: 0,
+    status: 'aberta',
+    parcelas: parcelasArray,
+  })
+
+  pedido.status = 'emitido'
+  pedido.dataEmissao = new Date().toISOString().split('T')[0]
+  await updatePedidoCompra(pedido)
+  return { ok: true }
+}
+
 export async function voltarPedidoParaAberto(pedidoId: string): Promise<{ ok: true } | { ok: false; erro: string }> {
   const current = await listPedidosCompra()
   const pedido = current.find((p) => p.id === pedidoId)
   if (!pedido) return { ok: false, erro: 'Pedido não encontrado.' }
 
+  // Validar pagamentos antes de voltar para aberto
+  const temPagamento = await verificarSePedidoTemPagamento(pedidoId)
+  if (temPagamento) {
+    return {
+      ok: false,
+      erro: 'Não é possível voltar o pedido para aberto: existem baixas/pagamentos efetuados no Contas a Pagar. Estorne os pagamentos antes de voltar para aberto.',
+    }
+  }
+
+  // Se já foi recebido, estornar estoque
   if (pedido.status === 'recebido' || pedido.status === 'recebido_parcial') {
     const resEstorno = await desfazerEntradaCompra({
       pedidoId: pedido.id,
@@ -212,7 +270,10 @@ export async function voltarPedidoParaAberto(pedidoId: string): Promise<{ ok: tr
     }
   }
 
-  pedido.status = 'emitido'
+  // Deletar o contas a pagar não pago para voltar para rascunho/aberto limpo
+  await deleteContaPagarPorPedidoId(pedidoId)
+
+  pedido.status = 'rascunho'
   await updatePedidoCompra(pedido)
   return { ok: true }
 }

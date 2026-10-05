@@ -11,6 +11,7 @@ import {
   Package,
   Edit3,
   RotateCcw,
+  Trash2,
   AlertTriangle,
   Calendar,
   Info,
@@ -21,14 +22,15 @@ import {
   listPedidosCompra,
   savePedidoCompra,
   updatePedidoCompra,
+  emitirPedidoCompra,
   receberPedidoCompra,
   voltarPedidoParaAberto,
   cancelarPedidoCompra,
+  deletePedidoCompra,
   PedidoCompra,
   PedidoCompraItem,
   StatusPedido,
 } from '../services/v2PedidoCompraService'
-import { saveContaPagar, StatusConta } from '../services/v2ContasPagarService'
 import { listV2Products, V2Product } from '../services/v2ProdutosService'
 import { listFornecedores, Fornecedor } from '../services/v2SettingsService'
 
@@ -37,7 +39,7 @@ const STATUS_CONFIG: Record<
   { label: string; color: string; bg: string; icon: React.ReactNode }
 > = {
   rascunho: {
-    label: 'Rascunho',
+    label: 'Aberto',
     color: '#6B7280',
     bg: '#F3F4F6',
     icon: <Clock size={13} />,
@@ -94,14 +96,31 @@ function StatusBadge({ status }: { status: StatusPedido }) {
 
 const ABAS_STATUS: { value: 'todos' | StatusPedido; label: string }[] = [
   { value: 'todos', label: 'Todos' },
-  { value: 'rascunho', label: 'Rascunho' },
-  { value: 'emitido', label: 'Emitido' },
+  { value: 'rascunho', label: 'Abertos' },
+  { value: 'emitido', label: 'Emitidos' },
   { value: 'recebido_parcial', label: 'Rec. Parcial' },
-  { value: 'recebido', label: 'Recebido' },
-  { value: 'cancelado', label: 'Cancelado' },
+  { value: 'recebido', label: 'Recebidos' },
+  { value: 'cancelado', label: 'Cancelados' },
 ]
 
-// Helper functions for Period & Overdue domain rules
+// Helper function for 10 previous + 2 next months dropdown options
+function gerarOpcoesMeses(dataHoje: string) {
+  const [anoAtual, mesAtual] = dataHoje.split('-').map(Number)
+  const opcoes = []
+  for (let delta = -10; delta <= 2; delta++) {
+    const total = anoAtual * 12 + (mesAtual - 1) + delta
+    const ano = Math.floor(total / 12)
+    const mes = (total % 12) + 1
+    const value = `${ano}-${String(mes).padStart(2, '0')}`
+    const data = new Date(Date.UTC(ano, mes - 1, 1))
+    const label = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+      .format(data)
+      .replace(' de ', ' / ')
+    opcoes.push({ value, label: label.charAt(0).toUpperCase() + label.slice(1) })
+  }
+  return opcoes
+}
+
 function mesAdjacente(mes: string, delta: number): string {
   const [a, m] = mes.split('-').map(Number)
   const total = a * 12 + (m - 1) + delta
@@ -110,17 +129,8 @@ function mesAdjacente(mes: string, delta: number): string {
   return `${novoAno}-${String(novoMes).padStart(2, '0')}`
 }
 
-function rotuloDoMes(mes: string): string {
-  const [a, m] = mes.split('-').map(Number)
-  if (!a || !m) return mes
-  const data = new Date(Date.UTC(a, m - 1, 1))
-  return new Intl.DateTimeFormat('pt-BR', { month: 'short', year: 'numeric', timeZone: 'UTC' })
-    .format(data)
-    .replace(' de ', ' ')
-}
-
 function estaEmAberto(status: StatusPedido): boolean {
-  return status === 'emitido' || status === 'recebido_parcial'
+  return status === 'rascunho' || status === 'emitido' || status === 'recebido_parcial'
 }
 
 function dentroDoPeriodo(
@@ -185,6 +195,7 @@ function podeEditarCampo(
 
 export function V2PedidoCompraPage() {
   const dataHoje = hoje()
+  const opcoesMeses = gerarOpcoesMeses(dataHoje)
 
   // State: Filter and Search
   const [busca, setBusca] = useState('')
@@ -426,48 +437,16 @@ export function V2PedidoCompraPage() {
         }
         await updatePedidoCompra(pedidoAtualizado)
       } else {
-        // CRIAÇÃO
-        const novoPedido = await savePedidoCompra({
+        // CRIAÇÃO (Novo Pedido nasce em Aberto / Rascunho)
+        await savePedidoCompra({
           fornecedor: formFornecedor,
-          status: 'emitido',
+          status: 'rascunho',
           dataEmissao: new Date().toISOString().split('T')[0],
           dataPrevistaEntrega: formDataEntrega || null,
           observacao: formObservacao || null,
           total: totalCalculado,
           numeroParcelas: formParcelas,
           itens: formItens,
-        })
-
-        // Gerar parcelas do Contas a Pagar
-        const parcelasArray = []
-        const valorParcela = totalCalculado / formParcelas
-        const dataHojeObj = new Date()
-        for (let i = 1; i <= formParcelas; i++) {
-          const vencimento = new Date(dataHojeObj)
-          vencimento.setMonth(vencimento.getMonth() + i)
-          parcelasArray.push({
-            numero: i,
-            vencimento: vencimento.toISOString().split('T')[0],
-            valor: valorParcela,
-            status: 'aberta' as StatusConta,
-          })
-        }
-
-        const descricaoItens =
-          formItens.length > 1
-            ? `${formItens[0]?.produto_nome || 'Item'} (+${formItens.length - 1} itens)`
-            : (formItens[0]?.produto_nome || 'Item')
-
-        await saveContaPagar({
-          pedido_id: novoPedido.id,
-          descricao: `Pedido de Compra #${novoPedido.numero} - ${descricaoItens}`,
-          fornecedor: formFornecedor,
-          origem: 'compra',
-          categoria: 'Mercadoria',
-          total: totalCalculado,
-          totalPago: 0,
-          status: 'aberta',
-          parcelas: parcelasArray,
         })
       }
 
@@ -476,6 +455,18 @@ export function V2PedidoCompraPage() {
     } catch (err) {
       alert('Erro ao salvar pedido.')
     }
+  }
+
+  const handleEmitirPedido = async (pedido: PedidoCompra) => {
+    if (!window.confirm(`Confirma emitir o Pedido #${pedido.numero}? Isso gerará o lançamento no Contas a Pagar.`)) {
+      return
+    }
+    const res = await emitirPedidoCompra(pedido.id)
+    if (!res.ok) {
+      setMensagemErro(res.erro)
+      return
+    }
+    await loadData()
   }
 
   const handleReceberPedido = async (pedido: PedidoCompra) => {
@@ -491,7 +482,7 @@ export function V2PedidoCompraPage() {
   }
 
   const handleVoltarParaAberto = async (pedido: PedidoCompra) => {
-    if (!window.confirm(`Confirma retornar o Pedido #${pedido.numero} para o status Em Aberto (Emitido)?`)) {
+    if (!window.confirm(`Confirma retornar o Pedido #${pedido.numero} para o status Aberto/Rascunho?`)) {
       return
     }
     const res = await voltarPedidoParaAberto(pedido.id)
@@ -514,8 +505,20 @@ export function V2PedidoCompraPage() {
     await loadData()
   }
 
+  const handleExcluirPedido = async (pedido: PedidoCompra) => {
+    if (!window.confirm(`Tem certeza que deseja excluir o Pedido #${pedido.numero}? Esta ação não pode ser desfeita.`)) {
+      return
+    }
+    const res = await deletePedidoCompra(pedido.id)
+    if (!res.ok) {
+      setMensagemErro(res.erro)
+      return
+    }
+    await loadData()
+  }
+
   return (
-    <div style={{ padding: '24px', maxWidth: 1150, margin: '0 auto' }}>
+    <div style={{ padding: '24px', maxWidth: 1180, margin: '0 auto' }}>
       {/* Cabeçalho */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, gap: 16, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -612,10 +615,10 @@ export function V2PedidoCompraPage() {
         })}
       </div>
 
-      {/* BARRA DE FILTROS E BUSCA */}
+      {/* BARRA DE FILTROS E BUSCA EM UMA ÚNICA LINHA */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
         {/* Campo de Busca */}
-        <div style={{ position: 'relative', flex: '1 1 240px', minWidth: 220 }}>
+        <div style={{ position: 'relative', flex: '1 1 240px', minWidth: 200 }}>
           <Search
             size={15}
             style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF' }}
@@ -638,100 +641,98 @@ export function V2PedidoCompraPage() {
           />
         </div>
 
-        {/* Seletor de Período e Navegação de Mês */}
-        <div
+        {/* Tipo de Período */}
+        <select
+          value={filtroPeriodo}
+          onChange={(e) => setFiltroPeriodo(e.target.value as any)}
           style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            background: '#FFFFFF',
-            padding: '4px 8px',
+            padding: '9px 12px',
             borderRadius: 10,
             border: '1.5px solid #E5E7EB',
+            background: '#FFFFFF',
+            fontSize: 13,
+            fontWeight: 700,
+            color: '#374151',
+            cursor: 'pointer',
+            outline: 'none',
             whiteSpace: 'nowrap',
           }}
         >
-          <select
-            value={filtroPeriodo}
-            onChange={(e) => setFiltroPeriodo(e.target.value as any)}
-            style={{
-              padding: '6px 8px',
-              borderRadius: 6,
-              border: 'none',
-              background: 'transparent',
-              fontSize: 13,
-              fontWeight: 700,
-              color: '#374151',
-              cursor: 'pointer',
-              outline: 'none',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <option value="mes">Mês</option>
-            <option value="ultimos_90_dias">Últimos 90 dias</option>
-            <option value="ano">Este ano</option>
-            <option value="todo">Todo o período</option>
-          </select>
+          <option value="mes">Mês</option>
+          <option value="ultimos_90_dias">Últimos 90 dias</option>
+          <option value="ano">Este ano</option>
+          <option value="todo">Todo o período</option>
+        </select>
 
-          {filtroPeriodo === 'mes' && (
-            <>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 2, whiteSpace: 'nowrap' }}>
-                <button
-                  type="button"
-                  title="Mês anterior"
-                  onClick={() => setFiltroMes(mesAdjacente(filtroMes, -1))}
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: 6,
-                    border: '1px solid #E5E7EB',
-                    background: '#F9FAFB',
-                    color: '#374151',
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <ChevronLeft size={15} />
-                </button>
-                <button
-                  type="button"
-                  title="Próximo mês"
-                  onClick={() => setFiltroMes(mesAdjacente(filtroMes, 1))}
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: 6,
-                    border: '1px solid #E5E7EB',
-                    background: '#F9FAFB',
-                    color: '#374151',
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <ChevronRight size={15} />
-                </button>
-              </div>
+        {/* Controles do Mês (Setas Visíveis + Dropdown de 13 Meses) */}
+        {filtroPeriodo === 'mes' && (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+            <button
+              type="button"
+              title="Mês anterior"
+              onClick={() => setFiltroMes(mesAdjacente(filtroMes, -1))}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 32,
+                height: 32,
+                borderRadius: 8,
+                border: '1.5px solid #CBD5E1',
+                background: '#F8FAFC',
+                color: '#0F172A',
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              <ChevronLeft size={18} strokeWidth={2.5} color="#0F172A" />
+            </button>
 
-              <span
-                style={{
-                  fontSize: 13,
-                  fontWeight: 800,
-                  color: '#0D6BAF',
-                  textTransform: 'capitalize',
-                  whiteSpace: 'nowrap',
-                  paddingLeft: 4,
-                  display: 'inline-block',
-                }}
-              >
-                {rotuloDoMes(filtroMes)}
-              </span>
-            </>
-          )}
-        </div>
+            <select
+              value={filtroMes}
+              onChange={(e) => setFiltroMes(e.target.value)}
+              style={{
+                padding: '8px 12px',
+                borderRadius: 8,
+                border: '1.5px solid #CBD5E1',
+                background: '#FFFFFF',
+                fontSize: 13,
+                fontWeight: 700,
+                color: '#0D6BAF',
+                cursor: 'pointer',
+                outline: 'none',
+                minWidth: 160,
+              }}
+            >
+              {opcoesMeses.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              title="Próximo mês"
+              onClick={() => setFiltroMes(mesAdjacente(filtroMes, 1))}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 32,
+                height: 32,
+                borderRadius: 8,
+                border: '1.5px solid #CBD5E1',
+                background: '#F8FAFC',
+                color: '#0F172A',
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              <ChevronRight size={18} strokeWidth={2.5} color="#0F172A" />
+            </button>
+          </div>
+        )}
 
         {/* Data de Referência do Filtro */}
         <select
@@ -844,7 +845,7 @@ export function V2PedidoCompraPage() {
         </div>
       ) : (
         <div style={{ background: '#FFFFFF', borderRadius: 14, border: '1.5px solid #E5E7EB', overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: 800 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: 820 }}>
             <thead>
               <tr style={{ background: '#F9FAFB', borderBottom: '1.5px solid #E5E7EB' }}>
                 <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', width: '130px' }}>
@@ -865,7 +866,7 @@ export function V2PedidoCompraPage() {
                 <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', width: '120px' }}>
                   Status
                 </th>
-                <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', width: '140px', textAlign: 'right' }}>
+                <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', width: '160px', textAlign: 'right' }}>
                   Ações
                 </th>
               </tr>
@@ -944,7 +945,7 @@ export function V2PedidoCompraPage() {
                       <StatusBadge status={pedido.status} />
                     </td>
 
-                    {/* Ações com ícones e tooltips (Sem botão Excluir; Voltar para Aberto) */}
+                    {/* Ações com ícones e regras de negócio */}
                     <td style={{ padding: '14px 16px', whiteSpace: 'nowrap', textAlign: 'right' }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
                         {/* Editar */}
@@ -965,7 +966,27 @@ export function V2PedidoCompraPage() {
                           <Edit3 size={14} />
                         </button>
 
-                        {/* Receber (Dar entrada no estoque) */}
+                        {/* RASCUNHO / ABERTO: Emitir pedido */}
+                        {pedido.status === 'rascunho' && (
+                          <button
+                            onClick={() => handleEmitirPedido(pedido)}
+                            title="Emitir pedido (Gerar financeiro)"
+                            style={{
+                              padding: '6px',
+                              borderRadius: 6,
+                              border: '1px solid #2563EB',
+                              background: '#EFF6FF',
+                              color: '#2563EB',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                            }}
+                          >
+                            <Package size={14} />
+                          </button>
+                        )}
+
+                        {/* EMITIDO ou REC. PARCIAL: Receber no estoque */}
                         {(pedido.status === 'emitido' || pedido.status === 'recebido_parcial') && (
                           <button
                             onClick={() => handleReceberPedido(pedido)}
@@ -985,11 +1006,11 @@ export function V2PedidoCompraPage() {
                           </button>
                         )}
 
-                        {/* Voltar para Aberto (Para pedidos recebidos ou cancelados) */}
-                        {(pedido.status === 'recebido' || pedido.status === 'recebido_parcial' || pedido.status === 'cancelado') && (
+                        {/* VOLTAR PARA ABERTO (Para pedidos emitidos, recebidos ou cancelados) */}
+                        {(pedido.status === 'emitido' || pedido.status === 'recebido' || pedido.status === 'recebido_parcial' || pedido.status === 'cancelado') && (
                           <button
                             onClick={() => handleVoltarParaAberto(pedido)}
-                            title="Voltar para aberto (Estornar estoque / Reabrir)"
+                            title="Voltar para Aberto (Rascunho)"
                             style={{
                               padding: '6px',
                               borderRadius: 6,
@@ -1005,8 +1026,8 @@ export function V2PedidoCompraPage() {
                           </button>
                         )}
 
-                        {/* Cancelar pedido (para pedidos emitidos) */}
-                        {pedido.status === 'emitido' && (
+                        {/* CANCELAR PEDIDO (Quando emitido ou recebido) */}
+                        {(pedido.status === 'emitido' || pedido.status === 'rascunho') && (
                           <button
                             onClick={() => handleCancelarPedido(pedido)}
                             title="Cancelar pedido"
@@ -1022,6 +1043,26 @@ export function V2PedidoCompraPage() {
                             }}
                           >
                             <XCircle size={14} />
+                          </button>
+                        )}
+
+                        {/* EXCLUIR SOMENTE QUANDO ESTIVER ABERTO (RASCUNHO) */}
+                        {pedido.status === 'rascunho' && (
+                          <button
+                            onClick={() => handleExcluirPedido(pedido)}
+                            title="Excluir pedido definitivamente"
+                            style={{
+                              padding: '6px',
+                              borderRadius: 6,
+                              border: '1px solid #FECACA',
+                              background: '#FEF2F2',
+                              color: '#DC2626',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                            }}
+                          >
+                            <Trash2 size={14} />
                           </button>
                         )}
                       </div>
@@ -1338,7 +1379,7 @@ export function V2PedidoCompraPage() {
                   onClick={handleSalvarPedido}
                   style={{ padding: '10px 18px', borderRadius: 8, border: 'none', background: '#0D6BAF', color: '#fff', cursor: 'pointer', fontWeight: 700 }}
                 >
-                  {pedidoEdicao ? 'Salvar Alterações' : 'Criar Pedido e Gerar Financeiro'}
+                  {pedidoEdicao ? 'Salvar Alterações' : 'Salvar Pedido (Aberto)'}
                 </button>
               )}
             </div>
