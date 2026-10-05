@@ -3,8 +3,8 @@ import {
   ShoppingCart,
   Plus,
   Search,
-  Filter,
-  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   CheckCircle2,
   Clock,
   XCircle,
@@ -14,9 +14,10 @@ import {
   Trash2,
   AlertTriangle,
   Calendar,
+  Info,
 } from 'lucide-react'
 import { formatarMoeda } from '../../modules/lib/money'
-import { formatarData } from '../../modules/lib/datas'
+import { formatarData, hoje, somarDias, compararDatas } from '../../modules/lib/datas'
 import {
   listPedidosCompra,
   savePedidoCompra,
@@ -92,19 +93,108 @@ function StatusBadge({ status }: { status: StatusPedido }) {
   )
 }
 
-const FILTROS_STATUS = [
+const ABAS_STATUS: { value: 'todos' | StatusPedido; label: string }[] = [
   { value: 'todos', label: 'Todos' },
-  { value: 'rascunho', label: 'Rascunhos' },
-  { value: 'emitido', label: 'Emitidos' },
+  { value: 'rascunho', label: 'Rascunho' },
+  { value: 'emitido', label: 'Emitido' },
   { value: 'recebido_parcial', label: 'Rec. Parcial' },
-  { value: 'recebido', label: 'Recebidos' },
-  { value: 'cancelado', label: 'Cancelados' },
+  { value: 'recebido', label: 'Recebido' },
+  { value: 'cancelado', label: 'Cancelado' },
 ]
 
+// Pure helper functions for Period & Overdue domain rules
+function mesAdjacente(mes: string, delta: number): string {
+  const [a, m] = mes.split('-').map(Number)
+  const total = a * 12 + (m - 1) + delta
+  const novoAno = Math.floor(total / 12)
+  const novoMes = (total % 12) + 1
+  return `${novoAno}-${String(novoMes).padStart(2, '0')}`
+}
+
+function rotuloDoMes(mes: string): string {
+  const [a, m] = mes.split('-').map(Number)
+  if (!a || !m) return mes
+  const data = new Date(Date.UTC(a, m - 1, 1))
+  return new Intl.DateTimeFormat('pt-BR', { month: 'short', year: 'numeric', timeZone: 'UTC' })
+    .format(data)
+    .replace(' de ', ' ')
+}
+
+function estaEmAberto(status: StatusPedido): boolean {
+  return status === 'emitido' || status === 'recebido_parcial'
+}
+
+function dentroDoPeriodo(
+  p: PedidoCompra,
+  periodo: 'mes' | 'ultimos_90_dias' | 'ano' | 'todo',
+  mes: string,
+  campo: 'emissao' | 'previsaoEntrega',
+  dataHoje: string
+): boolean {
+  if (periodo === 'todo') return true
+  const data = campo === 'emissao' ? p.dataEmissao : p.dataPrevistaEntrega
+  if (!data) return false
+  switch (periodo) {
+    case 'mes':
+      return data.slice(0, 7) === mes
+    case 'ano':
+      return data.slice(0, 4) === dataHoje.slice(0, 4)
+    case 'ultimos_90_dias':
+      return data >= somarDias(dataHoje, -90) && data <= dataHoje
+    default:
+      return true
+  }
+}
+
+function estaAtrasado(pedido: PedidoCompra, dataHoje: string): boolean {
+  if (pedido.status !== 'emitido' && pedido.status !== 'recebido_parcial') return false
+  if (!pedido.dataPrevistaEntrega) return false
+  return compararDatas(pedido.dataPrevistaEntrega, dataHoje) < 0
+}
+
+function diasDeAtraso(pedido: PedidoCompra, dataHoje: string): number {
+  if (!estaAtrasado(pedido, dataHoje) || !pedido.dataPrevistaEntrega) return 0
+  const ms = Date.parse(`${dataHoje}T00:00:00Z`) - Date.parse(`${pedido.dataPrevistaEntrega}T00:00:00Z`)
+  return Math.max(1, Math.round(ms / 86_400_000))
+}
+
+function avisoDeCusto(custoDigitado: number, custoCatalogo: number | undefined) {
+  if (!custoCatalogo || custoCatalogo <= 0 || !custoDigitado || custoDigitado <= 0) return null
+  const variacao = ((custoDigitado - custoCatalogo) / custoCatalogo) * 100
+  if (Math.abs(variacao) <= 20) return null
+  const arredondada = Math.round(Math.abs(variacao))
+  return {
+    arredondada,
+    acima: variacao > 0,
+    mensagem: `Custo ${arredondada}% ${variacao > 0 ? 'acima' : 'abaixo'} do cadastrado (${formatarMoeda(custoCatalogo)})`,
+  }
+}
+
+function podeEditarCampo(
+  status: StatusPedido | undefined,
+  campo: 'fornecedor' | 'itens' | 'parcelas' | 'previsao' | 'observacao'
+): boolean {
+  if (!status || status === 'rascunho') return true
+  if (status === 'emitido' || status === 'recebido_parcial') {
+    return campo === 'previsao' || campo === 'observacao'
+  }
+  if (status === 'recebido') {
+    return campo === 'observacao'
+  }
+  return false // cancelado
+}
+
 export function V2PedidoCompraPage() {
+  const dataHoje = hoje()
+
+  // State: Filter and Search
   const [busca, setBusca] = useState('')
-  const [filtroStatus, setFiltroStatus] = useState<string>('todos')
-  const [mostrarFiltros, setMostrarFiltros] = useState(false)
+  const [filtroStatus, setFiltroStatus] = useState<'todos' | StatusPedido>('todos')
+  const [filtroPeriodo, setFiltroPeriodo] = useState<'mes' | 'ultimos_90_dias' | 'ano' | 'todo'>('mes')
+  const [filtroMes, setFiltroMes] = useState<string>(dataHoje.slice(0, 7))
+  const [filtroCampo, setFiltroCampo] = useState<'emissao' | 'previsaoEntrega'>('emissao')
+
+  // State: Data
   const [pedidos, setPedidos] = useState<PedidoCompra[]>([])
   const [produtosDisponiveis, setProdutosDisponiveis] = useState<V2Product[]>([])
   const [fornecedoresCadastrados, setFornecedoresCadastrados] = useState<Fornecedor[]>([])
@@ -228,18 +318,82 @@ export function V2PedidoCompraPage() {
     )
   }
 
+  const handleItemPrecoChange = (index: number, preco: number) => {
+    const p = Math.max(0, preco)
+    setFormItens((prev) =>
+      prev.map((item, idx) => {
+        if (idx !== index) return item
+        return {
+          ...item,
+          preco_unitario: p,
+          total: p * (item.quantidade || 1),
+        }
+      })
+    )
+  }
+
   const totalCalculado = formItens.reduce((acc, item) => acc + (item.total || 0), 0)
 
-  const pedidosFiltrados = pedidos.filter((p) => {
-    const matchBusca =
-      !busca ||
-      p.fornecedor.toLowerCase().includes(busca.toLowerCase()) ||
-      String(p.numero).includes(busca)
-    const matchStatus = filtroStatus === 'todos' || p.status === filtroStatus
-    return matchBusca && matchStatus
+  // Search matching helper
+  const matchSearch = (p: PedidoCompra, term: string): boolean => {
+    if (!term.trim()) return true
+    const q = term.trim().toLowerCase()
+    return (
+      p.fornecedor.toLowerCase().includes(q) ||
+      String(p.numero).toLowerCase().includes(q) ||
+      (p.observacao ? p.observacao.toLowerCase().includes(q) : false) ||
+      (p.itens ? p.itens.some((i) => i.produto_nome.toLowerCase().includes(q)) : false)
+    )
+  }
+
+  // 1. Pedidos que correspondem à busca
+  const pedidosNaBusca = pedidos.filter((p) => matchSearch(p, busca))
+
+  // 2. Pedidos no período + Pedidos em aberto (nunca somem!)
+  const pedidosNoPeriodoEOuAbertos = pedidosNaBusca.filter((p) => {
+    const dentro = dentroDoPeriodo(p, filtroPeriodo, filtroMes, filtroCampo, dataHoje)
+    const aberto = estaEmAberto(p.status)
+    return dentro || aberto
   })
 
+  // Estatísticas para aviso do período
+  const ocultosForaPeriodo = pedidosNaBusca.filter(
+    (p) => !dentroDoPeriodo(p, filtroPeriodo, filtroMes, filtroCampo, dataHoje) && !estaEmAberto(p.status)
+  ).length
+  const abertosForaPeriodo = pedidosNaBusca.filter(
+    (p) => !dentroDoPeriodo(p, filtroPeriodo, filtroMes, filtroCampo, dataHoje) && estaEmAberto(p.status)
+  ).length
 
+  // Contadores das Abas
+  const contagemAbas = {
+    todos: pedidosNoPeriodoEOuAbertos.length,
+    rascunho: pedidosNoPeriodoEOuAbertos.filter((p) => p.status === 'rascunho').length,
+    emitido: pedidosNoPeriodoEOuAbertos.filter((p) => p.status === 'emitido').length,
+    recebido_parcial: pedidosNoPeriodoEOuAbertos.filter((p) => p.status === 'recebido_parcial').length,
+    recebido: pedidosNoPeriodoEOuAbertos.filter((p) => p.status === 'recebido').length,
+    cancelado: pedidosNoPeriodoEOuAbertos.filter((p) => p.status === 'cancelado').length,
+  }
+
+  // 3. Pedidos finais a exibir (filtrados pela aba selecionada)
+  const pedidosExibidos = pedidosNoPeriodoEOuAbertos.filter((p) => {
+    return filtroStatus === 'todos' || p.status === filtroStatus
+  })
+
+  // Verifica se há filtros ativos diferentes do padrão
+  const temFiltrosAtivos =
+    busca.trim() !== '' ||
+    filtroStatus !== 'todos' ||
+    filtroPeriodo !== 'mes' ||
+    filtroMes !== dataHoje.slice(0, 7) ||
+    filtroCampo !== 'emissao'
+
+  const handleLimparFiltros = () => {
+    setBusca('')
+    setFiltroStatus('todos')
+    setFiltroPeriodo('mes')
+    setFiltroMes(dataHoje.slice(0, 7))
+    setFiltroCampo('emissao')
+  }
 
   const handleSalvarPedido = async () => {
     if (!formFornecedor.trim()) {
@@ -288,9 +442,9 @@ export function V2PedidoCompraPage() {
         // Gerar parcelas do Contas a Pagar
         const parcelasArray = []
         const valorParcela = totalCalculado / formParcelas
-        const dataHoje = new Date()
+        const dataHojeObj = new Date()
         for (let i = 1; i <= formParcelas; i++) {
-          const vencimento = new Date(dataHoje)
+          const vencimento = new Date(dataHojeObj)
           vencimento.setMonth(vencimento.getMonth() + i)
           parcelasArray.push({
             numero: i,
@@ -364,7 +518,7 @@ export function V2PedidoCompraPage() {
   return (
     <div style={{ padding: '24px', maxWidth: 1150, margin: '0 auto' }}>
       {/* Cabeçalho */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, gap: 16, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, gap: 16, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div
             style={{
@@ -405,16 +559,71 @@ export function V2PedidoCompraPage() {
         </button>
       </div>
 
-      {/* Barra de busca e filtros */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+      {/* ABAS DE STATUS COM CONTADORES DE BADGE */}
+      <div
+        style={{
+          display: 'flex',
+          gap: 6,
+          borderBottom: '2px solid #E5E7EB',
+          marginBottom: 16,
+          overflowX: 'auto',
+          paddingBottom: 2,
+        }}
+      >
+        {ABAS_STATUS.map((aba) => {
+          const selecionada = filtroStatus === aba.value
+          const count = contagemAbas[aba.value]
+          return (
+            <button
+              key={aba.value}
+              onClick={() => setFiltroStatus(aba.value)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '10px 16px',
+                border: 'none',
+                borderBottom: selecionada ? '2.5px solid #0D6BAF' : '2.5px solid transparent',
+                background: 'transparent',
+                color: selecionada ? '#0D6BAF' : '#6B7280',
+                fontSize: 13,
+                fontWeight: selecionada ? 800 : 600,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                transition: 'all 0.15s ease',
+                marginBottom: '-2px',
+              }}
+            >
+              {aba.label}
+              <span
+                style={{
+                  padding: '2px 8px',
+                  borderRadius: 12,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  background: selecionada ? '#EFF6FF' : '#F3F4F6',
+                  color: selecionada ? '#0D6BAF' : '#6B7280',
+                  border: `1px solid ${selecionada ? '#BFDBFE' : '#E5E7EB'}`,
+                }}
+              >
+                {count}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* BARRA DE FILTROS E BUSCA */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+        {/* Campo de Busca */}
+        <div style={{ position: 'relative', flex: 1, minWidth: 240 }}>
           <Search
             size={15}
             style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF' }}
           />
           <input
             type="text"
-            placeholder="Buscar por fornecedor ou nº do pedido…"
+            placeholder="Buscar por fornecedor, produto, nº ou observação..."
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             style={{
@@ -429,54 +638,173 @@ export function V2PedidoCompraPage() {
             }}
           />
         </div>
-        <button
-          onClick={() => setMostrarFiltros(!mostrarFiltros)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '9px 14px',
-            borderRadius: 10,
-            border: '1.5px solid #E5E7EB',
-            background: mostrarFiltros ? '#EFF6FF' : '#FFFFFF',
-            color: mostrarFiltros ? '#2563EB' : '#374151',
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-        >
-          <Filter size={14} />
-          Filtros
-          <ChevronDown size={13} style={{ transform: mostrarFiltros ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-        </button>
-      </div>
 
-      {/* Filtros expandidos */}
-      {mostrarFiltros && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-          {FILTROS_STATUS.map((f) => (
+        {/* Seletor de Período e Navegação de Mês */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#FFFFFF', padding: '4px', borderRadius: 10, border: '1.5px solid #E5E7EB' }}>
+          {filtroPeriodo === 'mes' && (
             <button
-              key={f.value}
-              onClick={() => setFiltroStatus(f.value)}
+              type="button"
+              title="Mês anterior"
+              onClick={() => setFiltroMes(mesAdjacente(filtroMes, -1))}
               style={{
-                padding: '6px 14px',
-                borderRadius: 20,
-                border: `1.5px solid ${filtroStatus === f.value ? '#0D6BAF' : '#E5E7EB'}`,
-                background: filtroStatus === f.value ? '#0D6BAF' : '#FFFFFF',
-                color: filtroStatus === f.value ? '#FFFFFF' : '#374151',
-                fontSize: 12,
-                fontWeight: 700,
+                width: 30,
+                height: 30,
+                borderRadius: 6,
+                border: '1px solid #E5E7EB',
+                background: '#F9FAFB',
+                color: '#374151',
                 cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
             >
-              {f.label}
+              <ChevronLeft size={16} />
             </button>
-          ))}
+          )}
+
+          <select
+            value={filtroPeriodo}
+            onChange={(e) => setFiltroPeriodo(e.target.value as any)}
+            style={{
+              padding: '6px 10px',
+              borderRadius: 6,
+              border: 'none',
+              background: 'transparent',
+              fontSize: 13,
+              fontWeight: 600,
+              color: '#374151',
+              cursor: 'pointer',
+              outline: 'none',
+            }}
+          >
+            <option value="mes">Mês</option>
+            <option value="ultimos_90_dias">Últimos 90 dias</option>
+            <option value="ano">Este ano</option>
+            <option value="todo">Todo o período</option>
+          </select>
+
+          {filtroPeriodo === 'mes' && (
+            <button
+              type="button"
+              title="Próximo mês"
+              onClick={() => setFiltroMes(mesAdjacente(filtroMes, 1))}
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: 6,
+                border: '1px solid #E5E7EB',
+                background: '#F9FAFB',
+                color: '#374151',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <ChevronRight size={16} />
+            </button>
+          )}
+
+          {filtroPeriodo === 'mes' && (
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#1D4ED8', padding: '0 8px', textTransform: 'capitalize' }}>
+              {rotuloDoMes(filtroMes)}
+            </span>
+          )}
+        </div>
+
+        {/* Data de Referência do Filtro */}
+        <select
+          value={filtroCampo}
+          onChange={(e) => setFiltroCampo(e.target.value as any)}
+          style={{
+            padding: '9px 12px',
+            borderRadius: 10,
+            border: '1.5px solid #E5E7EB',
+            background: '#FFFFFF',
+            fontSize: 13,
+            fontWeight: 600,
+            color: '#374151',
+            cursor: 'pointer',
+            outline: 'none',
+          }}
+        >
+          <option value="emissao">Por Emissão</option>
+          <option value="previsaoEntrega">Por Prev. Entrega</option>
+        </select>
+
+        {/* Botão Limpar Filtros */}
+        {temFiltrosAtivos && (
+          <button
+            onClick={handleLimparFiltros}
+            style={{
+              padding: '8px 12px',
+              borderRadius: 8,
+              border: 'none',
+              background: 'transparent',
+              color: '#DC2626',
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: 'pointer',
+              textDecoration: 'underline',
+            }}
+          >
+            Limpar filtros
+          </button>
+        )}
+      </div>
+
+      {/* AVISO DE PEDIDOS FORA DO PERÍODO */}
+      {(abertosForaPeriodo > 0 || ocultosForaPeriodo > 0) && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: '10px 14px',
+            borderRadius: 10,
+            background: '#EFF6FF',
+            border: '1px solid #BFDBFE',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            fontSize: 13,
+            color: '#1E40AF',
+          }}
+        >
+          <Info size={16} color="#2563EB" style={{ flexShrink: 0 }} />
+          <div>
+            {abertosForaPeriodo > 0 && (
+              <span>
+                <strong>{abertosForaPeriodo}</strong> {abertosForaPeriodo === 1 ? 'pedido em aberto de outro período aparece mesmo assim.' : 'pedidos em aberto de outros períodos aparecem mesmo assim.'}{' '}
+              </span>
+            )}
+            {ocultosForaPeriodo > 0 && (
+              <span>
+                {ocultosForaPeriodo} {ocultosForaPeriodo === 1 ? 'pedido encerrado fora do período está oculto.' : 'pedidos encerrados fora do período estão ocultos.'}{' '}
+              </span>
+            )}
+            {filtroPeriodo !== 'todo' && (
+              <button
+                onClick={() => setFiltroPeriodo('todo')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  color: '#1D4ED8',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  marginLeft: 4,
+                }}
+              >
+                Ver todo o período
+              </button>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Tabela de pedidos - UMA ÚNICA LINHA POR PEDIDO */}
-      {pedidosFiltrados.length === 0 ? (
+      {/* TABELA DE PEDIDOS DE COMPRA */}
+      {pedidosExibidos.length === 0 ? (
         <div
           style={{
             padding: '60px 24px',
@@ -489,7 +817,7 @@ export function V2PedidoCompraPage() {
           <ShoppingCart size={40} color="#D1D5DB" style={{ marginBottom: 12 }} />
           <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#374151' }}>Nenhum pedido encontrado</p>
           <p style={{ margin: '6px 0 0', fontSize: 13, color: '#9CA3AF' }}>
-            Tente ajustar os filtros ou criar um novo pedido.
+            Tente ajustar a busca, alterar o período ou criar um novo pedido.
           </p>
         </div>
       ) : (
@@ -497,171 +825,206 @@ export function V2PedidoCompraPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: 800 }}>
             <thead>
               <tr style={{ background: '#F9FAFB', borderBottom: '1.5px solid #E5E7EB' }}>
-                <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', width: '80px' }}>
+                <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', width: '130px' }}>
                   Nº
                 </th>
                 <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                   Fornecedor
                 </th>
-                <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', width: '110px' }}>
+                <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', width: '100px' }}>
                   Emissão
                 </th>
-                <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', width: '120px' }}>
+                <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', width: '140px' }}>
                   Prev. Entrega
                 </th>
-                <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', width: '130px' }}>
+                <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', width: '120px' }}>
                   Total
                 </th>
-                <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', width: '130px' }}>
+                <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', width: '120px' }}>
                   Status
                 </th>
-                <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', width: '160px', textAlign: 'right' }}>
+                <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', width: '140px', textAlign: 'right' }}>
                   Ações
                 </th>
               </tr>
             </thead>
             <tbody>
-              {pedidosFiltrados.map((pedido, idx) => (
-                <tr
-                  key={pedido.id}
-                  style={{
-                    borderBottom: idx < pedidosFiltrados.length - 1 ? '1px solid #F3F4F6' : 'none',
-                    transition: 'background 0.1s',
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = '#F9FAFB' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-                >
-                  {/* Nº */}
-                  <td style={{ padding: '14px 16px', fontSize: 13, fontWeight: 900, color: '#6B7280', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
-                    #{pedido.numero}
-                  </td>
+              {pedidosExibidos.map((pedido, idx) => {
+                const atrasado = estaAtrasado(pedido, dataHoje)
+                const diasAtraso = atrasado ? diasDeAtraso(pedido, dataHoje) : 0
 
-                  {/* Fornecedor */}
-                  <td style={{ padding: '14px 16px', fontSize: 14, fontWeight: 700, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 240 }}>
-                    {pedido.fornecedor}
-                    {pedido.observacao && (
-                      <span style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#6B7280', marginTop: 2 }}>
-                        {pedido.observacao}
+                return (
+                  <tr
+                    key={pedido.id}
+                    style={{
+                      borderBottom: idx < pedidosExibidos.length - 1 ? '1px solid #F3F4F6' : 'none',
+                      transition: 'background 0.1s',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = '#F9FAFB' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                  >
+                    {/* Nº */}
+                    <td style={{ padding: '14px 16px', fontSize: 13, fontWeight: 900, color: '#6B7280', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+                      #{pedido.numero}
+                    </td>
+
+                    {/* Fornecedor */}
+                    <td style={{ padding: '14px 16px', fontSize: 14, fontWeight: 700, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 240 }}>
+                      {pedido.fornecedor}
+                      {pedido.observacao && (
+                        <span style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#6B7280', marginTop: 2 }}>
+                          {pedido.observacao}
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Emissão */}
+                    <td style={{ padding: '14px 16px', fontSize: 13, color: '#6B7280', whiteSpace: 'nowrap' }}>
+                      {formatarData(pedido.dataEmissao)}
+                    </td>
+
+                    {/* Prev. Entrega com Alerta de Atraso */}
+                    <td style={{ padding: '14px 16px', fontSize: 13, color: '#6B7280', whiteSpace: 'nowrap' }}>
+                      {formatarData(pedido.dataPrevistaEntrega)}
+                      {atrasado && (
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 3,
+                            marginLeft: 6,
+                            padding: '2px 6px',
+                            borderRadius: 4,
+                            background: '#FEF2F2',
+                            color: '#DC2626',
+                            fontSize: 11,
+                            fontWeight: 800,
+                            border: '1px solid #FECACA',
+                          }}
+                          title={`Entrega prevista para ${formatarData(pedido.dataPrevistaEntrega)}`}
+                        >
+                          <AlertTriangle size={11} />
+                          {diasAtraso}d atrasado
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Total */}
+                    <td style={{ padding: '14px 16px', fontSize: 14, fontWeight: 800, color: '#111827', whiteSpace: 'nowrap' }}>
+                      {formatarMoeda(pedido.total)}
+                      <span style={{ fontSize: 11, fontWeight: 500, color: '#9CA3AF', marginLeft: 4 }}>
+                        {pedido.numeroParcelas || 1}x
                       </span>
-                    )}
-                  </td>
+                    </td>
 
-                  {/* Emissão */}
-                  <td style={{ padding: '14px 16px', fontSize: 13, color: '#6B7280', whiteSpace: 'nowrap' }}>
-                    {formatarData(pedido.dataEmissao)}
-                  </td>
+                    {/* Status */}
+                    <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
+                      <StatusBadge status={pedido.status} />
+                    </td>
 
-                  {/* Prev. Entrega */}
-                  <td style={{ padding: '14px 16px', fontSize: 13, color: '#6B7280', whiteSpace: 'nowrap' }}>
-                    {formatarData(pedido.dataPrevistaEntrega)}
-                  </td>
-
-                  {/* Total */}
-                  <td style={{ padding: '14px 16px', fontSize: 14, fontWeight: 800, color: '#111827', whiteSpace: 'nowrap' }}>
-                    {formatarMoeda(pedido.total)}
-                    <span style={{ fontSize: 11, fontWeight: 500, color: '#9CA3AF', marginLeft: 4 }}>
-                      {pedido.numeroParcelas || 1}x
-                    </span>
-                  </td>
-
-                  {/* Status */}
-                  <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
-                    <StatusBadge status={pedido.status} />
-                  </td>
-
-                  {/* Ações */}
-                  <td style={{ padding: '14px 16px', whiteSpace: 'nowrap', textAlign: 'right' }}>
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
-                      {/* Editar */}
-                      <button
-                        onClick={() => abrirModalEditar(pedido)}
-                        title="Editar pedido"
-                        style={{
-                          padding: '6px',
-                          borderRadius: 6,
-                          border: '1px solid #E5E7EB',
-                          background: '#FFFFFF',
-                          color: '#374151',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                        }}
-                      >
-                        <Edit3 size={14} />
-                      </button>
-
-                      {/* Receber / Desfazer Recebimento */}
-                      {(pedido.status === 'emitido' || pedido.status === 'recebido_parcial') && (
+                    {/* Ações com ícones e tooltips */}
+                    <td style={{ padding: '14px 16px', whiteSpace: 'nowrap', textAlign: 'right' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                        {/* Editar */}
                         <button
-                          onClick={() => handleReceberPedido(pedido)}
-                          title="Receber (Dar entrada no estoque)"
+                          onClick={() => abrirModalEditar(pedido)}
+                          title="Editar pedido"
                           style={{
                             padding: '6px',
                             borderRadius: 6,
-                            border: '1px solid #16A34A',
-                            background: '#F0FDF4',
-                            color: '#16A34A',
+                            border: '1px solid #E5E7EB',
+                            background: '#FFFFFF',
+                            color: '#374151',
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
                           }}
                         >
-                          <Package size={14} />
+                          <Edit3 size={14} />
                         </button>
-                      )}
 
-                      {pedido.status === 'recebido' && (
+                        {/* Receber / Desfazer Recebimento */}
+                        {(pedido.status === 'emitido' || pedido.status === 'recebido_parcial') && (
+                          <button
+                            onClick={() => handleReceberPedido(pedido)}
+                            title="Receber (Dar entrada no estoque)"
+                            style={{
+                              padding: '6px',
+                              borderRadius: 6,
+                              border: '1px solid #16A34A',
+                              background: '#F0FDF4',
+                              color: '#16A34A',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                            }}
+                          >
+                            <Package size={14} />
+                          </button>
+                        )}
+
+                        {pedido.status === 'recebido' && (
+                          <button
+                            onClick={() => handleDesfazerRecebimento(pedido)}
+                            title="Desfazer recebimento (Estornar estoque)"
+                            style={{
+                              padding: '6px',
+                              borderRadius: 6,
+                              border: '1px solid #D97706',
+                              background: '#FFFBEB',
+                              color: '#D97706',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                            }}
+                          >
+                            <RotateCcw size={14} />
+                          </button>
+                        )}
+
+                        {/* Excluir */}
                         <button
-                          onClick={() => handleDesfazerRecebimento(pedido)}
-                          title="Desfazer recebimento (Estornar estoque)"
+                          onClick={() => handleExcluirPedido(pedido)}
+                          title="Excluir pedido"
                           style={{
                             padding: '6px',
                             borderRadius: 6,
-                            border: '1px solid #D97706',
-                            background: '#FFFBEB',
-                            color: '#D97706',
+                            border: '1px solid #FECACA',
+                            background: '#FEF2F2',
+                            color: '#DC2626',
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
                           }}
                         >
-                          <RotateCcw size={14} />
+                          <Trash2 size={14} />
                         </button>
-                      )}
-
-                      {/* Excluir */}
-                      <button
-                        onClick={() => handleExcluirPedido(pedido)}
-                        title="Excluir pedido"
-                        style={{
-                          padding: '6px',
-                          borderRadius: 6,
-                          border: '1px solid #FECACA',
-                          background: '#FEF2F2',
-                          color: '#DC2626',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                        }}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
       )}
 
-      {/* Modal Criar / Editar Pedido */}
+      {/* MODAL CRIAR / EDITAR PEDIDO */}
       {isModalCreateOpen && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}>
-          <div style={{ background: '#fff', padding: 24, borderRadius: 14, width: '100%', maxWidth: 560, boxShadow: '0 10px 25px rgba(0,0,0,0.15)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
-            <h2 style={{ marginTop: 0, marginBottom: 20, fontSize: 18, fontWeight: 800, color: '#111827' }}>
+          <div style={{ background: '#fff', padding: 24, borderRadius: 14, width: '100%', maxWidth: 580, boxShadow: '0 10px 25px rgba(0,0,0,0.15)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+            <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 18, fontWeight: 800, color: '#111827' }}>
               {pedidoEdicao ? `Editar Pedido #${pedidoEdicao.numero}` : 'Novo Pedido de Compra'}
             </h2>
+
+            {/* Aviso de Edição Restrita caso o pedido já esteja emitido / recebido */}
+            {pedidoEdicao && !podeEditarCampo(pedidoEdicao.status, 'itens') && (
+              <div style={{ marginBottom: 16, padding: '8px 12px', background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: 8, fontSize: 12, color: '#92400E', fontWeight: 600 }}>
+                {pedidoEdicao.status === 'recebido'
+                  ? 'Pedido recebido: apenas a observação pode ser alterada.'
+                  : 'Pedido emitido: itens e valores financeiros estão travados. Você pode alterar a previsão de entrega e a observação.'}
+              </div>
+            )}
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto', paddingRight: 4, marginBottom: 20 }}>
               {/* Fornecedor */}
@@ -672,8 +1035,17 @@ export function V2PedidoCompraPage() {
                   list="fornecedores-list"
                   value={formFornecedor}
                   onChange={(e) => setFormFornecedor(e.target.value)}
+                  disabled={!podeEditarCampo(pedidoEdicao?.status, 'fornecedor')}
                   placeholder="Digite ou selecione o fornecedor (Nome Fantasia)"
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1.5px solid #D1D5DB', fontSize: 14, boxSizing: 'border-box' }}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: 8,
+                    border: '1.5px solid #D1D5DB',
+                    fontSize: 14,
+                    boxSizing: 'border-box',
+                    background: podeEditarCampo(pedidoEdicao?.status, 'fornecedor') ? '#FFFFFF' : '#F3F4F6',
+                  }}
                 />
                 <datalist id="fornecedores-list">
                   {fornecedoresCadastrados.map((f) => (
@@ -688,115 +1060,161 @@ export function V2PedidoCompraPage() {
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <label style={{ fontSize: 13, fontWeight: 700, color: '#374151' }}>Produtos do Pedido *</label>
-                  <button
-                    type="button"
-                    onClick={handleAdicionarItem}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      padding: '5px 10px',
-                      borderRadius: 6,
-                      background: '#EFF6FF',
-                      color: '#2563EB',
-                      border: '1px solid #BFDBFE',
-                      fontSize: 12,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <Plus size={14} /> Adicionar Item
-                  </button>
+                  {podeEditarCampo(pedidoEdicao?.status, 'itens') && (
+                    <button
+                      type="button"
+                      onClick={handleAdicionarItem}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        padding: '5px 10px',
+                        borderRadius: 6,
+                        background: '#EFF6FF',
+                        color: '#2563EB',
+                        border: '1px solid #BFDBFE',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <Plus size={14} /> Adicionar Item
+                    </button>
+                  )}
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {formItens.map((item, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: '1fr 85px 100px 32px',
-                        gap: 8,
-                        alignItems: 'center',
-                        background: '#F9FAFB',
-                        padding: '10px 12px',
-                        borderRadius: 8,
-                        border: '1px solid #E5E7EB',
-                      }}
-                    >
-                      {/* Seleção do Produto */}
-                      <div>
-                        <select
-                          value={item.produto_id}
-                          onChange={(e) => handleItemProdutoChange(idx, e.target.value)}
-                          style={{
-                            width: '100%',
-                            padding: '8px 10px',
-                            borderRadius: 6,
-                            border: '1px solid #D1D5DB',
-                            fontSize: 13,
-                            backgroundColor: '#fff',
-                            boxSizing: 'border-box',
-                          }}
-                        >
-                          <option value="">Selecione um produto</option>
-                          {produtosDisponiveis.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name} ({formatarMoeda(p.cost_price)})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                  {formItens.map((item, idx) => {
+                    const prodCadastrado = produtosDisponiveis.find((p) => p.id === item.produto_id)
+                    const avisoCustoItem = avisoDeCusto(item.preco_unitario, prodCadastrado?.cost_price)
 
-                      {/* Quantidade */}
-                      <div>
-                        <input
-                          type="number"
-                          min="1"
-                          value={item.quantidade}
-                          onChange={(e) => handleItemQuantidadeChange(idx, Number(e.target.value))}
-                          placeholder="Qtd"
+                    return (
+                      <div
+                        key={idx}
+                        style={{
+                          background: '#F9FAFB',
+                          padding: '10px 12px',
+                          borderRadius: 8,
+                          border: '1px solid #E5E7EB',
+                        }}
+                      >
+                        <div
                           style={{
-                            width: '100%',
-                            padding: '8px 10px',
-                            borderRadius: 6,
-                            border: '1px solid #D1D5DB',
-                            fontSize: 13,
-                            boxSizing: 'border-box',
-                            textAlign: 'center',
-                          }}
-                        />
-                      </div>
-
-                      {/* Subtotal */}
-                      <div style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, color: '#111827', whiteSpace: 'nowrap' }}>
-                        {formatarMoeda(item.total)}
-                      </div>
-
-                      {/* Botão Remover */}
-                      <div>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoverItem(idx)}
-                          disabled={formItens.length <= 1}
-                          title="Remover item"
-                          style={{
-                            padding: '6px',
-                            borderRadius: 6,
-                            border: formItens.length <= 1 ? '1px solid #E5E7EB' : '1px solid #FECACA',
-                            background: formItens.length <= 1 ? '#F3F4F6' : '#FEF2F2',
-                            color: formItens.length <= 1 ? '#9CA3AF' : '#DC2626',
-                            cursor: formItens.length <= 1 ? 'not-allowed' : 'pointer',
-                            display: 'flex',
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 75px 95px 95px 32px',
+                            gap: 8,
                             alignItems: 'center',
-                            justifyContent: 'center',
                           }}
                         >
-                          <Trash2 size={14} />
-                        </button>
+                          {/* Seleção do Produto */}
+                          <div>
+                            <select
+                              value={item.produto_id}
+                              disabled={!podeEditarCampo(pedidoEdicao?.status, 'itens')}
+                              onChange={(e) => handleItemProdutoChange(idx, e.target.value)}
+                              style={{
+                                width: '100%',
+                                padding: '8px 8px',
+                                borderRadius: 6,
+                                border: '1px solid #D1D5DB',
+                                fontSize: 13,
+                                backgroundColor: podeEditarCampo(pedidoEdicao?.status, 'itens') ? '#fff' : '#F3F4F6',
+                                boxSizing: 'border-box',
+                              }}
+                            >
+                              <option value="">Selecione um produto</option>
+                              {produtosDisponiveis.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Quantidade */}
+                          <div>
+                            <input
+                              type="number"
+                              min="1"
+                              value={item.quantidade}
+                              disabled={!podeEditarCampo(pedidoEdicao?.status, 'itens')}
+                              onChange={(e) => handleItemQuantidadeChange(idx, Number(e.target.value))}
+                              placeholder="Qtd"
+                              style={{
+                                width: '100%',
+                                padding: '8px 6px',
+                                borderRadius: 6,
+                                border: '1px solid #D1D5DB',
+                                fontSize: 13,
+                                boxSizing: 'border-box',
+                                textAlign: 'center',
+                                background: podeEditarCampo(pedidoEdicao?.status, 'itens') ? '#fff' : '#F3F4F6',
+                              }}
+                            />
+                          </div>
+
+                          {/* Preço Unitário */}
+                          <div>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={item.preco_unitario}
+                              disabled={!podeEditarCampo(pedidoEdicao?.status, 'itens')}
+                              onChange={(e) => handleItemPrecoChange(idx, Number(e.target.value))}
+                              placeholder="Preço Unit."
+                              style={{
+                                width: '100%',
+                                padding: '8px 6px',
+                                borderRadius: 6,
+                                border: '1px solid #D1D5DB',
+                                fontSize: 13,
+                                boxSizing: 'border-box',
+                                textAlign: 'right',
+                                background: podeEditarCampo(pedidoEdicao?.status, 'itens') ? '#fff' : '#F3F4F6',
+                              }}
+                            />
+                          </div>
+
+                          {/* Subtotal */}
+                          <div style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, color: '#111827', whiteSpace: 'nowrap' }}>
+                            {formatarMoeda(item.total)}
+                          </div>
+
+                          {/* Botão Remover */}
+                          <div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoverItem(idx)}
+                              disabled={!podeEditarCampo(pedidoEdicao?.status, 'itens') || formItens.length <= 1}
+                              title="Remover item"
+                              style={{
+                                padding: '6px',
+                                borderRadius: 6,
+                                border: formItens.length <= 1 || !podeEditarCampo(pedidoEdicao?.status, 'itens') ? '1px solid #E5E7EB' : '1px solid #FECACA',
+                                background: formItens.length <= 1 || !podeEditarCampo(pedidoEdicao?.status, 'itens') ? '#F3F4F6' : '#FEF2F2',
+                                color: formItens.length <= 1 || !podeEditarCampo(pedidoEdicao?.status, 'itens') ? '#9CA3AF' : '#DC2626',
+                                cursor: formItens.length <= 1 || !podeEditarCampo(pedidoEdicao?.status, 'itens') ? 'not-allowed' : 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* AVISO DE VARIAÇÃO DE CUSTO (> 20%) */}
+                        {avisoCustoItem && (
+                          <div style={{ marginTop: 6, fontSize: 11, fontWeight: 700, color: '#D97706', display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <AlertTriangle size={12} color="#D97706" />
+                            {avisoCustoItem.mensagem}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
 
@@ -806,8 +1224,17 @@ export function V2PedidoCompraPage() {
                   <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Nº de Parcelas *</label>
                   <select
                     value={formParcelas}
+                    disabled={!podeEditarCampo(pedidoEdicao?.status, 'parcelas')}
                     onChange={(e) => setFormParcelas(Number(e.target.value))}
-                    style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1.5px solid #D1D5DB', fontSize: 14, backgroundColor: '#fff', boxSizing: 'border-box' }}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: 8,
+                      border: '1.5px solid #D1D5DB',
+                      fontSize: 14,
+                      backgroundColor: podeEditarCampo(pedidoEdicao?.status, 'parcelas') ? '#fff' : '#F3F4F6',
+                      boxSizing: 'border-box',
+                    }}
                   >
                     <option value={1}>À vista (1x)</option>
                     <option value={2}>2x</option>
@@ -824,8 +1251,17 @@ export function V2PedidoCompraPage() {
                     <input
                       type="date"
                       value={formDataEntrega}
+                      disabled={!podeEditarCampo(pedidoEdicao?.status, 'previsao')}
                       onChange={(e) => setFormDataEntrega(e.target.value)}
-                      style={{ width: '100%', padding: '10px 12px 10px 36px', borderRadius: 8, border: '1.5px solid #D1D5DB', fontSize: 14, boxSizing: 'border-box' }}
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px 10px 36px',
+                        borderRadius: 8,
+                        border: '1.5px solid #D1D5DB',
+                        fontSize: 14,
+                        boxSizing: 'border-box',
+                        background: podeEditarCampo(pedidoEdicao?.status, 'previsao') ? '#FFFFFF' : '#F3F4F6',
+                      }}
                     />
                   </div>
                 </div>
@@ -836,10 +1272,21 @@ export function V2PedidoCompraPage() {
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Observação</label>
                 <textarea
                   value={formObservacao}
+                  disabled={!podeEditarCampo(pedidoEdicao?.status, 'observacao')}
                   onChange={(e) => setFormObservacao(e.target.value)}
                   placeholder="Observações do pedido..."
                   rows={2}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1.5px solid #D1D5DB', fontSize: 14, boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit' }}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: 8,
+                    border: '1.5px solid #D1D5DB',
+                    fontSize: 14,
+                    boxSizing: 'border-box',
+                    resize: 'vertical',
+                    fontFamily: 'inherit',
+                    background: podeEditarCampo(pedidoEdicao?.status, 'observacao') ? '#FFFFFF' : '#F3F4F6',
+                  }}
                 />
               </div>
               
@@ -861,12 +1308,14 @@ export function V2PedidoCompraPage() {
               >
                 Cancelar
               </button>
-              <button
-                onClick={handleSalvarPedido}
-                style={{ padding: '10px 18px', borderRadius: 8, border: 'none', background: '#0D6BAF', color: '#fff', cursor: 'pointer', fontWeight: 700 }}
-              >
-                {pedidoEdicao ? 'Salvar Alterações' : 'Criar Pedido e Gerar Financeiro'}
-              </button>
+              {podeEditarCampo(pedidoEdicao?.status, 'observacao') && (
+                <button
+                  onClick={handleSalvarPedido}
+                  style={{ padding: '10px 18px', borderRadius: 8, border: 'none', background: '#0D6BAF', color: '#fff', cursor: 'pointer', fontWeight: 700 }}
+                >
+                  {pedidoEdicao ? 'Salvar Alterações' : 'Criar Pedido e Gerar Financeiro'}
+                </button>
+              )}
             </div>
           </div>
         </div>
