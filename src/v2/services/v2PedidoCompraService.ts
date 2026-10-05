@@ -196,6 +196,54 @@ export async function desfazerRecebimentoPedidoCompra(pedidoId: string): Promise
   return { ok: true }
 }
 
+export async function voltarPedidoParaAberto(pedidoId: string): Promise<{ ok: true } | { ok: false; erro: string }> {
+  const current = await listPedidosCompra()
+  const pedido = current.find((p) => p.id === pedidoId)
+  if (!pedido) return { ok: false, erro: 'Pedido não encontrado.' }
+
+  if (pedido.status === 'recebido' || pedido.status === 'recebido_parcial') {
+    const resEstorno = await desfazerEntradaCompra({
+      pedidoId: pedido.id,
+      pedidoNumero: pedido.numero,
+      itens: pedido.itens,
+    })
+    if (!resEstorno.ok) {
+      return resEstorno
+    }
+  }
+
+  pedido.status = 'emitido'
+  await updatePedidoCompra(pedido)
+  return { ok: true }
+}
+
+export async function cancelarPedidoCompra(pedidoId: string): Promise<{ ok: true } | { ok: false; erro: string }> {
+  const current = await listPedidosCompra()
+  const pedido = current.find((p) => p.id === pedidoId)
+  if (!pedido) return { ok: false, erro: 'Pedido não encontrado.' }
+
+  const temPagamento = await verificarSePedidoTemPagamento(pedidoId)
+  if (temPagamento) {
+    return {
+      ok: false,
+      erro: 'Não é possível cancelar o pedido: existem baixas/pagamentos efetuados no Contas a Pagar. Estorne os pagamentos antes de cancelar.',
+    }
+  }
+
+  if (pedido.status === 'recebido' || pedido.status === 'recebido_parcial') {
+    const resEstorno = await desfazerEntradaCompra({
+      pedidoId: pedido.id,
+      pedidoNumero: pedido.numero,
+      itens: pedido.itens,
+    })
+    if (!resEstorno.ok) return resEstorno
+  }
+
+  pedido.status = 'cancelado'
+  await updatePedidoCompra(pedido)
+  return { ok: true }
+}
+
 export async function deletePedidoCompra(pedidoId: string): Promise<{ ok: true } | { ok: false; erro: string }> {
   const current = await listPedidosCompra()
   const pedido = current.find((p) => p.id === pedidoId)

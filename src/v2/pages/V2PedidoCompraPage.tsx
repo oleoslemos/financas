@@ -11,7 +11,6 @@ import {
   Package,
   Edit3,
   RotateCcw,
-  Trash2,
   AlertTriangle,
   Calendar,
   Info,
@@ -23,8 +22,8 @@ import {
   savePedidoCompra,
   updatePedidoCompra,
   receberPedidoCompra,
-  desfazerRecebimentoPedidoCompra,
-  deletePedidoCompra,
+  voltarPedidoParaAberto,
+  cancelarPedidoCompra,
   PedidoCompra,
   PedidoCompraItem,
   StatusPedido,
@@ -102,7 +101,7 @@ const ABAS_STATUS: { value: 'todos' | StatusPedido; label: string }[] = [
   { value: 'cancelado', label: 'Cancelado' },
 ]
 
-// Pure helper functions for Period & Overdue domain rules
+// Helper functions for Period & Overdue domain rules
 function mesAdjacente(mes: string, delta: number): string {
   const [a, m] = mes.split('-').map(Number)
   const total = a * 12 + (m - 1) + delta
@@ -491,11 +490,11 @@ export function V2PedidoCompraPage() {
     await loadData()
   }
 
-  const handleDesfazerRecebimento = async (pedido: PedidoCompra) => {
-    if (!window.confirm(`Confirma desfazer o recebimento do Pedido #${pedido.numero}? O estoque será ajustado.`)) {
+  const handleVoltarParaAberto = async (pedido: PedidoCompra) => {
+    if (!window.confirm(`Confirma retornar o Pedido #${pedido.numero} para o status Em Aberto (Emitido)?`)) {
       return
     }
-    const res = await desfazerRecebimentoPedidoCompra(pedido.id)
+    const res = await voltarPedidoParaAberto(pedido.id)
     if (!res.ok) {
       setMensagemErro(res.erro)
       return
@@ -503,11 +502,11 @@ export function V2PedidoCompraPage() {
     await loadData()
   }
 
-  const handleExcluirPedido = async (pedido: PedidoCompra) => {
-    if (!window.confirm(`Tem certeza que deseja excluir o Pedido #${pedido.numero}? esta ação não poderá ser desfeita.`)) {
+  const handleCancelarPedido = async (pedido: PedidoCompra) => {
+    if (!window.confirm(`Confirma cancelar o Pedido #${pedido.numero}?`)) {
       return
     }
-    const res = await deletePedidoCompra(pedido.id)
+    const res = await cancelarPedidoCompra(pedido.id)
     if (!res.ok) {
       setMensagemErro(res.erro)
       return
@@ -616,7 +615,7 @@ export function V2PedidoCompraPage() {
       {/* BARRA DE FILTROS E BUSCA */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
         {/* Campo de Busca */}
-        <div style={{ position: 'relative', flex: 1, minWidth: 240 }}>
+        <div style={{ position: 'relative', flex: '1 1 240px', minWidth: 220 }}>
           <Search
             size={15}
             style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF' }}
@@ -640,42 +639,32 @@ export function V2PedidoCompraPage() {
         </div>
 
         {/* Seletor de Período e Navegação de Mês */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#FFFFFF', padding: '4px', borderRadius: 10, border: '1.5px solid #E5E7EB' }}>
-          {filtroPeriodo === 'mes' && (
-            <button
-              type="button"
-              title="Mês anterior"
-              onClick={() => setFiltroMes(mesAdjacente(filtroMes, -1))}
-              style={{
-                width: 30,
-                height: 30,
-                borderRadius: 6,
-                border: '1px solid #E5E7EB',
-                background: '#F9FAFB',
-                color: '#374151',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <ChevronLeft size={16} />
-            </button>
-          )}
-
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            background: '#FFFFFF',
+            padding: '4px 8px',
+            borderRadius: 10,
+            border: '1.5px solid #E5E7EB',
+            whiteSpace: 'nowrap',
+          }}
+        >
           <select
             value={filtroPeriodo}
             onChange={(e) => setFiltroPeriodo(e.target.value as any)}
             style={{
-              padding: '6px 10px',
+              padding: '6px 8px',
               borderRadius: 6,
               border: 'none',
               background: 'transparent',
               fontSize: 13,
-              fontWeight: 600,
+              fontWeight: 700,
               color: '#374151',
               cursor: 'pointer',
               outline: 'none',
+              whiteSpace: 'nowrap',
             }}
           >
             <option value="mes">Mês</option>
@@ -685,31 +674,62 @@ export function V2PedidoCompraPage() {
           </select>
 
           {filtroPeriodo === 'mes' && (
-            <button
-              type="button"
-              title="Próximo mês"
-              onClick={() => setFiltroMes(mesAdjacente(filtroMes, 1))}
-              style={{
-                width: 30,
-                height: 30,
-                borderRadius: 6,
-                border: '1px solid #E5E7EB',
-                background: '#F9FAFB',
-                color: '#374151',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <ChevronRight size={16} />
-            </button>
-          )}
+            <>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 2, whiteSpace: 'nowrap' }}>
+                <button
+                  type="button"
+                  title="Mês anterior"
+                  onClick={() => setFiltroMes(mesAdjacente(filtroMes, -1))}
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 6,
+                    border: '1px solid #E5E7EB',
+                    background: '#F9FAFB',
+                    color: '#374151',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <ChevronLeft size={15} />
+                </button>
+                <button
+                  type="button"
+                  title="Próximo mês"
+                  onClick={() => setFiltroMes(mesAdjacente(filtroMes, 1))}
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 6,
+                    border: '1px solid #E5E7EB',
+                    background: '#F9FAFB',
+                    color: '#374151',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <ChevronRight size={15} />
+                </button>
+              </div>
 
-          {filtroPeriodo === 'mes' && (
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#1D4ED8', padding: '0 8px', textTransform: 'capitalize' }}>
-              {rotuloDoMes(filtroMes)}
-            </span>
+              <span
+                style={{
+                  fontSize: 13,
+                  fontWeight: 800,
+                  color: '#0D6BAF',
+                  textTransform: 'capitalize',
+                  whiteSpace: 'nowrap',
+                  paddingLeft: 4,
+                  display: 'inline-block',
+                }}
+              >
+                {rotuloDoMes(filtroMes)}
+              </span>
+            </>
           )}
         </div>
 
@@ -727,6 +747,7 @@ export function V2PedidoCompraPage() {
             color: '#374151',
             cursor: 'pointer',
             outline: 'none',
+            whiteSpace: 'nowrap',
           }}
         >
           <option value="emissao">Por Emissão</option>
@@ -747,6 +768,7 @@ export function V2PedidoCompraPage() {
               fontWeight: 700,
               cursor: 'pointer',
               textDecoration: 'underline',
+              whiteSpace: 'nowrap',
             }}
           >
             Limpar filtros
@@ -922,7 +944,7 @@ export function V2PedidoCompraPage() {
                       <StatusBadge status={pedido.status} />
                     </td>
 
-                    {/* Ações com ícones e tooltips */}
+                    {/* Ações com ícones e tooltips (Sem botão Excluir; Voltar para Aberto) */}
                     <td style={{ padding: '14px 16px', whiteSpace: 'nowrap', textAlign: 'right' }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
                         {/* Editar */}
@@ -943,7 +965,7 @@ export function V2PedidoCompraPage() {
                           <Edit3 size={14} />
                         </button>
 
-                        {/* Receber / Desfazer Recebimento */}
+                        {/* Receber (Dar entrada no estoque) */}
                         {(pedido.status === 'emitido' || pedido.status === 'recebido_parcial') && (
                           <button
                             onClick={() => handleReceberPedido(pedido)}
@@ -963,10 +985,11 @@ export function V2PedidoCompraPage() {
                           </button>
                         )}
 
-                        {pedido.status === 'recebido' && (
+                        {/* Voltar para Aberto (Para pedidos recebidos ou cancelados) */}
+                        {(pedido.status === 'recebido' || pedido.status === 'recebido_parcial' || pedido.status === 'cancelado') && (
                           <button
-                            onClick={() => handleDesfazerRecebimento(pedido)}
-                            title="Desfazer recebimento (Estornar estoque)"
+                            onClick={() => handleVoltarParaAberto(pedido)}
+                            title="Voltar para aberto (Estornar estoque / Reabrir)"
                             style={{
                               padding: '6px',
                               borderRadius: 6,
@@ -982,23 +1005,25 @@ export function V2PedidoCompraPage() {
                           </button>
                         )}
 
-                        {/* Excluir */}
-                        <button
-                          onClick={() => handleExcluirPedido(pedido)}
-                          title="Excluir pedido"
-                          style={{
-                            padding: '6px',
-                            borderRadius: 6,
-                            border: '1px solid #FECACA',
-                            background: '#FEF2F2',
-                            color: '#DC2626',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                          }}
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        {/* Cancelar pedido (para pedidos emitidos) */}
+                        {pedido.status === 'emitido' && (
+                          <button
+                            onClick={() => handleCancelarPedido(pedido)}
+                            title="Cancelar pedido"
+                            style={{
+                              padding: '6px',
+                              borderRadius: 6,
+                              border: '1px solid #FECACA',
+                              background: '#FEF2F2',
+                              color: '#DC2626',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                            }}
+                          >
+                            <XCircle size={14} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -1200,7 +1225,7 @@ export function V2PedidoCompraPage() {
                                 justifyContent: 'center',
                               }}
                             >
-                              <Trash2 size={14} />
+                              <XCircle size={14} />
                             </button>
                           </div>
                         </div>
