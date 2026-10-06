@@ -103,31 +103,20 @@ const ABAS_STATUS: { value: 'todos' | StatusPedido; label: string }[] = [
   { value: 'cancelado', label: 'Cancelados' },
 ]
 
-// Helper function for 10 previous + 2 next months dropdown options
-function gerarOpcoesMeses(dataHoje: string) {
-  const [anoAtual, mesAtual] = dataHoje.split('-').map(Number)
-  const opcoes = []
-  for (let delta = -10; delta <= 2; delta++) {
-    const total = anoAtual * 12 + (mesAtual - 1) + delta
-    const ano = Math.floor(total / 12)
-    const mes = (total % 12) + 1
-    const value = `${ano}-${String(mes).padStart(2, '0')}`
-    const data = new Date(Date.UTC(ano, mes - 1, 1))
-    const label = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' })
-      .format(data)
-      .replace(' de ', ' / ')
-    opcoes.push({ value, label: label.charAt(0).toUpperCase() + label.slice(1) })
-  }
-  return opcoes
-}
-
-function mesAdjacente(mes: string, delta: number): string {
-  const [a, m] = mes.split('-').map(Number)
-  const total = a * 12 + (m - 1) + delta
-  const novoAno = Math.floor(total / 12)
-  const novoMes = (total % 12) + 1
-  return `${novoAno}-${String(novoMes).padStart(2, '0')}`
-}
+const MESES_LISTA = [
+  { num: '01', short: 'Jan', full: 'Janeiro' },
+  { num: '02', short: 'Fev', full: 'Fevereiro' },
+  { num: '03', short: 'Mar', full: 'Março' },
+  { num: '04', short: 'Abr', full: 'Abril' },
+  { num: '05', short: 'Mai', full: 'Maio' },
+  { num: '06', short: 'Jun', full: 'Junho' },
+  { num: '07', short: 'Jul', full: 'Julho' },
+  { num: '08', short: 'Ago', full: 'Agosto' },
+  { num: '09', short: 'Set', full: 'Setembro' },
+  { num: '10', short: 'Out', full: 'Outubro' },
+  { num: '11', short: 'Nov', full: 'Novembro' },
+  { num: '12', short: 'Dez', full: 'Dezembro' },
+]
 
 function estaEmAberto(status: StatusPedido): boolean {
   return status === 'rascunho' || status === 'emitido' || status === 'recebido_parcial'
@@ -195,14 +184,22 @@ function podeEditarCampo(
 
 export function V2PedidoCompraPage() {
   const dataHoje = hoje()
-  const opcoesMeses = gerarOpcoesMeses(dataHoje)
 
   // State: Filter and Search
   const [busca, setBusca] = useState('')
   const [filtroStatus, setFiltroStatus] = useState<'todos' | StatusPedido>('todos')
   const [filtroPeriodo, setFiltroPeriodo] = useState<'mes' | 'ultimos_90_dias' | 'ano' | 'todo'>('mes')
   const [filtroMes, setFiltroMes] = useState<string>(dataHoje.slice(0, 7))
+  const [filtroAno, setFiltroAno] = useState<number>(() => Number(dataHoje.slice(0, 4)) || 2026)
   const [filtroCampo, setFiltroCampo] = useState<'emissao' | 'previsaoEntrega'>('emissao')
+
+  // Sync ano if filtroMes changes
+  useEffect(() => {
+    if (filtroMes) {
+      const a = Number(filtroMes.slice(0, 4))
+      if (a && a !== filtroAno) setFiltroAno(a)
+    }
+  }, [filtroMes])
 
   // State: Data
   const [pedidos, setPedidos] = useState<PedidoCompra[]>([])
@@ -402,6 +399,7 @@ export function V2PedidoCompraPage() {
     setFiltroStatus('todos')
     setFiltroPeriodo('mes')
     setFiltroMes(dataHoje.slice(0, 7))
+    setFiltroAno(Number(dataHoje.slice(0, 4)) || 2026)
     setFiltroCampo('emissao')
   }
 
@@ -518,7 +516,7 @@ export function V2PedidoCompraPage() {
   }
 
   return (
-    <div style={{ padding: '24px', maxWidth: 1180, margin: '0 auto' }}>
+    <div style={{ padding: '24px', maxWidth: 1250, margin: '0 auto' }}>
       {/* Cabeçalho */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, gap: 16, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -615,166 +613,221 @@ export function V2PedidoCompraPage() {
         })}
       </div>
 
-      {/* BARRA DE FILTROS E BUSCA EM UMA ÚNICA LINHA */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-        {/* Campo de Busca */}
-        <div style={{ position: 'relative', flex: '1 1 240px', minWidth: 200 }}>
+      {/* BARRA DE FILTROS E MESES LADO A LADO - IGUAL À IMAGEM 02 */}
+      <div
+        style={{
+          background: '#FFFFFF',
+          padding: '10px 14px',
+          borderRadius: 14,
+          border: '1.5px solid #E2E8F0',
+          marginBottom: 14,
+          display: 'flex',
+          gap: 12,
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          justifyContent: 'space-between',
+        }}
+      >
+        {/* Esquerda: Seletor de Ano + Pílulas de Meses Lado a Lado (Estilo Imagem 02) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          {/* Seletor de Ano com Setas (< YYYY >) */}
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              background: '#F8FAFC',
+              padding: '4px 8px',
+              borderRadius: 10,
+              border: '1.5px solid #E2E8F0',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <button
+              type="button"
+              title="Ano anterior"
+              onClick={() => {
+                const novoAno = filtroAno - 1
+                setFiltroAno(novoAno)
+                const mesNum = filtroMes.split('-')[1] || '10'
+                setFiltroMes(`${novoAno}-${mesNum}`)
+              }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 24,
+                height: 24,
+                borderRadius: 6,
+                border: 'none',
+                background: 'transparent',
+                color: '#475569',
+                cursor: 'pointer',
+              }}
+            >
+              <ChevronLeft size={16} strokeWidth={2.5} />
+            </button>
+
+            <span style={{ fontSize: 13, fontWeight: 800, color: '#0F172A', padding: '0 4px' }}>
+              {filtroAno}
+            </span>
+
+            <button
+              type="button"
+              title="Próximo ano"
+              onClick={() => {
+                const novoAno = filtroAno + 1
+                setFiltroAno(novoAno)
+                const mesNum = filtroMes.split('-')[1] || '10'
+                setFiltroMes(`${novoAno}-${mesNum}`)
+              }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 24,
+                height: 24,
+                borderRadius: 6,
+                border: 'none',
+                background: 'transparent',
+                color: '#475569',
+                cursor: 'pointer',
+              }}
+            >
+              <ChevronRight size={16} strokeWidth={2.5} />
+            </button>
+          </div>
+
+          {/* Pílulas dos Meses Lado a Lado (Jan a Dez) */}
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3, overflowX: 'auto', maxWidth: '100%', padding: '2px 0' }}>
+            {MESES_LISTA.map((m) => {
+              const mesIso = `${filtroAno}-${m.num}`
+              const isSelected = filtroPeriodo === 'mes' && filtroMes === mesIso
+
+              return (
+                <button
+                  key={m.num}
+                  type="button"
+                  onClick={() => {
+                    setFiltroMes(mesIso)
+                    setFiltroPeriodo('mes')
+                  }}
+                  style={{
+                    padding: '5px 11px',
+                    borderRadius: 20,
+                    border: 'none',
+                    background: isSelected ? '#0D6BAF' : 'transparent',
+                    color: isSelected ? '#FFFFFF' : '#475569',
+                    fontSize: 12,
+                    fontWeight: isSelected ? 800 : 600,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    transition: 'all 0.15s ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSelected) e.currentTarget.style.background = '#F1F5F9'
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected) e.currentTarget.style.background = 'transparent'
+                  }}
+                >
+                  {m.short}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Dropdown de Tipo de Período */}
+          <select
+            value={filtroPeriodo}
+            onChange={(e) => setFiltroPeriodo(e.target.value as any)}
+            style={{
+              padding: '7px 12px',
+              borderRadius: 10,
+              border: '1.5px solid #E2E8F0',
+              background: '#FFFFFF',
+              fontSize: 12,
+              fontWeight: 700,
+              color: '#334155',
+              cursor: 'pointer',
+              outline: 'none',
+              width: 'auto',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <option value="mes">Por Mês</option>
+            <option value="ultimos_90_dias">Últimos 90 dias</option>
+            <option value="ano">Ano Atual ({filtroAno})</option>
+            <option value="todo">Todo o Período</option>
+          </select>
+
+          {/* Seletor do Campo de Data (Por Emissão / Por Prev. Entrega) */}
+          <select
+            value={filtroCampo}
+            onChange={(e) => setFiltroCampo(e.target.value as any)}
+            style={{
+              padding: '7px 12px',
+              borderRadius: 10,
+              border: '1.5px solid #E2E8F0',
+              background: '#FFFFFF',
+              fontSize: 12,
+              fontWeight: 700,
+              color: '#334155',
+              cursor: 'pointer',
+              outline: 'none',
+              width: 'auto',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <option value="emissao">Por Emissão</option>
+            <option value="previsaoEntrega">Por Prev. Entrega</option>
+          </select>
+
+          {/* Botão Limpar Filtros */}
+          {temFiltrosAtivos && (
+            <button
+              onClick={handleLimparFiltros}
+              style={{
+                padding: '6px 10px',
+                borderRadius: 8,
+                border: 'none',
+                background: 'transparent',
+                color: '#DC2626',
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+                textDecoration: 'underline',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Limpar filtros
+            </button>
+          )}
+        </div>
+
+        {/* Direita: Campo de Busca */}
+        <div style={{ position: 'relative', minWidth: 220, flex: '1 1 220px', maxWidth: 320 }}>
           <Search
-            size={15}
+            size={14}
             style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF' }}
           />
           <input
             type="text"
-            placeholder="Buscar por fornecedor, produto, nº ou observação..."
+            placeholder="Buscar no extrato/pedidos..."
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             style={{
               width: '100%',
-              padding: '9px 12px 9px 36px',
+              padding: '7px 12px 7px 34px',
               borderRadius: 10,
-              border: '1.5px solid #E5E7EB',
-              fontSize: 13,
+              border: '1.5px solid #E2E8F0',
+              fontSize: 12,
               outline: 'none',
               background: '#FFFFFF',
               boxSizing: 'border-box',
             }}
           />
         </div>
-
-        {/* Tipo de Período */}
-        <select
-          value={filtroPeriodo}
-          onChange={(e) => setFiltroPeriodo(e.target.value as any)}
-          style={{
-            padding: '9px 12px',
-            borderRadius: 10,
-            border: '1.5px solid #E5E7EB',
-            background: '#FFFFFF',
-            fontSize: 13,
-            fontWeight: 700,
-            color: '#374151',
-            cursor: 'pointer',
-            outline: 'none',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          <option value="mes">Mês</option>
-          <option value="ultimos_90_dias">Últimos 90 dias</option>
-          <option value="ano">Este ano</option>
-          <option value="todo">Todo o período</option>
-        </select>
-
-        {/* Controles do Mês (Setas Visíveis + Dropdown de 13 Meses) */}
-        {filtroPeriodo === 'mes' && (
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
-            <button
-              type="button"
-              title="Mês anterior"
-              onClick={() => setFiltroMes(mesAdjacente(filtroMes, -1))}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 32,
-                height: 32,
-                borderRadius: 8,
-                border: '1.5px solid #CBD5E1',
-                background: '#F8FAFC',
-                color: '#0F172A',
-                cursor: 'pointer',
-                flexShrink: 0,
-              }}
-            >
-              <ChevronLeft size={18} strokeWidth={2.5} color="#0F172A" />
-            </button>
-
-            <select
-              value={filtroMes}
-              onChange={(e) => setFiltroMes(e.target.value)}
-              style={{
-                padding: '8px 12px',
-                borderRadius: 8,
-                border: '1.5px solid #CBD5E1',
-                background: '#FFFFFF',
-                fontSize: 13,
-                fontWeight: 700,
-                color: '#0D6BAF',
-                cursor: 'pointer',
-                outline: 'none',
-                minWidth: 160,
-              }}
-            >
-              {opcoesMeses.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
-
-            <button
-              type="button"
-              title="Próximo mês"
-              onClick={() => setFiltroMes(mesAdjacente(filtroMes, 1))}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 32,
-                height: 32,
-                borderRadius: 8,
-                border: '1.5px solid #CBD5E1',
-                background: '#F8FAFC',
-                color: '#0F172A',
-                cursor: 'pointer',
-                flexShrink: 0,
-              }}
-            >
-              <ChevronRight size={18} strokeWidth={2.5} color="#0F172A" />
-            </button>
-          </div>
-        )}
-
-        {/* Data de Referência do Filtro */}
-        <select
-          value={filtroCampo}
-          onChange={(e) => setFiltroCampo(e.target.value as any)}
-          style={{
-            padding: '9px 12px',
-            borderRadius: 10,
-            border: '1.5px solid #E5E7EB',
-            background: '#FFFFFF',
-            fontSize: 13,
-            fontWeight: 600,
-            color: '#374151',
-            cursor: 'pointer',
-            outline: 'none',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          <option value="emissao">Por Emissão</option>
-          <option value="previsaoEntrega">Por Prev. Entrega</option>
-        </select>
-
-        {/* Botão Limpar Filtros */}
-        {temFiltrosAtivos && (
-          <button
-            onClick={handleLimparFiltros}
-            style={{
-              padding: '8px 12px',
-              borderRadius: 8,
-              border: 'none',
-              background: 'transparent',
-              color: '#DC2626',
-              fontSize: 13,
-              fontWeight: 700,
-              cursor: 'pointer',
-              textDecoration: 'underline',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Limpar filtros
-          </button>
-        )}
       </div>
 
       {/* AVISO DE PEDIDOS FORA DO PERÍODO */}
@@ -1026,7 +1079,7 @@ export function V2PedidoCompraPage() {
                           </button>
                         )}
 
-                        {/* CANCELAR PEDIDO (Quando emitido ou recebido) */}
+                        {/* CANCELAR PEDIDO (Quando emitido ou rascunho) */}
                         {(pedido.status === 'emitido' || pedido.status === 'rascunho') && (
                           <button
                             onClick={() => handleCancelarPedido(pedido)}
