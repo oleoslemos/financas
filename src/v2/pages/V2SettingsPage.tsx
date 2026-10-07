@@ -53,8 +53,6 @@ import {
   ChevronUp,
   Sparkles,
   Target,
-  Calendar,
-  TrendingUp,
   Copy,
   ArrowRight,
 } from 'lucide-react'
@@ -568,12 +566,6 @@ export function V2SettingsPage() {
     )
     showToast({ type: 'success', text: 'Valores base aplicados nos meses da grade!' })
   }
-
-  const totalSalesGoalYear = yearlyGoals.reduce((acc, curr) => acc + (curr.sales_goal || 0), 0)
-  const totalVisitsGoalYear = yearlyGoals.reduce((acc, curr) => acc + (curr.visits_goal || 0), 0)
-  const filledMonthsCount = yearlyGoals.filter((m) => (m.sales_goal ?? 0) > 0 || (m.visits_goal ?? 0) > 0).length
-  const avgSalesGoalMonth = filledMonthsCount > 0 ? totalSalesGoalYear / filledMonthsCount : 0
-  const avgVisitsGoalMonth = filledMonthsCount > 0 ? Math.round(totalVisitsGoalYear / filledMonthsCount) : 0
 
   const openNewRepModal = () => {
     setEditingRep(null)
@@ -1616,53 +1608,6 @@ export function V2SettingsPage() {
                       Aplicar em todos os meses
                     </button>
                   </div>
-                </div>
-              </div>
-
-              {/* KPIs Resumo do Ano */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 mb-6">
-                <div className="bg-purple-50/70 border border-purple-100 p-4 rounded-xl">
-                  <div className="flex items-center justify-between text-purple-700">
-                    <span className="text-[11px] font-black uppercase tracking-wider">Meta Total Vendas ({selectedYearForGoals})</span>
-                    <TrendingUp className="h-4 w-4" />
-                  </div>
-                  <p className="text-xl font-black text-purple-900 mt-1">
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalSalesGoalYear)}
-                  </p>
-                  <p className="text-[10px] text-purple-600 mt-0.5">Soma dos 12 meses</p>
-                </div>
-
-                <div className="bg-blue-50/70 border border-blue-100 p-4 rounded-xl">
-                  <div className="flex items-center justify-between text-blue-700">
-                    <span className="text-[11px] font-black uppercase tracking-wider">Meta Total Visitas ({selectedYearForGoals})</span>
-                    <Target className="h-4 w-4" />
-                  </div>
-                  <p className="text-xl font-black text-blue-900 mt-1">
-                    {totalVisitsGoalYear} <span className="text-sm font-bold text-blue-600">visitas</span>
-                  </p>
-                  <p className="text-[10px] text-blue-600 mt-0.5">Atendimentos no ano</p>
-                </div>
-
-                <div className="bg-emerald-50/70 border border-emerald-100 p-4 rounded-xl">
-                  <div className="flex items-center justify-between text-emerald-700">
-                    <span className="text-[11px] font-black uppercase tracking-wider">Média Mensal Vendas</span>
-                    <Calendar className="h-4 w-4" />
-                  </div>
-                  <p className="text-xl font-black text-emerald-900 mt-1">
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(avgSalesGoalMonth)}
-                  </p>
-                  <p className="text-[10px] text-emerald-600 mt-0.5">Por mês com meta ativa</p>
-                </div>
-
-                <div className="bg-amber-50/70 border border-amber-100 p-4 rounded-xl">
-                  <div className="flex items-center justify-between text-amber-700">
-                    <span className="text-[11px] font-black uppercase tracking-wider">Média Mensal Visitas</span>
-                    <Target className="h-4 w-4" />
-                  </div>
-                  <p className="text-xl font-black text-amber-900 mt-1">
-                    {avgVisitsGoalMonth} <span className="text-sm font-bold text-amber-600">visitas/mês</span>
-                  </p>
-                  <p className="text-[10px] text-amber-600 mt-0.5">{filledMonthsCount} de 12 meses preenchidos</p>
                 </div>
               </div>
 
