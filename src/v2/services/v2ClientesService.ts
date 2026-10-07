@@ -68,6 +68,78 @@ export function formatClientPhone(client: BemAvivClient): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Payload de gravação (cadastro do cliente)
+//
+// Somente campos editáveis na tela de cadastro. Ficam FORA de propósito:
+//  - id, created_at: gerenciados pelo banco
+//  - client_status: derivado por trigger a partir dos pedidos
+//    (trg_bem_aviv_sales_orders_refresh_client_status); enviar o valor lido
+//    ao abrir o drawer sobrescreveria o que o trigger calculou depois.
+//  - last_contact_at, next_followup_*: alimentados pelo módulo de follow-up /
+//    automações (bem_aviv_client_followups); a aba é somente leitura.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CLIENT_EDITABLE_FIELDS = [
+  'full_name',
+  'cpf',
+  'birth_date',
+  'phone_1',
+  'phone_2',
+  'email',
+  'cep',
+  'address_street',
+  'address_number',
+  'address_complement',
+  'address_district',
+  'address_city',
+  'address_state',
+  'commercial_stage',
+  'eko7_presentation_at',
+  'group_reference',
+] as const
+
+// Campos que viram NULL quando vazios (evita '' em colunas com índice único,
+// como e-mail). `cpf` e `full_name` ficam de fora: ver nota abaixo.
+const BLANK_TO_NULL = new Set<string>([
+  'birth_date',
+  'phone_1',
+  'phone_2',
+  'email',
+  'cep',
+  'address_street',
+  'address_number',
+  'address_complement',
+  'address_district',
+  'address_city',
+  'address_state',
+  'commercial_stage',
+  'eko7_presentation_at',
+  'group_reference',
+])
+
+export function toClientPayload(
+  form: Partial<BemAvivClient>,
+  companyId?: string | null,
+): Partial<BemAvivClientInput> {
+  const out: Record<string, unknown> = {}
+
+  for (const key of CLIENT_EDITABLE_FIELDS) {
+    const raw = form[key] as unknown
+    const value = typeof raw === 'string' ? raw.trim() : raw
+    if (BLANK_TO_NULL.has(key)) {
+      out[key] = value === '' || value === undefined ? null : value
+    } else {
+      // full_name e cpf: enviados como digitados (cpf '' será revisado depois de
+      // conferir se a coluna aceita NULL e se há índice único).
+      out[key] = value ?? ''
+    }
+  }
+
+  out.company_id = form.company_id ?? companyId ?? null
+  return out as Partial<BemAvivClientInput>
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // CRUD
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -98,26 +170,43 @@ const FIELDS = [
   'created_at',
 ].join(', ')
 
+// O PostgREST do Supabase limita cada resposta (padrão 1000 linhas). Sem
+// paginar, o excedente some da lista e dos KPIs sem nenhum erro.
+const PAGE_SIZE = 1000
+
 export async function fetchClients(companyId: string | null): Promise<{
   data: BemAvivClient[]
   error: string | null
 }> {
   if (!supabase) return { data: [], error: 'Supabase não configurado.' }
 
-  let query = supabase.from('bem_aviv_clients').select(FIELDS).order('full_name', { ascending: true })
+  const all: BemAvivClient[] = []
 
-  if (companyId) {
-    query = query.eq('company_id', companyId)
+  for (let from = 0; ; from += PAGE_SIZE) {
+    let query = supabase
+      .from('bem_aviv_clients')
+      .select(FIELDS)
+      .order('full_name', { ascending: true })
+      .order('id', { ascending: true }) // desempate para paginação estável
+      .range(from, from + PAGE_SIZE - 1)
+
+    if (companyId) {
+      query = query.eq('company_id', companyId)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error('fetchClients error:', error)
+      return { data: [], error: error.message }
+    }
+
+    const rows = (data as unknown as BemAvivClient[]) ?? []
+    all.push(...rows)
+    if (rows.length < PAGE_SIZE) break
   }
 
-  const { data, error } = await query
-
-  if (error) {
-    console.error('fetchClients error:', error)
-    return { data: [], error: error.message }
-  }
-
-  return { data: (data as unknown as BemAvivClient[]) ?? [], error: null }
+  return { data: all, error: null }
 }
 
 export async function fetchClient(id: string): Promise<{
@@ -152,38 +241,67 @@ export async function createClient(
     return { data: null, error: error.message }
   }
 
-  return { data: (data as unknown as BemAvivClient | null), error: null }
+  if (!data) {
+    // INSERT passou, mas o SELECT de retorno foi barrado (RLS de leitura).
+    return {
+      data: null,
+      error:
+        'O cadastro pode ter sido gravado, mas não foi possível lê-lo de volta (permissão de leitura). Recarregue a lista para conferir.',
+    }
+  }
+
+  return { data: data as unknown as BemAvivClient, error: null }
 }
 
 export async function updateClient(
   id: string,
   changes: Partial<BemAvivClientInput>,
+  companyId?: string | null,
 ): Promise<{ data: BemAvivClient | null; error: string | null }> {
   if (!supabase) return { data: null, error: 'Supabase não configurado.' }
 
-  const { data, error } = await supabase
-    .from('bem_aviv_clients')
-    .update(changes)
-    .eq('id', id)
-    .select(FIELDS)
-    .maybeSingle()
+  let query = supabase.from('bem_aviv_clients').update(changes).eq('id', id)
+  if (companyId) query = query.eq('company_id', companyId)
+
+  const { data, error } = await query.select(FIELDS).maybeSingle()
 
   if (error) {
     console.error('updateClient error:', error)
     return { data: null, error: error.message }
   }
 
-  return { data: (data as unknown as BemAvivClient | null), error: null }
+  if (!data) {
+    // 0 linhas afetadas: RLS bloqueou, empresa diferente ou cadastro já excluído.
+    return {
+      data: null,
+      error:
+        'Nenhuma alteração foi gravada. O cadastro pode ter sido excluído ou você não tem permissão para editá-lo.',
+    }
+  }
+
+  return { data: data as unknown as BemAvivClient, error: null }
 }
 
-export async function deleteClient(id: string): Promise<{ error: string | null }> {
+export async function deleteClient(
+  id: string,
+  companyId?: string | null,
+): Promise<{ error: string | null }> {
   if (!supabase) return { error: 'Supabase não configurado.' }
 
-  const { error } = await supabase.from('bem_aviv_clients').delete().eq('id', id)
+  let query = supabase.from('bem_aviv_clients').delete().eq('id', id)
+  if (companyId) query = query.eq('company_id', companyId)
+
+  const { data, error } = await query.select('id')
 
   if (error) {
     console.error('deleteClient error:', error)
     return { error: error.message }
+  }
+
+  if (!data || data.length === 0) {
+    // RLS pode devolver sucesso sem apagar nada; sem esta checagem a tela
+    // removeria o cliente da lista e ele reapareceria no próximo carregamento.
+    return { error: 'O cliente não foi excluído. Ele já pode ter sido removido ou você não tem permissão.' }
   }
 
   return { error: null }
@@ -241,53 +359,126 @@ export interface ClientOrderRow {
   total_amount: number
 }
 
-export async function fetchRelatives(clientId: string, companyId?: string | null): Promise<Familiar[]> {
-  if (!supabase) return []
+export async function fetchRelativesResult(
+  clientId: string,
+  companyId?: string | null,
+): Promise<{ data: Familiar[]; error: string | null }> {
+  if (!supabase) return { data: [], error: 'Supabase não configurado.' }
   let query = supabase
     .from('bem_aviv_client_relatives')
     .select('id, client_id, name, relationship, birth_date, phone, cpf')
     .eq('client_id', clientId)
   if (companyId) query = query.eq('company_id', companyId)
-  const { data } = await query.order('name', { ascending: true })
-  return (data as unknown as Familiar[]) ?? []
+  const { data, error } = await query.order('name', { ascending: true })
+  if (error) {
+    console.error('fetchRelatives error:', error)
+    return { data: [], error: error.message }
+  }
+  return { data: (data as unknown as Familiar[]) ?? [], error: null }
+}
+
+// Mantida com a assinatura original para não quebrar outras telas.
+export async function fetchRelatives(clientId: string, companyId?: string | null): Promise<Familiar[]> {
+  return (await fetchRelativesResult(clientId, companyId)).data
 }
 
 export async function createRelative(input: Omit<Familiar, 'id'>): Promise<{ data: Familiar | null; error: string | null }> {
   if (!supabase) return { data: null, error: 'Supabase não configurado.' }
   const { data, error } = await supabase.from('bem_aviv_client_relatives').insert(input).select().maybeSingle()
   if (error) return { data: null, error: error.message }
+  if (!data) {
+    return {
+      data: null,
+      error:
+        'O familiar pode ter sido gravado, mas não foi possível lê-lo de volta (permissão de leitura). Reabra o cadastro para conferir.',
+    }
+  }
   return { data: data as unknown as Familiar, error: null }
 }
 
 export async function updateRelative(
   id: string,
   changes: Partial<Omit<Familiar, 'id' | 'client_id'>>,
+  companyId?: string | null,
 ): Promise<{ data: Familiar | null; error: string | null }> {
   if (!supabase) return { data: null, error: 'Supabase não configurado.' }
-  const { data, error } = await supabase
-    .from('bem_aviv_client_relatives')
-    .update(changes)
-    .eq('id', id)
-    .select()
-    .maybeSingle()
+  let query = supabase.from('bem_aviv_client_relatives').update(changes).eq('id', id)
+  if (companyId) query = query.eq('company_id', companyId)
+  const { data, error } = await query.select().maybeSingle()
   if (error) return { data: null, error: error.message }
+  if (!data) {
+    return {
+      data: null,
+      error: 'Nenhuma alteração foi gravada. O familiar pode ter sido excluído ou você não tem permissão para editá-lo.',
+    }
+  }
   return { data: data as unknown as Familiar, error: null }
 }
 
-export async function deleteRelative(id: string): Promise<{ error: string | null }> {
+export async function deleteRelative(
+  id: string,
+  companyId?: string | null,
+): Promise<{ error: string | null }> {
   if (!supabase) return { error: 'Supabase não configurado.' }
-  const { error } = await supabase.from('bem_aviv_client_relatives').delete().eq('id', id)
+  let query = supabase.from('bem_aviv_client_relatives').delete().eq('id', id)
+  if (companyId) query = query.eq('company_id', companyId)
+  const { data, error } = await query.select('id')
   if (error) return { error: error.message }
+  if (!data || data.length === 0) {
+    return { error: 'O familiar não foi excluído. Ele já pode ter sido removido ou você não tem permissão.' }
+  }
   return { error: null }
 }
 
-export async function fetchClientOrders(clientId: string, companyId?: string | null): Promise<ClientOrderRow[]> {
-  if (!supabase) return []
+export async function fetchClientOrdersResult(
+  clientId: string,
+  companyId?: string | null,
+): Promise<{ data: ClientOrderRow[]; error: string | null }> {
+  if (!supabase) return { data: [], error: 'Supabase não configurado.' }
   let query = supabase
     .from('bem_aviv_sales_orders')
     .select('id, order_date, document_type, document_number, status, total_amount')
     .eq('client_id', clientId)
   if (companyId) query = query.eq('company_id', companyId)
-  const { data } = await query.order('order_date', { ascending: false })
-  return (data as unknown as ClientOrderRow[]) ?? []
+  const { data, error } = await query.order('order_date', { ascending: false })
+  if (error) {
+    console.error('fetchClientOrders error:', error)
+    return { data: [], error: error.message }
+  }
+  return { data: (data as unknown as ClientOrderRow[]) ?? [], error: null }
+}
+
+// Mantida com a assinatura original para não quebrar outras telas.
+export async function fetchClientOrders(clientId: string, companyId?: string | null): Promise<ClientOrderRow[]> {
+  return (await fetchClientOrdersResult(clientId, companyId)).data
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Estatísticas de compra
+//
+// Conta apenas PEDIDOS (orçamento ainda não é venda) e ignora cancelados.
+// Os valores reais de `status` ainda precisam ser conferidos no banco; por
+// segurança qualquer status que contenha "CANCEL" é descartado.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface OrderStats {
+  total: number
+  count: number
+  average: number
+  lastOrderDate: string | null
+}
+
+export function computeOrderStats(orders: ClientOrderRow[]): OrderStats {
+  const sales = orders.filter(
+    (o) => o.document_type === 'PEDIDO' && !/CANCEL/i.test(o.status ?? ''),
+  )
+  const total = sales.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0)
+  const count = sales.length
+  const lastOrderDate = sales
+    .map((o) => o.order_date)
+    .filter(Boolean)
+    .sort()
+    .at(-1) ?? null
+
+  return { total, count, average: count > 0 ? total / count : 0, lastOrderDate }
 }

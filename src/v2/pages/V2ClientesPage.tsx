@@ -25,20 +25,23 @@ import {
 } from 'lucide-react'
 import {
   BemAvivClient,
+  BemAvivClientInput,
   ClientOrderRow,
   ClientStatus,
   CommercialStage,
   Familiar,
   computeKpi,
+  computeOrderStats,
   createClient,
   createRelative,
   deleteClient,
   deleteRelative,
-  fetchClientOrders,
+  fetchClientOrdersResult,
   fetchClients,
-  fetchRelatives,
+  fetchRelativesResult,
   formatClientPhone,
   formatPhone,
+  toClientPayload,
   updateClient,
   updateRelative,
 } from '../services/v2ClientesService'
@@ -177,29 +180,39 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
   const overlayRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (open) {
-      setForm(client ? { ...client } : emptyForm(companyId))
-      setError(null)
-      setTab('dados')
-      setEditingRelativeId(null)
-      setNewRelative({ name: '', relationship: 'CÔNJUGE', cpf: '', birth_date: '', phone: '' })
+    if (!open) return
 
-      if (client?.id) {
-        setLoadingRelatives(true)
-        fetchRelatives(client.id, companyId).then((r) => {
-          setRelatives(r)
-          setLoadingRelatives(false)
-        })
+    setForm(client ? { ...client } : emptyForm(companyId))
+    setError(null)
+    setTab('dados')
+    setEditingRelativeId(null)
+    setNewRelative({ name: '', relationship: 'CÔNJUGE', cpf: '', birth_date: '', phone: '' })
 
-        setLoadingOrders(true)
-        fetchClientOrders(client.id, companyId).then((o) => {
-          setOrders(o)
-          setLoadingOrders(false)
-        })
-      } else {
-        setRelatives([])
-        setOrders([])
-      }
+    let cancelled = false
+
+    if (client?.id) {
+      setLoadingRelatives(true)
+      fetchRelativesResult(client.id, companyId).then(({ data, error: err }) => {
+        if (cancelled) return
+        setRelatives(data)
+        setLoadingRelatives(false)
+        if (err) setError(`Não foi possível carregar os familiares: ${err}`)
+      })
+
+      setLoadingOrders(true)
+      fetchClientOrdersResult(client.id, companyId).then(({ data, error: err }) => {
+        if (cancelled) return
+        setOrders(data)
+        setLoadingOrders(false)
+        if (err) setError(`Não foi possível carregar os pedidos: ${err}`)
+      })
+    } else {
+      setRelatives([])
+      setOrders([])
+    }
+
+    return () => {
+      cancelled = true
     }
   }, [open, client, companyId])
 
@@ -215,16 +228,16 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
     setSaving(true)
     setError(null)
 
-    const payload: Partial<BemAvivClient> = { ...form }
-    if (!payload.company_id) payload.company_id = companyId ?? undefined
+    // Só campos editáveis; '' vira null; client_status e follow-up ficam de fora.
+    const payload = toClientPayload(form, companyId)
 
     if (client?.id) {
-      const { data, error: err } = await updateClient(client.id, payload)
+      const { data, error: err } = await updateClient(client.id, payload, companyId)
       setSaving(false)
       if (err) { setError(err); return }
       if (data) onSaved(data)
     } else {
-      const { data, error: err } = await createClient(payload as Parameters<typeof createClient>[0])
+      const { data, error: err } = await createClient(payload as BemAvivClientInput)
       setSaving(false)
       if (err) { setError(err); return }
       if (data) onSaved(data)
@@ -235,7 +248,7 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
     if (!client?.id) return
     if (!confirm(`Excluir "${client.full_name}"? Esta ação não pode ser desfeita.`)) return
     setDeleting(true)
-    const { error: err } = await deleteClient(client.id)
+    const { error: err } = await deleteClient(client.id, companyId)
     setDeleting(false)
     if (err) { setError(err); return }
     onDeleted(client.id)
@@ -276,7 +289,7 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
     }
 
     if (editingRelativeId) {
-      const { data, error: relErr } = await updateRelative(editingRelativeId, payload)
+      const { data, error: relErr } = await updateRelative(editingRelativeId, payload, companyId)
       setAddingRelative(false)
       if (relErr) {
         setError(relErr)
@@ -307,7 +320,7 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
   const handleDeleteRelative = async (relId: string, relName: string) => {
     if (!confirm(`Excluir familiar "${relName}"?`)) return
     setError(null)
-    const { error: delErr } = await deleteRelative(relId)
+    const { error: delErr } = await deleteRelative(relId, companyId)
     if (delErr) {
       setError(delErr)
       return
@@ -319,11 +332,13 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
   }
 
   const orderStats = useMemo(() => {
-    const total = orders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0)
-    const count = orders.length
-    const average = count > 0 ? total / count : 0
-    const lastOrderDate = orders[0]?.order_date ? formatDate(orders[0].order_date) : '—'
-    return { total, count, average, lastOrderDate }
+    const s = computeOrderStats(orders)
+    return {
+      total: s.total,
+      count: s.count,
+      average: s.average,
+      lastOrderDate: s.lastOrderDate ? formatDate(s.lastOrderDate) : '—',
+    }
   }, [orders])
 
   const formatBRL = (val: number) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -772,11 +787,11 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
                 </div>
               ) : (
                 <>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-                    <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 10, padding: 12 }}>
-                      <p style={{ margin: 0, fontSize: 10, fontWeight: 800, color: '#6B7280', textTransform: 'uppercase' }}>Total Comprado</p>
-                      <p style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 900, color: '#111827' }}>{formatBRL(orderStats.total)}</p>
-                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 }}>
+                      <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 10, padding: 12 }}>
+                        <p style={{ margin: 0, fontSize: 10, fontWeight: 800, color: '#6B7280', textTransform: 'uppercase' }}>Total em Pedidos</p>
+                        <p style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 900, color: '#111827' }}>{formatBRL(orderStats.total)}</p>
+                      </div>
                     <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 10, padding: 12 }}>
                       <p style={{ margin: 0, fontSize: 10, fontWeight: 800, color: '#6B7280', textTransform: 'uppercase' }}>Ticket Médio</p>
                       <p style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 900, color: '#111827' }}>{formatBRL(orderStats.average)}</p>
@@ -1048,9 +1063,9 @@ export function V2ClientesPage() {
 
   return (
     <>
-      <div style={{ padding: '24px', maxWidth: 1200, margin: '0 auto', minHeight: '100vh' }}>
+      <div className="p-3 sm:p-6 max-w-7xl mx-auto min-h-screen font-sans">
         {/* ── Page Header ── */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
           <div>
             <h1 style={{ margin: 0, fontSize: 22, fontWeight: 900, color: '#111827' }}>Clientes</h1>
             <p style={{ margin: '4px 0 0', fontSize: 13, color: '#6B7280' }}>
@@ -1096,7 +1111,7 @@ export function V2ClientesPage() {
         )}
 
         {/* ── KPI Cards ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 20 }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 mb-5">
           <KpiCard label="Total de Cadastros" value={kpi.total} icon={Users} accent={BRAND_BLUE} filter="todos"
             sub={<span>{kpi.prospects} prospect{kpi.prospects !== 1 ? 's' : ''}</span>}
           />
@@ -1192,22 +1207,24 @@ export function V2ClientesPage() {
 
         {/* ── Table ── */}
         <div style={{ background: '#FFFFFF', borderRadius: 14, border: '1.5px solid #E5E7EB', overflow: 'hidden', boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
-          {/* Table Header */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: '2fr 1.6fr 1fr 1.5fr 40px',
-            padding: '10px 16px',
-            background: '#F9FAFB',
-            borderBottom: '1px solid #F3F4F6',
-            fontSize: 11, fontWeight: 800, color: '#9CA3AF',
-            textTransform: 'uppercase', letterSpacing: '0.06em',
-          }}>
-            <span>Cliente</span>
-            <span>Contato</span>
-            <span>Status</span>
-            <span>Próximo Follow-up</span>
-            <span />
-          </div>
+          <div className="overflow-x-auto">
+            <div style={{ minWidth: 700 }}>
+              {/* Table Header */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '2fr 1.6fr 1fr 1.5fr 40px',
+                padding: '10px 16px',
+                background: '#F9FAFB',
+                borderBottom: '1px solid #F3F4F6',
+                fontSize: 11, fontWeight: 800, color: '#9CA3AF',
+                textTransform: 'uppercase', letterSpacing: '0.06em',
+              }}>
+                <span>Cliente</span>
+                <span>Contato</span>
+                <span>Status</span>
+                <span>Próximo Follow-up</span>
+                <span />
+              </div>
 
           {/* Loading */}
           {loading && (
@@ -1338,6 +1355,8 @@ export function V2ClientesPage() {
               </button>
             </div>
           )}
+            </div>
+          </div>
         </div>
 
         {/* Pagination & Count footer */}

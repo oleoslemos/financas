@@ -61,7 +61,10 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [companies, setCompanies] = useState<CompanyRow[]>([])
-  const [activeCompanyId, setActiveCompanyIdState] = useState<string | null>(null)
+  const [activeCompanyId, setActiveCompanyIdState] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null
+    return getSeededCompanyIdForHostname(window.location.hostname)
+  })
   const [pickerConfirmed, setPickerConfirmed] = useState(() => isCompanyPickerConfirmed(user?.id))
   const activeCompanyIdRef = useRef<string | null>(null)
   useEffect(() => {
@@ -83,15 +86,23 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       if (!supabase) {
         setCompanies([])
         setError(null)
-        setLoading(true)
+        setLoading(false)
+        const host = typeof window !== 'undefined' ? window.location.hostname : ''
+        const seeded = getSeededCompanyIdForHostname(host)
+        if (seeded && !activeCompanyIdRef.current) {
+          setActiveCompanyIdState(seeded)
+        }
         return
       }
       if (emails.length === 0) {
         setCompanies([])
         setLoading(false)
         setError(null)
-        // Não zera activeCompanyId: e-mails do Clerk podem hidratar um instante depois; o seed por host
-        // mantém a home utilizável enquanto isso.
+        const host = typeof window !== 'undefined' ? window.location.hostname : ''
+        const seeded = getSeededCompanyIdForHostname(host)
+        if (seeded && !activeCompanyIdRef.current) {
+          setActiveCompanyIdState(seeded)
+        }
         return
       }
 
