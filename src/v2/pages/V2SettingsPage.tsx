@@ -200,6 +200,7 @@ function SectionCard({
 export function V2SettingsPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+  const { activeCompanyId } = useCompany()
 
   const currentTab = (searchParams.get('tab') as SettingsTab) || 'empresa'
   const setTab = (tab: SettingsTab) => {
@@ -437,6 +438,8 @@ export function V2SettingsPage() {
     email: string
     region: string
     active: boolean
+    sales_goal: number | null
+    visits_goal: number | null
   }>({
     code: '',
     name: '',
@@ -447,6 +450,8 @@ export function V2SettingsPage() {
     email: '',
     region: '',
     active: true,
+    sales_goal: null,
+    visits_goal: null,
   })
 
   const loadRepData = async () => {
@@ -474,8 +479,10 @@ export function V2SettingsPage() {
       commission_rate: 5.0,
       phone: '',
       email: '',
-      region: 'São Paulo - SP',
+      region: 'Florianópolis / SC',
       active: true,
+      sales_goal: null,
+      visits_goal: null,
     })
     setModalRepOpen(true)
   }
@@ -492,6 +499,8 @@ export function V2SettingsPage() {
       email: item.email || '',
       region: item.region || '',
       active: item.active,
+      sales_goal: item.sales_goal ?? null,
+      visits_goal: item.visits_goal ?? null,
     })
     setModalRepOpen(true)
   }
@@ -506,7 +515,7 @@ export function V2SettingsPage() {
     await saveRepresentante({
       ...(editingRep ? { id: editingRep.id } : {}),
       ...repForm,
-    })
+    }, activeCompanyId)
     setSavingRep(false)
     setModalRepOpen(false)
     await loadRepData()
@@ -1285,6 +1294,8 @@ export function V2SettingsPage() {
                         <th className="p-3.5">Tipo / Função</th>
                         <th className="p-3.5">CPF / CNPJ</th>
                         <th className="p-3.5">Comissão (%)</th>
+                        <th className="p-3.5">Meta Vendas</th>
+                        <th className="p-3.5">Meta Visitas</th>
                         <th className="p-3.5">Região</th>
                         <th className="p-3.5">Status</th>
                         <th className="p-3.5 text-right">Ações</th>
@@ -1317,6 +1328,20 @@ export function V2SettingsPage() {
                               <Percent className="h-3 w-3" />
                               {item.commission_rate}%
                             </span>
+                          </td>
+                          <td className="p-3.5 font-bold text-slate-900">
+                            {item.sales_goal != null && item.sales_goal > 0 ? (
+                              new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.sales_goal)
+                            ) : (
+                              <span className="text-slate-400 font-normal">Sem meta</span>
+                            )}
+                          </td>
+                          <td className="p-3.5 font-semibold text-slate-700">
+                            {item.visits_goal != null && item.visits_goal > 0 ? (
+                              `${item.visits_goal} visitas`
+                            ) : (
+                              <span className="text-slate-400 font-normal">Sem meta</span>
+                            )}
                           </td>
                           <td className="p-3.5 text-slate-600">{item.region || '—'}</td>
                           <td className="p-3.5">
@@ -1820,6 +1845,56 @@ export function V2SettingsPage() {
                     onChange={(e) => setRepForm({ ...repForm, region: e.target.value })}
                     className="w-full rounded-xl px-3.5 py-2.5 border border-slate-200 font-medium text-sm outline-none focus:border-purple-500"
                   />
+                </div>
+
+                {/* METAS COMERCIAIS */}
+                <div className="md:col-span-2 pt-2 border-t border-slate-100 mt-2">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="h-6 w-6 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600">
+                      <Target className="h-3.5 w-3.5" />
+                    </div>
+                    <span className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                      Metas Mensais (Vendas & Visitas)
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Meta de Vendas Mensal (R$)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="Ex: 50000.00"
+                    value={repForm.sales_goal ?? ''}
+                    onChange={(e) =>
+                      setRepForm({
+                        ...repForm,
+                        sales_goal: e.target.value === '' ? null : parseFloat(e.target.value),
+                      })
+                    }
+                    className="w-full rounded-xl px-3.5 py-2.5 border border-slate-200 font-medium text-sm outline-none focus:border-purple-500"
+                  />
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">Valor em vendas estimado para o mês</span>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Meta de Visitas Mensal (Quantidade)</label>
+                  <input
+                    type="number"
+                    step="1"
+                    min="0"
+                    placeholder="Ex: 20"
+                    value={repForm.visits_goal ?? ''}
+                    onChange={(e) =>
+                      setRepForm({
+                        ...repForm,
+                        visits_goal: e.target.value === '' ? null : parseInt(e.target.value, 10),
+                      })
+                    }
+                    className="w-full rounded-xl px-3.5 py-2.5 border border-slate-200 font-medium text-sm outline-none focus:border-purple-500"
+                  />
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">Qtd de visitas ou atendimentos no mês</span>
                 </div>
               </div>
 
