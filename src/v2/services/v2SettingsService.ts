@@ -38,6 +38,17 @@ export interface Representante {
   visits_goal?: number | null
 }
 
+export interface RepresentativeGoal {
+  id?: string
+  representative_id: string
+  company_id?: string
+  month: string // YYYY-MM-01
+  sales_goal: number | null
+  visits_goal: number | null
+  created_at?: string
+  updated_at?: string
+}
+
 export interface InstallmentRate {
   installment: number
   fee_percentage: number
@@ -283,32 +294,37 @@ export async function deleteFornecedor(id: string): Promise<void> {
 
 // ─── REPRESENTANTES ──────────────────────────────────────────────────────────
 
-export async function listRepresentantes(): Promise<Representante[]> {
+export async function listRepresentantes(companyId?: string | null): Promise<Representante[]> {
   if (supabase) {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('bem_aviv_representatives')
         .select('*')
         .is('deleted_at', null)
-        .order('name')
+
+      if (companyId) {
+        query = query.eq('company_id', companyId)
+      }
+
+      const { data, error } = await query.order('name')
 
       if (!error && data && data.length > 0) {
         const repIds = data.map((r: any) => r.id)
         let goalsMap: Record<string, { sales_goal: number | null; visits_goal: number | null }> = {}
         try {
+          const now = new Date()
+          const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
           const { data: goalsData } = await supabase
             .from('bem_aviv_representative_goals')
             .select('*')
             .in('representative_id', repIds)
-            .order('month', { ascending: false })
+            .eq('month', currentMonthStr)
 
           if (goalsData) {
             for (const g of goalsData) {
-              if (!goalsMap[g.representative_id]) {
-                goalsMap[g.representative_id] = {
-                  sales_goal: g.sales_goal != null ? Number(g.sales_goal) : null,
-                  visits_goal: g.visits_goal != null ? Number(g.visits_goal) : null,
-                }
+              goalsMap[g.representative_id] = {
+                sales_goal: g.sales_goal != null ? Number(g.sales_goal) : null,
+                visits_goal: g.visits_goal != null ? Number(g.visits_goal) : null,
               }
             }
           }
@@ -354,7 +370,7 @@ export async function saveRepresentante(
   item: Omit<Representante, 'id' | 'created_at'> & { id?: string },
   companyId?: string | null
 ): Promise<Representante> {
-  const current = await listRepresentantes()
+  const current = await listRepresentantes(companyId)
   const isEdit = Boolean(item.id)
   const id = item.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'rep-' + Date.now())
   const compId = companyId || '10000000-0000-4000-8000-000000000001'
@@ -417,17 +433,110 @@ export async function saveRepresentante(
 export async function deleteRepresentante(id: string): Promise<void> {
   if (supabase) {
     try {
-      await supabase
+      // 1. Tenta soft delete desmarcando is_default
+      const { error } = await supabase
         .from('bem_aviv_representatives')
-        .update({ deleted_at: new Date().toISOString(), active: false })
+        .update({
+          is_default: false,
+          active: false,
+          deleted_at: new Date().toISOString(),
+        })
         .eq('id', id)
+
+      if (error) {
+        // 2. Se falhar por constraint, tenta delete físico
+        console.warn('Soft-delete failed, attempting hard delete:', error)
+        await supabase.from('bem_aviv_representatives').delete().eq('id', id)
+      }
     } catch (err) {
       console.warn('Supabase representative delete error:', err)
+      try {
+        await supabase.from('bem_aviv_representatives').delete().eq('id', id)
+      } catch {}
     }
   }
   const current = await listRepresentantes()
   const filtered = current.filter(r => r.id !== id)
   localStorage.setItem(KEY_REPRESENTANTES, JSON.stringify(filtered))
+}
+
+// ─── METAS COMERCIAIS MÊS A MÊS ──────────────────────────────────────────────
+
+export async function listRepresentativeGoals(
+  representativeId: string,
+  year?: number
+): Promise<RepresentativeGoal[]> {
+  if (supabase) {
+    try {
+      let query = supabase
+        .from('bem_aviv_representative_goals')
+        .select('*')
+        .eq('representative_id', representativeId)
+
+      if (year) {
+        query = query
+          .gte('month', `${year}-01-01`)
+          .lte('month', `${year}-12-01`)
+      }
+
+      const { data, error } = await query.order('month', { ascending: true })
+      if (!error && data) {
+        return data.map((g: any) => ({
+          id: g.id,
+          representative_id: g.representative_id,
+          company_id: g.company_id,
+          month: g.month,
+          sales_goal: g.sales_goal != null ? Number(g.sales_goal) : null,
+          visits_goal: g.visits_goal != null ? Number(g.visits_goal) : null,
+          created_at: g.created_at,
+          updated_at: g.updated_at,
+        }))
+      }
+    } catch (err) {
+      console.warn('Error fetching goals:', err)
+    }
+  }
+
+  try {
+    const raw = localStorage.getItem(`v2_rep_goals_${representativeId}`)
+    if (raw) return JSON.parse(raw)
+  } catch {}
+  return []
+}
+
+export async function saveRepresentativeGoals(
+  representativeId: string,
+  goals: { month: string; sales_goal: number | null; visits_goal: number | null }[],
+  companyId?: string | null
+): Promise<void> {
+  const compId = companyId || '10000000-0000-4000-8000-000000000001'
+
+  if (supabase) {
+    try {
+      const records = goals.map((g) => ({
+        company_id: compId,
+        representative_id: representativeId,
+        month: g.month,
+        sales_goal: g.sales_goal != null ? Number(g.sales_goal) : null,
+        visits_goal: g.visits_goal != null ? Number(g.visits_goal) : null,
+        updated_at: new Date().toISOString(),
+      }))
+
+      const { error } = await supabase
+        .from('bem_aviv_representative_goals')
+        .upsert(records, { onConflict: 'representative_id,month' })
+
+      if (error) {
+        console.warn('Error upserting goals in Supabase:', error)
+      }
+    } catch (err) {
+      console.warn('Error saving goals in Supabase:', err)
+    }
+  }
+
+  try {
+    localStorage.setItem(`v2_rep_goals_${representativeId}`, JSON.stringify(goals))
+  } catch {}
 }
 
 // ─── FORMAS DE PAGAMENTO ─────────────────────────────────────────────────────

@@ -18,6 +18,8 @@ import {
   deleteRepresentante,
   Representante,
   RepresentanteRole,
+  listRepresentativeGoals,
+  saveRepresentativeGoals,
   listFormasPagamento,
   saveFormaPagamento,
   deleteFormaPagamento,
@@ -51,6 +53,10 @@ import {
   ChevronUp,
   Sparkles,
   Target,
+  Calendar,
+  TrendingUp,
+  Copy,
+  ArrowRight,
 } from 'lucide-react'
 import { useCompany } from '../../context/CompanyContext'
 
@@ -141,7 +147,7 @@ function maskPhone(value: string): string {
 // ─── Types ─────────────────────────────────────────────────────────────────
 type LocalUser = V2User & { password_hash: string }
 type Toast = { type: 'success' | 'error'; text: string }
-type SettingsTab = 'empresa' | 'fornecedor' | 'representante' | 'formas_pagamento'
+type SettingsTab = 'empresa' | 'fornecedor' | 'representante' | 'metas' | 'formas_pagamento'
 
 // ─── Section Wrapper ────────────────────────────────────────────────────────
 function SectionCard({
@@ -456,16 +462,118 @@ export function V2SettingsPage() {
 
   const loadRepData = async () => {
     setLoadingRep(true)
-    const data = await listRepresentantes()
+    const data = await listRepresentantes(activeCompanyId)
     setRepresentantes(data)
+    if (!selectedRepIdForGoals && data.length > 0) {
+      setSelectedRepIdForGoals(data[0].id)
+    }
     setLoadingRep(false)
   }
 
   useEffect(() => {
-    if (currentTab === 'representante') {
+    if (currentTab === 'representante' || currentTab === 'metas') {
       loadRepData()
     }
-  }, [currentTab])
+  }, [currentTab, activeCompanyId])
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 3.1. METAS MENSAIS (COMERCIAIS) STATE
+  // ──────────────────────────────────────────────────────────────────────────
+  const [selectedRepIdForGoals, setSelectedRepIdForGoals] = useState<string>('')
+  const [selectedYearForGoals, setSelectedYearForGoals] = useState<number>(new Date().getFullYear())
+  const [yearlyGoals, setYearlyGoals] = useState<
+    {
+      monthNum: number
+      monthLabel: string
+      monthDate: string
+      sales_goal: number | null
+      visits_goal: number | null
+    }[]
+  >([])
+  const [loadingGoals, setLoadingGoals] = useState<boolean>(false)
+  const [savingGoals, setSavingGoals] = useState<boolean>(false)
+  const [batchSalesGoal, setBatchSalesGoal] = useState<string>('')
+  const [batchVisitsGoal, setBatchVisitsGoal] = useState<string>('')
+
+  const MONTH_NAMES = [
+    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+  ]
+
+  const loadGoalsForSelectedRep = async (repId: string, year: number) => {
+    if (!repId) return
+    setLoadingGoals(true)
+    const existing = await listRepresentativeGoals(repId, year)
+    const existingMap: Record<string, { sales_goal: number | null; visits_goal: number | null }> = {}
+    for (const g of existing) {
+      existingMap[g.month] = {
+        sales_goal: g.sales_goal,
+        visits_goal: g.visits_goal,
+      }
+    }
+
+    const monthsData = MONTH_NAMES.map((name, idx) => {
+      const monthNum = idx + 1
+      const monthDate = `${year}-${String(monthNum).padStart(2, '0')}-01`
+      return {
+        monthNum,
+        monthLabel: name,
+        monthDate,
+        sales_goal: existingMap[monthDate]?.sales_goal ?? null,
+        visits_goal: existingMap[monthDate]?.visits_goal ?? null,
+      }
+    })
+
+    setYearlyGoals(monthsData)
+    setLoadingGoals(false)
+  }
+
+  useEffect(() => {
+    if (currentTab === 'metas') {
+      if (!selectedRepIdForGoals && representantes.length > 0) {
+        setSelectedRepIdForGoals(representantes[0].id)
+      } else if (selectedRepIdForGoals) {
+        loadGoalsForSelectedRep(selectedRepIdForGoals, selectedYearForGoals)
+      }
+    }
+  }, [currentTab, selectedRepIdForGoals, selectedYearForGoals, representantes])
+
+  const handleSaveYearlyGoals = async () => {
+    if (!selectedRepIdForGoals) {
+      showToast({ type: 'error', text: 'Selecione um representante para salvar as metas.' })
+      return
+    }
+    setSavingGoals(true)
+    const payload = yearlyGoals.map((m) => ({
+      month: m.monthDate,
+      sales_goal: m.sales_goal,
+      visits_goal: m.visits_goal,
+    }))
+    await saveRepresentativeGoals(selectedRepIdForGoals, payload, activeCompanyId)
+    setSavingGoals(false)
+    await loadRepData()
+    showToast({ type: 'success', text: `Metas do ano ${selectedYearForGoals} salvas com sucesso no Supabase!` })
+  }
+
+  const handleApplyBatchGoals = () => {
+    const sVal = batchSalesGoal !== '' ? parseFloat(batchSalesGoal) : null
+    const vVal = batchVisitsGoal !== '' ? parseInt(batchVisitsGoal, 10) : null
+
+    setYearlyGoals((prev) =>
+      prev.map((item) => ({
+        ...item,
+        sales_goal: sVal !== null ? sVal : item.sales_goal,
+        visits_goal: vVal !== null ? vVal : item.visits_goal,
+      }))
+    )
+    showToast({ type: 'success', text: 'Valores base aplicados nos meses da grade!' })
+  }
+
+  const totalSalesGoalYear = yearlyGoals.reduce((acc, curr) => acc + (curr.sales_goal || 0), 0)
+  const totalVisitsGoalYear = yearlyGoals.reduce((acc, curr) => acc + (curr.visits_goal || 0), 0)
+  const filledMonthsCount = yearlyGoals.filter((m) => (m.sales_goal ?? 0) > 0 || (m.visits_goal ?? 0) > 0).length
+  const avgSalesGoalMonth = filledMonthsCount > 0 ? totalSalesGoalYear / filledMonthsCount : 0
+  const avgVisitsGoalMonth = filledMonthsCount > 0 ? Math.round(totalVisitsGoalYear / filledMonthsCount) : 0
 
   const openNewRepModal = () => {
     setEditingRep(null)
@@ -724,6 +832,7 @@ export function V2SettingsPage() {
     { id: 'empresa' as const, label: 'EMPRESA', icon: Building2, desc: 'Dados cadastrais & equipe' },
     { id: 'fornecedor' as const, label: 'FORNECEDOR', icon: Truck, desc: 'Gestão de fornecedores' },
     { id: 'representante' as const, label: 'REPRESENTANTE', icon: Briefcase, desc: 'Distribuidores & Representantes' },
+    { id: 'metas' as const, label: 'METAS MENSAIS', icon: Target, desc: 'Metas comerciais mês a mês' },
     { id: 'formas_pagamento' as const, label: 'FORMAS DE PAGAMENTO', icon: CreditCard, desc: 'Parcelamentos & taxas' },
   ]
 
@@ -757,8 +866,8 @@ export function V2SettingsPage() {
           </div>
         </div>
 
-        {/* ── TOP NAV BAR (4 OPTIONS) ── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* ── TOP NAV BAR (5 OPTIONS) ── */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           {tabsList.map((tab) => {
             const Icon = tab.icon
             const isActive = currentTab === tab.id
@@ -1356,7 +1465,17 @@ export function V2SettingsPage() {
                               {item.active ? 'Ativo' : 'Inativo'}
                             </button>
                           </td>
-                          <td className="p-3.5 text-right space-x-2">
+                          <td className="p-3.5 text-right space-x-1.5">
+                            <button
+                              onClick={() => {
+                                setSelectedRepIdForGoals(item.id)
+                                setTab('metas')
+                              }}
+                              className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition"
+                              title="Gerenciar Metas Mês a Mês"
+                            >
+                              <Target className="h-4 w-4" />
+                            </button>
                             <button
                               onClick={() => openEditRepModal(item)}
                               className="p-1.5 rounded-lg text-purple-600 hover:bg-purple-50 transition"
@@ -1383,7 +1502,301 @@ export function V2SettingsPage() {
         )}
 
         {/* ────────────────────────────────────────────────────────────────── */}
-        {/* TAB 4: FORMAS DE PAGAMENTO */}
+        {/* TAB: METAS MENSAIS (COMERCIAIS) */}
+        {/* ────────────────────────────────────────────────────────────────── */}
+        {currentTab === 'metas' && (
+          <div className="space-y-6">
+            <SectionCard
+              icon={Target}
+              title="Planejamento e Gestão de Metas Mensais"
+              subtitle="Defina metas personalizadas de faturamento (R$) e visitas/atendimentos para cada mês do ano por distribuidor ou representante"
+              accent="purple"
+            >
+              {/* Controles de Seleção: Representante e Ano */}
+              <div className="bg-slate-50/80 border border-slate-200/80 p-4 rounded-2xl mb-6">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div>
+                      <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1">
+                        Distribuidor / Representante
+                      </label>
+                      <select
+                        value={selectedRepIdForGoals}
+                        onChange={(e) => setSelectedRepIdForGoals(e.target.value)}
+                        className="px-3.5 py-2 rounded-xl text-xs font-bold border border-slate-200 bg-white outline-none focus:border-purple-500 shadow-2xs min-w-[240px]"
+                      >
+                        {representantes.length === 0 ? (
+                          <option value="">Nenhum cadastro encontrado</option>
+                        ) : (
+                          representantes.map((r) => (
+                            <option key={r.id} value={r.id}>
+                              {r.code ? `[${r.code}] ` : ''}{r.name} ({r.role})
+                            </option>
+                          ))
+                        )}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1">
+                        Ano de Referência
+                      </label>
+                      <div className="inline-flex rounded-xl border border-slate-200 bg-white p-0.5 shadow-2xs">
+                        {[2025, 2026, 2027].map((yr) => (
+                          <button
+                            key={yr}
+                            type="button"
+                            onClick={() => setSelectedYearForGoals(yr)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                              selectedYearForGoals === yr
+                                ? 'bg-purple-600 text-white shadow-xs'
+                                : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            {yr}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Botões de Ação */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleSaveYearlyGoals}
+                      disabled={savingGoals || loadingGoals || !selectedRepIdForGoals}
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-sm transition disabled:opacity-50"
+                      style={{ background: '#7C3AED' }}
+                    >
+                      {savingGoals ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Salvando...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="h-4 w-4" />
+                          Salvar Metas do Ano
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Preenchimento Rápido / Em Lote Opcional */}
+                <div className="mt-4 pt-3 border-t border-slate-200/60 flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-2 text-slate-500 font-medium">
+                    <Sparkles className="h-4 w-4 text-purple-600" />
+                    <span>Preenchimento rápido base (opcional):</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="Meta Vendas (R$)"
+                      value={batchSalesGoal}
+                      onChange={(e) => setBatchSalesGoal(e.target.value)}
+                      className="w-36 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-medium outline-none focus:border-purple-500"
+                    />
+                    <input
+                      type="number"
+                      step="1"
+                      placeholder="Meta Visitas (Qtd)"
+                      value={batchVisitsGoal}
+                      onChange={(e) => setBatchVisitsGoal(e.target.value)}
+                      className="w-32 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-medium outline-none focus:border-purple-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleApplyBatchGoals}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-purple-700 bg-purple-100/70 hover:bg-purple-200/70 transition"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      Aplicar em todos os meses
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* KPIs Resumo do Ano */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 mb-6">
+                <div className="bg-purple-50/70 border border-purple-100 p-4 rounded-xl">
+                  <div className="flex items-center justify-between text-purple-700">
+                    <span className="text-[11px] font-black uppercase tracking-wider">Meta Total Vendas ({selectedYearForGoals})</span>
+                    <TrendingUp className="h-4 w-4" />
+                  </div>
+                  <p className="text-xl font-black text-purple-900 mt-1">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalSalesGoalYear)}
+                  </p>
+                  <p className="text-[10px] text-purple-600 mt-0.5">Soma dos 12 meses</p>
+                </div>
+
+                <div className="bg-blue-50/70 border border-blue-100 p-4 rounded-xl">
+                  <div className="flex items-center justify-between text-blue-700">
+                    <span className="text-[11px] font-black uppercase tracking-wider">Meta Total Visitas ({selectedYearForGoals})</span>
+                    <Target className="h-4 w-4" />
+                  </div>
+                  <p className="text-xl font-black text-blue-900 mt-1">
+                    {totalVisitsGoalYear} <span className="text-sm font-bold text-blue-600">visitas</span>
+                  </p>
+                  <p className="text-[10px] text-blue-600 mt-0.5">Atendimentos no ano</p>
+                </div>
+
+                <div className="bg-emerald-50/70 border border-emerald-100 p-4 rounded-xl">
+                  <div className="flex items-center justify-between text-emerald-700">
+                    <span className="text-[11px] font-black uppercase tracking-wider">Média Mensal Vendas</span>
+                    <Calendar className="h-4 w-4" />
+                  </div>
+                  <p className="text-xl font-black text-emerald-900 mt-1">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(avgSalesGoalMonth)}
+                  </p>
+                  <p className="text-[10px] text-emerald-600 mt-0.5">Por mês com meta ativa</p>
+                </div>
+
+                <div className="bg-amber-50/70 border border-amber-100 p-4 rounded-xl">
+                  <div className="flex items-center justify-between text-amber-700">
+                    <span className="text-[11px] font-black uppercase tracking-wider">Média Mensal Visitas</span>
+                    <Target className="h-4 w-4" />
+                  </div>
+                  <p className="text-xl font-black text-amber-900 mt-1">
+                    {avgVisitsGoalMonth} <span className="text-sm font-bold text-amber-600">visitas/mês</span>
+                  </p>
+                  <p className="text-[10px] text-amber-600 mt-0.5">{filledMonthsCount} de 12 meses preenchidos</p>
+                </div>
+              </div>
+
+              {/* Grade dos 12 Meses */}
+              {loadingGoals ? (
+                <div className="py-16 text-center">
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto text-purple-600 mb-2" />
+                  <p className="text-sm font-medium text-slate-500">Carregando metas do ano...</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {yearlyGoals.map((m, idx) => {
+                    const now = new Date()
+                    const isCurrentMonth =
+                      selectedYearForGoals === now.getFullYear() && m.monthNum === now.getMonth() + 1
+                    const hasGoal = (m.sales_goal ?? 0) > 0 || (m.visits_goal ?? 0) > 0
+
+                    return (
+                      <div
+                        key={m.monthDate}
+                        className={`p-4 rounded-2xl border transition-all ${
+                          isCurrentMonth
+                            ? 'bg-purple-50/30 border-purple-300 ring-2 ring-purple-500/20 shadow-xs'
+                            : 'bg-white border-slate-200 hover:border-slate-300 shadow-2xs'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-100">
+                          <div className="flex items-center gap-2">
+                            <span className="h-7 w-7 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center font-black text-xs">
+                              {String(m.monthNum).padStart(2, '0')}
+                            </span>
+                            <div>
+                              <span className="font-black text-slate-800 text-sm">{m.monthLabel}</span>
+                              <span className="text-[10px] font-bold text-slate-400 block -mt-0.5">{selectedYearForGoals}</span>
+                            </div>
+                          </div>
+                          {isCurrentMonth ? (
+                            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200">
+                              Mês Vigente
+                            </span>
+                          ) : hasGoal ? (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              Definida
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-normal px-2 py-0.5 rounded-full bg-slate-50 text-slate-400 border border-slate-100">
+                              Pendente
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                              Meta de Vendas (R$)
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                                R$
+                              </span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                placeholder="0,00"
+                                value={m.sales_goal ?? ''}
+                                onChange={(e) => {
+                                  const val = e.target.value === '' ? null : parseFloat(e.target.value)
+                                  setYearlyGoals((prev) =>
+                                    prev.map((item, i) => (i === idx ? { ...item, sales_goal: val } : item))
+                                  )
+                                }}
+                                className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 outline-none focus:border-purple-500 focus:bg-purple-50/20"
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                              Meta de Visitas (Quantidade)
+                            </label>
+                            <input
+                              type="number"
+                              step="1"
+                              min="0"
+                              placeholder="0 visitas"
+                              value={m.visits_goal ?? ''}
+                              onChange={(e) => {
+                                const val = e.target.value === '' ? null : parseInt(e.target.value, 10)
+                                setYearlyGoals((prev) =>
+                                  prev.map((item, i) => (i === idx ? { ...item, visits_goal: val } : item))
+                                )
+                              }}
+                              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 outline-none focus:border-purple-500 focus:bg-purple-50/20"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* Botão de Salvar no Rodapé */}
+              <div className="mt-8 pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <p className="text-xs text-slate-500 font-medium">
+                  Valores salvos são sincronizados diretamente com o banco Supabase em tempo real.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleSaveYearlyGoals}
+                  disabled={savingGoals || loadingGoals || !selectedRepIdForGoals}
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold text-white shadow-sm transition disabled:opacity-50"
+                  style={{ background: '#7C3AED' }}
+                >
+                  {savingGoals ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Salvando...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4" />
+                      Salvar Metas do Ano
+                    </>
+                  )}
+                </button>
+              </div>
+            </SectionCard>
+          </div>
+        )}
+
+        {/* ────────────────────────────────────────────────────────────────── */}
+        {/* TAB 5: FORMAS DE PAGAMENTO */}
         {/* ────────────────────────────────────────────────────────────────── */}
         {currentTab === 'formas_pagamento' && (
           <div className="space-y-6">
@@ -1848,15 +2261,35 @@ export function V2SettingsPage() {
                 </div>
 
                 {/* METAS COMERCIAIS */}
-                <div className="md:col-span-2 pt-2 border-t border-slate-100 mt-2">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="h-6 w-6 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600">
-                      <Target className="h-3.5 w-3.5" />
+                <div className="md:col-span-2 pt-3 border-t border-slate-100 mt-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="h-6 w-6 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600">
+                        <Target className="h-3.5 w-3.5" />
+                      </div>
+                      <span className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                        Metas Comerciais (Mês Atual & Anual)
+                      </span>
                     </div>
-                    <span className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                      Metas Mensais (Vendas & Visitas)
-                    </span>
+
+                    {editingRep && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedRepIdForGoals(editingRep.id)
+                          setModalRepOpen(false)
+                          setTab('metas')
+                        }}
+                        className="inline-flex items-center gap-1.5 text-[11px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded-xl transition self-start sm:self-auto"
+                      >
+                        Abrir Grade Mês a Mês (12 Meses)
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
+                  <p className="text-[11px] text-slate-500 mb-1">
+                    Preencha abaixo para o <strong>mês atual</strong> ou utilize a aba <strong>Metas Mensais</strong> para definir metas independentes para cada mês do ano.
+                  </p>
                 </div>
 
                 <div>
