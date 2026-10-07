@@ -22,6 +22,7 @@ export type RepresentanteRole = 'DISTRIBUIDOR' | 'REPRESENTANTE'
 
 export interface Representante {
   id: string
+  company_id?: string
   code?: string
   name: string
   role: RepresentanteRole
@@ -30,8 +31,11 @@ export interface Representante {
   phone?: string
   email?: string
   region?: string
+  is_default?: boolean
   active: boolean
   created_at: string
+  sales_goal?: number | null
+  visits_goal?: number | null
 }
 
 export interface InstallmentRate {
@@ -282,11 +286,50 @@ export async function deleteFornecedor(id: string): Promise<void> {
 export async function listRepresentantes(): Promise<Representante[]> {
   if (supabase) {
     try {
-      const { data, error } = await supabase.from('representatives').select('*').order('name')
+      const { data, error } = await supabase
+        .from('bem_aviv_representatives')
+        .select('*')
+        .is('deleted_at', null)
+        .order('name')
+
       if (!error && data && data.length > 0) {
+        const repIds = data.map((r: any) => r.id)
+        let goalsMap: Record<string, { sales_goal: number | null; visits_goal: number | null }> = {}
+        try {
+          const { data: goalsData } = await supabase
+            .from('bem_aviv_representative_goals')
+            .select('*')
+            .in('representative_id', repIds)
+            .order('month', { ascending: false })
+
+          if (goalsData) {
+            for (const g of goalsData) {
+              if (!goalsMap[g.representative_id]) {
+                goalsMap[g.representative_id] = {
+                  sales_goal: g.sales_goal != null ? Number(g.sales_goal) : null,
+                  visits_goal: g.visits_goal != null ? Number(g.visits_goal) : null,
+                }
+              }
+            }
+          }
+        } catch {}
+
         return data.map((r: any) => ({
-          ...r,
+          id: r.id,
+          company_id: r.company_id,
+          code: r.code,
+          name: r.name,
           role: r.role || 'REPRESENTANTE',
+          cpf_cnpj: r.cpf_cnpj || undefined,
+          commission_rate: Number(r.commission_rate) || 0,
+          phone: r.phone || undefined,
+          email: r.email || undefined,
+          region: r.region || undefined,
+          is_default: Boolean(r.is_default),
+          active: Boolean(r.active),
+          created_at: r.created_at,
+          sales_goal: goalsMap[r.id]?.sales_goal ?? null,
+          visits_goal: goalsMap[r.id]?.visits_goal ?? null,
         })) as Representante[]
       }
     } catch {}
@@ -307,32 +350,55 @@ export async function listRepresentantes(): Promise<Representante[]> {
   return INITIAL_REPRESENTANTES
 }
 
-export async function saveRepresentante(item: Omit<Representante, 'id' | 'created_at'> & { id?: string }): Promise<Representante> {
+export async function saveRepresentante(
+  item: Omit<Representante, 'id' | 'created_at'> & { id?: string },
+  companyId?: string | null
+): Promise<Representante> {
   const current = await listRepresentantes()
   const isEdit = Boolean(item.id)
-  const id = item.id || 'rep-' + Date.now()
+  const id = item.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'rep-' + Date.now())
+  const compId = companyId || '10000000-0000-4000-8000-000000000001'
+
   const fullItem: Representante = {
     ...item,
     role: item.role || 'REPRESENTANTE',
     id,
     created_at: item.id ? (current.find(c => c.id === item.id)?.created_at || new Date().toISOString()) : new Date().toISOString(),
+    sales_goal: item.sales_goal ?? null,
+    visits_goal: item.visits_goal ?? null,
   }
 
   if (supabase) {
     try {
-      await supabase.from('representatives').upsert({
+      const repPayload: any = {
         id: fullItem.id,
+        company_id: compId,
         code: fullItem.code || null,
         name: fullItem.name,
         role: fullItem.role,
-        cpf_cnpj: fullItem.cpf_cnpj || null,
-        commission_rate: fullItem.commission_rate,
+        cpf_cnpj: fullItem.cpf_cnpj ? fullItem.cpf_cnpj.replace(/\D/g, '') : null,
+        commission_rate: fullItem.commission_rate || 0,
         phone: fullItem.phone || null,
         email: fullItem.email || null,
         region: fullItem.region || null,
         active: fullItem.active,
-        updated_at: new Date().toISOString()
-      })
+        updated_at: new Date().toISOString(),
+      }
+
+      await supabase.from('bem_aviv_representatives').upsert(repPayload)
+
+      if (fullItem.sales_goal !== undefined || fullItem.visits_goal !== undefined) {
+        const now = new Date()
+        const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+        await supabase.from('bem_aviv_representative_goals').upsert({
+          company_id: compId,
+          representative_id: fullItem.id,
+          month: currentMonth,
+          sales_goal: fullItem.sales_goal,
+          visits_goal: fullItem.visits_goal,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'representative_id,month' })
+      }
     } catch (err) {
       console.warn('Supabase representative upsert fallback:', err)
     }
@@ -351,7 +417,10 @@ export async function saveRepresentante(item: Omit<Representante, 'id' | 'create
 export async function deleteRepresentante(id: string): Promise<void> {
   if (supabase) {
     try {
-      await supabase.from('representatives').delete().eq('id', id)
+      await supabase
+        .from('bem_aviv_representatives')
+        .update({ deleted_at: new Date().toISOString(), active: false })
+        .eq('id', id)
     } catch (err) {
       console.warn('Supabase representative delete error:', err)
     }

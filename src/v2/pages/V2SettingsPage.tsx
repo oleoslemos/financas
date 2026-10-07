@@ -50,7 +50,9 @@ import {
   ChevronDown,
   ChevronUp,
   Sparkles,
+  Target,
 } from 'lucide-react'
+import { useCompany } from '../../context/CompanyContext'
 
 // ─── Company config helpers ────────────────────────────────────────────────
 const COMPANY_KEY = 'v2_company_config'
