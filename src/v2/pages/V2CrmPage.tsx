@@ -1,21 +1,28 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   Phone,
   MessageCircle,
-  Mail,
-  MapPin,
-  Users,
-  Calendar,
   Plus,
-  X,
   Search,
+  X,
+  Calendar,
+  ChevronRight,
+  ArrowUpRight,
+  ArrowDownLeft,
   Clock,
   CheckCircle2,
-  ArrowRight,
-  ArrowLeft,
-  ChevronRight,
+  Users,
+  Loader2,
+  AlertCircle,
+
 } from 'lucide-react'
 import {
+  CrmContato,
+  CrmTipoContato,
+  CrmDirecao,
+  CrmTipoAgenda,
+  CrmAgendaItem,
+  ClienteResumido,
   fetchContatos,
   fetchContatosByCliente,
   criarContato,
@@ -23,91 +30,41 @@ import {
   fetchAgendaItems,
   criarAgendaItem,
   concluirAgendaItem,
+  cancelarAgendaItem,
   fetchClientesParaSelect,
+  formatarDataHora,
   formatarWaMe,
-  CrmContato,
-  CrmContatoInput,
-  CrmAgendaItem,
-  CrmAgendaItemInput,
-  ClienteResumido,
-  CrmTipoContato,
-  CrmDirecao,
-  CrmTipoAgenda,
+  obterTelefoneCliente,
 } from '../services/v2CrmService'
 import { getCurrentV2User } from '../services/v2AuthService'
+import { useCompany } from '../../context/CompanyContext'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Constants / configs
+// Config visual
 // ─────────────────────────────────────────────────────────────────────────────
 
-const TIPO_CONFIG: Record<
-  CrmTipoContato,
-  { label: string; color: string; bg: string; icon: React.ReactNode }
-> = {
-  ligacao: {
-    label: 'Ligação',
-    color: '#0D6BAF',
-    bg: '#EFF6FF',
-    icon: <Phone size={11} />,
-  },
-  whatsapp: {
-    label: 'WhatsApp',
-    color: '#16A34A',
-    bg: '#F0FDF4',
-    icon: <MessageCircle size={11} />,
-  },
-  email: {
-    label: 'E-mail',
-    color: '#EA580C',
-    bg: '#FFF7ED',
-    icon: <Mail size={11} />,
-  },
-  visita: {
-    label: 'Visita',
-    color: '#7C3AED',
-    bg: '#F5F3FF',
-    icon: <MapPin size={11} />,
-  },
-  reuniao: {
-    label: 'Reunião',
-    color: '#DB2777',
-    bg: '#FDF2F8',
-    icon: <Users size={11} />,
-  },
-  outro: {
-    label: 'Outro',
-    color: '#6B7280',
-    bg: '#F3F4F6',
-    icon: <Clock size={11} />,
-  },
+const TIPO_CONFIG: Record<CrmTipoContato, { label: string; color: string; bg: string }> = {
+  ligacao:  { label: 'Ligação',  color: '#2563EB', bg: '#EFF6FF' },
+  whatsapp: { label: 'WhatsApp', color: '#16A34A', bg: '#F0FDF4' },
+  email:    { label: 'E-mail',   color: '#D97706', bg: '#FFFBEB' },
+  visita:   { label: 'Visita',   color: '#7C3AED', bg: '#F5F3FF' },
+  reuniao:  { label: 'Reunião',  color: '#DB2777', bg: '#FDF2F8' },
+  outro:    { label: 'Outro',    color: '#6B7280', bg: '#F3F4F6' },
 }
 
 const TIPO_OPTIONS: { value: CrmTipoContato; label: string }[] = [
-  { value: 'ligacao', label: 'Ligação' },
+  { value: 'ligacao',  label: 'Ligação' },
   { value: 'whatsapp', label: 'WhatsApp' },
-  { value: 'email', label: 'E-mail' },
-  { value: 'visita', label: 'Visita' },
-  { value: 'reuniao', label: 'Reunião' },
-  { value: 'outro', label: 'Outro' },
+  { value: 'email',    label: 'E-mail' },
+  { value: 'visita',   label: 'Visita' },
+  { value: 'reuniao',  label: 'Reunião' },
+  { value: 'outro',    label: 'Outro' },
 ]
 
 const DIRECAO_OPTIONS: { value: CrmDirecao; label: string }[] = [
-  { value: 'realizado', label: 'Realizado' },
-  { value: 'recebido', label: 'Recebido' },
+  { value: 'realizado', label: 'Realizado (saída)' },
+  { value: 'recebido',  label: 'Recebido (entrada)' },
 ]
-
-const fmtDt = (iso: string) =>
-  new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(
-    new Date(iso),
-  )
-
-const fmtDate = (iso: string) =>
-  new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(new Date(iso))
-
-const toDatetimeLocal = (d: Date) => {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Sub-components
@@ -118,324 +75,224 @@ function TipoBadge({ tipo }: { tipo: CrmTipoContato }) {
   return (
     <span
       style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 4,
-        padding: '2px 8px',
-        borderRadius: 20,
-        fontSize: 11,
-        fontWeight: 700,
-        color: cfg.color,
-        background: cfg.bg,
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+        padding: '2px 10px', borderRadius: 20,
+        fontSize: 11, fontWeight: 700,
+        color: cfg.color, background: cfg.bg,
         border: `1px solid ${cfg.color}33`,
         whiteSpace: 'nowrap',
       }}
     >
-      {cfg.icon}
       {cfg.label}
     </span>
   )
 }
 
-function DirecaoBadge({ direcao }: { direcao: CrmDirecao }) {
+function DirecaoIcon({ direcao }: { direcao: CrmDirecao }) {
   if (direcao === 'realizado') {
-    return (
-      <span
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 3,
-          fontSize: 11,
-          fontWeight: 700,
-          color: '#16A34A',
-        }}
-        title="Realizado"
-      >
-        <ArrowRight size={12} />
-        Realizado
-      </span>
-    )
+    return <span title="Realizado"><ArrowUpRight size={14} style={{ color: '#16A34A' }} /></span>
   }
-  return (
-    <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 3,
-        fontSize: 11,
-        fontWeight: 700,
-        color: '#0D6BAF',
-      }}
-      title="Recebido"
-    >
-      <ArrowLeft size={12} />
-      Recebido
-    </span>
-  )
+  return <span title="Recebido"><ArrowDownLeft size={14} style={{ color: '#2563EB' }} /></span>
 }
 
-function ClienteAvatar({ nome }: { nome: string }) {
-  const inicial = (nome || '?').charAt(0).toUpperCase()
+function WhatsAppBtn({ phone }: { phone: string | null | undefined }) {
+  const link = formatarWaMe(phone)
+  if (!link) return null
   return (
-    <div
+    <a
+      href={link}
+      target="_blank"
+      rel="noopener noreferrer"
+      title="Abrir WhatsApp"
       style={{
-        width: 38,
-        height: 38,
-        borderRadius: 12,
-        background: '#0D6BAF',
-        color: '#fff',
-        fontWeight: 900,
-        fontSize: 15,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexShrink: 0,
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+        padding: '4px 10px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+        color: '#16A34A', background: '#F0FDF4',
+        border: '1px solid #86EFAC', textDecoration: 'none',
+        transition: 'opacity .15s',
       }}
+      onMouseEnter={e => { e.currentTarget.style.opacity = '0.8' }}
+      onMouseLeave={e => { e.currentTarget.style.opacity = '1' }}
     >
-      {inicial}
-    </div>
+      <MessageCircle size={13} />
+      WhatsApp
+    </a>
   )
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Modal: Novo Contato
+// Modal de Novo Contato
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface ModalContatoProps {
+interface NovoContatoModalProps {
   clientes: ClienteResumido[]
+  userId: string
+  companyId: string | null
   onClose: () => void
-  onSalvo: (contato: CrmContato) => void
+  onSalvo: (c: CrmContato) => void
 }
 
-function ModalNovoContato({ clientes, onClose, onSalvo }: ModalContatoProps) {
-  const user = getCurrentV2User()
-
+function NovoContatoModal({ clientes, userId, companyId, onClose, onSalvo }: NovoContatoModalProps) {
   const [clienteId, setClienteId] = useState('')
   const [clienteBusca, setClienteBusca] = useState('')
   const [tipo, setTipo] = useState<CrmTipoContato>('ligacao')
   const [direcao, setDirecao] = useState<CrmDirecao>('realizado')
   const [assunto, setAssunto] = useState('')
   const [descricao, setDescricao] = useState('')
-  const [ocorrido, setOcorrido] = useState(toDatetimeLocal(new Date()))
   const [resultado, setResultado] = useState('')
+  const [ocorridoEm, setOcorridoEm] = useState(() => {
+    const now = new Date()
+    now.setSeconds(0, 0)
+    return now.toISOString().slice(0, 16)
+  })
   const [proximoContato, setProximoContato] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
-  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [clienteDropdown, setClienteDropdown] = useState(false)
 
-  const clientesFiltrados = useMemo(
-    () =>
-      clientes.filter((c) =>
-        c.full_name.toLowerCase().includes(clienteBusca.toLowerCase()),
-      ),
-    [clientes, clienteBusca],
-  )
+  const clientesFiltrados = useMemo(() => {
+    if (!clienteBusca) return clientes.slice(0, 30)
+    const q = clienteBusca.toLowerCase()
+    return clientes.filter(c => c.full_name.toLowerCase().includes(q)).slice(0, 30)
+  }, [clientes, clienteBusca])
 
-  const clienteSelecionado = clientes.find((c) => c.id === clienteId)
+  const clienteSelecionado = clientes.find(c => c.id === clienteId)
 
-  async function handleSalvar() {
+  const handleSalvar = async () => {
     if (!clienteId) { setErro('Selecione um cliente.'); return }
-    if (!assunto.trim()) { setErro('Informe o assunto.'); return }
-
-    setSalvando(true)
+    if (!assunto.trim()) { setErro('Informe o assunto do contato.'); return }
     setErro(null)
-
+    setSalvando(true)
     try {
-      const input: CrmContatoInput = {
+      const contato = await criarContato({
         cliente_id: clienteId,
         tipo,
         direcao,
         assunto,
         descricao: descricao || null,
         resultado: resultado || null,
-        ocorrido_em: new Date(ocorrido).toISOString(),
+        ocorrido_em: new Date(ocorridoEm).toISOString(),
         proximo_contato_em: proximoContato ? new Date(proximoContato).toISOString() : null,
-      }
-      const contato = await criarContato(input, user?.id ?? '')
+        criado_por: userId,
+        company_id: companyId,
+      }, userId)
       onSalvo(contato)
-    } catch (e: unknown) {
-      setErro(typeof e === 'string' ? e : 'Erro ao salvar contato.')
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Erro ao salvar contato.')
     } finally {
       setSalvando(false)
     }
   }
 
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '8px 12px', borderRadius: 8, fontSize: 13,
+    border: '1.5px solid #D1D5DB', outline: 'none', background: '#FAFAFA',
+    boxSizing: 'border-box',
+  }
+  const labelStyle: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }
+
   return (
     <div
       style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.45)',
-        zIndex: 200,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
+        position: 'fixed', inset: 0, zIndex: 9999,
+        background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: 16,
       }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
         style={{
-          background: '#fff',
-          borderRadius: 18,
-          width: '100%',
-          maxWidth: 520,
-          maxHeight: '90vh',
-          overflowY: 'auto',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
+          background: '#fff', borderRadius: 16, width: '100%', maxWidth: 540,
+          maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
         }}
       >
         {/* Header */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '20px 24px 16px',
-            borderBottom: '1px solid #F3F4F6',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div
-              style={{
-                width: 38,
-                height: 38,
-                borderRadius: 11,
-                background: '#EFF6FF',
-                border: '1.5px solid #BFDBFE',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <MessageCircle size={18} color="#0D6BAF" />
-            </div>
-            <div>
-              <p style={{ margin: 0, fontSize: 16, fontWeight: 900, color: '#111827' }}>
-                Novo Contato
-              </p>
-              <p style={{ margin: 0, fontSize: 12, color: '#9CA3AF' }}>
-                Registre uma interação com o cliente
-              </p>
-            </div>
+        <div style={{ padding: '20px 24px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: '#111827', margin: 0 }}>Registrar Contato</h2>
+            <p style={{ fontSize: 12, color: '#6B7280', margin: '2px 0 0' }}>Registre a interação com o cliente</p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              background: 'none',
-              border: '1px solid #E5E7EB',
-              borderRadius: 8,
-              padding: 6,
-              cursor: 'pointer',
-              color: '#6B7280',
-            }}
-          >
-            <X size={16} />
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280', padding: 4 }}>
+            <X size={20} />
           </button>
         </div>
 
-        {/* Body */}
-        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {/* Cliente combobox */}
-          <div>
+        <div style={{ padding: '20px 24px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Cliente */}
+          <div style={{ position: 'relative' }}>
             <label style={labelStyle}>Cliente *</label>
-            <div style={{ position: 'relative' }}>
-              <input
-                type="text"
-                placeholder="Buscar cliente por nome…"
-                value={clienteSelecionado ? clienteSelecionado.full_name : clienteBusca}
-                onFocus={() => { setDropdownOpen(true); if (clienteSelecionado) setClienteBusca('') }}
-                onChange={(e) => {
-                  setClienteBusca(e.target.value)
-                  setClienteId('')
-                  setDropdownOpen(true)
-                }}
-                style={inputStyle}
-              />
-              {dropdownOpen && clienteBusca && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    right: 0,
-                    background: '#fff',
-                    border: '1.5px solid #E5E7EB',
-                    borderRadius: 10,
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-                    zIndex: 300,
-                    maxHeight: 200,
-                    overflowY: 'auto',
-                  }}
-                >
-                  {clientesFiltrados.length === 0 ? (
-                    <p style={{ padding: '10px 14px', margin: 0, color: '#9CA3AF', fontSize: 13 }}>
-                      Nenhum cliente encontrado
-                    </p>
-                  ) : (
-                    clientesFiltrados.slice(0, 30).map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => {
-                          setClienteId(c.id)
-                          setClienteBusca('')
-                          setDropdownOpen(false)
-                        }}
-                        style={{
-                          display: 'block',
-                          width: '100%',
-                          textAlign: 'left',
-                          padding: '8px 14px',
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          fontSize: 13,
-                          color: '#111827',
-                        }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = '#F0F7EE')}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
-                      >
-                        {c.full_name}
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
+            <div
+              onClick={() => setClienteDropdown(!clienteDropdown)}
+              style={{
+                ...inputStyle, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                border: clienteDropdown ? '1.5px solid #0D6BAF' : '1.5px solid #D1D5DB',
+              }}
+            >
+              <span style={{ color: clienteSelecionado ? '#111827' : '#9CA3AF' }}>
+                {clienteSelecionado ? clienteSelecionado.full_name : 'Selecionar cliente...'}
+              </span>
+              <ChevronRight size={14} style={{ color: '#6B7280', transform: clienteDropdown ? 'rotate(90deg)' : 'none', transition: '.2s' }} />
             </div>
+            {clienteDropdown && (
+              <div style={{
+                position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
+                background: '#fff', border: '1.5px solid #0D6BAF', borderRadius: 8,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.12)', maxHeight: 220, overflow: 'auto',
+              }}>
+                <div style={{ padding: '8px 10px', borderBottom: '1px solid #F3F4F6' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 6, padding: '5px 10px' }}>
+                    <Search size={13} style={{ color: '#9CA3AF' }} />
+                    <input
+                      autoFocus
+                      value={clienteBusca}
+                      onChange={e => setClienteBusca(e.target.value)}
+                      placeholder="Buscar cliente..."
+                      style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 13, width: '100%' }}
+                    />
+                  </div>
+                </div>
+                {clientesFiltrados.map(c => (
+                  <div
+                    key={c.id}
+                    onClick={() => { setClienteId(c.id); setClienteDropdown(false); setClienteBusca('') }}
+                    style={{
+                      padding: '9px 14px', cursor: 'pointer', fontSize: 13,
+                      background: c.id === clienteId ? '#EFF6FF' : 'transparent',
+                      color: c.id === clienteId ? '#1D4ED8' : '#111827',
+                    }}
+                    onMouseEnter={e => { if (c.id !== clienteId) e.currentTarget.style.background = '#F9FAFB' }}
+                    onMouseLeave={e => { if (c.id !== clienteId) e.currentTarget.style.background = 'transparent' }}
+                  >
+                    {c.full_name}
+                  </div>
+                ))}
+                {clientesFiltrados.length === 0 && (
+                  <div style={{ padding: 14, fontSize: 13, color: '#6B7280', textAlign: 'center' }}>Nenhum cliente encontrado</div>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* Tipo + Direção */}
+          {/* Tipo e Direção */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
-              <label style={labelStyle}>Tipo *</label>
-              <select
-                value={tipo}
-                onChange={(e) => setTipo(e.target.value as CrmTipoContato)}
-                style={selectStyle}
-              >
-                {TIPO_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
+              <label style={labelStyle}>Tipo de Contato *</label>
+              <select value={tipo} onChange={e => setTipo(e.target.value as CrmTipoContato)} style={{ ...inputStyle, cursor: 'pointer' }}>
+                {TIPO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
             <div>
               <label style={labelStyle}>Direção *</label>
-              <select
-                value={direcao}
-                onChange={(e) => setDirecao(e.target.value as CrmDirecao)}
-                style={selectStyle}
-              >
-                {DIRECAO_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
+              <select value={direcao} onChange={e => setDirecao(e.target.value as CrmDirecao)} style={{ ...inputStyle, cursor: 'pointer' }}>
+                {DIRECAO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
+          </div>
+
+          {/* Data/hora */}
+          <div>
+            <label style={labelStyle}>Data e Hora do Contato *</label>
+            <input type="datetime-local" value={ocorridoEm} onChange={e => setOcorridoEm(e.target.value)} style={inputStyle} />
           </div>
 
           {/* Assunto */}
@@ -443,9 +300,9 @@ function ModalNovoContato({ clientes, onClose, onSalvo }: ModalContatoProps) {
             <label style={labelStyle}>Assunto *</label>
             <input
               type="text"
-              placeholder="Ex: Apresentação de produto, Dúvida sobre pedido…"
               value={assunto}
-              onChange={(e) => setAssunto(e.target.value)}
+              onChange={e => setAssunto(e.target.value)}
+              placeholder="Ex: Apresentação do produto, dúvida sobre entrega..."
               style={inputStyle}
             />
           </div>
@@ -454,22 +311,11 @@ function ModalNovoContato({ clientes, onClose, onSalvo }: ModalContatoProps) {
           <div>
             <label style={labelStyle}>Descrição</label>
             <textarea
-              placeholder="Detalhes do contato…"
               value={descricao}
-              onChange={(e) => setDescricao(e.target.value)}
+              onChange={e => setDescricao(e.target.value)}
+              placeholder="Detalhes do contato..."
               rows={3}
-              style={{ ...inputStyle, resize: 'vertical' }}
-            />
-          </div>
-
-          {/* Data/hora */}
-          <div>
-            <label style={labelStyle}>Data/hora do contato *</label>
-            <input
-              type="datetime-local"
-              value={ocorrido}
-              onChange={(e) => setOcorrido(e.target.value)}
-              style={inputStyle}
+              style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
             />
           </div>
 
@@ -477,94 +323,63 @@ function ModalNovoContato({ clientes, onClose, onSalvo }: ModalContatoProps) {
           <div>
             <label style={labelStyle}>Resultado</label>
             <textarea
-              placeholder="O que ficou acordado? Qual foi o desfecho?"
               value={resultado}
-              onChange={(e) => setResultado(e.target.value)}
+              onChange={e => setResultado(e.target.value)}
+              placeholder="O que foi combinado ou decidido..."
               rows={2}
-              style={{ ...inputStyle, resize: 'vertical' }}
+              style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
             />
           </div>
 
           {/* Próximo contato */}
-          <div>
-            <label style={labelStyle}>Próximo contato (opcional)</label>
+          <div style={{ background: '#F0F7EE', borderRadius: 10, padding: '12px 14px', border: '1px solid #C6E6A0' }}>
+            <label style={{ ...labelStyle, color: '#166534', marginBottom: 6 }}>
+              <Calendar size={13} style={{ display: 'inline', marginRight: 4 }} />
+              Próximo Contato (opcional)
+            </label>
             <input
               type="datetime-local"
               value={proximoContato}
-              onChange={(e) => setProximoContato(e.target.value)}
-              style={inputStyle}
+              onChange={e => setProximoContato(e.target.value)}
+              style={{ ...inputStyle, background: '#fff' }}
             />
             {proximoContato && (
-              <p style={{ margin: '4px 0 0', fontSize: 11, color: '#7DC344' }}>
-                ✓ Um item de agenda será criado automaticamente.
+              <p style={{ fontSize: 11, color: '#16A34A', marginTop: 6, marginBottom: 0 }}>
+                ✓ Um item de agenda será criado automaticamente
               </p>
             )}
           </div>
 
           {/* Erro */}
           {erro && (
-            <div
-              style={{
-                padding: '10px 14px',
-                borderRadius: 10,
-                background: '#FEF2F2',
-                border: '1px solid #FECACA',
-                color: '#DC2626',
-                fontSize: 13,
-                fontWeight: 600,
-              }}
-            >
-              {erro}
+            <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '10px 14px', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+              <AlertCircle size={15} style={{ color: '#DC2626', flexShrink: 0, marginTop: 1 }} />
+              <span style={{ fontSize: 13, color: '#DC2626' }}>{erro}</span>
             </div>
           )}
-        </div>
 
-        {/* Footer */}
-        <div
-          style={{
-            padding: '16px 24px',
-            borderTop: '1px solid #F3F4F6',
-            display: 'flex',
-            gap: 10,
-            justifyContent: 'flex-end',
-          }}
-        >
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              padding: '9px 18px',
-              borderRadius: 10,
-              border: '1.5px solid #E5E7EB',
-              background: '#fff',
-              color: '#374151',
-              fontSize: 14,
-              fontWeight: 700,
-              cursor: 'pointer',
-            }}
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={handleSalvar}
-            disabled={salvando}
-            style={{
-              padding: '9px 22px',
-              borderRadius: 10,
-              border: 'none',
-              background: salvando ? '#93C5FD' : '#0D6BAF',
-              color: '#fff',
-              fontSize: 14,
-              fontWeight: 700,
-              cursor: salvando ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-            }}
-          >
-            {salvando ? 'Salvando…' : 'Salvar Contato'}
-          </button>
+          {/* Actions */}
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 4 }}>
+            <button
+              onClick={onClose}
+              style={{ padding: '9px 20px', borderRadius: 8, border: '1.5px solid #D1D5DB', background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#374151' }}
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleSalvar}
+              disabled={salvando}
+              style={{
+                padding: '9px 24px', borderRadius: 8, border: 'none',
+                background: salvando ? '#93C5FD' : '#0D6BAF',
+                color: '#fff', cursor: salvando ? 'not-allowed' : 'pointer',
+                fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6,
+              }}
+            >
+              {salvando && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}
+              {salvando ? 'Salvando...' : 'Registrar Contato'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -572,176 +387,95 @@ function ModalNovoContato({ clientes, onClose, onSalvo }: ModalContatoProps) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Modal: Novo Item de Agenda
+// Modal de Novo Item de Agenda
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface ModalAgendaProps {
+interface NovaAgendaModalProps {
   clientes: ClienteResumido[]
+  userId: string
+  companyId: string | null
   onClose: () => void
   onSalvo: () => void
 }
 
-function ModalNovoAgendaItem({ clientes, onClose, onSalvo }: ModalAgendaProps) {
-  const user = getCurrentV2User()
+function NovaAgendaModal({ clientes, userId, companyId, onClose, onSalvo }: NovaAgendaModalProps) {
   const [tipo, setTipo] = useState<CrmTipoAgenda>('tarefa')
   const [titulo, setTitulo] = useState('')
-  const [inicio, setInicio] = useState(toDatetimeLocal(new Date()))
+  const [inicio, setInicio] = useState(() => {
+    const now = new Date(); now.setSeconds(0, 0); return now.toISOString().slice(0, 16)
+  })
   const [fim, setFim] = useState('')
   const [clienteId, setClienteId] = useState('')
-  const [clienteBusca, setClienteBusca] = useState('')
-  const [dropdownOpen, setDropdownOpen] = useState(false)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
 
-  const clientesFiltrados = useMemo(
-    () => clientes.filter((c) => c.full_name.toLowerCase().includes(clienteBusca.toLowerCase())),
-    [clientes, clienteBusca],
-  )
-  const clienteSelecionado = clientes.find((c) => c.id === clienteId)
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '8px 12px', borderRadius: 8, fontSize: 13,
+    border: '1.5px solid #D1D5DB', outline: 'none', background: '#FAFAFA',
+    boxSizing: 'border-box',
+  }
 
-  async function handleSalvar() {
+  const handleSalvar = async () => {
     if (!titulo.trim()) { setErro('Informe o título.'); return }
-
-    setSalvando(true)
-    setErro(null)
+    setErro(null); setSalvando(true)
     try {
-      const input: CrmAgendaItemInput = {
-        tipo,
-        titulo,
-        inicio: new Date(inicio).toISOString(),
-        fim: fim ? new Date(fim).toISOString() : null,
-        cliente_id: clienteId || null,
-      }
-      await criarAgendaItem(input, user?.id ?? '')
+      await criarAgendaItem({ tipo, titulo, inicio: new Date(inicio).toISOString(), fim: fim ? new Date(fim).toISOString() : null, cliente_id: clienteId || null, company_id: companyId }, userId)
       onSalvo()
-    } catch (e: unknown) {
-      setErro(typeof e === 'string' ? e : 'Erro ao salvar item de agenda.')
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Erro ao criar item.')
     } finally {
       setSalvando(false)
     }
   }
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.45)',
-        zIndex: 200,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 16,
-      }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-    >
-      <div
-        style={{
-          background: '#fff',
-          borderRadius: 18,
-          width: '100%',
-          maxWidth: 460,
-          maxHeight: '90vh',
-          overflowY: 'auto',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '20px 24px 16px',
-            borderBottom: '1px solid #F3F4F6',
-          }}
-        >
-          <p style={{ margin: 0, fontSize: 16, fontWeight: 900, color: '#111827' }}>
-            Novo Evento / Tarefa
-          </p>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{ background: 'none', border: '1px solid #E5E7EB', borderRadius: 8, padding: 6, cursor: 'pointer', color: '#6B7280' }}
-          >
-            <X size={16} />
-          </button>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 440, boxShadow: '0 20px 60px rgba(0,0,0,0.2)', overflow: 'auto', maxHeight: '90vh' }}>
+        <div style={{ padding: '20px 24px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h2 style={{ fontSize: 17, fontWeight: 800, color: '#111827', margin: 0 }}>Novo Item de Agenda</h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280' }}><X size={20} /></button>
         </div>
-
-        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div>
-            <label style={labelStyle}>Tipo *</label>
-            <select value={tipo} onChange={(e) => setTipo(e.target.value as CrmTipoAgenda)} style={selectStyle}>
-              <option value="tarefa">Tarefa</option>
-              <option value="evento">Evento</option>
-            </select>
-          </div>
-
-          <div>
-            <label style={labelStyle}>Título *</label>
-            <input
-              type="text"
-              placeholder="Título do evento ou tarefa…"
-              value={titulo}
-              onChange={(e) => setTitulo(e.target.value)}
-              style={inputStyle}
-            />
-          </div>
-
+        <div style={{ padding: '16px 24px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
-              <label style={labelStyle}>Início *</label>
-              <input type="datetime-local" value={inicio} onChange={(e) => setInicio(e.target.value)} style={inputStyle} />
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>Tipo</label>
+              <select value={tipo} onChange={e => setTipo(e.target.value as CrmTipoAgenda)} style={{ ...inputStyle, cursor: 'pointer' }}>
+                <option value="tarefa">Tarefa</option>
+                <option value="evento">Evento</option>
+              </select>
             </div>
             <div>
-              <label style={labelStyle}>Fim (opcional)</label>
-              <input type="datetime-local" value={fim} onChange={(e) => setFim(e.target.value)} style={inputStyle} />
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>Cliente (opcional)</label>
+              <select value={clienteId} onChange={e => setClienteId(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
+                <option value="">— Nenhum —</option>
+                {clientes.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
+              </select>
             </div>
           </div>
-
           <div>
-            <label style={labelStyle}>Cliente (opcional)</label>
-            <div style={{ position: 'relative' }}>
-              <input
-                type="text"
-                placeholder="Buscar cliente…"
-                value={clienteSelecionado ? clienteSelecionado.full_name : clienteBusca}
-                onFocus={() => { setDropdownOpen(true); if (clienteSelecionado) setClienteBusca('') }}
-                onChange={(e) => { setClienteBusca(e.target.value); setClienteId(''); setDropdownOpen(true) }}
-                style={inputStyle}
-              />
-              {dropdownOpen && clienteBusca && (
-                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1.5px solid #E5E7EB', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 300, maxHeight: 160, overflowY: 'auto' }}>
-                  {clientesFiltrados.slice(0, 20).map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => { setClienteId(c.id); setClienteBusca(''); setDropdownOpen(false) }}
-                      style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#111827' }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = '#F0F7EE')}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
-                    >
-                      {c.full_name}
-                    </button>
-                  ))}
-                </div>
-              )}
+            <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>Título *</label>
+            <input type="text" value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="O que fazer..." style={inputStyle} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>Início *</label>
+              <input type="datetime-local" value={inicio} onChange={e => setInicio(e.target.value)} style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>Fim (opcional)</label>
+              <input type="datetime-local" value={fim} onChange={e => setFim(e.target.value)} style={inputStyle} />
             </div>
           </div>
-
           {erro && (
-            <div style={{ padding: '10px 14px', borderRadius: 10, background: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626', fontSize: 13, fontWeight: 600 }}>
-              {erro}
-            </div>
+            <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#DC2626' }}>{erro}</div>
           )}
-        </div>
-
-        <div style={{ padding: '16px 24px', borderTop: '1px solid #F3F4F6', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <button type="button" onClick={onClose} style={{ padding: '9px 18px', borderRadius: 10, border: '1.5px solid #E5E7EB', background: '#fff', color: '#374151', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
-            Cancelar
-          </button>
-          <button type="button" onClick={handleSalvar} disabled={salvando} style={{ padding: '9px 22px', borderRadius: 10, border: 'none', background: salvando ? '#93C5FD' : '#0D6BAF', color: '#fff', fontSize: 14, fontWeight: 700, cursor: salvando ? 'not-allowed' : 'pointer' }}>
-            {salvando ? 'Salvando…' : 'Salvar'}
-          </button>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <button onClick={onClose} style={{ padding: '9px 20px', borderRadius: 8, border: '1.5px solid #D1D5DB', background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#374151' }}>Cancelar</button>
+            <button onClick={handleSalvar} disabled={salvando} style={{ padding: '9px 24px', borderRadius: 8, border: 'none', background: salvando ? '#93C5FD' : '#0D6BAF', color: '#fff', cursor: salvando ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 700 }}>
+              {salvando ? 'Salvando...' : 'Criar'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -749,257 +483,155 @@ function ModalNovoAgendaItem({ clientes, onClose, onSalvo }: ModalAgendaProps) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Painel Direito: Detalhes do Contato / Linha do Tempo
+// Ficha do cliente (painel direito)
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface PainelDetalhesProps {
+interface FichaClienteProps {
   clienteId: string
-  clientes: ClienteResumido[]
+  clienteNome: string
+  phone: string | null
+  onClose: () => void
   onContatoCancelado: () => void
 }
 
-function PainelDetalhes({ clienteId, clientes, onContatoCancelados: onContatoCancelado }: { clienteId: string; clientes: ClienteResumido[]; onContatoCancelados: () => void }) {
+function FichaCliente({ clienteId, clienteNome, phone, onClose, onContatoCancelado }: FichaClienteProps) {
   const [contatos, setContatos] = useState<CrmContato[]>([])
-  const [carregando, setCarregando] = useState(false)
+  const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
   const [cancelandoId, setCancelandoId] = useState<string | null>(null)
-  const [confirmarCancelId, setConfirmarCancelId] = useState<string | null>(null)
+  const [confirmId, setConfirmId] = useState<string | null>(null)
 
-  const cliente = clientes.find((c) => c.id === clienteId)
-
-  const carregar = useCallback(async () => {
-    setCarregando(true)
-    setErro(null)
-    try {
-      const data = await fetchContatosByCliente(clienteId)
-      setContatos(data)
-    } catch (e: unknown) {
-      setErro(typeof e === 'string' ? e : 'Erro ao carregar linha do tempo.')
-    } finally {
-      setCarregando(false)
-    }
+  useEffect(() => {
+    setCarregando(true); setErro(null)
+    fetchContatosByCliente(clienteId)
+      .then(setContatos)
+      .catch(e => setErro(e instanceof Error ? e.message : 'Erro ao carregar.'))
+      .finally(() => setCarregando(false))
   }, [clienteId])
 
-  useEffect(() => { carregar() }, [carregar])
-
-  async function handleCancelar(id: string) {
+  const handleCancelar = async (id: string) => {
     setCancelandoId(id)
     try {
       await cancelarContato(id)
-      setContatos((prev) => prev.map((c) => c.id === id ? { ...c, cancelado_em: new Date().toISOString() } : c))
-      setConfirmarCancelId(null)
+      setContatos(prev => prev.filter(c => c.id !== id))
       onContatoCancelado()
-    } catch (e: unknown) {
-      setErro(typeof e === 'string' ? e : 'Erro ao cancelar contato.')
+      setConfirmId(null)
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Erro ao cancelar.')
     } finally {
       setCancelandoId(null)
     }
   }
 
-  const waLink = formatarWaMe(cliente?.phone_1 ?? null) ?? formatarWaMe(cliente?.phone_2 ?? null)
+  const waLink = formatarWaMe(phone)
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* Cabeçalho do cliente */}
-      <div
-        style={{
-          padding: '20px 24px',
-          borderBottom: '1px solid #E5E7EB',
-          background: '#fff',
-          borderRadius: '0 0 0 0',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <ClienteAvatar nome={cliente?.full_name ?? '?'} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ margin: 0, fontSize: 16, fontWeight: 900, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {cliente?.full_name ?? 'Cliente'}
-            </p>
-            {(cliente?.phone_1 || cliente?.phone_2) && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
-                <span style={{ fontSize: 12, color: '#6B7280' }}>
-                  {cliente?.phone_1 || cliente?.phone_2}
-                </span>
-                {waLink && (
-                  <a
-                    href={waLink}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      padding: '2px 8px',
-                      borderRadius: 20,
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: '#16A34A',
-                      background: '#F0FDF4',
-                      border: '1px solid #BBF7D0',
-                      textDecoration: 'none',
-                    }}
-                  >
-                    <MessageCircle size={11} />
-                    WhatsApp
-                  </a>
-                )}
-              </div>
-            )}
+      {/* Header */}
+      <div style={{ padding: '16px 20px', borderBottom: '1px solid #E5E7EB', background: '#fff', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: '#0D6BAF', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 15, flexShrink: 0 }}>
+              {clienteNome.charAt(0).toUpperCase()}
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <p style={{ margin: 0, fontWeight: 800, fontSize: 15, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{clienteNome}</p>
+              {phone && (
+                <p style={{ margin: 0, fontSize: 12, color: '#6B7280', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <Phone size={11} />{phone}
+                </p>
+              )}
+            </div>
           </div>
+          {waLink && <WhatsAppBtn phone={phone} />}
         </div>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', flexShrink: 0 }}>
+          <X size={18} />
+        </button>
       </div>
 
       {/* Linha do tempo */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
-        <p style={{ margin: '0 0 16px', fontSize: 12, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-          Linha do Tempo
+      <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px' }}>
+        <p style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>
+          Histórico de Contatos
         </p>
 
         {carregando && (
-          <div style={{ textAlign: 'center', padding: '40px 0', color: '#9CA3AF', fontSize: 13 }}>
-            <Clock size={24} style={{ marginBottom: 8, opacity: 0.5 }} />
-            <p style={{ margin: 0 }}>Carregando…</p>
+          <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}>
+            <Loader2 size={24} style={{ color: '#0D6BAF', animation: 'spin 1s linear infinite' }} />
           </div>
         )}
 
-        {!carregando && erro && (
-          <div style={{ padding: '12px 16px', borderRadius: 10, background: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626', fontSize: 13 }}>
-            {erro}
-          </div>
+        {erro && (
+          <div style={{ background: '#FEF2F2', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#DC2626' }}>{erro}</div>
         )}
 
         {!carregando && !erro && contatos.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '40px 0', color: '#9CA3AF' }}>
-            <MessageCircle size={32} style={{ marginBottom: 8, opacity: 0.3 }} />
-            <p style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>Nenhum contato registrado</p>
+          <div style={{ textAlign: 'center', padding: '32px 0', color: '#9CA3AF', fontSize: 13 }}>
+            <MessageCircle size={32} style={{ margin: '0 auto 10px', display: 'block', opacity: .4 }} />
+            Nenhum contato registrado para este cliente.
           </div>
         )}
 
-        {!carregando && contatos.map((c, idx) => {
-          const cancelado = !!c.cancelado_em
-          return (
-            <div
-              key={c.id}
-              style={{
-                position: 'relative',
-                paddingLeft: 24,
-                marginBottom: idx < contatos.length - 1 ? 20 : 0,
-                opacity: cancelado ? 0.5 : 1,
-              }}
-            >
-              {/* Linha vertical */}
-              {idx < contatos.length - 1 && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    left: 7,
-                    top: 22,
-                    bottom: -20,
-                    width: 2,
-                    background: '#E5E7EB',
-                  }}
-                />
-              )}
-              {/* Ponto */}
-              <div
-                style={{
-                  position: 'absolute',
-                  left: 0,
-                  top: 6,
-                  width: 14,
-                  height: 14,
-                  borderRadius: '50%',
-                  background: cancelado ? '#D1D5DB' : TIPO_CONFIG[c.tipo].color,
-                  border: '2px solid #fff',
-                  boxShadow: '0 0 0 2px ' + (cancelado ? '#D1D5DB' : TIPO_CONFIG[c.tipo].color + '44'),
-                }}
-              />
-
-              <div
-                style={{
-                  background: '#fff',
-                  borderRadius: 12,
-                  border: '1.5px solid #E5E7EB',
-                  padding: '12px 14px',
-                }}
-              >
-                {/* Topo */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
-                  <TipoBadge tipo={c.tipo} />
-                  <DirecaoBadge direcao={c.direcao} />
-                  <span style={{ fontSize: 11, color: '#9CA3AF', marginLeft: 'auto' }}>
-                    {fmtDt(c.ocorrido_em)}
-                  </span>
-                </div>
-
-                <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, color: '#111827' }}>
-                  {c.assunto}
-                </p>
-
-                {c.descricao && (
-                  <p style={{ margin: '0 0 4px', fontSize: 12, color: '#4B5563', lineHeight: 1.5 }}>
-                    {c.descricao}
-                  </p>
-                )}
-
-                {c.resultado && (
-                  <p style={{ margin: '4px 0', fontSize: 12, color: '#059669', fontWeight: 600 }}>
-                    → {c.resultado}
-                  </p>
-                )}
-
-                {c.proximo_contato_em && (
-                  <p style={{ margin: '4px 0 0', fontSize: 11, color: '#7C3AED', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <Calendar size={11} />
-                    Próximo: {fmtDt(c.proximo_contato_em)}
-                  </p>
-                )}
-
-                {cancelado && (
-                  <p style={{ margin: '6px 0 0', fontSize: 11, color: '#DC2626', fontWeight: 700 }}>
-                    Cancelado em {fmtDt(c.cancelado_em!)}
-                  </p>
-                )}
-
-                {/* Ação cancelar */}
-                {!cancelado && (
-                  <div style={{ marginTop: 10, borderTop: '1px solid #F3F4F6', paddingTop: 8 }}>
-                    {confirmarCancelId === c.id ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: 12, color: '#DC2626', fontWeight: 600 }}>
-                          Confirmar cancelamento?
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleCancelar(c.id)}
-                          disabled={cancelandoId === c.id}
-                          style={{ padding: '4px 12px', borderRadius: 8, border: 'none', background: '#DC2626', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
-                        >
-                          {cancelandoId === c.id ? 'Aguarde…' : 'Sim, cancelar'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setConfirmarCancelId(null)}
-                          style={{ padding: '4px 12px', borderRadius: 8, border: '1px solid #E5E7EB', background: '#fff', color: '#374151', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
-                        >
-                          Manter
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setConfirmarCancelId(c.id)}
-                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 12, color: '#DC2626', fontWeight: 600 }}
-                      >
-                        Cancelar contato
-                      </button>
-                    )}
-                  </div>
-                )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {contatos.map(c => (
+            <div key={c.id} style={{ background: '#fff', borderRadius: 12, border: '1px solid #E5E7EB', padding: '12px 14px', position: 'relative' }}>
+              {/* Header do card */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                <DirecaoIcon direcao={c.direcao} />
+                <TipoBadge tipo={c.tipo} />
+                <span style={{ fontSize: 12, color: '#6B7280', marginLeft: 'auto' }}>
+                  <Clock size={11} style={{ display: 'inline', marginRight: 3 }} />
+                  {formatarDataHora(c.ocorrido_em)}
+                </span>
               </div>
+
+              {/* Assunto */}
+              <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: 13, color: '#111827' }}>{c.assunto}</p>
+
+              {/* Descrição */}
+              {c.descricao && (
+                <p style={{ margin: '0 0 6px', fontSize: 12, color: '#4B5563', lineHeight: 1.5 }}>{c.descricao}</p>
+              )}
+
+              {/* Resultado */}
+              {c.resultado && (
+                <div style={{ background: '#F0FDF4', border: '1px solid #D1FAE5', borderRadius: 6, padding: '6px 10px', fontSize: 12, color: '#065F46', marginBottom: 6 }}>
+                  <strong>Resultado:</strong> {c.resultado}
+                </div>
+              )}
+
+              {/* Próximo contato */}
+              {c.proximo_contato_em && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#D97706', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 6, padding: '5px 10px', marginBottom: 6 }}>
+                  <Calendar size={12} />
+                  Próximo contato: {formatarDataHora(c.proximo_contato_em)}
+                </div>
+              )}
+
+              {/* Cancelar */}
+              {confirmId === c.id ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                  <span style={{ fontSize: 12, color: '#DC2626' }}>Confirmar cancelamento?</span>
+                  <button onClick={() => handleCancelar(c.id)} disabled={cancelandoId === c.id}
+                    style={{ padding: '4px 12px', borderRadius: 6, border: 'none', background: '#DC2626', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
+                    {cancelandoId === c.id ? '...' : 'Sim'}
+                  </button>
+                  <button onClick={() => setConfirmId(null)} style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid #D1D5DB', background: '#fff', cursor: 'pointer', fontSize: 12 }}>
+                    Não
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmId(c.id)}
+                  style={{ marginTop: 6, fontSize: 11, color: '#9CA3AF', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0', textDecoration: 'underline' }}
+                >
+                  Cancelar contato
+                </button>
+              )}
             </div>
-          )
-        })}
+          ))}
+        </div>
       </div>
     </div>
   )
@@ -1009,185 +641,141 @@ function PainelDetalhes({ clienteId, clientes, onContatoCancelados: onContatoCan
 // Aba Agenda
 // ─────────────────────────────────────────────────────────────────────────────
 
-function AbaAgenda({ clientes }: { clientes: ClienteResumido[] }) {
-  const [items, setItems] = useState<CrmAgendaItem[]>([])
-  const [carregando, setCarregando] = useState(false)
+function AbaAgenda({ clientes, userId, companyId }: { clientes: ClienteResumido[]; userId: string; companyId: string | null }) {
+  const [itens, setItens] = useState<CrmAgendaItem[]>([])
+  const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
-  const [mostrarModal, setMostrarModal] = useState(false)
-  const [concluidoId, setConcluidoId] = useState<string | null>(null)
+  const [novaAgendaOpen, setNovaAgendaOpen] = useState(false)
 
-  const carregar = useCallback(async () => {
-    setCarregando(true)
-    setErro(null)
-    try {
-      const hoje = new Date()
-      const em30 = new Date()
-      em30.setDate(hoje.getDate() + 30)
-      const data = await fetchAgendaItems(hoje.toISOString(), em30.toISOString())
-      setItems(data)
-    } catch (e: unknown) {
-      setErro(typeof e === 'string' ? e : 'Erro ao carregar agenda.')
-    } finally {
-      setCarregando(false)
-    }
+  const carregar = useCallback(() => {
+    setCarregando(true); setErro(null)
+    const de = new Date(); de.setHours(0, 0, 0, 0)
+    const ate = new Date(de); ate.setDate(ate.getDate() + 30)
+    fetchAgendaItems(de.toISOString(), ate.toISOString())
+      .then(setItens)
+      .catch(e => setErro(e instanceof Error ? e.message : 'Erro ao carregar agenda.'))
+      .finally(() => setCarregando(false))
   }, [])
 
   useEffect(() => { carregar() }, [carregar])
 
-  async function handleConcluir(id: string) {
-    setConcluidoId(id)
+  const handleConcluir = async (id: string) => {
     try {
       await concluirAgendaItem(id)
-      setItems((prev) => prev.map((i) => i.id === id ? { ...i, concluido_em: new Date().toISOString() } : i))
-    } catch (e: unknown) {
-      setErro(typeof e === 'string' ? e : 'Erro ao concluir item.')
-    } finally {
-      setConcluidoId(null)
+      setItens(prev => prev.map(i => i.id === id ? { ...i, concluido_em: new Date().toISOString() } : i))
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Erro ao concluir.')
     }
   }
 
+  const handleCancelar = async (id: string) => {
+    try {
+      await cancelarAgendaItem(id)
+      setItens(prev => prev.filter(i => i.id !== id))
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Erro ao cancelar.')
+    }
+  }
+
+  const pendentes = itens.filter(i => !i.concluido_em)
+  const concluidos = itens.filter(i => i.concluido_em)
+
   return (
-    <div style={{ padding: 24 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+    <div style={{ padding: '20px 20px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: '#111827' }}>Agenda — Próximos 30 dias</h2>
-          <p style={{ margin: '2px 0 0', fontSize: 12, color: '#9CA3AF' }}>Eventos e tarefas agendados</p>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#111827' }}>Próximos 30 dias</h3>
+          <p style={{ margin: 0, fontSize: 12, color: '#6B7280' }}>{pendentes.length} pendente{pendentes.length !== 1 ? 's' : ''}</p>
         </div>
         <button
-          type="button"
-          onClick={() => setMostrarModal(true)}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 10, border: 'none', background: '#0D6BAF', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+          onClick={() => setNovaAgendaOpen(true)}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: 'none', background: '#0D6BAF', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 700 }}
         >
-          <Plus size={14} />
-          Novo Evento/Tarefa
+          <Plus size={15} /> Novo
         </button>
       </div>
 
-      {erro && (
-        <div style={{ padding: '12px 16px', borderRadius: 10, background: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626', fontSize: 13, marginBottom: 16 }}>
-          {erro}
-        </div>
-      )}
-
       {carregando && (
-        <div style={{ textAlign: 'center', padding: '40px 0', color: '#9CA3AF', fontSize: 13 }}>
-          Carregando agenda…
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}>
+          <Loader2 size={24} style={{ color: '#0D6BAF', animation: 'spin 1s linear infinite' }} />
         </div>
       )}
 
-      {!carregando && items.length === 0 && !erro && (
-        <div style={{ textAlign: 'center', padding: '60px 0', background: '#fff', borderRadius: 14, border: '1.5px solid #E5E7EB' }}>
-          <Calendar size={36} color="#D1D5DB" style={{ marginBottom: 12 }} />
-          <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#374151' }}>Nenhum item nos próximos 30 dias</p>
+      {erro && <div style={{ background: '#FEF2F2', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#DC2626', marginBottom: 12 }}>{erro}</div>}
+
+      {!carregando && !erro && pendentes.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '40px 0', color: '#9CA3AF' }}>
+          <Calendar size={36} style={{ margin: '0 auto 10px', display: 'block', opacity: .4 }} />
+          <p style={{ margin: 0, fontSize: 14 }}>Nenhum item nos próximos 30 dias.</p>
         </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {items.map((item) => {
-          const concluido = !!item.concluido_em
-          return (
-            <div
-              key={item.id}
-              style={{
-                background: '#fff',
-                borderRadius: 12,
-                border: '1.5px solid #E5E7EB',
-                padding: '14px 18px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 14,
-                opacity: concluido ? 0.6 : 1,
-              }}
-            >
-              <div
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 11,
-                  background: item.tipo === 'evento' ? '#FDF2F8' : '#EFF6FF',
-                  border: `1.5px solid ${item.tipo === 'evento' ? '#F9A8D4' : '#BFDBFE'}`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                }}
-              >
-                {item.tipo === 'evento'
-                  ? <Calendar size={18} color="#DB2777" />
-                  : <CheckCircle2 size={18} color="#0D6BAF" />}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {pendentes.map(item => (
+          <div key={item.id} style={{ background: '#fff', borderRadius: 10, border: '1px solid #E5E7EB', padding: '12px 14px', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <button
+              onClick={() => handleConcluir(item.id)}
+              title="Marcar como concluído"
+              style={{ background: 'none', border: '2px solid #D1D5DB', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', flexShrink: 0, marginTop: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = '#7DC344'; e.currentTarget.style.background = '#F0FDF4' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = '#D1D5DB'; e.currentTarget.style.background = 'none' }}
+            />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+                <span style={{ fontWeight: 700, fontSize: 13, color: '#111827' }}>{item.titulo}</span>
+                <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: item.tipo === 'tarefa' ? '#EFF6FF' : '#F5F3FF', color: item.tipo === 'tarefa' ? '#1D4ED8' : '#7C3AED', fontWeight: 700, border: `1px solid ${item.tipo === 'tarefa' ? '#BFDBFE' : '#DDD6FE'}` }}>
+                  {item.tipo === 'tarefa' ? 'Tarefa' : 'Evento'}
+                </span>
+                {item.origem === 'google' && (
+                  <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: '#FEF2F2', color: '#DC2626', fontWeight: 700, border: '1px solid #FECACA' }}>Google</span>
+                )}
               </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 12, color: '#6B7280' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <Clock size={11} />{formatarDataHora(item.inicio)}
+                </span>
+                {item.cliente_nome && (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Users size={11} />{item.cliente_nome}
+                  </span>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={() => handleCancelar(item.id)}
+              title="Cancelar"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#D1D5DB', padding: 4, flexShrink: 0 }}
+              onMouseEnter={e => { e.currentTarget.style.color = '#DC2626' }}
+              onMouseLeave={e => { e.currentTarget.style.color = '#D1D5DB' }}
+            >
+              <X size={15} />
+            </button>
+          </div>
+        ))}
 
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: concluido ? '#9CA3AF' : '#111827', textDecoration: concluido ? 'line-through' : 'none' }}>
-                  {item.titulo}
-                </p>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 3, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 12, color: '#6B7280' }}>
-                    {fmtDt(item.inicio)}
-                  </span>
-                  {item.cliente_nome && (
-                    <span style={{ fontSize: 12, color: '#0D6BAF', fontWeight: 600 }}>
-                      · {item.cliente_nome}
-                    </span>
-                  )}
-                  {/* badge origem */}
-                  <span
-                    style={{
-                      padding: '2px 8px',
-                      borderRadius: 20,
-                      fontSize: 10,
-                      fontWeight: 700,
-                      color: item.origem === 'google' ? '#EA580C' : '#6B7280',
-                      background: item.origem === 'google' ? '#FFF7ED' : '#F3F4F6',
-                      border: `1px solid ${item.origem === 'google' ? '#FED7AA' : '#E5E7EB'}`,
-                    }}
-                  >
-                    {item.origem === 'google' ? 'Google' : 'Sistema'}
-                  </span>
+        {concluidos.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 1, margin: '0 0 8px' }}>Concluídos</p>
+            {concluidos.map(item => (
+              <div key={item.id} style={{ background: '#F9FAFB', borderRadius: 10, border: '1px solid #F3F4F6', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6, opacity: .7 }}>
+                <CheckCircle2 size={18} style={{ color: '#7DC344', flexShrink: 0 }} />
+                <div>
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#6B7280', textDecoration: 'line-through' }}>{item.titulo}</p>
+                  <p style={{ margin: 0, fontSize: 11, color: '#9CA3AF' }}>{formatarDataHora(item.inicio)}</p>
                 </div>
               </div>
-
-              {!concluido && (
-                <button
-                  type="button"
-                  onClick={() => handleConcluir(item.id)}
-                  disabled={concluidoId === item.id}
-                  title="Marcar como concluído"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 5,
-                    padding: '6px 12px',
-                    borderRadius: 8,
-                    border: '1.5px solid #7DC344',
-                    background: 'none',
-                    color: '#7DC344',
-                    fontSize: 12,
-                    fontWeight: 700,
-                    cursor: concluidoId === item.id ? 'not-allowed' : 'pointer',
-                    flexShrink: 0,
-                  }}
-                >
-                  <CheckCircle2 size={13} />
-                  {concluidoId === item.id ? '…' : 'Concluir'}
-                </button>
-              )}
-
-              {concluido && (
-                <span style={{ fontSize: 11, color: '#7DC344', fontWeight: 700, flexShrink: 0 }}>
-                  ✓ Concluído
-                </span>
-              )}
-            </div>
-          )
-        })}
+            ))}
+          </div>
+        )}
       </div>
 
-      {mostrarModal && (
-        <ModalNovoAgendaItem
+      {novaAgendaOpen && (
+        <NovaAgendaModal
           clientes={clientes}
-          onClose={() => setMostrarModal(false)}
-          onSalvo={() => { setMostrarModal(false); carregar() }}
+          userId={userId}
+          companyId={companyId}
+          onClose={() => setNovaAgendaOpen(false)}
+          onSalvo={() => { setNovaAgendaOpen(false); carregar() }}
         />
       )}
     </div>
@@ -1195,415 +783,252 @@ function AbaAgenda({ clientes }: { clientes: ClienteResumido[] }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Shared input styles
-// ─────────────────────────────────────────────────────────────────────────────
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '9px 12px',
-  borderRadius: 10,
-  border: '1.5px solid #E5E7EB',
-  fontSize: 13,
-  outline: 'none',
-  background: '#fff',
-  boxSizing: 'border-box',
-  fontFamily: 'inherit',
-}
-
-const selectStyle: React.CSSProperties = {
-  ...inputStyle,
-  cursor: 'pointer',
-}
-
-const labelStyle: React.CSSProperties = {
-  display: 'block',
-  fontSize: 12,
-  fontWeight: 700,
-  color: '#374151',
-  marginBottom: 5,
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Main Page
+// Página principal
 // ─────────────────────────────────────────────────────────────────────────────
 
 type Tab = 'contatos' | 'agenda'
-type MobileView = 'lista' | 'detalhe'
 
 export function V2CrmPage() {
-  // Data
+  const { activeCompanyId: companyId } = useCompany()
+  const v2User = getCurrentV2User()
+  const userId = v2User?.id ?? ''
+
+  const [tab, setTab] = useState<Tab>('contatos')
   const [contatos, setContatos] = useState<CrmContato[]>([])
   const [clientes, setClientes] = useState<ClienteResumido[]>([])
-  const [carregando, setCarregando] = useState(false)
+  const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
-
-  // UI state
-  const [tab, setTab] = useState<Tab>('contatos')
   const [busca, setBusca] = useState('')
-  const [clienteSelecionadoId, setClienteSelecionadoId] = useState<string | null>(null)
-  const [mostrarModal, setMostrarModal] = useState(false)
-  const [mobileView, setMobileView] = useState<MobileView>('lista')
+  const [novoContatoOpen, setNovoContatoOpen] = useState(false)
+  const [fichaCliente, setFichaCliente] = useState<{ id: string; nome: string; phone: string | null } | null>(null)
 
-  const carregar = useCallback(async () => {
-    setCarregando(true)
-    setErro(null)
-    try {
-      const [contatosData, clientesData] = await Promise.all([
-        fetchContatos({ somente_ativos: true }),
-        fetchClientesParaSelect(),
-      ])
-      setContatos(contatosData)
-      setClientes(clientesData)
-    } catch (e: unknown) {
-      setErro(typeof e === 'string' ? e : 'Erro ao carregar dados.')
-    } finally {
-      setCarregando(false)
-    }
-  }, [])
+  const carregar = useCallback(() => {
+    setCarregando(true); setErro(null)
+    Promise.all([fetchContatos(), fetchClientesParaSelect(companyId)])
+      .then(([ct, cl]) => { setContatos(ct); setClientes(cl) })
+      .catch(e => setErro(e instanceof Error ? e.message : 'Erro ao carregar CRM.'))
+      .finally(() => setCarregando(false))
+  }, [companyId])
 
   useEffect(() => { carregar() }, [carregar])
 
   const contatosFiltrados = useMemo(() => {
     if (!busca) return contatos
     const q = busca.toLowerCase()
-    return contatos.filter(
-      (c) =>
-        c.cliente_nome?.toLowerCase().includes(q) ||
-        c.assunto.toLowerCase().includes(q),
+    return contatos.filter(c =>
+      (c.cliente_nome ?? '').toLowerCase().includes(q) ||
+      c.assunto.toLowerCase().includes(q) ||
+      (c.descricao ?? '').toLowerCase().includes(q)
     )
   }, [contatos, busca])
 
-  function handleContatoSalvo(novoContato: CrmContato) {
-    setContatos((prev) => [novoContato, ...prev])
-    setMostrarModal(false)
-    setClienteSelecionadoId(novoContato.cliente_id)
-    setMobileView('detalhe')
-  }
-
-  function handleSelecionarContato(contato: CrmContato) {
-    setClienteSelecionadoId(contato.cliente_id)
-    setMobileView('detalhe')
-  }
-
-  function handleContatoCancelado() {
-    // Recarrega a lista principal sem fechar o painel de detalhe
-    carregar()
-  }
+  const tabStyle = (active: boolean): React.CSSProperties => ({
+    padding: '10px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+    border: 'none', background: 'none',
+    color: active ? '#0D6BAF' : '#6B7280',
+    borderBottom: active ? '2px solid #0D6BAF' : '2px solid transparent',
+    transition: 'all .15s',
+  })
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#F0F7EE' }}>
-      {/* ── Page Header ── */}
-      <div
-        style={{
-          background: '#fff',
-          borderBottom: '1px solid #E5E7EB',
-          padding: '16px 24px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 16,
-          flexWrap: 'wrap',
-          flexShrink: 0,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 14,
-              background: '#EFF6FF',
-              border: '1.5px solid #BFDBFE',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-            }}
-          >
-            <Users size={22} color="#0D6BAF" />
-          </div>
+      {/* Header */}
+      <div style={{ background: '#fff', borderBottom: '1px solid #E5E7EB', padding: '16px 24px 0', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
           <div>
             <h1 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: '#111827' }}>CRM</h1>
-            <p style={{ margin: 0, fontSize: 13, color: '#6B7280', marginTop: 2 }}>
-              {contatos.length} contato{contatos.length !== 1 ? 's' : ''} registrado{contatos.length !== 1 ? 's' : ''}
-            </p>
+            <p style={{ margin: 0, fontSize: 12, color: '#6B7280' }}>Acompanhamento de contatos com clientes</p>
           </div>
-        </div>
-
-        {/* Tabs */}
-        <div style={{ display: 'flex', gap: 4, background: '#F0F7EE', borderRadius: 12, padding: 4 }}>
-          {([['contatos', 'Contatos'], ['agenda', 'Agenda']] as [Tab, string][]).map(([t, label]) => (
+          {tab === 'contatos' && (
             <button
-              key={t}
-              type="button"
-              onClick={() => setTab(t)}
-              style={{
-                padding: '6px 18px',
-                borderRadius: 8,
-                border: 'none',
-                background: tab === t ? '#0D6BAF' : 'transparent',
-                color: tab === t ? '#fff' : '#6B7280',
-                fontSize: 13,
-                fontWeight: 700,
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-              }}
+              onClick={() => setNovoContatoOpen(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 10, border: 'none', background: '#0D6BAF', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 700, boxShadow: '0 2px 8px rgba(13,107,175,.3)' }}
             >
-              {label}
+              <Plus size={15} /> Registrar Contato
             </button>
-          ))}
+          )}
+        </div>
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: 0 }}>
+          <button style={tabStyle(tab === 'contatos')} onClick={() => setTab('contatos')}>
+            <MessageCircle size={13} style={{ display: 'inline', marginRight: 6 }} />
+            Contatos
+          </button>
+          <button style={tabStyle(tab === 'agenda')} onClick={() => setTab('agenda')}>
+            <Calendar size={13} style={{ display: 'inline', marginRight: 6 }} />
+            Agenda
+          </button>
         </div>
       </div>
 
-      {/* ── Content ── */}
-      {tab === 'agenda' ? (
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-          <AbaAgenda clientes={clientes} />
-        </div>
-      ) : (
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-          {/* ── Mobile tabs ── */}
-          <div
-            className="sm:hidden"
-            style={{
-              position: 'absolute',
-              bottom: 0,
-              left: 0,
-              right: 0,
-              zIndex: 50,
-              background: '#fff',
-              borderTop: '1px solid #E5E7EB',
-              display: 'flex',
-            }}
-          >
-            {(['lista', 'detalhe'] as MobileView[]).map((v) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => setMobileView(v)}
-                disabled={v === 'detalhe' && !clienteSelecionadoId}
-                style={{
-                  flex: 1,
-                  padding: '10px 0',
-                  border: 'none',
-                  background: mobileView === v ? '#EFF6FF' : '#fff',
-                  color: mobileView === v ? '#0D6BAF' : '#6B7280',
-                  fontSize: 12,
-                  fontWeight: 700,
-                  cursor: v === 'detalhe' && !clienteSelecionadoId ? 'not-allowed' : 'pointer',
-                  opacity: v === 'detalhe' && !clienteSelecionadoId ? 0.4 : 1,
-                }}
-              >
-                {v === 'lista' ? 'Lista' : 'Detalhe'}
-              </button>
-            ))}
+      {/* Body */}
+      <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
+        {tab === 'agenda' ? (
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            <AbaAgenda clientes={clientes} userId={userId} companyId={companyId} />
           </div>
-
-          {/* ── LEFT PANEL: Lista de Contatos ── */}
-          <div
-            style={{
-              width: '380px',
-              borderRight: '1px solid #E5E7EB',
-              background: '#fff',
-              display: 'flex',
-              flexDirection: 'column',
+        ) : (
+          /* Layout 2 painéis */
+          <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+            {/* Painel esquerdo: lista */}
+            <div style={{
+              width: fichaCliente ? '380px' : '100%',
+              minWidth: fichaCliente ? '320px' : undefined,
               flexShrink: 0,
-              // Mobile: esconde se detalhe ativo
-            }}
-            className={mobileView === 'detalhe' ? 'hidden sm:flex' : 'flex sm:flex'}
-          >
-            {/* Busca + Botão */}
-            <div style={{ padding: '14px 16px', borderBottom: '1px solid #F3F4F6', display: 'flex', gap: 8 }}>
-              <div style={{ position: 'relative', flex: 1 }}>
-                <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF' }} />
-                <input
-                  type="text"
-                  placeholder="Buscar contato…"
-                  value={busca}
-                  onChange={(e) => setBusca(e.target.value)}
-                  style={{ ...inputStyle, paddingLeft: 30, fontSize: 12 }}
-                />
+              display: 'flex', flexDirection: 'column',
+              borderRight: fichaCliente ? '1px solid #E5E7EB' : 'none',
+              background: '#fff',
+              overflow: 'hidden',
+            }}>
+              {/* Busca */}
+              <div style={{ padding: '14px 16px', borderBottom: '1px solid #F3F4F6', flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#F9FAFB', border: '1.5px solid #E5E7EB', borderRadius: 10, padding: '8px 12px' }}>
+                  <Search size={15} style={{ color: '#9CA3AF', flexShrink: 0 }} />
+                  <input
+                    value={busca}
+                    onChange={e => setBusca(e.target.value)}
+                    placeholder="Buscar por cliente ou assunto..."
+                    style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 13, width: '100%', color: '#111827' }}
+                  />
+                  {busca && (
+                    <button onClick={() => setBusca('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 0 }}>
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setMostrarModal(true)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  padding: '9px 12px',
-                  borderRadius: 10,
-                  border: 'none',
-                  background: '#0D6BAF',
-                  color: '#fff',
-                  fontSize: 12,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0,
-                }}
-              >
-                <Plus size={13} />
-                Novo
-              </button>
-            </div>
 
-            {/* Lista */}
-            <div style={{ flex: 1, overflowY: 'auto' }}>
-              {carregando && (
-                <div style={{ textAlign: 'center', padding: '40px 0', color: '#9CA3AF' }}>
-                  <Clock size={28} style={{ opacity: 0.4, marginBottom: 8 }} />
-                  <p style={{ margin: 0, fontSize: 13 }}>Carregando…</p>
-                </div>
-              )}
+              {/* Lista */}
+              <div style={{ flex: 1, overflowY: 'auto' }}>
+                {carregando && (
+                  <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+                    <Loader2 size={28} style={{ color: '#0D6BAF', animation: 'spin 1s linear infinite' }} />
+                  </div>
+                )}
 
-              {!carregando && erro && (
-                <div style={{ padding: '16px', color: '#DC2626', fontSize: 13 }}>
-                  {erro}
-                </div>
-              )}
-
-              {!carregando && !erro && contatosFiltrados.length === 0 && (
-                <div style={{ textAlign: 'center', padding: '40px 16px', color: '#9CA3AF' }}>
-                  <MessageCircle size={32} style={{ opacity: 0.3, marginBottom: 8 }} />
-                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>
-                    {busca ? 'Nenhum resultado encontrado' : 'Nenhum contato ainda'}
-                  </p>
-                </div>
-              )}
-
-              {contatosFiltrados.map((c) => {
-                const ativo = clienteSelecionadoId === c.cliente_id
-                const waLink = formatarWaMe(c.cliente_phone_1 ?? null) ?? formatarWaMe(c.cliente_phone_2 ?? null)
-
-                return (
-                  <div
-                    key={c.id}
-                    onClick={() => handleSelecionarContato(c)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 12,
-                      padding: '12px 16px',
-                      borderBottom: '1px solid #F3F4F6',
-                      cursor: 'pointer',
-                      background: ativo ? '#EFF6FF' : 'transparent',
-                      borderLeft: ativo ? '3px solid #0D6BAF' : '3px solid transparent',
-                      transition: 'background 0.1s',
-                    }}
-                  >
-                    <ClienteAvatar nome={c.cliente_nome ?? '?'} />
-
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                        <span
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 700,
-                            color: '#111827',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            maxWidth: '140px',
-                          }}
-                        >
-                          {c.cliente_nome ?? 'Cliente'}
-                        </span>
-                        <TipoBadge tipo={c.tipo} />
-                      </div>
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: 12,
-                          color: '#6B7280',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {c.assunto}
-                      </p>
-                      <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9CA3AF' }}>
-                        {fmtDate(c.ocorrido_em)}
-                      </p>
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
-                      {waLink && (
-                        <a
-                          href={waLink}
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          title="Abrir WhatsApp"
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            width: 28,
-                            height: 28,
-                            borderRadius: 8,
-                            background: '#F0FDF4',
-                            border: '1px solid #BBF7D0',
-                            color: '#16A34A',
-                            textDecoration: 'none',
-                          }}
-                        >
-                          <MessageCircle size={13} />
-                        </a>
-                      )}
-                      <ChevronRight size={14} color="#D1D5DB" />
+                {erro && (
+                  <div style={{ margin: 16, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '14px 16px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                    <AlertCircle size={16} style={{ color: '#DC2626', flexShrink: 0, marginTop: 1 }} />
+                    <div>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#DC2626' }}>Erro ao carregar</p>
+                      <p style={{ margin: '2px 0 0', fontSize: 12, color: '#DC2626' }}>{erro}</p>
                     </div>
                   </div>
-                )
-              })}
-            </div>
-          </div>
+                )}
 
-          {/* ── RIGHT PANEL: Detalhes ── */}
-          <div
-            style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}
-            className={mobileView === 'lista' ? 'hidden sm:flex' : 'flex sm:flex'}
-          >
-            {!clienteSelecionadoId ? (
-              <div
-                style={{
-                  flex: 1,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#9CA3AF',
-                  gap: 12,
-                }}
-              >
-                <Users size={48} style={{ opacity: 0.2 }} />
-                <p style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>
-                  Selecione um contato
-                </p>
-                <p style={{ margin: 0, fontSize: 13 }}>
-                  Clique em um contato para ver a linha do tempo do cliente
-                </p>
+                {!carregando && !erro && contatosFiltrados.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '48px 24px', color: '#9CA3AF' }}>
+                    <MessageCircle size={40} style={{ margin: '0 auto 12px', display: 'block', opacity: .35 }} />
+                    <p style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>
+                      {busca ? 'Nenhum contato encontrado.' : 'Nenhum contato registrado ainda.'}
+                    </p>
+                    {!busca && (
+                      <p style={{ margin: '6px 0 0', fontSize: 12 }}>
+                        Clique em <strong>Registrar Contato</strong> para começar.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {contatosFiltrados.map(c => {
+                  const phone = obterTelefoneCliente({ phone_1: c.cliente_phone_1, phone_2: c.cliente_phone_2 })
+                  const isActive = fichaCliente?.id === c.cliente_id
+                  return (
+                    <div
+                      key={c.id}
+                      onClick={() => setFichaCliente({ id: c.cliente_id, nome: c.cliente_nome ?? '—', phone })}
+                      style={{
+                        padding: '13px 16px', cursor: 'pointer',
+                        borderBottom: '1px solid #F3F4F6',
+                        background: isActive ? '#EFF6FF' : '#fff',
+                        transition: 'background .12s',
+                        display: 'flex', alignItems: 'flex-start', gap: 12,
+                      }}
+                      onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#F9FAFB' }}
+                      onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = '#fff' }}
+                    >
+                      {/* Avatar */}
+                      <div style={{
+                        width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                        background: isActive ? '#0D6BAF' : '#E5E7EB',
+                        color: isActive ? '#fff' : '#6B7280',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontWeight: 800, fontSize: 14,
+                      }}>
+                        {(c.cliente_nome ?? 'C').charAt(0).toUpperCase()}
+                      </div>
+
+                      {/* Info */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+                          <p style={{ margin: 0, fontWeight: 700, fontSize: 13, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {c.cliente_nome ?? '—'}
+                          </p>
+                          <span style={{ fontSize: 11, color: '#9CA3AF', flexShrink: 0 }}>
+                            {formatarDataHora(c.ocorrido_em)}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
+                          <DirecaoIcon direcao={c.direcao} />
+                          <TipoBadge tipo={c.tipo} />
+                        </div>
+                        <p style={{ margin: 0, fontSize: 12, color: '#4B5563', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {c.assunto}
+                        </p>
+                        {phone && (
+                          <div style={{ marginTop: 6 }}>
+                            <WhatsAppBtn phone={phone} />
+                          </div>
+                        )}
+                      </div>
+
+                      <ChevronRight size={14} style={{ color: '#D1D5DB', flexShrink: 0, marginTop: 4 }} />
+                    </div>
+                  )
+                })}
               </div>
-            ) : (
-              <PainelDetalhes
-                clienteId={clienteSelecionadoId}
-                clientes={clientes}
-                onContatoCancelados={handleContatoCancelado}
-              />
+            </div>
+
+            {/* Painel direito: ficha do cliente */}
+            {fichaCliente && (
+              <div style={{ flex: 1, overflow: 'hidden', background: '#FAFAFA', minWidth: 0 }}>
+                <FichaCliente
+                  clienteId={fichaCliente.id}
+                  clienteNome={fichaCliente.nome}
+                  phone={fichaCliente.phone}
+                  onClose={() => setFichaCliente(null)}
+                  onContatoCancelado={carregar}
+                />
+              </div>
             )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* Modal Novo Contato */}
-      {mostrarModal && (
-        <ModalNovoContato
+      {/* Modal novo contato */}
+      {novoContatoOpen && (
+        <NovoContatoModal
           clientes={clientes}
-          onClose={() => setMostrarModal(false)}
-          onSalvo={handleContatoSalvo}
+          userId={userId}
+          companyId={companyId}
+          onClose={() => setNovoContatoOpen(false)}
+          onSalvo={(novoContato) => {
+            setNovoContatoOpen(false)
+            // adiciona no topo da lista com nome do cliente
+            const cliente = clientes.find(cl => cl.id === novoContato.cliente_id)
+            setContatos(prev => [{
+              ...novoContato,
+              cliente_nome: cliente?.full_name ?? '—',
+              cliente_phone_1: cliente?.phone_1 ?? null,
+              cliente_phone_2: cliente?.phone_2 ?? null,
+            }, ...prev])
+          }}
         />
       )}
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
     </div>
   )
 }
