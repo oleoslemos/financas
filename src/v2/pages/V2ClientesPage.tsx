@@ -22,6 +22,8 @@ import {
   Lock,
   MessageCircle,
   Pencil,
+  UserPlus,
+  ExternalLink,
 } from 'lucide-react'
 import {
   BemAvivClient,
@@ -33,9 +35,11 @@ import {
   computeKpi,
   computeOrderStats,
   createClient,
+  createClientFromRelative,
   createRelative,
   deleteClient,
   deleteRelative,
+  fetchClient,
   fetchClientOrdersResult,
   fetchClients,
   fetchRelativesResult,
@@ -149,21 +153,26 @@ interface DrawerProps {
   onClose: () => void
   onSaved: (c: BemAvivClient) => void
   onDeleted: (id: string) => void
+  onOpenClient?: (clientId: string) => void
+  onClientCreated?: (c: BemAvivClient) => void
 }
 
 type DrawerTab = 'dados' | 'contato' | 'familiares' | 'followup' | 'pedidos'
 
-function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: DrawerProps) {
+function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted, onOpenClient, onClientCreated }: DrawerProps) {
   const [form, setForm] = useState<Partial<BemAvivClient>>(emptyForm(companyId))
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const [tab, setTab] = useState<DrawerTab>('dados')
 
   // Relatives state
   const [relatives, setRelatives] = useState<Familiar[]>([])
   const [loadingRelatives, setLoadingRelatives] = useState(false)
   const [editingRelativeId, setEditingRelativeId] = useState<string | null>(null)
+  const [autoCreateClient, setAutoCreateClient] = useState(true)
+  const [creatingClientForRelId, setCreatingClientForRelId] = useState<string | null>(null)
   const [newRelative, setNewRelative] = useState({
     name: '',
     relationship: 'CÔNJUGE',
@@ -184,6 +193,7 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
 
     setForm(client ? { ...client } : emptyForm(companyId))
     setError(null)
+    setSuccessMsg(null)
     setTab('dados')
     setEditingRelativeId(null)
     setNewRelative({ name: '', relationship: 'CÔNJUGE', cpf: '', birth_date: '', phone: '' })
@@ -270,6 +280,33 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
     setNewRelative({ name: '', relationship: 'CÔNJUGE', cpf: '', birth_date: '', phone: '' })
   }
 
+  const handleCreateClientNow = async (rel: Familiar) => {
+    if (!client) return
+    setCreatingClientForRelId(rel.id)
+    setError(null)
+    setSuccessMsg(null)
+    try {
+      const { client: created, error: cErr } = await createClientFromRelative(rel, client, companyId)
+      if (cErr || !created) {
+        setError(cErr || 'Não foi possível criar o cliente para o cônjuge.')
+        return
+      }
+      setSuccessMsg(`Cadastro de cliente criado e vinculado com sucesso para "${created.full_name}"!`)
+      if (onClientCreated) onClientCreated(created)
+      else onSaved(created)
+
+      // Recarrega familiares e pedidos unificados
+      const { data: updatedRels } = await fetchRelativesResult(client.id, companyId)
+      setRelatives(updatedRels)
+      const { data: updatedOrders } = await fetchClientOrdersResult(client.id, companyId)
+      setOrders(updatedOrders)
+    } catch (e: any) {
+      setError(e?.message || 'Erro ao processar criação de cliente.')
+    } finally {
+      setCreatingClientForRelId(null)
+    }
+  }
+
   const handleSaveRelative = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!client?.id) return
@@ -279,6 +316,7 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
     }
     setAddingRelative(true)
     setError(null)
+    setSuccessMsg(null)
 
     const payload = {
       name: newRelative.name.trim().toUpperCase(),
@@ -305,15 +343,35 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
         client_id: client.id,
         company_id: companyId,
       })
-      setAddingRelative(false)
       if (relErr) {
+        setAddingRelative(false)
         setError(relErr)
         return
       }
       if (data) {
-        setRelatives((prev) => [...prev, data])
+        // Se for cônjuge e autoCreateClient estiver marcado, já cria o cadastro de cliente!
+        const isSpouse = ['CÔNJUGE', 'CONJUGE', 'ESPOSO', 'ESPOSA'].includes(data.relationship.toUpperCase())
+        if (isSpouse && autoCreateClient) {
+          const { client: createdClient, error: cErr } = await createClientFromRelative(data, client, companyId)
+          if (createdClient) {
+            if (onClientCreated) onClientCreated(createdClient)
+            else onSaved(createdClient)
+            setSuccessMsg(`Familiar adicionado e novo cliente "${createdClient.full_name}" vinculado com sucesso!`)
+          } else if (cErr) {
+            console.warn('Familiar criado, mas aviso ao vincular cliente:', cErr)
+          }
+        } else {
+          setSuccessMsg('Familiar cadastrado com sucesso!')
+        }
+
+        // Recarrega familiares e pedidos unificados
+        const { data: updatedRels } = await fetchRelativesResult(client.id, companyId)
+        setRelatives(updatedRels)
+        const { data: updatedOrders } = await fetchClientOrdersResult(client.id, companyId)
+        setOrders(updatedOrders)
         handleCancelEditRelative()
       }
+      setAddingRelative(false)
     }
   }
 
@@ -462,6 +520,12 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, marginBottom: 16 }}>
               <AlertCircle size={16} color="#DC2626" />
               <span style={{ fontSize: 13, color: '#DC2626' }}>{error}</span>
+            </div>
+          )}
+          {successMsg && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 8, marginBottom: 16 }}>
+              <CheckCircle2 size={16} color="#16A34A" />
+              <span style={{ fontSize: 13, color: '#16A34A', fontWeight: 600 }}>{successMsg}</span>
             </div>
           )}
 
@@ -627,6 +691,20 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
                         <input style={inputClass()} value={newRelative.phone} onChange={(e) => setNewRelative({ ...newRelative, phone: e.target.value })} placeholder="(00) 00000-0000" />
                       </div>
                     </div>
+                    {['CÔNJUGE', 'CONJUGE', 'ESPOSO', 'ESPOSA'].includes(newRelative.relationship.toUpperCase()) && !editingRelativeId && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: '#F0FDF4', borderRadius: 8, border: '1px solid #BBF7D0', marginBottom: 12 }}>
+                        <input
+                          id="auto-create-client-check"
+                          type="checkbox"
+                          checked={autoCreateClient}
+                          onChange={(e) => setAutoCreateClient(e.target.checked)}
+                          style={{ width: 16, height: 16, cursor: 'pointer' }}
+                        />
+                        <label htmlFor="auto-create-client-check" style={{ fontSize: 12, fontWeight: 700, color: '#166534', cursor: 'pointer' }}>
+                          Criar também um novo cliente para este cônjuge (vincula os cadastros e unifica os pedidos)
+                        </label>
+                      </div>
+                    )}
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button
                         type="submit"
@@ -660,6 +738,7 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
                             <tr style={{ background: '#F9FAFB', borderBottom: '1px solid #E5E7EB', textAlign: 'left', color: '#6B7280', fontWeight: 700 }}>
                               <th style={{ padding: '8px 10px' }}>NOME</th>
                               <th style={{ padding: '8px 10px' }}>PARENTESCO</th>
+                              <th style={{ padding: '8px 10px' }}>VÍNCULO CLIENTE</th>
                               <th style={{ padding: '8px 10px' }}>CPF</th>
                               <th style={{ padding: '8px 10px' }}>ANIVERSÁRIO</th>
                               <th style={{ padding: '8px 10px' }}>TELEFONE</th>
@@ -669,10 +748,63 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
                           <tbody>
                             {relatives.map((rel, idx) => {
                               const waUrl = getWhatsappUrl(rel.phone)
+                              const isSpouse = ['CÔNJUGE', 'CONJUGE', 'ESPOSO', 'ESPOSA'].includes(rel.relationship.toUpperCase())
                               return (
                                 <tr key={rel.id} style={{ borderBottom: idx < relatives.length - 1 ? '1px solid #F3F4F6' : 'none', background: idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA' }}>
                                   <td style={{ padding: '8px 10px', fontWeight: 700, color: '#111827' }}>{rel.name}</td>
                                   <td style={{ padding: '8px 10px', color: '#4B5563' }}>{rel.relationship}</td>
+                                  <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
+                                    {rel.linked_client_id ? (
+                                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                        <span style={{
+                                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                                          padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                                          background: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0',
+                                        }}>
+                                          <CheckCircle2 size={12} color="#059669" />
+                                          Cliente Vinculado
+                                        </span>
+                                        {onOpenClient && (
+                                          <button
+                                            type="button"
+                                            onClick={() => onOpenClient(rel.linked_client_id!)}
+                                            style={{
+                                              display: 'inline-flex', alignItems: 'center', gap: 3,
+                                              border: 'none', background: '#EFF6FF', color: '#1D4ED8',
+                                              borderRadius: 4, padding: '3px 7px', fontSize: 11, fontWeight: 700,
+                                              cursor: 'pointer',
+                                            }}
+                                            title="Abrir ficha do cônjuge"
+                                          >
+                                            Ver <ExternalLink size={11} />
+                                          </button>
+                                        )}
+                                      </div>
+                                    ) : isSpouse ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleCreateClientNow(rel)}
+                                        disabled={creatingClientForRelId === rel.id}
+                                        style={{
+                                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                                          padding: '4px 9px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                                          border: 'none', background: '#7DC344', color: '#FFFFFF',
+                                          cursor: creatingClientForRelId === rel.id ? 'not-allowed' : 'pointer',
+                                          boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                                        }}
+                                        title="Criar novo cliente com este cônjuge e vincular todos os pedidos"
+                                      >
+                                        {creatingClientForRelId === rel.id ? (
+                                          <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} />
+                                        ) : (
+                                          <UserPlus size={12} />
+                                        )}
+                                        Criar Cliente
+                                      </button>
+                                    ) : (
+                                      <span style={{ color: '#9CA3AF', fontSize: 11 }}>—</span>
+                                    )}
+                                  </td>
                                   <td style={{ padding: '8px 10px', color: '#6B7280', whiteSpace: 'nowrap' }}>{rel.cpf || '—'}</td>
                                   <td style={{ padding: '8px 10px', color: '#6B7280', whiteSpace: 'nowrap' }}>{formatDate(rel.birth_date)}</td>
                                   <td style={{ padding: '8px 10px', color: '#6B7280', whiteSpace: 'nowrap' }}>
@@ -787,11 +919,20 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
                 </div>
               ) : (
                 <>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 }}>
-                      <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 10, padding: 12 }}>
-                        <p style={{ margin: 0, fontSize: 10, fontWeight: 800, color: '#6B7280', textTransform: 'uppercase' }}>Total em Pedidos</p>
-                        <p style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 900, color: '#111827' }}>{formatBRL(orderStats.total)}</p>
-                      </div>
+                  {orders.some((o) => o.is_linked_spouse) && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8 }}>
+                      <Users size={16} color="#1D4ED8" />
+                      <span style={{ fontSize: 12, color: '#1E40AF', fontWeight: 600 }}>
+                        Visualização Unificada: Mostrando pedidos combinados de {client.full_name} e cônjuge(s) vinculado(s).
+                      </span>
+                    </div>
+                  )}
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 }}>
+                    <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 10, padding: 12 }}>
+                      <p style={{ margin: 0, fontSize: 10, fontWeight: 800, color: '#6B7280', textTransform: 'uppercase' }}>Total em Pedidos</p>
+                      <p style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 900, color: '#111827' }}>{formatBRL(orderStats.total)}</p>
+                    </div>
                     <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 10, padding: 12 }}>
                       <p style={{ margin: 0, fontSize: 10, fontWeight: 800, color: '#6B7280', textTransform: 'uppercase' }}>Ticket Médio</p>
                       <p style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 900, color: '#111827' }}>{formatBRL(orderStats.average)}</p>
@@ -818,6 +959,7 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
                           <thead>
                             <tr style={{ background: '#F9FAFB', borderBottom: '1px solid #E5E7EB', textAlign: 'left', color: '#6B7280', fontWeight: 700 }}>
                               <th style={{ padding: '8px 8px', whiteSpace: 'nowrap' }}>DATA</th>
+                              <th style={{ padding: '8px 8px', whiteSpace: 'nowrap' }}>COMPRADOR</th>
                               <th style={{ padding: '8px 8px', whiteSpace: 'nowrap' }}>TIPO</th>
                               <th style={{ padding: '8px 8px', whiteSpace: 'nowrap' }}>Nº DOC</th>
                               <th style={{ padding: '8px 8px', textAlign: 'right', whiteSpace: 'nowrap', minWidth: 90 }}>VALOR</th>
@@ -828,6 +970,16 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted }: 
                             {orders.map((ord, idx) => (
                               <tr key={ord.id} style={{ borderBottom: idx < orders.length - 1 ? '1px solid #F3F4F6' : 'none', background: idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA' }}>
                                 <td style={{ padding: '8px 8px', color: '#374151', whiteSpace: 'nowrap' }}>{formatDate(ord.order_date)}</td>
+                                <td style={{ padding: '8px 8px', whiteSpace: 'nowrap' }}>
+                                  <span style={{
+                                    padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700,
+                                    background: ord.is_linked_spouse ? '#F3E8FF' : '#EFF6FF',
+                                    color: ord.is_linked_spouse ? '#7E22CE' : '#1D4ED8',
+                                    border: `1px solid ${ord.is_linked_spouse ? '#E9D5FF' : '#DBEAFE'}`,
+                                  }}>
+                                    {ord.is_linked_spouse ? `Cônjuge: ${ord.client_name}` : 'Titular'}
+                                  </span>
+                                </td>
                                 <td style={{ padding: '8px 8px', whiteSpace: 'nowrap' }}>
                                   <span style={{
                                     padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700,
@@ -1005,6 +1157,28 @@ export function V2ClientesPage() {
       return [c, ...prev]
     })
     setDrawerOpen(false)
+  }
+
+  const handleClientCreated = (c: BemAvivClient) => {
+    setClients((prev) => {
+      const idx = prev.findIndex((p) => p.id === c.id)
+      if (idx >= 0) { const next = [...prev]; next[idx] = c; return next }
+      return [c, ...prev]
+    })
+  }
+
+  const handleOpenClientById = async (clientId: string) => {
+    const local = clients.find((c) => c.id === clientId)
+    if (local) {
+      setSelectedClient(local)
+      setDrawerOpen(true)
+      return
+    }
+    const { data: fetched } = await fetchClient(clientId)
+    if (fetched) {
+      setSelectedClient(fetched)
+      setDrawerOpen(true)
+    }
   }
 
   const handleDeleted = (id: string) => {
@@ -1407,6 +1581,8 @@ export function V2ClientesPage() {
         onClose={closeDrawer}
         onSaved={handleSaved}
         onDeleted={handleDeleted}
+        onOpenClient={handleOpenClientById}
+        onClientCreated={handleClientCreated}
       />
     </>
   )

@@ -348,10 +348,15 @@ export interface Familiar {
   birth_date: string | null
   phone: string | null
   cpf?: string | null
+  linked_client_id?: string | null
+  linked_client_name?: string | null
 }
 
 export interface ClientOrderRow {
   id: string
+  client_id?: string
+  client_name?: string
+  is_linked_spouse?: boolean
   order_date: string
   document_type: 'ORCAMENTO' | 'PEDIDO'
   document_number: string | null
@@ -364,17 +369,73 @@ export async function fetchRelativesResult(
   companyId?: string | null,
 ): Promise<{ data: Familiar[]; error: string | null }> {
   if (!supabase) return { data: [], error: 'Supabase não configurado.' }
+  
+  // Tenta selecionar com linked_client_id; se a coluna ainda não existir no banco, faz fallback
   let query = supabase
     .from('bem_aviv_client_relatives')
-    .select('id, client_id, name, relationship, birth_date, phone, cpf')
+    .select('id, client_id, name, relationship, birth_date, phone, cpf, linked_client_id')
     .eq('client_id', clientId)
   if (companyId) query = query.eq('company_id', companyId)
-  const { data, error } = await query.order('name', { ascending: true })
+  
+  let { data, error } = await query.order('name', { ascending: true })
+  
+  if (error && (error.code === '42703' || error.message?.includes('linked_client_id'))) {
+    // Fallback sem linked_client_id
+    let fallbackQuery = supabase
+      .from('bem_aviv_client_relatives')
+      .select('id, client_id, name, relationship, birth_date, phone, cpf')
+      .eq('client_id', clientId)
+    if (companyId) fallbackQuery = fallbackQuery.eq('company_id', companyId)
+    const fallbackRes = await fallbackQuery.order('name', { ascending: true })
+    data = fallbackRes.data as any
+    error = fallbackRes.error
+  }
+
   if (error) {
     console.error('fetchRelatives error:', error)
     return { data: [], error: error.message }
   }
-  return { data: (data as unknown as Familiar[]) ?? [], error: null }
+
+  const list = ((data as unknown as Familiar[]) ?? [])
+
+  // Resolve nomes de clientes vinculados ou cônjuges que já possuem cadastro de cliente com o mesmo nome
+  if (list.length > 0) {
+    const linkedIds = list.map((r) => r.linked_client_id).filter(Boolean) as string[]
+    const namesToFind = list.filter((r) => !r.linked_client_id).map((r) => r.name.trim().toUpperCase())
+
+    let foundClients: { id: string; full_name: string }[] = []
+    
+    if (linkedIds.length > 0) {
+      const { data: byId } = await supabase
+        .from('bem_aviv_clients')
+        .select('id, full_name')
+        .in('id', linkedIds)
+      if (byId) foundClients.push(...byId)
+    }
+
+    if (namesToFind.length > 0) {
+      const { data: byName } = await supabase
+        .from('bem_aviv_clients')
+        .select('id, full_name')
+        .in('full_name', namesToFind)
+      if (byName) foundClients.push(...byName)
+    }
+
+    const mapById = new Map(foundClients.map((c) => [c.id, c.full_name]))
+    const mapByName = new Map(foundClients.map((c) => [c.full_name.trim().toUpperCase(), c.id]))
+
+    for (const item of list) {
+      if (item.linked_client_id && mapById.has(item.linked_client_id)) {
+        item.linked_client_name = mapById.get(item.linked_client_id)
+      } else if (!item.linked_client_id && mapByName.has(item.name.trim().toUpperCase())) {
+        const foundId = mapByName.get(item.name.trim().toUpperCase())!
+        item.linked_client_id = foundId
+        item.linked_client_name = item.name
+      }
+    }
+  }
+
+  return { data: list, error: null }
 }
 
 // Mantida com a assinatura original para não quebrar outras telas.
@@ -384,7 +445,18 @@ export async function fetchRelatives(clientId: string, companyId?: string | null
 
 export async function createRelative(input: Omit<Familiar, 'id'>): Promise<{ data: Familiar | null; error: string | null }> {
   if (!supabase) return { data: null, error: 'Supabase não configurado.' }
-  const { data, error } = await supabase.from('bem_aviv_client_relatives').insert(input).select().maybeSingle()
+
+  // Tenta com todos os campos fornecidos
+  let { data, error } = await supabase.from('bem_aviv_client_relatives').insert(input).select().maybeSingle()
+  
+  if (error && (error.code === '42703' || error.message?.includes('linked_client_id'))) {
+    // Fallback sem linked_client_id caso a coluna ainda não exista
+    const { linked_client_id, ...safeInput } = input as any
+    const fallbackRes = await supabase.from('bem_aviv_client_relatives').insert(safeInput).select().maybeSingle()
+    data = fallbackRes.data
+    error = fallbackRes.error
+  }
+
   if (error) return { data: null, error: error.message }
   if (!data) {
     return {
@@ -404,7 +476,17 @@ export async function updateRelative(
   if (!supabase) return { data: null, error: 'Supabase não configurado.' }
   let query = supabase.from('bem_aviv_client_relatives').update(changes).eq('id', id)
   if (companyId) query = query.eq('company_id', companyId)
-  const { data, error } = await query.select().maybeSingle()
+  let { data, error } = await query.select().maybeSingle()
+  
+  if (error && (error.code === '42703' || error.message?.includes('linked_client_id'))) {
+    const { linked_client_id, ...safeChanges } = changes as any
+    let fbQuery = supabase.from('bem_aviv_client_relatives').update(safeChanges).eq('id', id)
+    if (companyId) fbQuery = fbQuery.eq('company_id', companyId)
+    const fbRes = await fbQuery.select().maybeSingle()
+    data = fbRes.data
+    error = fbRes.error
+  }
+
   if (error) return { data: null, error: error.message }
   if (!data) {
     return {
@@ -430,22 +512,196 @@ export async function deleteRelative(
   return { error: null }
 }
 
+/**
+ * Cria um novo cliente com os dados do familiar (ex: cônjuge),
+ * copia o endereço do cliente titular e faz o vínculo recíproco.
+ */
+export async function createClientFromRelative(
+  relative: Familiar,
+  titularClient: BemAvivClient,
+  companyId?: string | null,
+): Promise<{ client: BemAvivClient | null; error: string | null }> {
+  if (!supabase) return { client: null, error: 'Supabase não configurado.' }
+
+  const cleanName = relative.name.trim().toUpperCase()
+  if (!cleanName) return { client: null, error: 'Nome do familiar é obrigatório.' }
+
+  const company = companyId ?? titularClient.company_id ?? null
+
+  // 1. Verifica se já existe um cliente com este nome exato para vincular diretamente
+  let checkQuery = supabase.from('bem_aviv_clients').select(FIELDS).eq('full_name', cleanName)
+  if (company) checkQuery = checkQuery.eq('company_id', company)
+  const { data: existingClient } = await checkQuery.maybeSingle()
+
+  let targetClient: BemAvivClient | null = existingClient as unknown as BemAvivClient | null
+
+  // 2. Se não existir, cria o novo cliente com dados do cônjuge e endereço do titular
+  if (!targetClient) {
+    const newClientPayload: BemAvivClientInput = {
+      company_id: company,
+      full_name: cleanName,
+      cpf: relative.cpf?.trim() || '',
+      birth_date: relative.birth_date || null,
+      phone_1: relative.phone?.trim() || '',
+      phone_2: '',
+      email: '',
+      cep: titularClient.cep || null,
+      address_street: titularClient.address_street || null,
+      address_number: titularClient.address_number || null,
+      address_complement: titularClient.address_complement || null,
+      address_district: titularClient.address_district || null,
+      address_city: titularClient.address_city || null,
+      address_state: titularClient.address_state || null,
+      commercial_stage: 'CONTATO',
+      next_followup_at: null,
+      next_followup_note: '',
+      next_followup_status: null,
+      eko7_presentation_at: titularClient.eko7_presentation_at || null,
+      group_reference: titularClient.group_reference || `CÔNJUGE: ${titularClient.full_name}`,
+      last_contact_at: null,
+    }
+
+    const { data: created, error: createErr } = await createClient(newClientPayload)
+    if (createErr || !created) {
+      return { client: null, error: createErr || 'Não foi possível criar o cadastro do cônjuge.' }
+    }
+    targetClient = created
+  }
+
+  // 3. Atualiza o registro original do familiar do titular com linked_client_id
+  if (relative.id && targetClient?.id) {
+    await updateRelative(relative.id, { linked_client_id: targetClient.id }, company)
+  }
+
+  // 4. Cria o familiar recíproco no novo cliente apontando de volta para o titular
+  if (targetClient?.id && titularClient.id) {
+    // Checa se o titular já consta como familiar no novo cliente
+    const { data: reciprocalList } = await supabase
+      .from('bem_aviv_client_relatives')
+      .select('id')
+      .eq('client_id', targetClient.id)
+      .eq('name', titularClient.full_name.trim().toUpperCase())
+    
+    if (!reciprocalList || reciprocalList.length === 0) {
+      await createRelative({
+        client_id: targetClient.id,
+        company_id: company,
+        name: titularClient.full_name.trim().toUpperCase(),
+        relationship: 'CÔNJUGE',
+        birth_date: titularClient.birth_date || null,
+        phone: titularClient.phone_1 || titularClient.phone_2 || null,
+        cpf: titularClient.cpf || null,
+        linked_client_id: titularClient.id,
+      })
+    }
+  }
+
+  return { client: targetClient, error: null }
+}
+
 export async function fetchClientOrdersResult(
   clientId: string,
   companyId?: string | null,
+  knownLinkedClientIds?: string[],
+  clientNamesMap?: Record<string, string>,
 ): Promise<{ data: ClientOrderRow[]; error: string | null }> {
   if (!supabase) return { data: [], error: 'Supabase não configurado.' }
+
+  // 1. Identifica IDs de clientes vinculados (cônjuges) se não informados
+  const targetClientIds = new Set<string>([clientId])
+  const namesMap: Record<string, string> = { ...(clientNamesMap || {}) }
+
+  if (knownLinkedClientIds && knownLinkedClientIds.length > 0) {
+    knownLinkedClientIds.forEach((id) => targetClientIds.add(id))
+  } else {
+    // Procura parentes com linked_client_id do cliente atual
+    try {
+      const { data: rels } = await supabase
+        .from('bem_aviv_client_relatives')
+        .select('linked_client_id, name')
+        .eq('client_id', clientId)
+      
+      if (rels) {
+        rels.forEach((r: any) => {
+          if (r.linked_client_id) {
+            targetClientIds.add(r.linked_client_id)
+            if (r.name) namesMap[r.linked_client_id] = r.name
+          }
+        })
+      }
+    } catch {
+      /* ignore */
+    }
+
+    // Procura se outro cliente tem o cliente atual como linked_client_id
+    try {
+      const { data: invRels } = await supabase
+        .from('bem_aviv_client_relatives')
+        .select('client_id, name')
+        .eq('linked_client_id', clientId)
+      
+      if (invRels) {
+        invRels.forEach((r: any) => {
+          if (r.client_id) {
+            targetClientIds.add(r.client_id)
+          }
+        })
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const idsArray = Array.from(targetClientIds)
+
+  // 2. Busca nomes dos clientes para preencher client_name se necessário
+  const missingNames = idsArray.filter((id) => !namesMap[id])
+  if (missingNames.length > 0) {
+    try {
+      const { data: clients } = await supabase
+        .from('bem_aviv_clients')
+        .select('id, full_name')
+        .in('id', missingNames)
+      if (clients) {
+        clients.forEach((c) => {
+          namesMap[c.id] = c.full_name
+        })
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // 3. Busca os pedidos de todos os clientes vinculados
   let query = supabase
     .from('bem_aviv_sales_orders')
-    .select('id, order_date, document_type, document_number, status, total_amount')
-    .eq('client_id', clientId)
+    .select('id, client_id, order_date, document_type, document_number, status, total_amount')
+    .in('client_id', idsArray)
+
   if (companyId) query = query.eq('company_id', companyId)
   const { data, error } = await query.order('order_date', { ascending: false })
+
   if (error) {
     console.error('fetchClientOrders error:', error)
     return { data: [], error: error.message }
   }
-  return { data: (data as unknown as ClientOrderRow[]) ?? [], error: null }
+
+  const rows = ((data as unknown as any[]) ?? []).map((ord) => {
+    const isSpouse = ord.client_id !== clientId
+    return {
+      id: ord.id,
+      client_id: ord.client_id,
+      client_name: namesMap[ord.client_id] || (isSpouse ? 'Cônjuge' : 'Titular'),
+      is_linked_spouse: isSpouse,
+      order_date: ord.order_date,
+      document_type: ord.document_type,
+      document_number: ord.document_number,
+      status: ord.status,
+      total_amount: ord.total_amount,
+    } as ClientOrderRow
+  })
+
+  return { data: rows, error: null }
 }
 
 // Mantida com a assinatura original para não quebrar outras telas.
