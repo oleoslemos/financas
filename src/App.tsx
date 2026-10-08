@@ -80,7 +80,8 @@ const V2PedidoCompraPage = lazy(() => import('./v2/pages/V2PedidoCompraPage').th
 const V2PedidoVendasPage = lazy(() => import('./v2/pages/V2PedidoVendasPage').then((m) => ({ default: m.V2PedidoVendasPage })))
 const V2EstoquePage = lazy(() => import('./v2/pages/V2EstoquePage').then((m) => ({ default: m.V2EstoquePage })))
 const V2ContasPagarPage = lazy(() => import('./v2/pages/V2ContasPagarPage').then(m => ({ default: m.V2ContasPagarPage })))
-const V2CrmPage = lazy(() => import('./v2/pages/V2CrmPage').then(m => ({ default: m.V2CrmPage })));
+const V2CrmPage = lazy(() => import('./v2/pages/V2CrmPage').then(m => ({ default: m.V2CrmPage })))
+const V2TagsPage = lazy(() => import('./v2/pages/V2TagsPage').then(m => ({ default: m.V2TagsPage })))
 
 function HomeRedirect() {
   const { user } = useUser()
@@ -119,6 +120,7 @@ export default function App() {
           <Route path="/v2/configuracoes" element={<V2SettingsPage />} />
                  <Route path="/v2/contas-pagar" element={<V2ContasPagarPage />} />
          <Route path="/v2/tags" element={<V2TagsPage />} />
+         <Route path="/v2/crm" element={<V2CrmPage />} />
          </Route>
 
         <Route path="/sign-in/*" element={<SignInPage />} />
