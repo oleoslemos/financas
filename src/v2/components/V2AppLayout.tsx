@@ -7,6 +7,7 @@ import {
   Home,
   Settings,
   Users,
+  UserCheck,
   Menu,
   X,
   Package,
@@ -59,6 +60,7 @@ function V2AppLayoutInner() {
         { to: '/v2/tags', icon: Tag, label: 'Tags' },
       ],
     },
+    { to: '/v2/crm', icon: UserCheck, label: 'CRM' },
     { to: '/v2/configuracoes', icon: Settings, label: 'Configurações' },
   ]
 
