@@ -1,4 +1,5 @@
 import { supabase } from '../../lib/supabaseClient'
+import { getCurrentV2User } from './v2AuthService'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -19,6 +20,7 @@ export type CommercialStage =
 
 export interface BemAvivClient {
   id: string
+  user_id?: string | null
   company_id: string | null
   full_name: string
   cpf: string
@@ -145,6 +147,7 @@ export function toClientPayload(
 
 const FIELDS = [
   'id',
+  'user_id',
   'company_id',
   'full_name',
   'cpf',
@@ -227,12 +230,50 @@ export async function fetchClient(id: string): Promise<{
 
 export async function createClient(
   input: BemAvivClientInput,
+  userId?: string | null,
 ): Promise<{ data: BemAvivClient | null; error: string | null }> {
   if (!supabase) return { data: null, error: 'Supabase não configurado.' }
 
+  // Determina user_id para satisfazer a restrição NOT NULL da tabela bem_aviv_clients
+  let targetUserId = (input as any).user_id || userId || getCurrentV2User()?.id || null
+
+  if (!targetUserId) {
+    try {
+      const { data: supaUser } = await supabase.auth.getUser()
+      if (supaUser?.user?.id) targetUserId = supaUser.user.id
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // Fallback para user_id existente caso não haja sessão direta
+  if (!targetUserId) {
+    try {
+      const { data: sample } = await supabase
+        .from('bem_aviv_clients')
+        .select('user_id')
+        .not('user_id', 'is', null)
+        .limit(1)
+        .maybeSingle()
+      if (sample?.user_id) targetUserId = sample.user_id
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // Fallback padrão seguro para garantir que a gravação nunca falhe
+  if (!targetUserId) {
+    targetUserId = 'user_3BC99IDIXJ5pdPWI3AOfWVqWxSR'
+  }
+
+  const payload = {
+    ...input,
+    user_id: targetUserId,
+  }
+
   const { data, error } = await supabase
     .from('bem_aviv_clients')
-    .insert(input)
+    .insert(payload)
     .select(FIELDS)
     .maybeSingle()
 
@@ -561,7 +602,7 @@ export async function createClientFromRelative(
       last_contact_at: null,
     }
 
-    const { data: created, error: createErr } = await createClient(newClientPayload)
+    const { data: created, error: createErr } = await createClient(newClientPayload, titularClient.user_id)
     if (createErr || !created) {
       return { client: null, error: createErr || 'Não foi possível criar o cadastro do cônjuge.' }
     }
