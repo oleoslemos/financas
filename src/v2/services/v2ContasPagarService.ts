@@ -1,20 +1,37 @@
 import { supabase } from '../../lib/supabaseClient'
 
+export type TipoLancamento = 'pagar' | 'receber'
 export type StatusConta = 'aberta' | 'parcial' | 'paga' | 'cancelada' | 'vencida'
-export type OrigemConta = 'compra' | 'avulsa' | 'recorrente'
+export type OrigemConta = 'compra' | 'venda' | 'avulsa' | 'recorrente'
+
+export type BaixaParcelaInfo = {
+  dataBaixa: string
+  valorOriginal: number
+  descontoTipo: 'R$' | '%'
+  descontoValor: number
+  descontoFinal: number
+  acrescimoTipo: 'R$' | '%'
+  acrescimoValor: number
+  acrescimoFinal: number
+  valorFinalPago: number
+  formaPagamento?: string
+  observacao?: string
+}
 
 export type ContaPagarParcela = {
   numero: number
   vencimento: string
   valor: number
   status: StatusConta
+  baixa?: BaixaParcelaInfo
 }
 
 export type ContaPagar = {
   id: string
+  tipo?: TipoLancamento // 'pagar' (default) ou 'receber'
   pedido_id?: string
   descricao: string
-  fornecedor: string | null
+  fornecedor: string | null // Para receber pode ser cliente/origem
   origem: OrigemConta
   categoria: string | null
   total: number
@@ -44,7 +61,12 @@ export async function listContasPagar(): Promise<ContaPagar[]> {
       if (raw) list = JSON.parse(raw)
     } catch {}
   }
-  return list
+
+  // Garantir que todas tenham o campo 'tipo' preenchido por padrão como 'pagar'
+  return list.map((c) => ({
+    ...c,
+    tipo: c.tipo || 'pagar',
+  }))
 }
 
 export async function getContaPagarPorPedidoId(pedidoId: string): Promise<ContaPagar | undefined> {
@@ -67,6 +89,7 @@ export async function saveContaPagar(conta: Omit<ContaPagar, 'id' | 'created_at'
   
   const newConta: ContaPagar = {
     ...conta,
+    tipo: conta.tipo || 'pagar',
     id: crypto.randomUUID(),
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
@@ -86,8 +109,9 @@ export async function saveContaPagar(conta: Omit<ContaPagar, 'id' | 'created_at'
 
 export async function updateContaPagar(conta: ContaPagar): Promise<ContaPagar> {
   const current = await listContasPagar()
-  const updatedConta = {
+  const updatedConta: ContaPagar = {
     ...conta,
+    tipo: conta.tipo || 'pagar',
     updated_at: new Date().toISOString(),
   }
 
@@ -101,6 +125,17 @@ export async function updateContaPagar(conta: ContaPagar): Promise<ContaPagar> {
   localStorage.setItem(KEY, JSON.stringify(updatedList))
 
   return updatedConta
+}
+
+export async function deleteContaPagar(id: string): Promise<void> {
+  const current = await listContasPagar()
+  if (supabase) {
+    try {
+      await supabase.from(SUPABASE_TABLE).delete().eq('id', id)
+    } catch {}
+  }
+  const filtered = current.filter((c) => c.id !== id)
+  localStorage.setItem(KEY, JSON.stringify(filtered))
 }
 
 export async function deleteContaPagarPorPedidoId(pedidoId: string): Promise<void> {

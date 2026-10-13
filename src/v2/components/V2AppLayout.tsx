@@ -16,6 +16,7 @@ import {
   ClipboardList,
   Warehouse,
   Wallet,
+  TrendingUp,
 } from 'lucide-react'
 
 export function V2AppLayout() {
@@ -46,6 +47,7 @@ function V2AppLayoutInner() {
 
   const navEntries: NavEntry[] = [
     { to: '/v2/inicio', icon: Home, label: 'Início' },
+    { to: '/v2/painel-vendas', icon: TrendingUp, label: 'Painel de Vendas' },
     { to: '/v2/clientes', icon: Users, label: 'Clientes' },
     {
       group: 'Comercial',
@@ -56,7 +58,7 @@ function V2AppLayoutInner() {
         { to: '/v2/pedido-vendas', icon: ClipboardList, label: 'Vendas Rep.' },
         { to: '/v2/pedido-vendas-distribuidor', icon: ClipboardList, label: 'Vendas Dist.' },
         { to: '/v2/estoque', icon: Warehouse, label: 'Estoque' },
-        { to: '/v2/contas-pagar', icon: Wallet, label: 'Contas a Pagar' },
+        { to: '/v2/contas-pagar', icon: Wallet, label: 'Financeiro' },
         { to: '/v2/tags', icon: Tag, label: 'Tags' },
       ],
     },

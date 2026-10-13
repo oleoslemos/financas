@@ -80,6 +80,7 @@ const V2PedidoCompraPage = lazy(() => import('./v2/pages/V2PedidoCompraPage').th
 const V2PedidoVendasPage = lazy(() => import('./v2/pages/V2PedidoVendasPage').then((m) => ({ default: m.V2PedidoVendasPage })))
 const V2EstoquePage = lazy(() => import('./v2/pages/V2EstoquePage').then((m) => ({ default: m.V2EstoquePage })))
 const V2ContasPagarPage = lazy(() => import('./v2/pages/V2ContasPagarPage').then(m => ({ default: m.V2ContasPagarPage })))
+const V2PainelVendasPage = lazy(() => import('./v2/pages/V2PainelVendasPage').then(m => ({ default: m.V2PainelVendasPage })))
 const V2CrmPage = lazy(() => import('./v2/pages/V2CrmPage').then(m => ({ default: m.V2CrmPage })))
 const V2TagsPage = lazy(() => import('./v2/pages/V2TagsPage').then(m => ({ default: m.V2TagsPage })))
 
@@ -110,6 +111,7 @@ export default function App() {
         <Route element={<V2AppLayout />}>
           <Route path="/v2" element={<Navigate to="/v2/inicio" replace />} />
           <Route path="/v2/inicio" element={<V2WelcomePage />} />
+          <Route path="/v2/painel-vendas" element={<V2PainelVendasPage />} />
           <Route path="/v2/clientes" element={<V2ClientesPage />} />
           <Route path="/v2/produtos" element={<V2ProdutosPage />} />
           <Route path="/v2/tabela-preco" element={<V2TabelaPrecoPage />} />
