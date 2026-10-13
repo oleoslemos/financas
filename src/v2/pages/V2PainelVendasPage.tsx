@@ -5,7 +5,6 @@ import {
   ShoppingBag,
   Award,
   Target,
-  Sparkles,
   ArrowUpRight,
   Settings,
   Calendar,
@@ -257,6 +256,29 @@ export function V2PainelVendasPage() {
   }, [periodoModo, selectedMonth, goalsMap, annualGoalVal, faturamentoRealizado])
 
   const atingimentoMeta = metaPeriodo > 0 ? (faturamentoRealizado / metaPeriodo) * 100 : 0
+  const faltamValor = Math.max(0, metaPeriodo - faturamentoRealizado)
+
+  // Cálculos de Ritmo e Projeções (conforme a imagem)
+  const agora = new Date()
+  const totalDiasNoMes = new Date(selectedYear, selectedMonth, 0).getDate()
+  const diaAtualNoMes =
+    selectedYear === agora.getFullYear() && selectedMonth === agora.getMonth() + 1
+      ? agora.getDate()
+      : selectedYear < agora.getFullYear() || (selectedYear === agora.getFullYear() && selectedMonth < agora.getMonth() + 1)
+      ? totalDiasNoMes
+      : 1
+  const diasRestantes = Math.max(1, totalDiasNoMes - diaAtualNoMes)
+
+  const ritmoAtualPorDia = diaAtualNoMes > 0 ? faturamentoRealizado / diaAtualNoMes : 0
+  const ritmoNecessarioPorDia = diasRestantes > 0 ? faltamValor / diasRestantes : 0
+  const projecaoRitmoAtual = ritmoAtualPorDia * totalDiasNoMes
+  const percentualProjecao = metaPeriodo > 0 ? (projecaoRitmoAtual / metaPeriodo) * 100 : 0
+
+  const esperadoAteHoje = metaPeriodo > 0 ? (metaPeriodo / totalDiasNoMes) * diaAtualNoMes : 0
+  const pacePercentageOfDay = totalDiasNoMes > 0 ? (diaAtualNoMes / totalDiasNoMes) * 100 : 0
+  const estaAbaixoDoRitmo = atingimentoMeta < (pacePercentageOfDay * 0.85)
+
+  const nomeMesAtivo = MONTH_NAMES[selectedMonth - 1] || 'Mês'
 
   // Evolução Mês a Mês do Ano Selecionado (com as Metas configuradas para cada mês)
   const evolucaoMeses = useMemo(() => {
@@ -515,82 +537,197 @@ export function V2PainelVendasPage() {
         </div>
       </div>
 
-      {/* ── HISTÓRIA EXECUTIVA (STORYTELLING BANNER) ────────────────── */}
+      {/* ── CARD PRINCIPAL DE META MENSAL / RITMO COMERCIAL (ESTILO IMAGEM ENVIADA) ── */}
       <div
         style={{
-          background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)',
+          background: '#FFFFFF',
           borderRadius: 20,
-          padding: '24px 28px',
-          color: '#FFFFFF',
+          border: '1.5px solid #E2E8F0',
+          padding: '28px 32px',
           marginBottom: 28,
-          boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.25)',
-          position: 'relative',
-          overflow: 'hidden',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        {/* Badges superiores: Status do Ritmo + Meta do Mês */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
           <span
             style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 5,
-              padding: '4px 10px',
-              borderRadius: 20,
-              background: '#16A34A33',
-              border: '1px solid #16A34A66',
-              fontSize: 11,
+              gap: 6,
+              padding: '4px 12px',
+              borderRadius: 6,
+              background: estaAbaixoDoRitmo ? '#FEFCE8' : '#F0FDF4',
+              border: `1.2px solid ${estaAbaixoDoRitmo ? '#FEF08A' : '#BBF7D0'}`,
+              fontSize: 12,
               fontWeight: 800,
-              color: '#4ADE80',
+              color: estaAbaixoDoRitmo ? '#A16207' : '#15803D',
               textTransform: 'uppercase',
+              letterSpacing: '0.04em',
             }}
           >
-            <Sparkles size={13} />
-            Insight Comercial
+            {estaAbaixoDoRitmo ? '⚠ ATENÇÃO · ABAIXO DO RITMO' : '✓ PARABÉNS · NO RITMO DA META'}
           </span>
-          <span style={{ fontSize: 12, color: '#94A3B8' }}>
-            Atualizado com as metas de {selectedYear}
+
+          <span style={{ fontSize: 13, color: '#64748B', fontWeight: 600 }}>
+            Meta do mês: <strong style={{ color: '#0F172A' }}>{fmt(metaPeriodo)}</strong>
           </span>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 24, alignItems: 'center' }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900, lineHeight: 1.3 }}>
-              Faturamento realizado: {fmt(faturamentoRealizado)}
-            </h2>
-            <p style={{ margin: '8px 0 0', fontSize: 13, color: '#CBD5E1', lineHeight: 1.6 }}>
-              {atingimentoMeta >= 100 ? (
-                <span>
-                  🎉 <strong>Parabéns!</strong> A meta de <strong>{fmt(metaPeriodo)}</strong> foi superada, alcançando{' '}
-                  <strong>{atingimentoMeta.toFixed(1)}%</strong> do objetivo estipulado para o ciclo.
-                </span>
-              ) : (
-                <span>
-                  O ritmo comercial já atingiu <strong>{atingimentoMeta.toFixed(1)}%</strong> da meta configurada de{' '}
-                  <strong>{fmt(metaPeriodo)}</strong>. Faltam {fmt(Math.max(0, metaPeriodo - faturamentoRealizado))} para concluir o período.
-                </span>
-              )}
+        {/* Título de impacto: Mês, faltam R$ e dias restantes */}
+        <h2 style={{ margin: '0 0 8px', fontSize: 26, fontWeight: 800, color: '#0F172A', lineHeight: 1.3 }}>
+          {atingimentoMeta >= 100 ? (
+            `🎉 ${nomeMesAtivo} atingiu a meta: superada em ${fmt(faturamentoRealizado - metaPeriodo)}!`
+          ) : (
+            `${nomeMesAtivo} está ${estaAbaixoDoRitmo ? 'bem abaixo' : 'próximo'} da meta: faltam ${fmt(faltamValor)} em ${diasRestantes} dias.`
+          )}
+        </h2>
+
+        {/* Subtítulo estimulante: Quanto precisa vender por dia vs ritmo atual */}
+        <p style={{ margin: '0 0 24px', fontSize: 14, color: '#64748B', lineHeight: 1.6 }}>
+          Seria preciso vender <strong style={{ color: '#0F172A', fontWeight: 700 }}>{fmt(ritmoNecessarioPorDia)} por dia</strong> daqui até o fim do mês. O ritmo atual é de <strong style={{ color: '#0F172A', fontWeight: 700 }}>{fmt(ritmoAtualPorDia)} por dia</strong>.
+        </p>
+
+        {/* Linha com valores de realização e meta */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+            <span style={{ fontSize: 22, fontWeight: 900, color: '#0F172A' }}>
+              {fmt(faturamentoRealizado)}
+            </span>
+            <span style={{ fontSize: 13, color: '#64748B', fontWeight: 600 }}>
+              realizados · {atingimentoMeta.toFixed(1)}% da meta
+            </span>
+          </div>
+
+          <span style={{ fontSize: 13, color: '#64748B', fontWeight: 600 }}>
+            Meta {fmt(metaPeriodo)}
+          </span>
+        </div>
+
+        {/* Barra de Progresso com Marcador Flutuante "Esperado até hoje" */}
+        <div style={{ position: 'relative', paddingTop: 28, marginBottom: 12 }}>
+          {/* Marcador flutuante */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: `${Math.min(92, Math.max(8, pacePercentageOfDay))}%`,
+              transform: 'translateX(-50%)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              pointerEvents: 'none',
+              transition: 'left 0.3s ease',
+            }}
+          >
+            <span
+              style={{
+                borderRadius: 20,
+                background: '#0F172A',
+                color: '#FFFFFF',
+                fontSize: 11,
+                fontWeight: 800,
+                padding: '4px 10px',
+                whiteSpace: 'nowrap',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
+              }}
+            >
+              Esperado até hoje · {fmt(esperadoAteHoje)}
+            </span>
+            <div
+              style={{
+                width: 0,
+                height: 0,
+                borderLeft: '5px solid transparent',
+                borderRight: '5px solid transparent',
+                borderTop: '5px solid #0F172A',
+              }}
+            />
+          </div>
+
+          {/* Trilho da Barra */}
+          <div
+            style={{
+              height: 10,
+              width: '100%',
+              background: '#EFF6FF',
+              borderRadius: 10,
+              overflow: 'hidden',
+              border: '1px solid #DBEAFE',
+            }}
+          >
+            <div
+              style={{
+                height: '100%',
+                width: `${Math.min(100, atingimentoMeta)}%`,
+                background: '#1D4ED8',
+                borderRadius: 10,
+                transition: 'width 0.5s ease',
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Legenda explicativa */}
+        <p style={{ margin: '0 0 24px', fontSize: 12, color: '#94A3B8' }}>
+          A linha escura mostra onde a meta deveria estar hoje, se as vendas fossem constantes até o dia {totalDiasNoMes}.
+        </p>
+
+        {/* ── 3 MINI CARDS DE ESTÍMULO (FALTAM, PRECISA VENDER POR DIA, SE MANTIVER O RITMO) ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+          {/* Card 1: Faltam */}
+          <div
+            style={{
+              background: '#F8FAFC',
+              borderRadius: 14,
+              padding: '16px 20px',
+              border: '1px solid #E2E8F0',
+            }}
+          >
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              FALTAM
+            </span>
+            <p style={{ margin: '6px 0 0', fontSize: 22, fontWeight: 900, color: '#0F172A' }}>
+              {fmt(faltamValor)}
             </p>
           </div>
 
-          <div style={{ display: 'flex', gap: 16, background: '#FFFFFF0D', padding: '16px 20px', borderRadius: 14, border: '1px solid #FFFFFF1A' }}>
-            <div>
-              <p style={{ margin: 0, fontSize: 11, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase' }}>Meta do Ciclo</p>
-              <p style={{ margin: '4px 0 0', fontSize: 20, fontWeight: 900, color: '#FFFFFF' }}>{fmt(metaPeriodo)}</p>
-              <div style={{ marginTop: 8, height: 6, width: 140, background: '#334155', borderRadius: 10, overflow: 'hidden' }}>
-                <div
-                  style={{
-                    height: '100%',
-                    width: `${Math.min(100, atingimentoMeta)}%`,
-                    background: atingimentoMeta >= 100 ? '#38BDF8' : '#22C55E',
-                    borderRadius: 10,
-                  }}
-                />
-              </div>
-            </div>
-            <div style={{ borderLeft: '1px solid #FFFFFF1A', paddingLeft: 16 }}>
-              <p style={{ margin: 0, fontSize: 11, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase' }}>Ticket Médio</p>
-              <p style={{ margin: '4px 0 0', fontSize: 20, fontWeight: 900, color: '#38BDF8' }}>{fmt(ticketMedio)}</p>
-              <p style={{ margin: '4px 0 0', fontSize: 11, color: '#94A3B8' }}>em {totalPedidos} negociações</p>
+          {/* Card 2: Precisa Vender Por Dia */}
+          <div
+            style={{
+              background: '#F8FAFC',
+              borderRadius: 14,
+              padding: '16px 20px',
+              border: '1px solid #E2E8F0',
+            }}
+          >
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              PRECISA VENDER POR DIA
+            </span>
+            <p style={{ margin: '6px 0 0', fontSize: 22, fontWeight: 900, color: '#0F172A' }}>
+              {fmt(ritmoNecessarioPorDia)}
+            </p>
+          </div>
+
+          {/* Card 3: Se Mantiver o Ritmo */}
+          <div
+            style={{
+              background: '#F8FAFC',
+              borderRadius: 14,
+              padding: '16px 20px',
+              border: '1px solid #E2E8F0',
+            }}
+          >
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              SE MANTIVER O RITMO
+            </span>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 6 }}>
+              <span style={{ fontSize: 22, fontWeight: 900, color: '#0F172A' }}>
+                {fmt(projecaoRitmoAtual)}
+              </span>
+              <span style={{ fontSize: 13, color: '#64748B', fontWeight: 700 }}>
+                · {percentualProjecao.toFixed(0)}% da meta
+              </span>
             </div>
           </div>
         </div>
