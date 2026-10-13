@@ -1,32 +1,45 @@
-import { useState, useEffect } from 'react'
+import { memo, useDeferredValue, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
-  Wallet,
-  Search,
-  Plus,
-  CheckCircle2,
-  Clock,
-  XCircle,
   AlertCircle,
-  ChevronDown,
-  Filter,
   ArrowDownLeft,
   ArrowUpRight,
-  TrendingDown,
-  TrendingUp,
-  X,
+  CheckCircle2,
+  CircleDot,
+  Clock,
+  Inbox,
+  Plus,
   RotateCcw,
+  Search,
+  Wallet,
+  X,
 } from 'lucide-react'
+import {
+  achatar,
+  agruparPorDia,
+  contarHistoria,
+  filtrar,
+  formatBRL,
+  hojeISO,
+  mesesDisponiveis,
+  rotuloDia,
+  rotuloMes,
+  totalizar,
+  type BaseData,
+  type DiaExtrato,
+  type Filtros,
+  type Movimento,
+  type Status,
+} from '../features/financeiro/extrato'
 import {
   listContasPagar,
   updateContaPagar,
   saveContaPagar,
   estornarBaixaParcela,
   ContaPagar,
-  StatusConta,
-  OrigemConta,
-  TipoLancamento,
   ContaPagarParcela,
   BaixaParcelaInfo,
+  TipoLancamento,
+  StatusConta,
 } from '../services/v2ContasPagarService'
 import {
   listContasBancarias,
@@ -35,58 +48,37 @@ import {
   ContaBancaria,
 } from '../services/v2ContasBancariasService'
 
-const STATUS_CONFIG: Record<StatusConta, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
-  aberta: { label: 'Aberta', color: '#2563EB', bg: '#EFF6FF', icon: <Clock size={13} /> },
-  parcial: { label: 'Parcial', color: '#D97706', bg: '#FFFBEB', icon: <AlertCircle size={13} /> },
-  paga: { label: 'Paga', color: '#16A34A', bg: '#F0FDF4', icon: <CheckCircle2 size={13} /> },
-  cancelada: { label: 'Cancelada', color: '#6B7280', bg: '#F3F4F6', icon: <XCircle size={13} /> },
-  vencida: { label: 'Vencida', color: '#DC2626', bg: '#FEF2F2', icon: <AlertCircle size={13} /> },
+const DIAS_POR_PAGINA = 30
+
+const STATUS_INFO: Record<Status, { label: string; cls: string; Icon: typeof Clock }> = {
+  aberta: { label: 'Aberta', cls: 'bg-blue-50 text-blue-700 border-blue-200', Icon: Clock },
+  vencida: { label: 'Vencida', cls: 'bg-red-50 text-red-700 border-red-200', Icon: AlertCircle },
+  parcial: { label: 'Parcial', cls: 'bg-amber-50 text-amber-700 border-amber-200', Icon: CircleDot },
+  paga: { label: 'Paga', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', Icon: CheckCircle2 },
+  cancelada: { label: 'Cancelada', cls: 'bg-slate-50 text-slate-700 border-slate-200', Icon: X },
 }
 
-const ORIGEM_CONFIG: Record<OrigemConta, { label: string; icon: React.ReactNode }> = {
-  compra: { label: 'Pedido de Compra', icon: <span style={{ fontSize: 11 }}>🛒</span> },
-  venda: { label: 'Venda / Pedido', icon: <span style={{ fontSize: 11 }}>💰</span> },
-  avulsa: { label: 'Avulsa / Financeiro', icon: <span style={{ fontSize: 11 }}>📋</span> },
-  recorrente: { label: 'Recorrente', icon: <span style={{ fontSize: 11 }}>🔄</span> },
-}
+const STATUS_ORDEM: Status[] = ['vencida', 'aberta', 'parcial', 'paga']
 
-function StatusBadge({ status }: { status: StatusConta }) {
-  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.aberta
-  return (
-    <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 4,
-        padding: '3px 10px',
-        borderRadius: 20,
-        fontSize: 12,
-        fontWeight: 700,
-        color: cfg.color,
-        background: cfg.bg,
-        border: `1px solid ${cfg.color}22`,
-        whiteSpace: 'nowrap',
-      }}
-    >
-      {cfg.icon}
-      {cfg.label}
-    </span>
-  )
-}
+const fmtData = (iso: string) => iso.split('-').reverse().join('/')
 
 export function V2ContasPagarPage() {
-  const [busca, setBusca] = useState('')
-  const [tipoFiltro, setTipoFiltro] = useState<'todos' | 'pagar' | 'receber'>('todos')
-  const [filtroStatus, setFiltroStatus] = useState<string>('todos')
-  const [contaExpandida, setContaExpandida] = useState<string | null>(null)
-  const [mostrarFiltros, setMostrarFiltros] = useState(false)
   const [contas, setContas] = useState<ContaPagar[]>([])
+  const [carregando, setCarregando] = useState(true)
+  const hoje = useMemo(() => hojeISO(), [])
 
-  // Filtros de Mês e Critério de Data
-  const [filtroMesAno, setFiltroMesAno] = useState<string>('todos') // 'todos' ou 'YYYY-MM'
-  const [criterioData, setCriterioData] = useState<'vencimento' | 'liquidacao'>('vencimento')
+  // Filtros
+  const [tipo, setTipo] = useState<Filtros['tipo']>('todos')
+  const [status, setStatus] = useState<ReadonlySet<Status>>(() => new Set())
+  const [mes, setMes] = useState('todos')
+  const [base, setBase] = useState<BaseData>('vencimento')
+  const [busca, setBusca] = useState('')
+  const [limite, setLimite] = useState(DIAS_POR_PAGINA)
+  const [mesInicializado, setMesInicializado] = useState(false)
 
-  // Modal de Baixa
+  const buscaAdiada = useDeferredValue(busca)
+
+  // Modal de Baixa Inteligente
   const [baixaModal, setBaixaModal] = useState<{
     conta: ContaPagar
     parcela: ContaPagarParcela
@@ -106,7 +98,7 @@ export function V2ContasPagarPage() {
   const [criandoNovaContaTag, setCriandoNovaContaTag] = useState(false)
   const [novoNomeContaTag, setNovoNomeContaTag] = useState('')
 
-  // Modal de Nova Conta
+  // Modal de Novo Lançamento
   const [novaContaModal, setNovaContaModal] = useState(false)
   const [novaTipo, setNovaTipo] = useState<TipoLancamento>('pagar')
   const [novaDescricao, setNovaDescricao] = useState('')
@@ -116,76 +108,88 @@ export function V2ContasPagarPage() {
   const [novaVencimento, setNovaVencimento] = useState(() => new Date().toISOString().split('T')[0])
   const [novaQtdParcelas, setNovaQtdParcelas] = useState<number>(1)
 
-  useEffect(() => {
-    async function load() {
-      const [data, bancos] = await Promise.all([
+  // Carga inicial dos dados
+  const recarregar = async () => {
+    setCarregando(true)
+    try {
+      const [dadosContas, bancos] = await Promise.all([
         listContasPagar(),
         listContasBancarias(),
       ])
-      setContas(data)
+      setContas(dadosContas)
       setContasBancarias(bancos)
       if (bancos.length > 0 && !contaBancariaSelecionadaId) {
         setContaBancariaSelecionadaId(bancos[0].id)
       }
+    } finally {
+      setCarregando(false)
     }
-    load()
+  }
+
+  useEffect(() => {
+    void recarregar()
   }, [])
 
-  const fmt = (v: number) =>
-    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
+  // Derivações do Extrato
+  const movsGerais = useMemo(() => achatar(contas, hoje, 'vencimento'), [contas, hoje])
+  const movs = useMemo(() => achatar(contas, hoje, base), [contas, hoje, base])
+  const meses = useMemo(() => mesesDisponiveis(movs), [movs])
+  const saldoGeral = useMemo(() => totalizar(movsGerais, hoje), [movsGerais, hoje])
 
-  // Meses únicos disponíveis nas contas para popular o select
-  const mesesDisponiveis = Array.from(
-    new Set(
-      contas.flatMap((c) =>
-        c.parcelas.flatMap((p) => {
-          const list: string[] = []
-          if (p.vencimento) list.push(p.vencimento.slice(0, 7))
-          if (p.baixa?.dataBaixa) list.push(p.baixa.dataBaixa.slice(0, 7))
-          return list
-        })
-      )
-    )
-  ).sort().reverse()
+  // Inicializa com o mês atual se houver dados
+  useEffect(() => {
+    if (mesInicializado || carregando) return
+    setMesInicializado(true)
+    const atual = hoje.slice(0, 7)
+    if (movs.some((m) => m.data.startsWith(atual))) setMes(atual)
+  }, [carregando, mesInicializado, movs, hoje])
 
-  // Filtragem
-  const contasFiltradas = contas.filter((c) => {
-    const matchTipo = tipoFiltro === 'todos' || (c.tipo || 'pagar') === tipoFiltro
-    const matchBusca =
-      !busca ||
-      c.descricao.toLowerCase().includes(busca.toLowerCase()) ||
-      (c.fornecedor ?? '').toLowerCase().includes(busca.toLowerCase()) ||
-      (c.categoria ?? '').toLowerCase().includes(busca.toLowerCase())
-    const matchStatus = filtroStatus === 'todos' || c.status === filtroStatus
+  useEffect(() => {
+    setLimite(DIAS_POR_PAGINA)
+  }, [tipo, status, mes, base, buscaAdiada])
 
-    // Filtro por mês e critério de data
-    let matchMes = true
-    if (filtroMesAno !== 'todos') {
-      matchMes = c.parcelas.some((p) => {
-        if (criterioData === 'liquidacao') {
-          return p.baixa?.dataBaixa && p.baixa.dataBaixa.startsWith(filtroMesAno)
-        } else {
-          return p.vencimento && p.vencimento.startsWith(filtroMesAno)
-        }
-      })
-    }
+  const semTipo = useMemo(
+    () => filtrar(movs, { tipo: 'todos', status, mes, base, busca: buscaAdiada }),
+    [movs, status, mes, base, buscaAdiada],
+  )
 
-    return matchTipo && matchBusca && matchStatus && matchMes
-  })
+  const contagem = useMemo(() => {
+    let pagar = 0
+    for (const m of semTipo) if (m.tipo === 'pagar') pagar++
+    return { todos: semTipo.length, pagar, receber: semTipo.length - pagar }
+  }, [semTipo])
 
-  // Totais separados Pagar vs Receber baseados nos filtros vigentes
-  const contasPagar = contasFiltradas.filter((c) => (c.tipo || 'pagar') === 'pagar')
-  const contasReceber = contasFiltradas.filter((c) => c.tipo === 'receber')
+  const filtrados = useMemo(
+    () => (tipo === 'todos' ? semTipo : semTipo.filter((m) => m.tipo === tipo)),
+    [semTipo, tipo],
+  )
 
-  const totalAbertoPagar = contasPagar
-    .filter((c) => c.status === 'aberta' || c.status === 'parcial' || c.status === 'vencida')
-    .reduce((acc, c) => acc + (c.total - c.totalPago), 0)
+  const totais = useMemo(() => totalizar(filtrados, hoje), [filtrados, hoje])
+  const dias = useMemo(() => agruparPorDia(filtrados), [filtrados])
+  const escopo = mes === 'todos' ? 'todo o período' : rotuloMes(mes).toLowerCase()
+  const historia = useMemo(
+    () => contarHistoria(totais, filtrados, hoje, escopo),
+    [totais, filtrados, hoje, escopo],
+  )
 
-  const totalAbertoReceber = contasReceber
-    .filter((c) => c.status === 'aberta' || c.status === 'parcial' || c.status === 'vencida')
-    .reduce((acc, c) => acc + (c.total - c.totalPago), 0)
+  const temFiltro = tipo !== 'todos' || status.size > 0 || busca !== '' || mes !== 'todos'
 
-  // Cálculo da Baixa
+  const limpar = () => {
+    setTipo('todos')
+    setStatus(new Set())
+    setBusca('')
+    setMes('todos')
+  }
+
+  const alternarStatus = (s: Status) =>
+    setStatus((atual) => {
+      const novo = new Set(atual)
+      if (novo.has(s)) novo.delete(s)
+      else novo.add(s)
+      return novo
+    })
+
+  // Cálculos do Modal de Baixa
   const valorOriginal = baixaModal?.parcela.valor ?? 0
   const valorDescontoCalc =
     descontoTipo === 'R$'
@@ -206,7 +210,6 @@ export function V2ContasPagarPage() {
       ) / 100
     : 0
 
-  // Handlers sincronizados para o Valor Líquido Pago
   function handleValorLiquidoChange(valStr: string) {
     setValorLiquidoInput(valStr)
     const valNum = parseFloat(valStr.replace(',', '.'))
@@ -218,12 +221,10 @@ export function V2ContasPagarPage() {
 
     const diff = Math.round((valNum - valorOriginal) * 100) / 100
     if (diff > 0) {
-      // Acréscimo
       setAcrescimoTipo('R$')
       setAcrescimoValor(diff)
       setDescontoValor(0)
     } else if (diff < 0) {
-      // Desconto
       setDescontoTipo('R$')
       setDescontoValor(Math.abs(diff))
       setAcrescimoValor(0)
@@ -233,20 +234,20 @@ export function V2ContasPagarPage() {
     }
   }
 
-  function handleDescontoChange(novoDesc: number, tipo: 'R$' | '%') {
-    setDescontoTipo(tipo)
+  function handleDescontoChange(novoDesc: number, tipoDesc: 'R$' | '%') {
+    setDescontoTipo(tipoDesc)
     setDescontoValor(novoDesc)
     setAcrescimoValor(0)
-    const descCalc = tipo === 'R$' ? novoDesc : (valorOriginal * novoDesc) / 100
+    const descCalc = tipoDesc === 'R$' ? novoDesc : (valorOriginal * novoDesc) / 100
     const novoLiquido = Math.max(0, Math.round((valorOriginal - descCalc) * 100) / 100)
     setValorLiquidoInput(novoLiquido.toFixed(2))
   }
 
-  function handleAcrescimoChange(novoAcr: number, tipo: 'R$' | '%') {
-    setAcrescimoTipo(tipo)
+  function handleAcrescimoChange(novoAcr: number, tipoAcr: 'R$' | '%') {
+    setAcrescimoTipo(tipoAcr)
     setAcrescimoValor(novoAcr)
     setDescontoValor(0)
-    const acrCalc = tipo === 'R$' ? novoAcr : (valorOriginal * novoAcr) / 100
+    const acrCalc = tipoAcr === 'R$' ? novoAcr : (valorOriginal * novoAcr) / 100
     const novoLiquido = Math.max(0, Math.round((valorOriginal + acrCalc) * 100) / 100)
     setValorLiquidoInput(novoLiquido.toFixed(2))
   }
@@ -331,10 +332,7 @@ export function V2ContasPagarPage() {
 
     await updateContaPagar(contaAtualizada)
 
-    // Atualiza saldo da conta bancária vinculada
     if (contaBancariaObj) {
-      // Se pagar: deduz o valor do saldo (-valorFinalLiquido)
-      // Se receber: adiciona o valor ao saldo (+valorFinalLiquido)
       const delta = isPagar ? -valorFinalLiquido : valorFinalLiquido
       await updateSaldoContaBancaria(contaBancariaObj.id, delta)
       const bancosAtualizados = await listContasBancarias()
@@ -350,9 +348,9 @@ export function V2ContasPagarPage() {
     const isPagar = (conta.tipo || 'pagar') === 'pagar'
     const textoAcao = isPagar ? 'pagamento' : 'recebimento'
     const conf = window.confirm(
-      `Confirma o estorno do ${textoAcao} da parcela #${parcela.numero} (${fmt(parcela.baixa.valorFinalPago)})?\n\n` +
+      `Confirma o estorno do ${textoAcao} da parcela #${parcela.numero} (${formatBRL(parcela.baixa.valorFinalPago)})?\n\n` +
       `• O status da parcela voltará para Aberto;\n` +
-      `• O saldo da conta bancária (${parcela.baixa.contaBancariaNome || 'vinculada'}) será estornado/recomposto.`
+      `• O saldo da conta bancária (${parcela.baixa.contaBancariaNome || 'vinculada'}) será recomposto.`
     )
     if (!conf) return
 
@@ -413,467 +411,181 @@ export function V2ContasPagarPage() {
   }
 
   return (
-    <div style={{ padding: '24px', maxWidth: 1100, margin: '0 auto', fontFamily: 'inherit' }}>
-      {/* Cabeçalho */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, gap: 16, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div
-            style={{
-              width: 46,
-              height: 46,
-              borderRadius: 14,
-              background: '#EFF6FF',
-              border: '1.5px solid #BFDBFE',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Wallet size={24} color="#1D4ED8" />
-          </div>
+    <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
+      {/* ── TOPO ── */}
+      <header className="mb-5 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-blue-100 bg-blue-50 text-blue-700">
+            <Wallet size={20} aria-hidden />
+          </span>
           <div>
-            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 900, color: '#111827' }}>
-              Gestão Financeira
-            </h1>
-            <div style={{ display: 'flex', gap: 16, marginTop: 4, flexWrap: 'wrap', fontSize: 13 }}>
-              <span style={{ color: '#DC2626', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                <TrendingDown size={14} /> A Pagar em aberto: {fmt(totalAbertoPagar)}
-              </span>
-              <span style={{ color: '#16A34A', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                <TrendingUp size={14} /> A Receber em aberto: {fmt(totalAbertoReceber)}
-              </span>
+            <h1 className="font-hub text-xl font-bold uppercase tracking-tight text-slate-900">Financeiro</h1>
+            <p className="text-sm text-slate-500">Seu extrato de contas a pagar e a receber</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setNovaContaModal(true)}
+          className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-semibold uppercase text-white shadow-sm transition hover:bg-blue-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+        >
+          <Plus size={16} aria-hidden />
+          <span className="sm:hidden">Novo</span>
+          <span className="hidden sm:inline">Novo lançamento</span>
+        </button>
+      </header>
+
+      {/* ── SALDO + KPIS ── */}
+      <section className="grid gap-3 lg:grid-cols-[1.35fr_1fr]" aria-label="Resumo">
+        <div className="rounded-2xl bg-gradient-to-br from-blue-700 to-blue-900 p-5 text-white shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wider text-blue-100">Saldo em caixa</p>
+          {carregando ? (
+            <div className="mt-3 h-10 w-48 animate-pulse rounded-lg bg-white/20" />
+          ) : (
+            <p className="mt-1 font-hub text-4xl font-bold tabular-nums">{formatBRL(saldoGeral.saldoRealizado)}</p>
+          )}
+          <div className="mt-4 grid grid-cols-2 gap-3 border-t border-white/15 pt-3 text-sm">
+            <div>
+              <p className="text-xs uppercase text-blue-100">Projetado</p>
+              <p className="font-semibold tabular-nums">{carregando ? '—' : formatBRL(saldoGeral.saldoProjetado)}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase text-blue-100">Vencido</p>
+              <p className="font-semibold tabular-nums">
+                {carregando ? '—' : formatBRL(saldoGeral.vencidoPagar + saldoGeral.vencidoReceber)}
+              </p>
             </div>
           </div>
         </div>
 
-        <button
-          onClick={() => setNovaContaModal(true)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '10px 18px',
-            borderRadius: 10,
-            background: '#1D4ED8',
-            color: '#fff',
-            border: 'none',
-            fontSize: 14,
-            fontWeight: 700,
-            cursor: 'pointer',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-          }}
-        >
-          <Plus size={16} />
-          Novo Lançamento
-        </button>
-      </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Kpi rotulo="Recebido" valor={totais.recebido} cor="text-emerald-600" carregando={carregando} />
+          <Kpi rotulo="Pago" valor={totais.pago} cor="text-rose-600" carregando={carregando} />
+          <Kpi rotulo="A receber" valor={totais.aReceber} cor="text-emerald-600" carregando={carregando} />
+          <Kpi rotulo="A pagar" valor={totais.aPagar} cor="text-rose-600" carregando={carregando} />
+        </div>
+      </section>
 
-      {/* Tabs Pagar vs Receber vs Todos */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20, background: '#E2E8F0', padding: 4, borderRadius: 12, width: 'fit-content' }}>
-        <button
-          onClick={() => setTipoFiltro('todos')}
-          style={{
-            padding: '8px 18px',
-            borderRadius: 8,
-            border: 'none',
-            fontSize: 13,
-            fontWeight: 700,
-            cursor: 'pointer',
-            background: tipoFiltro === 'todos' ? '#FFFFFF' : 'transparent',
-            color: tipoFiltro === 'todos' ? '#0F172A' : '#64748B',
-            boxShadow: tipoFiltro === 'todos' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-            transition: 'all 0.15s ease',
-          }}
+      {/* ── STORYTELLING ── */}
+      {!carregando && (
+        <section
+          aria-live="polite"
+          className={`mt-3 rounded-2xl border border-l-4 bg-white p-4 shadow-sm ${
+            historia.tom === 'atencao'
+              ? 'border-amber-200 border-l-amber-500'
+              : historia.tom === 'positivo'
+                ? 'border-emerald-100 border-l-emerald-500'
+                : 'border-slate-200 border-l-slate-300'
+          }`}
         >
-          Todos ({contas.length})
-        </button>
-        <button
-          onClick={() => setTipoFiltro('pagar')}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '8px 18px',
-            borderRadius: 8,
-            border: 'none',
-            fontSize: 13,
-            fontWeight: 700,
-            cursor: 'pointer',
-            background: tipoFiltro === 'pagar' ? '#DC2626' : 'transparent',
-            color: tipoFiltro === 'pagar' ? '#FFFFFF' : '#64748B',
-            boxShadow: tipoFiltro === 'pagar' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-            transition: 'all 0.15s ease',
-          }}
-        >
-          <ArrowDownLeft size={15} />
-          Contas a Pagar ({contasPagar.length})
-        </button>
-        <button
-          onClick={() => setTipoFiltro('receber')}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '8px 18px',
-            borderRadius: 8,
-            border: 'none',
-            fontSize: 13,
-            fontWeight: 700,
-            cursor: 'pointer',
-            background: tipoFiltro === 'receber' ? '#16A34A' : 'transparent',
-            color: tipoFiltro === 'receber' ? '#FFFFFF' : '#64748B',
-            boxShadow: tipoFiltro === 'receber' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-            transition: 'all 0.15s ease',
-          }}
-        >
-          <ArrowUpRight size={15} />
-          Contas a Receber ({contasReceber.length})
-        </button>
-      </div>
+          <h2 className="text-base font-semibold text-slate-900">{historia.titulo}</h2>
+          <p className="mt-1 text-sm leading-relaxed text-slate-600">{historia.texto}</p>
+        </section>
+      )}
 
-      {/* Cards de resumo por Status */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 24 }}>
-        {(['aberta', 'vencida', 'parcial', 'paga'] as StatusConta[]).map((status) => {
-          const cfg = STATUS_CONFIG[status]
-          const qtd = contas
-            .filter((c) => tipoFiltro === 'todos' || (c.tipo || 'pagar') === tipoFiltro)
-            .filter((c) => c.status === status).length
-          return (
-            <button
-              key={status}
-              onClick={() => setFiltroStatus(filtroStatus === status ? 'todos' : status)}
-              style={{
-                padding: '14px 16px',
-                borderRadius: 12,
-                background: filtroStatus === status ? cfg.bg : '#FFFFFF',
-                border: `1.5px solid ${filtroStatus === status ? cfg.color + '66' : '#E5E7EB'}`,
-                textAlign: 'left',
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-              }}
+      {/* ── FILTROS ── */}
+      <div className="sticky top-0 z-10 -mx-4 mt-4 space-y-2 bg-[#eff5ee]/90 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6">
+        <div className="flex flex-wrap items-center gap-2">
+          <div role="tablist" aria-label="Tipo de conta" className="flex rounded-xl bg-white p-1 shadow-sm">
+            <Aba ativa={tipo === 'todos'} onClick={() => setTipo('todos')} texto={`Todos (${contagem.todos})`} />
+            <Aba ativa={tipo === 'pagar'} onClick={() => setTipo('pagar')} texto={`A pagar (${contagem.pagar})`} />
+            <Aba ativa={tipo === 'receber'} onClick={() => setTipo('receber')} texto={`A receber (${contagem.receber})`} />
+          </div>
+
+          <label className="relative min-w-[200px] flex-1">
+            <span className="sr-only">Buscar lançamentos</span>
+            <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden />
+            <input
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Buscar descrição, fornecedor ou cliente"
+              className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+            />
+          </label>
+
+          <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+            <span className="text-xs font-semibold uppercase text-slate-500">Mês</span>
+            <select
+              value={mes}
+              onChange={(e) => setMes(e.target.value)}
+              className="bg-transparent font-semibold text-slate-800 focus:outline-none"
             >
-              <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: cfg.color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                {cfg.label}
-              </p>
-              <p style={{ margin: '4px 0 0', fontSize: 24, fontWeight: 900, color: '#111827' }}>{qtd}</p>
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Barra de busca e filtros adicionais */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-        <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
-          <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF' }} />
-          <input
-            type="text"
-            placeholder="Buscar por descrição, fornecedor/cliente ou categoria…"
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            style={{ width: '100%', padding: '9px 12px 9px 36px', borderRadius: 10, border: '1.5px solid #E5E7EB', fontSize: 13, outline: 'none', background: '#FFFFFF', boxSizing: 'border-box' }}
-          />
+              <option value="todos">Todos os meses</option>
+              {meses.map((m) => (
+                <option key={m} value={m}>
+                  {rotuloMes(m)}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
 
-        {/* Filtro por Mês */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#FFFFFF', border: '1.5px solid #E5E7EB', borderRadius: 10, padding: '4px 10px' }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: '#64748B' }}>Mês:</span>
-          <select
-            value={filtroMesAno}
-            onChange={(e) => setFiltroMesAno(e.target.value)}
-            style={{ border: 'none', background: 'transparent', fontSize: 13, fontWeight: 700, color: '#0F172A', outline: 'none', cursor: 'pointer' }}
-          >
-            <option value="todos">Todos os Meses</option>
-            {mesesDisponiveis.map((m) => {
-              const [ano, mes] = m.split('-')
-              const nomeMes = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date(Number(ano), Number(mes) - 1, 1))
-              const label = `${nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)} / ${ano}`
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex rounded-xl bg-white p-1 shadow-sm" role="group" aria-label="Base da data">
+            <Aba ativa={base === 'vencimento'} onClick={() => setBase('vencimento')} texto="Por vencimento" />
+            <Aba ativa={base === 'pagamento'} onClick={() => setBase('pagamento')} texto="Por pagamento" />
+          </div>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Status">
+            {STATUS_ORDEM.map((s) => {
+              const { label, cls, Icon } = STATUS_INFO[s]
+              const ativo = status.has(s)
               return (
-                <option key={m} value={m}>
-                  {label}
-                </option>
+                <button
+                  key={s}
+                  type="button"
+                  aria-pressed={ativo}
+                  onClick={() => alternarStatus(s)}
+                  className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-semibold uppercase transition ${
+                    ativo ? `${cls} border-current` : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+                  }`}
+                >
+                  <Icon size={12} aria-hidden /> {label}
+                </button>
               )
             })}
-          </select>
+          </div>
+          {temFiltro && (
+            <button
+              type="button"
+              onClick={limpar}
+              className="ml-auto inline-flex items-center gap-1 text-xs font-semibold uppercase text-blue-700 hover:underline"
+            >
+              <X size={12} aria-hidden /> Limpar filtros
+            </button>
+          )}
         </div>
-
-        {/* Critério da Data */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#F1F5F9', borderRadius: 10, padding: 3, border: '1px solid #E2E8F0' }}>
-          <button
-            type="button"
-            onClick={() => setCriterioData('vencimento')}
-            style={{
-              padding: '6px 12px',
-              borderRadius: 7,
-              border: 'none',
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: 'pointer',
-              background: criterioData === 'vencimento' ? '#FFFFFF' : 'transparent',
-              color: criterioData === 'vencimento' ? '#0F172A' : '#64748B',
-              boxShadow: criterioData === 'vencimento' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
-              transition: 'all 0.15s',
-            }}
-            title="Filtra por Data de Emissão / Vencimento da parcela"
-          >
-            Por Emissão / Venc.
-          </button>
-          <button
-            type="button"
-            onClick={() => setCriterioData('liquidacao')}
-            style={{
-              padding: '6px 12px',
-              borderRadius: 7,
-              border: 'none',
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: 'pointer',
-              background: criterioData === 'liquidacao' ? '#FFFFFF' : 'transparent',
-              color: criterioData === 'liquidacao' ? '#0F172A' : '#64748B',
-              boxShadow: criterioData === 'liquidacao' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
-              transition: 'all 0.15s',
-            }}
-            title="Filtra por Data de Liquidação / Pagamento da parcela"
-          >
-            Por Pagto / Baixa
-          </button>
-        </div>
-
-        <button
-          onClick={() => setMostrarFiltros(!mostrarFiltros)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 10,
-            border: '1.5px solid #E5E7EB', background: mostrarFiltros ? '#EFF6FF' : '#FFFFFF',
-            color: mostrarFiltros ? '#1D4ED8' : '#374151', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-          }}
-        >
-          <Filter size={14} />
-          Status
-          <ChevronDown size={13} style={{ transform: mostrarFiltros ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-        </button>
       </div>
 
-      {/* Filtros em pílulas */}
-      {mostrarFiltros && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-          {(['todos', 'aberta', 'vencida', 'parcial', 'paga', 'cancelada'] as string[]).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFiltroStatus(f)}
-              style={{
-                padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                border: `1.5px solid ${filtroStatus === f ? '#1D4ED8' : '#E5E7EB'}`,
-                background: filtroStatus === f ? '#1D4ED8' : '#FFFFFF',
-                color: filtroStatus === f ? '#FFFFFF' : '#374151',
-              }}
-            >
-              {f === 'todos' ? 'Todos' : STATUS_CONFIG[f as StatusConta]?.label ?? f}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Lista de lançamentos */}
-      {contasFiltradas.length === 0 ? (
-        <div style={{ padding: '60px 24px', textAlign: 'center', background: '#FFFFFF', borderRadius: 14, border: '1.5px solid #E5E7EB' }}>
-          <Wallet size={40} color="#D1D5DB" style={{ marginBottom: 12 }} />
-          <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#374151' }}>Nenhum lançamento encontrado</p>
-          <p style={{ margin: '6px 0 0', fontSize: 13, color: '#9CA3AF' }}>Ajuste os filtros ou crie um novo lançamento financeiro.</p>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {contasFiltradas.map((conta) => {
-            const isPagar = (conta.tipo || 'pagar') === 'pagar'
-            const saldoAberto = conta.total - conta.totalPago
-            const expandida = contaExpandida === conta.id
-            return (
-              <div
-                key={conta.id}
-                style={{
-                  background: '#FFFFFF',
-                  borderRadius: 14,
-                  border: '1.5px solid #E5E7EB',
-                  borderLeft: `4px solid ${isPagar ? '#DC2626' : '#16A34A'}`,
-                  overflow: 'hidden',
-                }}
+      {/* ── EXTRATO AGRUPADO POR DIA ── */}
+      <main className="mt-2 space-y-3" aria-busy={carregando}>
+        {carregando ? (
+          <Esqueleto />
+        ) : dias.length === 0 ? (
+          <VazioEstado temFiltro={temFiltro} onLimpar={limpar} />
+        ) : (
+          <>
+            {dias.slice(0, limite).map((d) => (
+              <Dia
+                key={d.data}
+                dia={d}
+                hoje={hoje}
+                onBaixar={(conta, parcela) => abrirModalBaixa(conta, parcela)}
+                onEstornar={(conta, parcela) => handleEstornarParcela(conta, parcela)}
+              />
+            ))}
+            {dias.length > limite && (
+              <button
+                type="button"
+                onClick={() => setLimite((l) => l + DIAS_POR_PAGINA)}
+                className="mx-auto block rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300 shadow-sm"
               >
-                {/* Linha principal */}
-                <div
-                  style={{ padding: '16px 20px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}
-                  onClick={() => setContaExpandida(expandida ? null : conta.id)}
-                >
-                  {/* Ícone Indicador Pagar vs Receber */}
-                  <div
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 10,
-                      background: isPagar ? '#FEF2F2' : '#F0FDF4',
-                      border: `1px solid ${isPagar ? '#FECACA' : '#BBF7D0'}`,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                    }}
-                    title={isPagar ? 'Conta a Pagar' : 'Conta a Receber'}
-                  >
-                    {isPagar ? <ArrowDownLeft size={18} color="#DC2626" /> : <ArrowUpRight size={18} color="#16A34A" />}
-                  </div>
+                Ver mais dias ({dias.length - limite} restantes)
+              </button>
+            )}
+          </>
+        )}
+      </main>
 
-                  <div style={{ flex: 1, minWidth: 160 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 800,
-                          padding: '2px 6px',
-                          borderRadius: 4,
-                          background: isPagar ? '#FEE2E2' : '#DCFCE7',
-                          color: isPagar ? '#991B1B' : '#166534',
-                          textTransform: 'uppercase',
-                        }}
-                      >
-                        {isPagar ? 'A Pagar' : 'A Receber'}
-                      </span>
-                      <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#111827' }}>{conta.descricao}</p>
-                    </div>
-                    <p style={{ margin: '3px 0 0', fontSize: 12, color: '#9CA3AF' }}>
-                      {conta.fornecedor ?? ORIGEM_CONFIG[conta.origem]?.label}
-                      {conta.categoria && ` · ${conta.categoria}`}
-                      {' · '}{conta.parcelas.length} parcela{conta.parcelas.length > 1 ? 's' : ''}
-                    </p>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <div style={{ textAlign: 'right' }}>
-                      <p style={{ margin: 0, fontSize: 11, color: '#9CA3AF', fontWeight: 600 }}>TOTAL</p>
-                      <p style={{ margin: '2px 0 0', fontSize: 15, fontWeight: 900, color: isPagar ? '#111827' : '#16A34A' }}>
-                        {fmt(conta.total)}
-                      </p>
-                    </div>
-                    {saldoAberto > 0 && saldoAberto < conta.total && (
-                      <div style={{ textAlign: 'right' }}>
-                        <p style={{ margin: 0, fontSize: 11, color: '#9CA3AF', fontWeight: 600 }}>EM ABERTO</p>
-                        <p style={{ margin: '2px 0 0', fontSize: 14, fontWeight: 700, color: isPagar ? '#DC2626' : '#2563EB' }}>
-                          {fmt(saldoAberto)}
-                        </p>
-                      </div>
-                    )}
-                    <StatusBadge status={conta.status} />
-                    <ChevronDown
-                      size={16}
-                      color="#9CA3AF"
-                      style={{ transform: expandida ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }}
-                    />
-                  </div>
-                </div>
-
-                {/* Parcelas expandidas */}
-                {expandida && (
-                  <div style={{ borderTop: '1px solid #F3F4F6', background: '#F9FAFB', padding: '14px 20px' }}>
-                    <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                      Parcelas & Baixas
-                    </p>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {conta.parcelas.map((p) => (
-                        <div
-                          key={p.numero}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '12px 16px',
-                            borderRadius: 10,
-                            background: '#FFFFFF',
-                            border: '1px solid #E5E7EB',
-                            gap: 12,
-                            flexWrap: 'wrap',
-                          }}
-                        >
-                          <span style={{ fontSize: 13, fontWeight: 700, color: '#6B7280' }}>#{p.numero}</span>
-                          <span style={{ fontSize: 13, color: '#374151', flex: 1, minWidth: 160 }}>
-                            Vence em {p.vencimento.split('-').reverse().join('/')}
-                            {p.baixa && (
-                              <span style={{ display: 'block', fontSize: 11, color: '#16A34A', marginTop: 2, fontWeight: 600 }}>
-                                Liquidado em {p.baixa.dataBaixa.split('-').reverse().join('/')} · Pago: {fmt(p.baixa.valorFinalPago)}
-                                {p.baixa.descontoFinal > 0 && ` (Desc: -${fmt(p.baixa.descontoFinal)})`}
-                                {p.baixa.acrescimoFinal > 0 && ` (Acrésc: +${fmt(p.baixa.acrescimoFinal)})`}
-                                {p.baixa.contaBancariaNome && (
-                                  <span
-                                    style={{
-                                      display: 'inline-block',
-                                      marginLeft: 6,
-                                      padding: '1px 6px',
-                                      background: '#E0F2FE',
-                                      color: '#0369A1',
-                                      borderRadius: 4,
-                                      fontWeight: 700,
-                                    }}
-                                  >
-                                    🏦 {p.baixa.contaBancariaNome}
-                                  </span>
-                                )}
-                              </span>
-                            )}
-                          </span>
-
-                          <div style={{ textAlign: 'right' }}>
-                            <span style={{ fontSize: 14, fontWeight: 800, color: '#111827' }}>{fmt(p.valor)}</span>
-                          </div>
-
-                          <StatusBadge status={p.status} />
-
-                          {(p.status === 'aberta' || p.status === 'parcial' || p.status === 'vencida') && (
-                            <button
-                              onClick={() => abrirModalBaixa(conta, p)}
-                              style={{
-                                padding: '6px 14px',
-                                borderRadius: 8,
-                                border: isPagar ? '1.5px solid #DC2626' : '1.5px solid #16A34A',
-                                background: 'none',
-                                color: isPagar ? '#DC2626' : '#16A34A',
-                                fontSize: 12,
-                                fontWeight: 700,
-                                cursor: 'pointer',
-                              }}
-                            >
-                              Baixar
-                            </button>
-                          )}
-
-                          {p.status === 'paga' && p.baixa && (
-                            <button
-                              onClick={() => handleEstornarParcela(conta, p)}
-                              title="Estornar baixa desta parcela"
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 4,
-                                padding: '5px 12px',
-                                borderRadius: 8,
-                                border: '1.5px solid #F59E0B',
-                                background: '#FFFBEB',
-                                color: '#B45309',
-                                fontSize: 12,
-                                fontWeight: 700,
-                                cursor: 'pointer',
-                              }}
-                            >
-                              <RotateCcw size={12} />
-                              Estornar
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {/* ── MODAL DE BAIXA COM DESCONTO E ACRÉSCIMO ───────────────── */}
+      {/* ── MODAL DE BAIXA COM DESCONTO, ACRÉSCIMO E CONTA BANCÁRIA ── */}
       {baixaModal && (
         <div
           style={{
@@ -893,12 +605,12 @@ export function V2ContasPagarPage() {
               background: '#FFFFFF',
               borderRadius: 16,
               width: '100%',
-              maxWidth: 500,
+              maxWidth: 520,
               padding: 24,
               boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'between', marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: '#0F172A' }}>
                   Baixar Parcela #{baixaModal.parcela.numero}
@@ -920,7 +632,7 @@ export function V2ContasPagarPage() {
               {/* Valor Original */}
               <div style={{ background: '#F8FAFC', padding: '10px 14px', borderRadius: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 13, color: '#64748B', fontWeight: 600 }}>Valor Nominal</span>
-                <span style={{ fontSize: 16, fontWeight: 800, color: '#0F172A' }}>{fmt(baixaModal.parcela.valor)}</span>
+                <span style={{ fontSize: 16, fontWeight: 800, color: '#0F172A' }}>{formatBRL(baixaModal.parcela.valor)}</span>
               </div>
 
               {/* Data da Baixa */}
@@ -1019,13 +731,13 @@ export function V2ContasPagarPage() {
                   />
                   {valorDescontoCalc > 0 && (
                     <div style={{ padding: '9px 12px', fontSize: 12, fontWeight: 700, color: '#16A34A', background: '#F0FDF4', borderRadius: 8, alignSelf: 'center' }}>
-                      -{fmt(valorDescontoCalc)}
+                      -{formatBRL(valorDescontoCalc)}
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Acréscimo / Juros / Multa */}
+              {/* Acréscimo */}
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 4 }}>
                   Acréscimo (Juros / Multa / Taxa)
@@ -1078,7 +790,7 @@ export function V2ContasPagarPage() {
                   />
                   {valorAcrescimoCalc > 0 && (
                     <div style={{ padding: '9px 12px', fontSize: 12, fontWeight: 700, color: '#DC2626', background: '#FEF2F2', borderRadius: 8, alignSelf: 'center' }}>
-                      +{fmt(valorAcrescimoCalc)}
+                      +{formatBRL(valorAcrescimoCalc)}
                     </div>
                   )}
                 </div>
@@ -1158,7 +870,7 @@ export function V2ContasPagarPage() {
                   >
                     {contasBancarias.map((cb) => (
                       <option key={cb.id} value={cb.id}>
-                        {cb.nome} · Saldo: {fmt(cb.saldoAtual)}
+                        {cb.nome} · Saldo: {formatBRL(cb.saldoAtual)}
                       </option>
                     ))}
                     <option value="__NOVA__">+ Cadastrar outra conta...</option>
@@ -1182,7 +894,7 @@ export function V2ContasPagarPage() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
                       <span style={{ color: '#64748B', fontWeight: 600 }}>Saldo Atual Disponível:</span>
                       <strong style={{ fontSize: 13, color: contaBancariaSelecionada.saldoAtual >= 0 ? '#0F172A' : '#DC2626' }}>
-                        {fmt(contaBancariaSelecionada.saldoAtual)}
+                        {formatBRL(contaBancariaSelecionada.saldoAtual)}
                       </strong>
                     </div>
 
@@ -1196,7 +908,7 @@ export function V2ContasPagarPage() {
                           color: saldoPrevistoAposBaixa >= 0 ? '#16A34A' : '#DC2626',
                         }}
                       >
-                        {fmt(saldoPrevistoAposBaixa)}
+                        {formatBRL(saldoPrevistoAposBaixa)}
                       </strong>
                     </div>
 
@@ -1227,11 +939,11 @@ export function V2ContasPagarPage() {
                     Valor Efetivo da Baixa
                   </span>
                   <p style={{ margin: 0, fontSize: 11, color: '#64748B' }}>
-                    Nominal: {fmt(valorOriginal)} {valorDescontoCalc > 0 ? ` - ${fmt(valorDescontoCalc)}` : ''} {valorAcrescimoCalc > 0 ? ` + ${fmt(valorAcrescimoCalc)}` : ''}
+                    Nominal: {formatBRL(valorOriginal)} {valorDescontoCalc > 0 ? ` - ${formatBRL(valorDescontoCalc)}` : ''} {valorAcrescimoCalc > 0 ? ` + ${formatBRL(valorAcrescimoCalc)}` : ''}
                   </p>
                 </div>
                 <span style={{ fontSize: 20, fontWeight: 900, color: '#1E3A8A' }}>
-                  {fmt(valorFinalLiquido)}
+                  {formatBRL(valorFinalLiquido)}
                 </span>
               </div>
 
@@ -1257,7 +969,7 @@ export function V2ContasPagarPage() {
         </div>
       )}
 
-      {/* ── MODAL DE NOVO LANÇAMENTO (PAGAR OU RECEBER) ───────────── */}
+      {/* ── MODAL DE NOVO LANÇAMENTO (PAGAR OU RECEBER) ── */}
       {novaContaModal && (
         <div
           style={{
@@ -1296,53 +1008,42 @@ export function V2ContasPagarPage() {
             </div>
 
             <form onSubmit={handleSalvarNovaConta} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {/* Tipo: A Pagar ou A Receber */}
-              <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
-                  Tipo de Operação
-                </label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  <button
-                    type="button"
-                    onClick={() => setNovaTipo('pagar')}
-                    style={{
-                      padding: '10px',
-                      borderRadius: 8,
-                      border: `2px solid ${novaTipo === 'pagar' ? '#DC2626' : '#E2E8F0'}`,
-                      background: novaTipo === 'pagar' ? '#FEF2F2' : '#FFFFFF',
-                      color: novaTipo === 'pagar' ? '#DC2626' : '#64748B',
-                      fontSize: 13,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 6,
-                    }}
-                  >
-                    <ArrowDownLeft size={16} /> Conta a Pagar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setNovaTipo('receber')}
-                    style={{
-                      padding: '10px',
-                      borderRadius: 8,
-                      border: `2px solid ${novaTipo === 'receber' ? '#16A34A' : '#E2E8F0'}`,
-                      background: novaTipo === 'receber' ? '#F0FDF4' : '#FFFFFF',
-                      color: novaTipo === 'receber' ? '#16A34A' : '#64748B',
-                      fontSize: 13,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 6,
-                    }}
-                  >
-                    <ArrowUpRight size={16} /> Conta a Receber
-                  </button>
-                </div>
+              {/* Tipo de Operação */}
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => setNovaTipo('pagar')}
+                  style={{
+                    flex: 1,
+                    padding: '10px',
+                    borderRadius: 8,
+                    border: 'none',
+                    fontWeight: 700,
+                    fontSize: 13,
+                    cursor: 'pointer',
+                    background: novaTipo === 'pagar' ? '#DC2626' : '#F1F5F9',
+                    color: novaTipo === 'pagar' ? '#FFFFFF' : '#64748B',
+                  }}
+                >
+                  Conta a Pagar (Despesa)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNovaTipo('receber')}
+                  style={{
+                    flex: 1,
+                    padding: '10px',
+                    borderRadius: 8,
+                    border: 'none',
+                    fontWeight: 700,
+                    fontSize: 13,
+                    cursor: 'pointer',
+                    background: novaTipo === 'receber' ? '#16A34A' : '#F1F5F9',
+                    color: novaTipo === 'receber' ? '#FFFFFF' : '#64748B',
+                  }}
+                >
+                  Conta a Receber (Receita)
+                </button>
               </div>
 
               <div>
@@ -1352,7 +1053,7 @@ export function V2ContasPagarPage() {
                 <input
                   type="text"
                   required
-                  placeholder="Ex: Aluguel da Loja, Recebimento Cliente X..."
+                  placeholder="Ex: Aluguel da Loja, Manutenção, Venda Avulsa..."
                   value={novaDescricao}
                   onChange={(e) => setNovaDescricao(e.target.value)}
                   style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #CBD5E1', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
@@ -1362,11 +1063,11 @@ export function V2ContasPagarPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
                   <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 4 }}>
-                    {novaTipo === 'pagar' ? 'Fornecedor' : 'Cliente / Origem'}
+                    {novaTipo === 'pagar' ? 'Fornecedor / Beneficiário' : 'Cliente / Pagador'}
                   </label>
                   <input
                     type="text"
-                    placeholder="Nome"
+                    placeholder="Nome da pessoa ou empresa"
                     value={novaPessoa}
                     onChange={(e) => setNovaPessoa(e.target.value)}
                     style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #CBD5E1', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
@@ -1378,7 +1079,7 @@ export function V2ContasPagarPage() {
                   </label>
                   <input
                     type="text"
-                    placeholder="Ex: Despesa Operacional"
+                    placeholder="Ex: Operacional, Marketing, Salários..."
                     value={novaCategoria}
                     onChange={(e) => setNovaCategoria(e.target.value)}
                     style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #CBD5E1', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
@@ -1386,7 +1087,7 @@ export function V2ContasPagarPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 0.8fr', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 10 }}>
                 <div>
                   <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 4 }}>
                     Valor Total (R$) *
@@ -1399,12 +1100,12 @@ export function V2ContasPagarPage() {
                     placeholder="0,00"
                     value={novaTotal || ''}
                     onChange={(e) => setNovaTotal(Number(e.target.value))}
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #CBD5E1', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #CBD5E1', fontSize: 13, outline: 'none', boxSizing: 'border-box', fontWeight: 700 }}
                   />
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 4 }}>
-                    1º Vencimento
+                    1º Vencimento *
                   </label>
                   <input
                     type="date"
@@ -1416,20 +1117,23 @@ export function V2ContasPagarPage() {
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 4 }}>
-                    Parcelas
+                    Nº Parcelas
                   </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="48"
+                  <select
                     value={novaQtdParcelas}
-                    onChange={(e) => setNovaQtdParcelas(Math.max(1, Number(e.target.value)))}
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #CBD5E1', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
-                  />
+                    onChange={(e) => setNovaQtdParcelas(Number(e.target.value))}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #CBD5E1', fontSize: 13, outline: 'none', background: '#FFFFFF' }}
+                  >
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((num) => (
+                      <option key={num} value={num}>
+                        {num === 1 ? '1x À vista' : `${num}x Parcelas`}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
                 <button
                   type="button"
                   onClick={() => setNovaContaModal(false)}
@@ -1439,14 +1143,203 @@ export function V2ContasPagarPage() {
                 </button>
                 <button
                   type="submit"
-                  style={{ padding: '10px 20px', borderRadius: 8, border: 'none', background: '#1D4ED8', color: '#FFFFFF', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}
+                  style={{ padding: '10px 22px', borderRadius: 8, border: 'none', background: '#1D4ED8', color: '#FFFFFF', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}
                 >
-                  Salvar Lançamento
+                  Criar Lançamento
                 </button>
               </div>
             </form>
           </div>
         </div>
+      )}
+    </div>
+  )
+}
+
+/* ============================== PARTES ============================== */
+
+function Kpi({ rotulo, valor, cor, carregando }: { rotulo: string; valor: number; cor: string; carregando: boolean }) {
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{rotulo}</p>
+      {carregando ? (
+        <div className="mt-2 h-6 w-20 animate-pulse rounded bg-slate-100" />
+      ) : (
+        <p className={`mt-1 font-hub text-lg font-bold tabular-nums ${cor}`}>{formatBRL(valor)}</p>
+      )}
+    </div>
+  )
+}
+
+function Aba({ ativa, onClick, texto }: { ativa: boolean; onClick: () => void; texto: string }) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={ativa}
+      onClick={onClick}
+      className={`rounded-lg px-3 py-1.5 text-xs font-semibold uppercase transition ${
+        ativa ? 'bg-blue-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
+      }`}
+    >
+      {texto}
+    </button>
+  )
+}
+
+const dayStyle: CSSProperties = { contentVisibility: 'auto', containIntrinsicSize: '0 160px' }
+
+const Dia = memo(function Dia({
+  dia,
+  hoje,
+  onBaixar,
+  onEstornar,
+}: {
+  dia: DiaExtrato
+  hoje: string
+  onBaixar: (conta: ContaPagar, parcela: ContaPagarParcela) => void
+  onEstornar: (conta: ContaPagar, parcela: ContaPagarParcela) => void
+}) {
+  const { titulo, sub } = rotuloDia(dia.data, hoje)
+  return (
+    <section style={dayStyle} aria-label={`${titulo}, ${sub}`}>
+      <div className="mb-1 flex items-baseline justify-between px-1">
+        <h3 className="text-sm font-semibold text-slate-800">
+          {titulo} <span className="text-xs font-normal uppercase text-slate-400">{sub}</span>
+        </h3>
+        {dia.saldoDia !== 0 && (
+          <span className={`text-xs font-semibold tabular-nums ${dia.saldoDia > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+            {dia.saldoDia > 0 ? '+' : '−'} {formatBRL(Math.abs(dia.saldoDia))} em baixas
+          </span>
+        )}
+      </div>
+      <ul className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
+        {dia.movimentos.map((m) => (
+          <Linha
+            key={m.id}
+            m={m}
+            onBaixar={() => onBaixar(m.contaOriginal, m.parcelaOriginal)}
+            onEstornar={() => onEstornar(m.contaOriginal, m.parcelaOriginal)}
+          />
+        ))}
+      </ul>
+    </section>
+  )
+})
+
+const Linha = memo(function Linha({
+  m,
+  onBaixar,
+  onEstornar,
+}: {
+  m: Movimento
+  onBaixar: () => void
+  onEstornar: () => void
+}) {
+  const receber = m.tipo === 'receber'
+  const { label, cls, Icon } = STATUS_INFO[m.status] || STATUS_INFO.aberta
+  const Seta = receber ? ArrowDownLeft : ArrowUpRight
+  const detalhe = [
+    m.contraparte,
+    m.totalParcelas > 1 ? `parcela ${m.numero}/${m.totalParcelas}` : null,
+    m.status === 'paga' && m.pagoEm ? `paga em ${fmtData(m.pagoEm)}` : `vence ${fmtData(m.vencimento)}`,
+    m.parcelaOriginal.baixa?.contaBancariaNome ? `🏦 ${m.parcelaOriginal.baixa.contaBancariaNome}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
+  return (
+    <li className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50/50 transition">
+      <span
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+          receber ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
+        }`}
+        title={receber ? 'A receber' : 'A pagar'}
+      >
+        <Seta size={16} aria-hidden />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="line-clamp-2 text-sm font-semibold text-slate-900">{m.descricao}</p>
+        <p className="truncate text-xs text-slate-500">{detalhe}</p>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-3">
+        <div className="flex flex-col items-end gap-1">
+          <span className={`text-sm font-bold tabular-nums ${receber ? 'text-emerald-600' : 'text-rose-600'}`}>
+            {receber ? '+' : '−'} {formatBRL(m.valor)}
+          </span>
+          <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold uppercase ${cls}`}>
+            <Icon size={10} aria-hidden />
+            {m.status === 'parcial' ? `Faltam ${formatBRL(m.restante)}` : label}
+          </span>
+        </div>
+
+        {/* Ações da Parcela: Baixar ou Estornar */}
+        {m.status !== 'paga' ? (
+          <button
+            type="button"
+            onClick={onBaixar}
+            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition border ${
+              receber
+                ? 'border-emerald-600 text-emerald-600 hover:bg-emerald-50'
+                : 'border-rose-600 text-rose-600 hover:bg-rose-50'
+            }`}
+          >
+            Baixar
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onEstornar}
+            title="Estornar baixa"
+            className="inline-flex items-center gap-1 rounded-lg border border-amber-500 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-800 hover:bg-amber-100 transition"
+          >
+            <RotateCcw size={11} aria-hidden />
+            Estornar
+          </button>
+        )}
+      </div>
+    </li>
+  )
+})
+
+function Esqueleto() {
+  return (
+    <div className="space-y-3" role="status" aria-label="Carregando extrato">
+      {[0, 1].map((i) => (
+        <div key={i} className="overflow-hidden rounded-2xl border border-slate-100 bg-white">
+          {[0, 1, 2].map((j) => (
+            <div key={j} className="flex items-center gap-3 border-b border-slate-50 px-4 py-3 last:border-0">
+              <div className="h-9 w-9 animate-pulse rounded-xl bg-slate-100" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3 w-2/3 animate-pulse rounded bg-slate-100" />
+                <div className="h-2.5 w-1/3 animate-pulse rounded bg-slate-100" />
+              </div>
+              <div className="h-4 w-20 animate-pulse rounded bg-slate-100" />
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function VazioEstado({ temFiltro, onLimpar }: { temFiltro: boolean; onLimpar: () => void }) {
+  return (
+    <div className="flex flex-col items-center rounded-2xl border border-dashed border-slate-300 bg-white/60 px-6 py-12 text-center">
+      <Inbox size={28} className="text-slate-400" aria-hidden />
+      <p className="mt-3 text-base font-semibold text-slate-800">
+        {temFiltro ? 'Nada encontrado com esses filtros' : 'Nenhum lançamento ainda'}
+      </p>
+      <p className="mt-1 max-w-sm text-sm text-slate-500">
+        {temFiltro
+          ? 'Tente outro mês ou remova algum filtro para ver mais movimentos.'
+          : 'Quando você criar contas a pagar ou receber, elas aparecem aqui em forma de extrato.'}
+      </p>
+      {temFiltro && (
+        <button type="button" onClick={onLimpar} className="mt-4 text-sm font-semibold uppercase text-blue-700 hover:underline">
+          Limpar filtros
+        </button>
       )}
     </div>
   )
