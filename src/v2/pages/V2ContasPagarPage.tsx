@@ -74,6 +74,10 @@ export function V2ContasPagarPage() {
   const [mostrarFiltros, setMostrarFiltros] = useState(false)
   const [contas, setContas] = useState<ContaPagar[]>([])
 
+  // Filtros de Mês e Critério de Data
+  const [filtroMesAno, setFiltroMesAno] = useState<string>('todos') // 'todos' ou 'YYYY-MM'
+  const [criterioData, setCriterioData] = useState<'vencimento' | 'liquidacao'>('vencimento')
+
   // Modal de Baixa
   const [baixaModal, setBaixaModal] = useState<{
     conta: ContaPagar
@@ -86,6 +90,7 @@ export function V2ContasPagarPage() {
   const [acrescimoValor, setAcrescimoValor] = useState<number>(0)
   const [baixaFormaPagto, setBaixaFormaPagto] = useState('PIX')
   const [baixaObs, setBaixaObs] = useState('')
+  const [valorLiquidoInput, setValorLiquidoInput] = useState<string>('')
 
   // Modal de Nova Conta
   const [novaContaModal, setNovaContaModal] = useState(false)
@@ -108,6 +113,20 @@ export function V2ContasPagarPage() {
   const fmt = (v: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
 
+  // Meses únicos disponíveis nas contas para popular o select
+  const mesesDisponiveis = Array.from(
+    new Set(
+      contas.flatMap((c) =>
+        c.parcelas.flatMap((p) => {
+          const list: string[] = []
+          if (p.vencimento) list.push(p.vencimento.slice(0, 7))
+          if (p.baixa?.dataBaixa) list.push(p.baixa.dataBaixa.slice(0, 7))
+          return list
+        })
+      )
+    )
+  ).sort().reverse()
+
   // Filtragem
   const contasFiltradas = contas.filter((c) => {
     const matchTipo = tipoFiltro === 'todos' || (c.tipo || 'pagar') === tipoFiltro
@@ -117,12 +136,25 @@ export function V2ContasPagarPage() {
       (c.fornecedor ?? '').toLowerCase().includes(busca.toLowerCase()) ||
       (c.categoria ?? '').toLowerCase().includes(busca.toLowerCase())
     const matchStatus = filtroStatus === 'todos' || c.status === filtroStatus
-    return matchTipo && matchBusca && matchStatus
+
+    // Filtro por mês e critério de data
+    let matchMes = true
+    if (filtroMesAno !== 'todos') {
+      matchMes = c.parcelas.some((p) => {
+        if (criterioData === 'liquidacao') {
+          return p.baixa?.dataBaixa && p.baixa.dataBaixa.startsWith(filtroMesAno)
+        } else {
+          return p.vencimento && p.vencimento.startsWith(filtroMesAno)
+        }
+      })
+    }
+
+    return matchTipo && matchBusca && matchStatus && matchMes
   })
 
-  // Totais separados Pagar vs Receber
-  const contasPagar = contas.filter((c) => (c.tipo || 'pagar') === 'pagar')
-  const contasReceber = contas.filter((c) => c.tipo === 'receber')
+  // Totais separados Pagar vs Receber baseados nos filtros vigentes
+  const contasPagar = contasFiltradas.filter((c) => (c.tipo || 'pagar') === 'pagar')
+  const contasReceber = contasFiltradas.filter((c) => c.tipo === 'receber')
 
   const totalAbertoPagar = contasPagar
     .filter((c) => c.status === 'aberta' || c.status === 'parcial' || c.status === 'vencida')
@@ -142,7 +174,52 @@ export function V2ContasPagarPage() {
     acrescimoTipo === 'R$'
       ? Math.max(0, acrescimoValor)
       : (valorOriginal * Math.max(0, acrescimoValor)) / 100
-  const valorFinalLiquido = Math.max(0, valorOriginal - valorDescontoCalc + valorAcrescimoCalc)
+  const valorFinalLiquido = Math.max(0, Math.round((valorOriginal - valorDescontoCalc + valorAcrescimoCalc) * 100) / 100)
+
+  // Handlers sincronizados para o Valor Líquido Pago
+  function handleValorLiquidoChange(valStr: string) {
+    setValorLiquidoInput(valStr)
+    const valNum = parseFloat(valStr.replace(',', '.'))
+    if (isNaN(valNum) || valNum < 0) {
+      setDescontoValor(0)
+      setAcrescimoValor(0)
+      return
+    }
+
+    const diff = Math.round((valNum - valorOriginal) * 100) / 100
+    if (diff > 0) {
+      // Acréscimo
+      setAcrescimoTipo('R$')
+      setAcrescimoValor(diff)
+      setDescontoValor(0)
+    } else if (diff < 0) {
+      // Desconto
+      setDescontoTipo('R$')
+      setDescontoValor(Math.abs(diff))
+      setAcrescimoValor(0)
+    } else {
+      setDescontoValor(0)
+      setAcrescimoValor(0)
+    }
+  }
+
+  function handleDescontoChange(novoDesc: number, tipo: 'R$' | '%') {
+    setDescontoTipo(tipo)
+    setDescontoValor(novoDesc)
+    setAcrescimoValor(0)
+    const descCalc = tipo === 'R$' ? novoDesc : (valorOriginal * novoDesc) / 100
+    const novoLiquido = Math.max(0, Math.round((valorOriginal - descCalc) * 100) / 100)
+    setValorLiquidoInput(novoLiquido.toFixed(2))
+  }
+
+  function handleAcrescimoChange(novoAcr: number, tipo: 'R$' | '%') {
+    setAcrescimoTipo(tipo)
+    setAcrescimoValor(novoAcr)
+    setDescontoValor(0)
+    const acrCalc = tipo === 'R$' ? novoAcr : (valorOriginal * novoAcr) / 100
+    const novoLiquido = Math.max(0, Math.round((valorOriginal + acrCalc) * 100) / 100)
+    setValorLiquidoInput(novoLiquido.toFixed(2))
+  }
 
   function abrirModalBaixa(conta: ContaPagar, parcela: ContaPagarParcela) {
     setBaixaModal({ conta, parcela })
@@ -151,6 +228,7 @@ export function V2ContasPagarPage() {
     setDescontoValor(0)
     setAcrescimoTipo('R$')
     setAcrescimoValor(0)
+    setValorLiquidoInput(parcela.valor.toFixed(2))
     setBaixaFormaPagto('PIX')
     setBaixaObs('')
   }
@@ -394,7 +472,7 @@ export function V2ContasPagarPage() {
       </div>
 
       {/* Barra de busca e filtros adicionais */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
         <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
           <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF' }} />
           <input
@@ -405,6 +483,71 @@ export function V2ContasPagarPage() {
             style={{ width: '100%', padding: '9px 12px 9px 36px', borderRadius: 10, border: '1.5px solid #E5E7EB', fontSize: 13, outline: 'none', background: '#FFFFFF', boxSizing: 'border-box' }}
           />
         </div>
+
+        {/* Filtro por Mês */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#FFFFFF', border: '1.5px solid #E5E7EB', borderRadius: 10, padding: '4px 10px' }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#64748B' }}>Mês:</span>
+          <select
+            value={filtroMesAno}
+            onChange={(e) => setFiltroMesAno(e.target.value)}
+            style={{ border: 'none', background: 'transparent', fontSize: 13, fontWeight: 700, color: '#0F172A', outline: 'none', cursor: 'pointer' }}
+          >
+            <option value="todos">Todos os Meses</option>
+            {mesesDisponiveis.map((m) => {
+              const [ano, mes] = m.split('-')
+              const nomeMes = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date(Number(ano), Number(mes) - 1, 1))
+              const label = `${nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)} / ${ano}`
+              return (
+                <option key={m} value={m}>
+                  {label}
+                </option>
+              )
+            })}
+          </select>
+        </div>
+
+        {/* Critério da Data */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#F1F5F9', borderRadius: 10, padding: 3, border: '1px solid #E2E8F0' }}>
+          <button
+            type="button"
+            onClick={() => setCriterioData('vencimento')}
+            style={{
+              padding: '6px 12px',
+              borderRadius: 7,
+              border: 'none',
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: 'pointer',
+              background: criterioData === 'vencimento' ? '#FFFFFF' : 'transparent',
+              color: criterioData === 'vencimento' ? '#0F172A' : '#64748B',
+              boxShadow: criterioData === 'vencimento' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+              transition: 'all 0.15s',
+            }}
+            title="Filtra por Data de Emissão / Vencimento da parcela"
+          >
+            Por Emissão / Venc.
+          </button>
+          <button
+            type="button"
+            onClick={() => setCriterioData('liquidacao')}
+            style={{
+              padding: '6px 12px',
+              borderRadius: 7,
+              border: 'none',
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: 'pointer',
+              background: criterioData === 'liquidacao' ? '#FFFFFF' : 'transparent',
+              color: criterioData === 'liquidacao' ? '#0F172A' : '#64748B',
+              boxShadow: criterioData === 'liquidacao' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+              transition: 'all 0.15s',
+            }}
+            title="Filtra por Data de Liquidação / Pagamento da parcela"
+          >
+            Por Pagto / Baixa
+          </button>
+        </div>
+
         <button
           onClick={() => setMostrarFiltros(!mostrarFiltros)}
           style={{
@@ -414,7 +557,7 @@ export function V2ContasPagarPage() {
           }}
         >
           <Filter size={14} />
-          Filtros de Status
+          Status
           <ChevronDown size={13} style={{ transform: mostrarFiltros ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
         </button>
       </div>
@@ -665,6 +808,36 @@ export function V2ContasPagarPage() {
                 />
               </div>
 
+              {/* Campo Direto: Valor Líquido Pago */}
+              <div style={{ background: '#F8FAFC', padding: '12px 14px', borderRadius: 10, border: '1.5px solid #CBD5E1' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <label style={{ fontSize: 13, fontWeight: 800, color: '#0F172A' }}>
+                    💵 Valor Líquido Pago / Recebido (R$)
+                  </label>
+                  <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600 }}>Calcula desconto/acréscimo automático</span>
+                </div>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0,00"
+                  value={valorLiquidoInput}
+                  onChange={(e) => handleValorLiquidoChange(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: 8,
+                    border: '2px solid #3B82F6',
+                    fontSize: 16,
+                    fontWeight: 800,
+                    color: '#1E3A8A',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                    background: '#FFFFFF',
+                  }}
+                />
+              </div>
+
               {/* Desconto */}
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 4 }}>
@@ -674,7 +847,7 @@ export function V2ContasPagarPage() {
                   <div style={{ display: 'flex', background: '#F1F5F9', borderRadius: 8, padding: 2 }}>
                     <button
                       type="button"
-                      onClick={() => setDescontoTipo('R$')}
+                      onClick={() => handleDescontoChange(descontoValor, 'R$')}
                       style={{
                         padding: '6px 12px',
                         border: 'none',
@@ -691,7 +864,7 @@ export function V2ContasPagarPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setDescontoTipo('%')}
+                      onClick={() => handleDescontoChange(descontoValor, '%')}
                       style={{
                         padding: '6px 12px',
                         border: 'none',
@@ -713,7 +886,7 @@ export function V2ContasPagarPage() {
                     min="0"
                     placeholder="0,00"
                     value={descontoValor || ''}
-                    onChange={(e) => setDescontoValor(Number(e.target.value))}
+                    onChange={(e) => handleDescontoChange(Number(e.target.value), descontoTipo)}
                     style={{ flex: 1, padding: '9px 12px', borderRadius: 8, border: '1.5px solid #CBD5E1', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
                   />
                   {valorDescontoCalc > 0 && (
@@ -733,7 +906,7 @@ export function V2ContasPagarPage() {
                   <div style={{ display: 'flex', background: '#F1F5F9', borderRadius: 8, padding: 2 }}>
                     <button
                       type="button"
-                      onClick={() => setAcrescimoTipo('R$')}
+                      onClick={() => handleAcrescimoChange(acrescimoValor, 'R$')}
                       style={{
                         padding: '6px 12px',
                         border: 'none',
@@ -750,7 +923,7 @@ export function V2ContasPagarPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setAcrescimoTipo('%')}
+                      onClick={() => handleAcrescimoChange(acrescimoValor, '%')}
                       style={{
                         padding: '6px 12px',
                         border: 'none',
@@ -772,7 +945,7 @@ export function V2ContasPagarPage() {
                     min="0"
                     placeholder="0,00"
                     value={acrescimoValor || ''}
-                    onChange={(e) => setAcrescimoValor(Number(e.target.value))}
+                    onChange={(e) => handleAcrescimoChange(Number(e.target.value), acrescimoTipo)}
                     style={{ flex: 1, padding: '9px 12px', borderRadius: 8, border: '1.5px solid #CBD5E1', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
                   />
                   {valorAcrescimoCalc > 0 && (

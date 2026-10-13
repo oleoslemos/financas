@@ -45,28 +45,39 @@ export type ContaPagar = {
 const KEY = 'v2_contas_pagar'
 const SUPABASE_TABLE = 'v2_contas_pagar'
 
+// Helper: lê SEMPRE do localStorage primeiro (fonte de verdade local)
+function readFromStorage(): ContaPagar[] {
+  try {
+    const raw = localStorage.getItem(KEY)
+    if (raw) return JSON.parse(raw) as ContaPagar[]
+  } catch {}
+  return []
+}
+
+// Helper: grava no localStorage e sincroniza com Supabase em background
+function writeToStorage(list: ContaPagar[]): void {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(list))
+  } catch {}
+}
+
 export async function listContasPagar(): Promise<ContaPagar[]> {
-  let list: ContaPagar[] = []
-  if (supabase) {
+  // Sempre retorna o localStorage (fonte primária e confiável)
+  const list = readFromStorage()
+
+  // Se localStorage está vazio, tenta trazer dados do Supabase e salvar localmente
+  if (list.length === 0 && supabase) {
     try {
       const { data, error } = await supabase.from(SUPABASE_TABLE).select('*').order('created_at', { ascending: false })
-      if (!error && data) {
-        list = data as ContaPagar[]
+      if (!error && data && data.length > 0) {
+        const remoteList = data as ContaPagar[]
+        writeToStorage(remoteList)
+        return remoteList.map((c) => ({ ...c, tipo: c.tipo || 'pagar' }))
       }
     } catch {}
   }
-  if (list.length === 0) {
-    try {
-      const raw = localStorage.getItem(KEY)
-      if (raw) list = JSON.parse(raw)
-    } catch {}
-  }
 
-  // Garantir que todas tenham o campo 'tipo' preenchido por padrão como 'pagar'
-  return list.map((c) => ({
-    ...c,
-    tipo: c.tipo || 'pagar',
-  }))
+  return list.map((c) => ({ ...c, tipo: c.tipo || 'pagar' }))
 }
 
 export async function getContaPagarPorPedidoId(pedidoId: string): Promise<ContaPagar | undefined> {
@@ -85,8 +96,6 @@ export async function verificarSePedidoTemPagamento(pedidoId: string): Promise<b
 }
 
 export async function saveContaPagar(conta: Omit<ContaPagar, 'id' | 'created_at' | 'updated_at'>): Promise<ContaPagar> {
-  const current = await listContasPagar()
-  
   const newConta: ContaPagar = {
     ...conta,
     tipo: conta.tipo || 'pagar',
@@ -95,25 +104,32 @@ export async function saveContaPagar(conta: Omit<ContaPagar, 'id' | 'created_at'
     updated_at: new Date().toISOString()
   }
 
+  const current = readFromStorage()
+  current.push(newConta)
+  writeToStorage(current)
+
   if (supabase) {
     try {
       await supabase.from(SUPABASE_TABLE).insert([newConta])
     } catch {}
   }
 
-  current.push(newConta)
-  localStorage.setItem(KEY, JSON.stringify(current))
-
   return newConta
 }
 
 export async function updateContaPagar(conta: ContaPagar): Promise<ContaPagar> {
-  const current = await listContasPagar()
   const updatedConta: ContaPagar = {
     ...conta,
     tipo: conta.tipo || 'pagar',
     updated_at: new Date().toISOString(),
   }
+
+  const current = readFromStorage()
+  const exists = current.some((c) => c.id === conta.id)
+  const updatedList = exists
+    ? current.map((c) => (c.id === conta.id ? updatedConta : c))
+    : [updatedConta, ...current]
+  writeToStorage(updatedList)
 
   if (supabase) {
     try {
@@ -121,34 +137,32 @@ export async function updateContaPagar(conta: ContaPagar): Promise<ContaPagar> {
     } catch {}
   }
 
-  const updatedList = current.map((c) => (c.id === conta.id ? updatedConta : c))
-  localStorage.setItem(KEY, JSON.stringify(updatedList))
-
   return updatedConta
 }
 
 export async function deleteContaPagar(id: string): Promise<void> {
-  const current = await listContasPagar()
+  const current = readFromStorage()
+  const filtered = current.filter((c) => c.id !== id)
+  writeToStorage(filtered)
+
   if (supabase) {
     try {
       await supabase.from(SUPABASE_TABLE).delete().eq('id', id)
     } catch {}
   }
-  const filtered = current.filter((c) => c.id !== id)
-  localStorage.setItem(KEY, JSON.stringify(filtered))
 }
 
 export async function deleteContaPagarPorPedidoId(pedidoId: string): Promise<void> {
-  const current = await listContasPagar()
+  const current = readFromStorage()
   const conta = current.find((c) => c.pedido_id === pedidoId)
   if (!conta) return
+
+  const filtered = current.filter((c) => c.id !== conta.id)
+  writeToStorage(filtered)
 
   if (supabase) {
     try {
       await supabase.from(SUPABASE_TABLE).delete().eq('id', conta.id)
     } catch {}
   }
-
-  const filtered = current.filter((c) => c.id !== conta.id)
-  localStorage.setItem(KEY, JSON.stringify(filtered))
 }
