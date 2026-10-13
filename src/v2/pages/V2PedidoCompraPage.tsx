@@ -5,6 +5,9 @@ import {
   RotateCcw,
   Search,
   Eye,
+  CheckCircle,
+  ArrowRight,
+  Tag,
 } from 'lucide-react'
 import { formatarMoeda } from '../../modules/lib/money'
 import { formatarData, hoje, somarDias } from '../../modules/lib/datas'
@@ -12,6 +15,9 @@ import {
   listPedidosCompra,
   savePedidoCompra,
   updatePedidoCompra,
+  emitirPedidoCompra,
+  receberPedidoCompra,
+  desfazerRecebimentoPedidoCompra,
   voltarPedidoParaAberto,
   PedidoCompra,
   PedidoCompraItem,
@@ -19,6 +25,16 @@ import {
 } from '../services/v2PedidoCompraService'
 import { listV2Products, V2Product } from '../services/v2ProdutosService'
 import { listFornecedores, Fornecedor } from '../services/v2SettingsService'
+import { listContasBancarias, ContaBancaria } from '../services/v2ContasBancariasService'
+
+const FORMAS_PAGAMENTO: string[] = [
+  'Dinheiro',
+  'Pix',
+  'Cartão Débito',
+  'Cartão Crédito',
+  'Boleto',
+  'Crediário',
+]
 
 const ABAS_STATUS: { value: 'todos' | StatusPedido; label: string }[] = [
   { value: 'todos', label: 'TODOS' },
@@ -60,6 +76,7 @@ export function V2PedidoCompraPage() {
   const [pedidos, setPedidos] = useState<PedidoCompra[]>([])
   const [produtosDisponiveis, setProdutosDisponiveis] = useState<V2Product[]>([])
   const [fornecedoresCadastrados, setFornecedoresCadastrados] = useState<Fornecedor[]>([])
+  const [contasBancarias, setContasBancarias] = useState<ContaBancaria[]>([])
 
   // State: Formulario Novo / Edição
   const [pedidoEdicao, setPedidoEdicao] = useState<PedidoCompra | null>(null)
@@ -67,6 +84,8 @@ export function V2PedidoCompraPage() {
   const [formFornecedor, setFormFornecedor] = useState('')
   const [formItens, setFormItens] = useState<PedidoCompraItem[]>([])
   const [formParcelas, setFormParcelas] = useState(1)
+  const [formFormaPagamento, setFormFormaPagamento] = useState('Boleto')
+  const [formContaSaidaTag, setFormContaSaidaTag] = useState('')
   const [formDataEntrega, setFormDataEntrega] = useState(() => somarDias(dataHoje, 11))
   const [formObservacao, setFormObservacao] = useState('')
 
@@ -74,48 +93,36 @@ export function V2PedidoCompraPage() {
     const p = await listPedidosCompra()
     const prods = await listV2Products()
     const forns = await listFornecedores()
+    const ctas = await listContasBancarias()
     setPedidos(p)
     setProdutosDisponiveis(prods)
     setFornecedoresCadastrados(forns)
+    setContasBancarias(ctas.filter((c) => c.ativo))
   }
 
   useEffect(() => {
     loadData()
   }, [])
 
-  // Iniciar formulário de novo pedido
+  // Iniciar formulário de novo pedido totalmente limpo para preenchimento pelo usuário
   const handleIniciarNovoPedido = () => {
     setPedidoEdicao(null)
     setIsVisualizacao(false)
-    const fornPadrao = fornecedoresCadastrados[0]?.trade_name || 'SOUZA INDUSTRIA E COMERCIO DE COLCHOES LTDA'
-    setFormFornecedor(fornPadrao)
-
-    const prodPadrao = produtosDisponiveis[0]
-    if (prodPadrao) {
-      setFormItens([
-        {
-          produto_id: prodPadrao.id,
-          produto_nome: prodPadrao.name,
-          quantidade: 1,
-          preco_unitario: prodPadrao.cost_price,
-          total: prodPadrao.cost_price,
-        },
-      ])
-    } else {
-      setFormItens([
-        {
-          produto_id: 'prod-padrao',
-          produto_nome: 'TÊNIS FNI [BRANCA/PI...]',
-          quantidade: 1,
-          preco_unitario: 244.34,
-          total: 244.34,
-        },
-      ])
-    }
-
+    setFormFornecedor('')
+    setFormItens([
+      {
+        produto_id: '',
+        produto_nome: '',
+        quantidade: 1,
+        preco_unitario: 0,
+        total: 0,
+      },
+    ])
     setFormParcelas(1)
+    setFormFormaPagamento('Boleto')
+    setFormContaSaidaTag('')
     setFormDataEntrega(somarDias(dataHoje, 11))
-    setFormObservacao('PEDIDO CLADIMOR')
+    setFormObservacao('')
     setViewMode('novo')
   }
 
@@ -123,25 +130,33 @@ export function V2PedidoCompraPage() {
   const handleVisualizarPedido = (p: PedidoCompra) => {
     setPedidoEdicao(p)
     setIsVisualizacao(true)
-    setFormFornecedor(p.fornecedor)
+    setFormFornecedor(p.fornecedor || '')
     setFormItens(p.itens || [])
     setFormParcelas(p.numeroParcelas || 1)
+    setFormFormaPagamento(p.formaPagamento || 'Boleto')
+    setFormContaSaidaTag(p.contaSaidaTag || '')
     setFormDataEntrega(p.dataPrevistaEntrega || somarDias(dataHoje, 11))
     setFormObservacao(p.observacao || '')
     setViewMode('novo')
   }
 
   const handleEditarPedido = (p: PedidoCompra) => {
-    // Se o pedido estiver recebido, abre no modo visualização
+    // Se o pedido estiver recebido, abre no modo visualização (não permite edição)
     if (p.status === 'recebido') {
       handleVisualizarPedido(p)
       return
     }
     setPedidoEdicao(p)
     setIsVisualizacao(false)
-    setFormFornecedor(p.fornecedor)
-    setFormItens(p.itens || [])
+    setFormFornecedor(p.fornecedor || '')
+    setFormItens(
+      p.itens && p.itens.length > 0
+        ? p.itens
+        : [{ produto_id: '', produto_nome: '', quantidade: 1, preco_unitario: 0, total: 0 }]
+    )
     setFormParcelas(p.numeroParcelas || 1)
+    setFormFormaPagamento(p.formaPagamento || 'Boleto')
+    setFormContaSaidaTag(p.contaSaidaTag || '')
     setFormDataEntrega(p.dataPrevistaEntrega || somarDias(dataHoje, 11))
     setFormObservacao(p.observacao || '')
     setViewMode('novo')
@@ -219,14 +234,15 @@ export function V2PedidoCompraPage() {
 
   const totalCalculado = formItens.reduce((acc, item) => acc + (item.total || 0), 0)
 
-  // Salvar Pedido
-  const handleSalvarPedido = async () => {
+  // Salvar Pedido com status Rascunho (Criado) ou Emitir diretamente
+  const handleSalvarPedido = async (emitirAgora: boolean = false) => {
     if (!formFornecedor.trim()) {
-      alert('Informe o fornecedor.')
+      alert('Informe ou selecione o fornecedor.')
       return
     }
-    if (formItens.length === 0) {
-      alert('Adicione pelo menos 1 produto ao pedido.')
+    const itensValidos = formItens.filter((it) => it.produto_id && it.quantidade > 0)
+    if (itensValidos.length === 0) {
+      alert('Selecione pelo menos 1 produto válido no pedido.')
       return
     }
 
@@ -239,24 +255,77 @@ export function V2PedidoCompraPage() {
           observacao: formObservacao || null,
           total: totalCalculado,
           numeroParcelas: formParcelas,
-          itens: formItens,
+          formaPagamento: formFormaPagamento,
+          contaSaidaTag: formContaSaidaTag,
+          itens: itensValidos,
         })
       } else {
-        await savePedidoCompra({
+        const novo = await savePedidoCompra({
           fornecedor: formFornecedor,
-          status: 'recebido', // Conforme o fluxo do usuário na imagem, já gravado como recebido
+          status: 'rascunho', // Novo pedido nasce sempre como rascunho (Criado)
           dataEmissao: dataHoje,
           dataPrevistaEntrega: formDataEntrega || null,
           observacao: formObservacao || null,
           total: totalCalculado,
           numeroParcelas: formParcelas,
-          itens: formItens,
+          formaPagamento: formFormaPagamento,
+          contaSaidaTag: formContaSaidaTag,
+          itens: itensValidos,
         })
+
+        if (emitirAgora) {
+          await emitirPedidoCompra(novo.id)
+        }
       }
       await loadData()
       setViewMode('lista')
     } catch {
       alert('Erro ao salvar o pedido.')
+    }
+  }
+
+  // Ações de transição de etapas pelo usuário
+  const handleAvançarParaEmitido = async (pedido: PedidoCompra) => {
+    if (window.confirm(`Confirma emitir o Pedido #${pedido.numero}? Ele será integrado ao Contas a Pagar.`)) {
+      const res = await emitirPedidoCompra(pedido.id)
+      if (!res.ok) {
+        alert(res.erro)
+        return
+      }
+      await loadData()
+    }
+  }
+
+  const handleAvançarParaRecebido = async (pedido: PedidoCompra) => {
+    if (window.confirm(`Confirma o recebimento físico do Pedido #${pedido.numero}? Os itens entrarão no estoque.`)) {
+      const res = await receberPedidoCompra(pedido.id)
+      if (!res.ok) {
+        alert(res.erro)
+        return
+      }
+      await loadData()
+    }
+  }
+
+  const handleDesfazerRecebimento = async (pedido: PedidoCompra) => {
+    if (window.confirm(`Deseja desfazer o recebimento do Pedido #${pedido.numero}? O estoque lançado será estornado e o pedido voltará para Emitido.`)) {
+      const res = await desfazerRecebimentoPedidoCompra(pedido.id)
+      if (!res.ok) {
+        alert(res.erro)
+        return
+      }
+      await loadData()
+    }
+  }
+
+  const handleVoltarParaAberto = async (pedido: PedidoCompra) => {
+    if (window.confirm(`Confirma retornar o Pedido #${pedido.numero} para Aberto / Rascunho?`)) {
+      const res = await voltarPedidoParaAberto(pedido.id)
+      if (!res.ok) {
+        alert(res.erro)
+        return
+      }
+      await loadData()
     }
   }
 
@@ -306,6 +375,12 @@ export function V2PedidoCompraPage() {
 
   // Nome do mês atual por extenso para a frase
   const nomeMesExtenso = MESES_LISTA.find((m) => m.num === filtroMesNum)?.full.toLowerCase() || 'outubro'
+
+  // Último pedido do fornecedor selecionado (para banner informativo inteligente)
+  const ultimoPedidoDoFornecedor = useMemo(() => {
+    if (!formFornecedor) return null
+    return pedidos.find((p) => p.fornecedor.toLowerCase() === formFornecedor.toLowerCase())
+  }, [pedidos, formFornecedor])
 
   // Dias até entrega calculados
   const diasAteEntrega = useMemo(() => {
@@ -429,13 +504,13 @@ export function V2PedidoCompraPage() {
                     cursor: isVisualizacao ? 'default' : 'pointer',
                   }}
                 >
-                  {fornecedoresCadastrados.length > 0 ? (
-                    fornecedoresCadastrados.map((f) => (
-                      <option key={f.id} value={f.trade_name}>
-                        {f.trade_name}
-                      </option>
-                    ))
-                  ) : (
+                  <option value="">Selecione um fornecedor...</option>
+                  {fornecedoresCadastrados.map((f) => (
+                    <option key={f.id} value={f.trade_name}>
+                      {f.trade_name}
+                    </option>
+                  ))}
+                  {fornecedoresCadastrados.length === 0 && (
                     <option value="SOUZA INDUSTRIA E COMERCIO DE COLCHOES LTDA">
                       SOUZA INDUSTRIA E COMERCIO DE COLCHOES LTDA
                     </option>
@@ -443,37 +518,41 @@ export function V2PedidoCompraPage() {
                 </select>
               </div>
 
-              {/* Banner Informativo do Último Pedido */}
-              <div
-                style={{
-                  marginTop: 16,
-                  background: '#F1F7F2',
-                  borderRadius: 10,
-                  padding: '12px 16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  fontSize: 13,
-                  color: '#334155',
-                  flexWrap: 'wrap',
-                }}
-              >
-                <span>Último pedido a este fornecedor:</span>
-                <strong style={{ color: '#0F2A43' }}>08/10/2026 · R$ 244,34</strong>
-                <span
+              {/* Banner Informativo do Último Pedido (quando fornecedor selecionado) */}
+              {ultimoPedidoDoFornecedor && (
+                <div
                   style={{
-                    background: '#DCFCE7',
-                    color: '#15803D',
-                    padding: '3px 10px',
-                    borderRadius: 12,
-                    fontSize: 12,
-                    fontWeight: 700,
-                    marginLeft: 'auto',
+                    marginTop: 16,
+                    background: '#F1F7F2',
+                    borderRadius: 10,
+                    padding: '12px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    fontSize: 13,
+                    color: '#334155',
+                    flexWrap: 'wrap',
                   }}
                 >
-                  ✓ Recebido
-                </span>
-              </div>
+                  <span>Último pedido a este fornecedor:</span>
+                  <strong style={{ color: '#0F2A43' }}>
+                    {formatarData(ultimoPedidoDoFornecedor.dataEmissao)} · {formatarMoeda(ultimoPedidoDoFornecedor.total)}
+                  </strong>
+                  <span
+                    style={{
+                      background: ultimoPedidoDoFornecedor.status === 'recebido' ? '#DCFCE7' : '#E3EEFA',
+                      color: ultimoPedidoDoFornecedor.status === 'recebido' ? '#15803D' : '#0D5BA3',
+                      padding: '3px 10px',
+                      borderRadius: 12,
+                      fontSize: 12,
+                      fontWeight: 700,
+                      marginLeft: 'auto',
+                    }}
+                  >
+                    {ultimoPedidoDoFornecedor.status === 'recebido' ? '✓ Recebido' : `● ${ultimoPedidoDoFornecedor.status.toUpperCase()}`}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* ── PASSO 2: O QUE VOCÊ VAI COMPRAR? ── */}
@@ -501,7 +580,7 @@ export function V2PedidoCompraPage() {
                     fontSize: 15,
                   }}
                 >
-                  ✓
+                  2
                 </div>
                 <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0F2A43' }}>
                   2. O que você vai comprar?
@@ -542,14 +621,12 @@ export function V2PedidoCompraPage() {
                             cursor: isVisualizacao ? 'default' : 'pointer',
                           }}
                         >
+                          <option value="">Selecione um produto...</option>
                           {produtosDisponiveis.map((p) => (
                             <option key={p.id} value={p.id}>
                               {p.name}
                             </option>
                           ))}
-                          {produtosDisponiveis.length === 0 && (
-                            <option value="prod-padrao">TÊNIS FNI [BRANCA/PI...]</option>
-                          )}
                         </select>
                       </div>
 
@@ -606,7 +683,7 @@ export function V2PedidoCompraPage() {
                       <span style={{ fontSize: 17, fontWeight: 700, color: '#0F2A43' }}>
                         {formatarMoeda(item.total)}
                       </span>
-                      {!isVisualizacao && (
+                      {!isVisualizacao && formItens.length > 1 && (
                         <button
                           type="button"
                           onClick={() => handleRemoverItem(idx)}
@@ -627,12 +704,6 @@ export function V2PedidoCompraPage() {
                           ✕
                         </button>
                       )}
-                    </div>
-
-                    {/* Dica de custo */}
-                    <div style={{ marginTop: 10, fontSize: 13, color: '#475569' }}>
-                      Último custo pago: {formatarMoeda(item.preco_unitario)} ·{' '}
-                      <strong style={{ color: '#15803D' }}>sem variação</strong>
                     </div>
                   </div>
                 ))}
@@ -691,14 +762,45 @@ export function V2PedidoCompraPage() {
                   3
                 </div>
                 <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0F2A43' }}>
-                  3. Quando você paga e quando chega?
+                  3. Como você paga e de qual conta sai?
                 </h2>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+              {/* Linha 1: Forma de Pagamento e Condição / Parcelas */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 16, marginBottom: 16 }}>
                 <div>
                   <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
-                    Pagamento
+                    Forma de Pagamento
+                  </label>
+                  <select
+                    disabled={isVisualizacao}
+                    value={formFormaPagamento}
+                    onChange={(e) => setFormFormaPagamento(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: 10,
+                      border: '1px solid #CBD5E1',
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: '#0F2A43',
+                      background: isVisualizacao ? '#F8FAFC' : '#FFFFFF',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                      cursor: isVisualizacao ? 'default' : 'pointer',
+                    }}
+                  >
+                    {FORMAS_PAGAMENTO.map((f) => (
+                      <option key={f} value={f}>
+                        {f}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                    Condição / Parcelas
                   </label>
                   <select
                     disabled={isVisualizacao}
@@ -722,7 +824,70 @@ export function V2PedidoCompraPage() {
                     <option value={3}>3x Parcelado</option>
                     <option value={4}>4x Parcelado</option>
                     <option value={6}>6x Parcelado</option>
+                    <option value={10}>10x Parcelado</option>
+                    <option value={12}>12x Parcelado</option>
                   </select>
+                </div>
+              </div>
+
+              {/* Linha 2: Conta de Saída (Tag) e Previsão de Entrega */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 16, marginBottom: 16 }}>
+                <div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                    <Tag size={14} color="#0D5BA3" />
+                    Conta de Saída (Tag / Origem do recurso)
+                  </label>
+                  <input
+                    type="text"
+                    disabled={isVisualizacao}
+                    placeholder="Ex: #Inter, #Caixa, #BB, #Nubank"
+                    value={formContaSaidaTag}
+                    onChange={(e) => setFormContaSaidaTag(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: 10,
+                      border: '1px solid #CBD5E1',
+                      fontSize: 14,
+                      color: '#0F2A43',
+                      background: isVisualizacao ? '#F8FAFC' : '#FFFFFF',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  {/* Tags Rápidas das Contas Cadastradas */}
+                  {!isVisualizacao && contasBancarias.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                      <span style={{ fontSize: 11, color: '#64748B', alignSelf: 'center' }}>Atalhos:</span>
+                      {contasBancarias.map((cb) => {
+                        const tagNome = `#${cb.nome.replace(/\s+/g, '')}`
+                        const isSelecionado = formContaSaidaTag.toLowerCase().includes(cb.nome.toLowerCase()) || formContaSaidaTag === tagNome
+                        return (
+                          <button
+                            key={cb.id}
+                            type="button"
+                            onClick={() => setFormContaSaidaTag(tagNome)}
+                            style={{
+                              padding: '3px 8px',
+                              borderRadius: 12,
+                              fontSize: 11,
+                              fontWeight: 600,
+                              border: isSelecionado ? '1px solid #0D5BA3' : '1px solid #CBD5E1',
+                              background: isSelecionado ? '#E3EEFA' : '#F8FAFC',
+                              color: isSelecionado ? '#0D5BA3' : '#475569',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            <span>{tagNome}</span>
+                            <span style={{ opacity: 0.7 }}>({formatarMoeda(cb.saldoAtual)})</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -757,11 +922,11 @@ export function V2PedidoCompraPage() {
                   Observação <span style={{ color: '#64748B', fontWeight: 400 }}>(opcional)</span>
                 </label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   readOnly={isVisualizacao}
                   value={formObservacao}
                   onChange={(e) => setFormObservacao(e.target.value)}
-                  placeholder="Ex: PEDIDO CLADIMOR"
+                  placeholder="Ex: Instruções de entrega, condições comerciais ou notas fiscais..."
                   style={{
                     width: '100%',
                     padding: '12px 14px',
@@ -795,33 +960,42 @@ export function V2PedidoCompraPage() {
               Resumo do pedido
             </h3>
 
-            <p style={{ margin: '0 0 16px', fontSize: 15, color: '#1E293B', lineHeight: 1.5 }}>
-              Você está pedindo <strong>{formItens.length} item</strong> à{' '}
-              <strong>{formFornecedor.split(' ')[0] || 'Souza'} Indústria</strong>, pagando{' '}
-              <strong>{formParcelas === 1 ? 'à vista' : `${formParcelas}x`}</strong>. A previsão é receber até{' '}
-              <strong>{formDataEntrega.split('-').slice(1).reverse().join('/')}</strong>.
+            <p style={{ margin: '0 0 16px', fontSize: 14, color: '#1E293B', lineHeight: 1.5 }}>
+              Você está pedindo <strong>{formItens.filter((i) => i.produto_id).length} item(ns)</strong> à{' '}
+              <strong>{formFornecedor ? formFornecedor.split(' ')[0] : '...'}</strong>, pagando{' '}
+              <strong>{formFormaPagamento} ({formParcelas === 1 ? 'à vista' : `${formParcelas}x`})</strong>.
             </p>
 
             <div style={{ borderTop: '1px solid #D7E4DA', borderBottom: '1px solid #D7E4DA', padding: '14px 0', margin: '14px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
               {formItens.map((it, idx) => (
-                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-                  <span style={{ color: '#475569' }}>{it.produto_nome.split('[')[0]} × {it.quantidade}</span>
+                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                  <span style={{ color: '#475569' }}>
+                    {it.produto_nome ? it.produto_nome.split('[')[0] : 'Produto não selecionado'} × {it.quantidade}
+                  </span>
                   <span style={{ color: '#0F2A43', fontWeight: 600 }}>{formatarMoeda(it.total)}</span>
                 </div>
               ))}
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginTop: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginTop: 4 }}>
                 <span style={{ color: '#475569' }}>Pagamento</span>
-                <span style={{ color: '#0F2A43', fontWeight: 600 }}>{formParcelas === 1 ? 'À vista (1x)' : `${formParcelas}x`}</span>
+                <span style={{ color: '#0F2A43', fontWeight: 600 }}>
+                  {formFormaPagamento} · {formParcelas === 1 ? '1x à vista' : `${formParcelas}x`}
+                </span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-                <span style={{ color: '#475569' }}>Entrega</span>
+              {formContaSaidaTag && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                  <span style={{ color: '#475569' }}>Conta Saída</span>
+                  <span style={{ color: '#0D5BA3', fontWeight: 700 }}>{formContaSaidaTag}</span>
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <span style={{ color: '#475569' }}>Entrega prevista</span>
                 <span style={{ color: '#0F2A43', fontWeight: 600 }}>{formatarData(formDataEntrega)}</span>
               </div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', margin: '18px 0' }}>
               <span style={{ fontSize: 14, fontWeight: 700, color: '#334155' }}>Total estimado</span>
-              <span style={{ fontSize: 26, fontWeight: 800, color: '#0D5BA3' }}>{formatarMoeda(totalCalculado)}</span>
+              <span style={{ fontSize: 24, fontWeight: 800, color: '#0D5BA3' }}>{formatarMoeda(totalCalculado)}</span>
             </div>
 
             {isVisualizacao ? (
@@ -839,28 +1013,57 @@ export function V2PedidoCompraPage() {
                   ✓ Pedido Recebido
                 </div>
                 <p style={{ margin: '6px 0 0', fontSize: 12, color: '#166534', lineHeight: 1.4 }}>
-                  Este pedido já foi recebido e integrado ao estoque e financeiro. Para editá-lo, retorne seu status para Aberto na listagem.
+                  Este pedido já foi recebido e integrado ao estoque físico e financeiro. Para editá-lo, desfaça o recebimento na listagem.
                 </p>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={handleSalvarPedido}
-                style={{
-                  width: '100%',
-                  padding: '14px',
-                  borderRadius: 12,
-                  background: '#0D5BA3',
-                  color: '#FFFFFF',
-                  fontSize: 16,
-                  fontWeight: 700,
-                  border: 'none',
-                  cursor: 'pointer',
-                  marginBottom: 10,
-                }}
-              >
-                Salvar pedido
-              </button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
+                {/* Botão de Salvar Rascunho */}
+                <button
+                  type="button"
+                  onClick={() => handleSalvarPedido(false)}
+                  style={{
+                    width: '100%',
+                    padding: '13px',
+                    borderRadius: 12,
+                    background: '#0D5BA3',
+                    color: '#FFFFFF',
+                    fontSize: 15,
+                    fontWeight: 700,
+                    border: 'none',
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 6px rgba(13, 91, 163, 0.2)',
+                  }}
+                >
+                  {pedidoEdicao ? 'Salvar alterações' : 'Salvar como Rascunho (Criado)'}
+                </button>
+
+                {/* Botão Salvar e Emitir Diretamente (se novo) */}
+                {!pedidoEdicao && (
+                  <button
+                    type="button"
+                    onClick={() => handleSalvarPedido(true)}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      borderRadius: 12,
+                      background: '#F0FDF4',
+                      border: '1.5px solid #15803D',
+                      color: '#15803D',
+                      fontSize: 14,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <span>Salvar e Emitir Pedido</span>
+                    <ArrowRight size={16} />
+                  </button>
+                )}
+              </div>
             )}
 
             <button
@@ -868,7 +1071,7 @@ export function V2PedidoCompraPage() {
               onClick={() => setViewMode('lista')}
               style={{
                 width: '100%',
-                padding: '12px',
+                padding: '11px',
                 borderRadius: 10,
                 background: '#FFFFFF',
                 color: '#0F2A43',
@@ -881,8 +1084,8 @@ export function V2PedidoCompraPage() {
               {isVisualizacao ? 'Voltar para lista' : 'Cancelar'}
             </button>
 
-            <p style={{ margin: '16px 0 0', fontSize: 12, color: '#475569', lineHeight: 1.5 }}>
-              Depois de salvo, o pedido segue para Emitido e Recebido. Ao receber, só a observação poderá ser alterada.
+            <p style={{ margin: '14px 0 0', fontSize: 12, color: '#64748B', lineHeight: 1.5 }}>
+              O ciclo do pedido segue as etapas: <strong>Criado → Emitido → Recebido</strong>, avançadas por você conforme o andamento real.
             </p>
           </div>
         </div>
@@ -1161,177 +1364,401 @@ export function V2PedidoCompraPage() {
         ) : (
           pedidosFiltrados.map((pedido) => (
             <div key={pedido.id} style={{ marginBottom: 16 }}>
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'minmax(280px, 1.8fr) 110px 140px 140px auto',
-                  gap: 16,
-                  alignItems: 'center',
-                  paddingBottom: 16,
-                }}
-              >
-                {/* 1. Número e Fornecedor */}
-                <div>
-                  <span style={{ fontSize: 12, fontFamily: 'monospace', color: '#475569', display: 'block', marginBottom: 2 }}>
-                    #{pedido.numero}
-                  </span>
-                  <strong style={{ fontSize: 15, color: '#0F2A43', display: 'block', lineHeight: 1.3 }}>
-                    {pedido.fornecedor}
-                  </strong>
-                  {pedido.observacao && (
-                    <span style={{ fontSize: 13, color: '#475569', display: 'block', marginTop: 4 }}>
-                      {pedido.observacao}
-                    </span>
-                  )}
-                </div>
+              {(() => {
+                const isCriado = pedido.status !== 'cancelado'
+                const isEmitido = pedido.status === 'emitido' || pedido.status === 'recebido' || pedido.status === 'recebido_parcial'
+                const isRecebido = pedido.status === 'recebido'
 
-                {/* 2. Emissão */}
-                <div>
-                  <span style={{ fontSize: 13, color: '#475569', display: 'block' }}>Emissão</span>
-                  <strong style={{ fontSize: 14, color: '#0F2A43', display: 'block', marginTop: 2 }}>
-                    {formatarData(pedido.dataEmissao)}
-                  </strong>
-                </div>
-
-                {/* 3. Previsão de Entrega */}
-                <div>
-                  <span style={{ fontSize: 13, color: '#475569', display: 'block' }}>Previsão de entrega</span>
-                  <strong style={{ fontSize: 14, color: '#0F2A43', display: 'block', marginTop: 2 }}>
-                    {formatarData(pedido.dataPrevistaEntrega)}
-                  </strong>
-                </div>
-
-                {/* 4. Total */}
-                <div>
-                  <span style={{ fontSize: 13, color: '#475569', display: 'block' }}>Total</span>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginTop: 2 }}>
-                    <strong style={{ fontSize: 17, color: '#0F2A43' }}>
-                      {formatarMoeda(pedido.total)}
-                    </strong>
-                    <span style={{ fontSize: 13, color: '#475569', fontWeight: 700 }}>
-                      {pedido.numeroParcelas || 1}x
-                    </span>
-                  </div>
-                </div>
-
-                {/* 5. Pipeline de Status Visual (Criado -> Emitido -> Recebido) */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
-                  {/* Etapa 1: Criado */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <div style={{ width: 20, height: 20, borderRadius: 10, background: '#15803D', color: '#fff', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      ✓
-                    </div>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#15803D' }}>Criado</span>
-                  </div>
-
-                  <div style={{ width: 14, height: 2, background: '#15803D' }} />
-
-                  {/* Etapa 2: Emitido */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <div style={{ width: 20, height: 20, borderRadius: 10, background: '#15803D', color: '#fff', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      ✓
-                    </div>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#15803D' }}>Emitido</span>
-                  </div>
-
-                  <div style={{ width: 14, height: 2, background: '#15803D' }} />
-
-                  {/* Etapa 3: Recebido */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                return (
+                  <>
                     <div
                       style={{
-                        width: 20,
-                        height: 20,
-                        borderRadius: 10,
-                        background: pedido.status === 'recebido' ? '#15803D' : '#CBD5E1',
-                        color: '#fff',
-                        fontSize: 11,
-                        display: 'flex',
+                        display: 'grid',
+                        gridTemplateColumns: 'minmax(280px, 1.8fr) 110px 140px 140px auto',
+                        gap: 16,
                         alignItems: 'center',
-                        justifyContent: 'center',
+                        paddingBottom: 14,
                       }}
                     >
-                      ✓
+                      {/* 1. Número, Fornecedor e Badges de Pagamento / Conta */}
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                          <span style={{ fontSize: 12, fontFamily: 'monospace', color: '#475569' }}>
+                            #{pedido.numero}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              padding: '1px 6px',
+                              borderRadius: 6,
+                              background:
+                                pedido.status === 'recebido'
+                                  ? '#DCFCE7'
+                                  : pedido.status === 'emitido'
+                                  ? '#E3EEFA'
+                                  : '#F1F5F9',
+                              color:
+                                pedido.status === 'recebido'
+                                  ? '#15803D'
+                                  : pedido.status === 'emitido'
+                                  ? '#0D5BA3'
+                                  : '#475569',
+                              textTransform: 'uppercase',
+                            }}
+                          >
+                            {pedido.status === 'rascunho' ? 'RASCUNHO' : pedido.status}
+                          </span>
+                        </div>
+
+                        <strong style={{ fontSize: 15, color: '#0F2A43', display: 'block', lineHeight: 1.3 }}>
+                          {pedido.fornecedor}
+                        </strong>
+
+                        {pedido.observacao && (
+                          <span style={{ fontSize: 13, color: '#475569', display: 'block', marginTop: 3 }}>
+                            {pedido.observacao}
+                          </span>
+                        )}
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5, flexWrap: 'wrap' }}>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              padding: '2px 8px',
+                              borderRadius: 8,
+                              background: '#E3EEFA',
+                              color: '#0D5BA3',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            💳 {pedido.formaPagamento || 'Boleto'}
+                          </span>
+                          {pedido.contaSaidaTag && (
+                            <span
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                padding: '2px 8px',
+                                borderRadius: 8,
+                                background: '#FEF3C7',
+                                color: '#92400E',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                              }}
+                            >
+                              🏷️ {pedido.contaSaidaTag}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 2. Emissão */}
+                      <div>
+                        <span style={{ fontSize: 13, color: '#475569', display: 'block' }}>Emissão</span>
+                        <strong style={{ fontSize: 14, color: '#0F2A43', display: 'block', marginTop: 2 }}>
+                          {formatarData(pedido.dataEmissao)}
+                        </strong>
+                      </div>
+
+                      {/* 3. Previsão de Entrega */}
+                      <div>
+                        <span style={{ fontSize: 13, color: '#475569', display: 'block' }}>Previsão entrega</span>
+                        <strong style={{ fontSize: 14, color: '#0F2A43', display: 'block', marginTop: 2 }}>
+                          {formatarData(pedido.dataPrevistaEntrega)}
+                        </strong>
+                      </div>
+
+                      {/* 4. Total */}
+                      <div>
+                        <span style={{ fontSize: 13, color: '#475569', display: 'block' }}>Total</span>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginTop: 2 }}>
+                          <strong style={{ fontSize: 17, color: '#0F2A43' }}>
+                            {formatarMoeda(pedido.total)}
+                          </strong>
+                          <span style={{ fontSize: 13, color: '#475569', fontWeight: 700 }}>
+                            {pedido.numeroParcelas || 1}x
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 5. Pipeline de Status Visual (Criado -> Emitido -> Recebido) */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+                        {/* Etapa 1: Criado */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <div
+                            style={{
+                              width: 22,
+                              height: 22,
+                              borderRadius: 11,
+                              background: isCriado ? '#15803D' : '#CBD5E1',
+                              color: '#fff',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            ✓
+                          </div>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: isCriado ? '#15803D' : '#64748B' }}>
+                            Criado
+                          </span>
+                        </div>
+
+                        <div
+                          style={{
+                            width: 14,
+                            height: 2,
+                            background: isEmitido ? '#15803D' : '#CBD5E1',
+                          }}
+                        />
+
+                        {/* Etapa 2: Emitido */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <div
+                            style={{
+                              width: 22,
+                              height: 22,
+                              borderRadius: 11,
+                              background: isEmitido ? '#15803D' : '#E2E8F0',
+                              color: isEmitido ? '#fff' : '#64748B',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            {isEmitido ? '✓' : '2'}
+                          </div>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: isEmitido ? '#15803D' : '#64748B' }}>
+                            Emitido
+                          </span>
+                        </div>
+
+                        <div
+                          style={{
+                            width: 14,
+                            height: 2,
+                            background: isRecebido ? '#15803D' : '#CBD5E1',
+                          }}
+                        />
+
+                        {/* Etapa 3: Recebido */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <div
+                            style={{
+                              width: 22,
+                              height: 22,
+                              borderRadius: 11,
+                              background: isRecebido ? '#15803D' : '#E2E8F0',
+                              color: isRecebido ? '#fff' : '#64748B',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            {isRecebido ? '✓' : '3'}
+                          </div>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: isRecebido ? '#15803D' : '#64748B' }}>
+                            Recebido
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <span
-                      style={{
-                        fontSize: 12,
-                        fontWeight: 700,
-                        color: pedido.status === 'recebido' ? '#15803D' : '#64748B',
-                      }}
-                    >
-                      Recebido
-                    </span>
-                  </div>
-                </div>
-              </div>
 
-              {/* Botões de Ação na Linha do Pedido (Editar e Voltar) */}
-              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                {pedido.status === 'recebido' ? (
-                  <button
-                    onClick={() => handleVisualizarPedido(pedido)}
-                    title="Visualizar pedido (recebido)"
-                    style={{
-                      width: 38,
-                      height: 38,
-                      borderRadius: 8,
-                      border: '1.5px solid #0D5BA3',
-                      background: '#EFF6FF',
-                      color: '#0D5BA3',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <Eye size={16} />
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleEditarPedido(pedido)}
-                    title="Editar pedido"
-                    style={{
-                      width: 38,
-                      height: 38,
-                      borderRadius: 8,
-                      border: '1px solid #CBD5E1',
-                      background: '#FFFFFF',
-                      color: '#0D5BA3',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <Edit3 size={16} />
-                  </button>
-                )}
+                    {/* Ações da Linha: Botões de transição e edição/visualização */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, paddingBottom: 16, borderBottom: '1px solid #EDF2F7' }}>
+                      {/* Se Rascunho (Criado) */}
+                      {pedido.status === 'rascunho' && (
+                        <>
+                          <button
+                            onClick={() => handleAvançarParaEmitido(pedido)}
+                            style={{
+                              padding: '7px 14px',
+                              borderRadius: 8,
+                              border: 'none',
+                              background: '#0D5BA3',
+                              color: '#FFFFFF',
+                              fontSize: 13,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
+                            }}
+                          >
+                            <span>Emitir Pedido</span>
+                            <ArrowRight size={14} />
+                          </button>
 
-                <button
-                  onClick={async () => {
-                    if (window.confirm(`Confirma retornar o Pedido #${pedido.numero} para Aberto?`)) {
-                      await voltarPedidoParaAberto(pedido.id)
-                      await loadData()
-                    }
-                  }}
-                  title="Voltar status"
-                  style={{
-                    width: 38,
-                    height: 38,
-                    borderRadius: 8,
-                    border: '1px solid #F0B45C',
-                    background: '#FFF4E0',
-                    color: '#B45309',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <RotateCcw size={16} />
-                </button>
-              </div>
+                          <button
+                            onClick={() => handleEditarPedido(pedido)}
+                            title="Editar pedido"
+                            style={{
+                              padding: '7px 12px',
+                              borderRadius: 8,
+                              border: '1px solid #CBD5E1',
+                              background: '#FFFFFF',
+                              color: '#0D5BA3',
+                              fontSize: 13,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            <Edit3 size={14} />
+                            <span>Editar</span>
+                          </button>
+                        </>
+                      )}
+
+                      {/* Se Emitido */}
+                      {pedido.status === 'emitido' && (
+                        <>
+                          <button
+                            onClick={() => handleAvançarParaRecebido(pedido)}
+                            style={{
+                              padding: '7px 14px',
+                              borderRadius: 8,
+                              border: 'none',
+                              background: '#15803D',
+                              color: '#FFFFFF',
+                              fontSize: 13,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
+                            }}
+                          >
+                            <CheckCircle size={14} />
+                            <span>Receber Pedido (Dar Entrada Estoque)</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleEditarPedido(pedido)}
+                            title="Editar pedido emitido"
+                            style={{
+                              padding: '7px 12px',
+                              borderRadius: 8,
+                              border: '1px solid #CBD5E1',
+                              background: '#FFFFFF',
+                              color: '#0D5BA3',
+                              fontSize: 13,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            <Edit3 size={14} />
+                            <span>Editar</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleVoltarParaAberto(pedido)}
+                            title="Retornar para rascunho"
+                            style={{
+                              padding: '7px 12px',
+                              borderRadius: 8,
+                              border: '1px solid #F0B45C',
+                              background: '#FFF4E0',
+                              color: '#B45309',
+                              fontSize: 13,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            <RotateCcw size={14} />
+                            <span>Voltar p/ Aberto</span>
+                          </button>
+                        </>
+                      )}
+
+                      {/* Se Recebido */}
+                      {pedido.status === 'recebido' && (
+                        <>
+                          <span
+                            style={{
+                              background: '#DCFCE7',
+                              color: '#15803D',
+                              padding: '6px 12px',
+                              borderRadius: 8,
+                              fontSize: 13,
+                              fontWeight: 800,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 5,
+                            }}
+                          >
+                            <CheckCircle size={15} />
+                            Recebido no Estoque
+                          </span>
+
+                          {/* Visualizar: obrigatório, não pode editar quando recebido */}
+                          <button
+                            onClick={() => handleVisualizarPedido(pedido)}
+                            title="Visualizar detalhes do pedido (somente leitura)"
+                            style={{
+                              padding: '7px 14px',
+                              borderRadius: 8,
+                              border: '1.5px solid #0D5BA3',
+                              background: '#EFF6FF',
+                              color: '#0D5BA3',
+                              fontSize: 13,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
+                            }}
+                          >
+                            <Eye size={15} />
+                            <span>Visualizar Pedido</span>
+                          </button>
+
+                          {/* Desfazer recebimento: estorna estoque e volta para emitido */}
+                          <button
+                            onClick={() => handleDesfazerRecebimento(pedido)}
+                            title="Desfazer recebimento e estornar entrada no estoque"
+                            style={{
+                              padding: '7px 12px',
+                              borderRadius: 8,
+                              border: '1px solid #CBD5E1',
+                              background: '#FFFFFF',
+                              color: '#B45309',
+                              fontSize: 12,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            <RotateCcw size={13} />
+                            <span>Desfazer Recebimento</span>
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </>
+                )
+              })()}
             </div>
           ))
         )}

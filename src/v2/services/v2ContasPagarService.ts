@@ -179,13 +179,16 @@ export async function estornarBaixaParcela(
   if (!conta) return null
 
   const parcela = conta.parcelas.find((p) => p.numero === numeroParcela)
-  if (!parcela || !parcela.baixa) return null
+  if (!parcela) return null
+
+  // Se a parcela não está paga e não tem baixa, não há o que estornar
+  if (parcela.status !== 'paga' && !parcela.baixa) return null
 
   const baixa = parcela.baixa
   const isPagar = (conta.tipo || 'pagar') === 'pagar'
 
   // Se a baixa tinha conta bancária vinculada, reverte o saldo
-  if (baixa.contaBancariaId) {
+  if (baixa?.contaBancariaId) {
     // Se era conta a pagar: o dinheiro saiu (-), logo no estorno o dinheiro volta (+)
     // Se era conta a receber: o dinheiro entrou (+), logo no estorno o dinheiro sai (-)
     const deltaReversao = isPagar ? baixa.valorFinalPago : -baixa.valorFinalPago
@@ -209,7 +212,8 @@ export async function estornarBaixaParcela(
   })
 
   // Recalcula total pago
-  const novoTotalPago = Math.max(0, Math.round((conta.totalPago - parcela.valor) * 100) / 100)
+  const valorEstornado = baixa?.valorFinalPago ?? parcela.valor
+  const novoTotalPago = Math.max(0, Math.round((conta.totalPago - valorEstornado) * 100) / 100)
 
   // Recalcula status geral da conta
   let novoStatusConta: StatusConta = 'aberta'

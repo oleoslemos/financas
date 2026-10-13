@@ -6,10 +6,12 @@ import {
   CheckCircle2,
   CircleDot,
   Clock,
+  Eye,
   Inbox,
   Plus,
   RotateCcw,
   Search,
+  Tag,
   Wallet,
   X,
 } from 'lucide-react'
@@ -48,6 +50,15 @@ import {
   ContaBancaria,
 } from '../services/v2ContasBancariasService'
 
+const FORMAS_PAGAMENTO_FINANCEIRO: string[] = [
+  'Dinheiro',
+  'Pix',
+  'Cartão Débito',
+  'Cartão Crédito',
+  'Boleto',
+  'Crediário',
+]
+
 const DIAS_POR_PAGINA = 30
 
 const STATUS_INFO: Record<Status, { label: string; cls: string; Icon: typeof Clock }> = {
@@ -78,6 +89,12 @@ export function V2ContasPagarPage() {
 
   const buscaAdiada = useDeferredValue(busca)
 
+  // Modal de Detalhes do Lançamento / Pedido
+  const [detalhesModal, setDetalhesModal] = useState<{
+    conta: ContaPagar
+    parcela: ContaPagarParcela
+  } | null>(null)
+
   // Modal de Baixa Inteligente
   const [baixaModal, setBaixaModal] = useState<{
     conta: ContaPagar
@@ -88,7 +105,8 @@ export function V2ContasPagarPage() {
   const [descontoValor, setDescontoValor] = useState<number>(0)
   const [acrescimoTipo, setAcrescimoTipo] = useState<'R$' | '%'>('R$')
   const [acrescimoValor, setAcrescimoValor] = useState<number>(0)
-  const [baixaFormaPagto, setBaixaFormaPagto] = useState('PIX')
+  const [baixaFormaPagto, setBaixaFormaPagto] = useState('Boleto')
+  const [baixaContaTag, setBaixaContaTag] = useState('')
   const [baixaObs, setBaixaObs] = useState('')
   const [valorLiquidoInput, setValorLiquidoInput] = useState<string>('')
 
@@ -260,19 +278,26 @@ export function V2ContasPagarPage() {
     setAcrescimoTipo('R$')
     setAcrescimoValor(0)
     setValorLiquidoInput(parcela.valor.toFixed(2))
-    setBaixaFormaPagto('PIX')
+    setBaixaFormaPagto('Boleto')
     setBaixaObs('')
     setCriandoNovaContaTag(false)
     setNovoNomeContaTag('')
-    if (contasBancarias.length > 0 && !contaBancariaSelecionadaId) {
-      setContaBancariaSelecionadaId(contasBancarias[0].id)
+    if (contasBancarias.length > 0) {
+      const padrao = contasBancarias[0]
+      setContaBancariaSelecionadaId(padrao.id)
+      setBaixaContaTag(`#${padrao.nome.replace(/\s+/g, '')}`)
+    } else {
+      setBaixaContaTag('')
     }
   }
 
   async function handleCriarNovaContaTag() {
     if (!novoNomeContaTag.trim()) return
+    const tagFormatada = novoNomeContaTag.trim().startsWith('#')
+      ? novoNomeContaTag.trim()
+      : `#${novoNomeContaTag.trim()}`
     const nova = await saveContaBancaria({
-      nome: novoNomeContaTag.trim(),
+      nome: novoNomeContaTag.trim().replace(/^#/, ''),
       tipo: 'carteira',
       saldoAtual: 0,
       cor: '#3B82F6',
@@ -281,6 +306,7 @@ export function V2ContasPagarPage() {
     const lista = await listContasBancarias()
     setContasBancarias(lista)
     setContaBancariaSelecionadaId(nova.id)
+    setBaixaContaTag(tagFormatada)
     setNovoNomeContaTag('')
     setCriandoNovaContaTag(false)
   }
@@ -290,7 +316,9 @@ export function V2ContasPagarPage() {
     const { conta, parcela } = baixaModal
     const isPagar = (conta.tipo || 'pagar') === 'pagar'
 
-    const contaBancariaObj = contasBancarias.find((cb) => cb.id === contaBancariaSelecionadaId)
+    const contaBancariaObj = contasBancarias.find(
+      (cb) => cb.id === contaBancariaSelecionadaId || `#${cb.nome.replace(/\s+/g, '')}`.toLowerCase() === baixaContaTag.trim().toLowerCase()
+    )
 
     const baixaInfo: BaixaParcelaInfo = {
       dataBaixa: baixaData,
@@ -305,7 +333,7 @@ export function V2ContasPagarPage() {
       formaPagamento: baixaFormaPagto,
       observacao: baixaObs.trim() || undefined,
       contaBancariaId: contaBancariaObj?.id,
-      contaBancariaNome: contaBancariaObj?.nome,
+      contaBancariaNome: baixaContaTag.trim() || contaBancariaObj?.nome || undefined,
     }
 
     const novasParcelas = conta.parcelas.map((p) => {
@@ -341,16 +369,17 @@ export function V2ContasPagarPage() {
 
     setContas((prev) => prev.map((c) => (c.id === contaAtualizada.id ? contaAtualizada : c)))
     setBaixaModal(null)
+    setDetalhesModal(null)
   }
 
   async function handleEstornarParcela(conta: ContaPagar, parcela: ContaPagarParcela) {
-    if (!parcela.baixa) return
     const isPagar = (conta.tipo || 'pagar') === 'pagar'
     const textoAcao = isPagar ? 'pagamento' : 'recebimento'
+    const valorEstornado = parcela.baixa?.valorFinalPago ?? parcela.valor
     const conf = window.confirm(
-      `Confirma o estorno do ${textoAcao} da parcela #${parcela.numero} (${formatBRL(parcela.baixa.valorFinalPago)})?\n\n` +
+      `Confirma o estorno do ${textoAcao} da parcela #${parcela.numero} (${formatBRL(valorEstornado)})?\n\n` +
       `• O status da parcela voltará para Aberto;\n` +
-      `• O saldo da conta bancária (${parcela.baixa.contaBancariaNome || 'vinculada'}) será recomposto.`
+      (parcela.baixa?.contaBancariaNome ? `• O saldo da conta bancária (${parcela.baixa.contaBancariaNome}) será recomposto.` : '')
     )
     if (!conf) return
 
@@ -360,6 +389,9 @@ export function V2ContasPagarPage() {
         setContas((prev) => prev.map((c) => (c.id === atualizada.id ? atualizada : c)))
         const bancosAtualizados = await listContasBancarias()
         setContasBancarias(bancosAtualizados)
+        setDetalhesModal(null)
+      } else {
+        alert('Não foi possível realizar o estorno da parcela.')
       }
     } catch {
       alert('Erro ao realizar o estorno da parcela.')
@@ -569,7 +601,7 @@ export function V2ContasPagarPage() {
                 dia={d}
                 hoje={hoje}
                 onBaixar={(conta, parcela) => abrirModalBaixa(conta, parcela)}
-                onEstornar={(conta, parcela) => handleEstornarParcela(conta, parcela)}
+                onVerDetalhes={(conta, parcela) => setDetalhesModal({ conta, parcela })}
               />
             ))}
             {dias.length > limite && (
@@ -804,23 +836,22 @@ export function V2ContasPagarPage() {
                 <select
                   value={baixaFormaPagto}
                   onChange={(e) => setBaixaFormaPagto(e.target.value)}
-                  style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #CBD5E1', fontSize: 13, outline: 'none', background: '#FFFFFF' }}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #CBD5E1', fontSize: 13, fontWeight: 600, outline: 'none', background: '#FFFFFF' }}
                 >
-                  <option value="PIX">PIX</option>
-                  <option value="BOLETO">Boleto Bancário</option>
-                  <option value="TRANSFERENCIA">Transferência / TED</option>
-                  <option value="CARTAO_CREDITO">Cartão de Crédito</option>
-                  <option value="CARTAO_DEBITO">Cartão de Débito</option>
-                  <option value="DINHEIRO">Dinheiro em Espécie</option>
-                  <option value="OUTRO">Outro</option>
+                  {FORMAS_PAGAMENTO_FINANCEIRO.map((f) => (
+                    <option key={f} value={f}>
+                      {f}
+                    </option>
+                  ))}
                 </select>
               </div>
 
-              {/* Conta Bancária / Carteira (Tag) e Saldo */}
+              {/* Conta Bancária / Carteira (Tag de Saída / Entrada) */}
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <label style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>
-                    Conta Bancária / Carteira (Tag de Liquidação)
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 700, color: '#334155' }}>
+                    <Tag size={13} color="#2563EB" />
+                    Conta de Saída (Tag / Origem do Recurso)
                   </label>
                   <button
                     type="button"
@@ -835,7 +866,7 @@ export function V2ContasPagarPage() {
                       padding: 0,
                     }}
                   >
-                    {criandoNovaContaTag ? 'Cancelar nova' : '+ Nova Conta / Tag'}
+                    {criandoNovaContaTag ? 'Cancelar' : '+ Nova Conta'}
                   </button>
                 </div>
 
@@ -843,7 +874,7 @@ export function V2ContasPagarPage() {
                   <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
                     <input
                       type="text"
-                      placeholder="Nome da nova conta (ex: Santander PJ, Carteira 2)"
+                      placeholder="Nome da nova conta (ex: Santander PJ, Cofre)"
                       value={novoNomeContaTag}
                       onChange={(e) => setNovoNomeContaTag(e.target.value)}
                       style={{ flex: 1, padding: '9px 12px', borderRadius: 8, border: '1.5px solid #3B82F6', fontSize: 13, outline: 'none' }}
@@ -857,24 +888,54 @@ export function V2ContasPagarPage() {
                     </button>
                   </div>
                 ) : (
-                  <select
-                    value={contaBancariaSelecionadaId}
-                    onChange={(e) => {
-                      if (e.target.value === '__NOVA__') {
-                        setCriandoNovaContaTag(true)
-                      } else {
-                        setContaBancariaSelecionadaId(e.target.value)
-                      }
-                    }}
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #CBD5E1', fontSize: 13, outline: 'none', background: '#FFFFFF' }}
-                  >
-                    {contasBancarias.map((cb) => (
-                      <option key={cb.id} value={cb.id}>
-                        {cb.nome} · Saldo: {formatBRL(cb.saldoAtual)}
-                      </option>
-                    ))}
-                    <option value="__NOVA__">+ Cadastrar outra conta...</option>
-                  </select>
+                  <div>
+                    <input
+                      type="text"
+                      placeholder="Ex: #Inter, #Caixa, #BB, #Nubank"
+                      value={baixaContaTag}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        setBaixaContaTag(val)
+                        const correspondente = contasBancarias.find(
+                          (c) => `#${c.nome.replace(/\s+/g, '')}`.toLowerCase() === val.trim().toLowerCase() || c.nome.toLowerCase() === val.trim().toLowerCase()
+                        )
+                        if (correspondente) setContaBancariaSelecionadaId(correspondente.id)
+                      }}
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #CBD5E1', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                    />
+
+                    {/* Chips de Atalho das Contas Cadastradas */}
+                    {contasBancarias.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                        {contasBancarias.map((cb) => {
+                          const tagFormatada = `#${cb.nome.replace(/\s+/g, '')}`
+                          const isSel = baixaContaTag === tagFormatada || contaBancariaSelecionadaId === cb.id
+                          return (
+                            <button
+                              key={cb.id}
+                              type="button"
+                              onClick={() => {
+                                setBaixaContaTag(tagFormatada)
+                                setContaBancariaSelecionadaId(cb.id)
+                              }}
+                              style={{
+                                padding: '3px 8px',
+                                borderRadius: 12,
+                                fontSize: 11,
+                                fontWeight: 600,
+                                border: isSel ? '1px solid #2563EB' : '1px solid #CBD5E1',
+                                background: isSel ? '#EFF6FF' : '#F8FAFC',
+                                color: isSel ? '#1D4ED8' : '#475569',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              {tagFormatada} ({formatBRL(cb.saldoAtual)})
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {/* Exibição em Tempo Real do Saldo da Conta */}
@@ -964,6 +1025,280 @@ export function V2ContasPagarPage() {
                   Confirmar Baixa
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL DE DETALHES DO LANÇAMENTO / PEDIDO (COM BOTÃO ESTORNAR) ── */}
+      {detalhesModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(15, 23, 42, 0.45)',
+            backdropFilter: 'blur(3px)',
+            padding: 16,
+          }}
+        >
+          <div
+            style={{
+              background: '#FFFFFF',
+              borderRadius: 16,
+              width: '100%',
+              maxWidth: 540,
+              padding: 24,
+              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, borderBottom: '1px solid #E2E8F0', paddingBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    background: detalhesModal.conta.tipo === 'receber' ? '#DCFCE7' : '#FEE2E2',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: detalhesModal.conta.tipo === 'receber' ? '#15803D' : '#DC2626',
+                  }}
+                >
+                  <Eye size={18} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: '#0F172A' }}>
+                    Visualizar Lançamento
+                  </h3>
+                  <span style={{ fontSize: 12, color: '#64748B' }}>
+                    {detalhesModal.conta.tipo === 'receber' ? 'Conta a Receber' : 'Conta a Pagar'} · Parcela #{detalhesModal.parcela.numero} de {detalhesModal.conta.parcelas.length}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDetalhesModal(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', padding: 4 }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Informações Gerais da Conta / Pedido */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', display: 'block', marginBottom: 2 }}>
+                  Descrição / Origem
+                </span>
+                <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0F172A', lineHeight: 1.4 }}>
+                  {detalhesModal.conta.descricao}
+                </p>
+                {detalhesModal.conta.origem === 'compra' && (
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      marginTop: 4,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      padding: '2px 8px',
+                      borderRadius: 6,
+                      background: '#EFF6FF',
+                      color: '#1D4ED8',
+                    }}
+                  >
+                    📦 Gerado a partir de Pedido de Compra
+                  </span>
+                )}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div style={{ background: '#F8FAFC', padding: '10px 12px', borderRadius: 10 }}>
+                  <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600, display: 'block' }}>
+                    {detalhesModal.conta.tipo === 'receber' ? 'Cliente' : 'Fornecedor'}
+                  </span>
+                  <strong style={{ fontSize: 13, color: '#0F172A', display: 'block', marginTop: 2 }}>
+                    {detalhesModal.conta.fornecedor || 'Não informado'}
+                  </strong>
+                </div>
+
+                <div style={{ background: '#F8FAFC', padding: '10px 12px', borderRadius: 10 }}>
+                  <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600, display: 'block' }}>
+                    Categoria
+                  </span>
+                  <strong style={{ fontSize: 13, color: '#0F172A', display: 'block', marginTop: 2 }}>
+                    {detalhesModal.conta.categoria || 'Geral'}
+                  </strong>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div style={{ background: '#F8FAFC', padding: '10px 12px', borderRadius: 10 }}>
+                  <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600, display: 'block' }}>
+                    Vencimento Nominal
+                  </span>
+                  <strong style={{ fontSize: 13, color: '#0F172A', display: 'block', marginTop: 2 }}>
+                    {fmtData(detalhesModal.parcela.vencimento)}
+                  </strong>
+                </div>
+
+                <div style={{ background: '#F8FAFC', padding: '10px 12px', borderRadius: 10 }}>
+                  <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600, display: 'block' }}>
+                    Valor Nominal
+                  </span>
+                  <strong style={{ fontSize: 15, color: '#0F172A', display: 'block', marginTop: 2 }}>
+                    {formatBRL(detalhesModal.parcela.valor)}
+                  </strong>
+                </div>
+              </div>
+
+              {/* Status e Dados da Quitação (se Paga) */}
+              {detalhesModal.parcela.status === 'paga' ? (
+                <div
+                  style={{
+                    background: '#F0FDF4',
+                    border: '1.5px solid #BBF7D0',
+                    borderRadius: 12,
+                    padding: '14px',
+                    marginTop: 6,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, fontWeight: 800, color: '#15803D' }}>
+                      <CheckCircle2 size={16} /> Parcela Liquidada / Paga
+                    </span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#166534' }}>
+                      {detalhesModal.parcela.baixa?.dataBaixa ? `Em ${fmtData(detalhesModal.parcela.baixa.dataBaixa)}` : 'Confirmada'}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12, color: '#334155' }}>
+                    <div>
+                      <span style={{ color: '#64748B', display: 'block' }}>Forma de Pagamento:</span>
+                      <strong style={{ color: '#0F172A' }}>
+                        {detalhesModal.parcela.baixa?.formaPagamento || 'Boleto'}
+                      </strong>
+                    </div>
+                    <div>
+                      <span style={{ color: '#64748B', display: 'block' }}>Conta de Saída (Tag):</span>
+                      <strong style={{ color: '#1D4ED8' }}>
+                        {detalhesModal.parcela.baixa?.contaBancariaNome || 'Não especificada'}
+                      </strong>
+                    </div>
+                    {detalhesModal.parcela.baixa?.descontoFinal ? (
+                      <div>
+                        <span style={{ color: '#64748B', display: 'block' }}>Desconto Obtido:</span>
+                        <strong style={{ color: '#15803D' }}>
+                          -{formatBRL(detalhesModal.parcela.baixa.descontoFinal)}
+                        </strong>
+                      </div>
+                    ) : null}
+                    {detalhesModal.parcela.baixa?.acrescimoFinal ? (
+                      <div>
+                        <span style={{ color: '#64748B', display: 'block' }}>Acréscimo / Juros:</span>
+                        <strong style={{ color: '#DC2626' }}>
+                          +{formatBRL(detalhesModal.parcela.baixa.acrescimoFinal)}
+                        </strong>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div style={{ borderTop: '1px solid #DCFCE7', paddingTop: 10, marginTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#166534' }}>
+                      Valor Líquido Baixado:
+                    </span>
+                    <span style={{ fontSize: 18, fontWeight: 900, color: '#15803D' }}>
+                      {formatBRL(detalhesModal.parcela.baixa?.valorFinalPago ?? detalhesModal.parcela.valor)}
+                    </span>
+                  </div>
+
+                  {detalhesModal.parcela.baixa?.observacao && (
+                    <p style={{ margin: '8px 0 0', fontSize: 12, color: '#475569', fontStyle: 'italic' }}>
+                      Obs: {detalhesModal.parcela.baixa.observacao}
+                    </p>
+                  )}
+
+                  {/* ── BOTÃO ESTORNAR (LOCALIZADO DENTRO DO MODAL DE VISUALIZAÇÃO) ── */}
+                  <button
+                    type="button"
+                    onClick={() => handleEstornarParcela(detalhesModal.conta, detalhesModal.parcela)}
+                    style={{
+                      width: '100%',
+                      marginTop: 14,
+                      padding: '12px',
+                      borderRadius: 10,
+                      border: '1.5px solid #F59E0B',
+                      background: '#FFFBEB',
+                      color: '#B45309',
+                      fontSize: 14,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <RotateCcw size={16} />
+                    <span>Estornar Pagamento da Parcela</span>
+                  </button>
+                </div>
+              ) : (
+                <div style={{ marginTop: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const c = detalhesModal.conta
+                      const p = detalhesModal.parcela
+                      setDetalhesModal(null)
+                      abrirModalBaixa(c, p)
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      borderRadius: 10,
+                      border: 'none',
+                      background: '#2563EB',
+                      color: '#FFFFFF',
+                      fontSize: 14,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                    }}
+                  >
+                    <span>Realizar Baixa / Liquidar Parcela</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div style={{ marginTop: 16, textAlign: 'right' }}>
+              <button
+                type="button"
+                onClick={() => setDetalhesModal(null)}
+                style={{
+                  padding: '9px 18px',
+                  borderRadius: 8,
+                  border: '1px solid #CBD5E1',
+                  background: '#FFFFFF',
+                  color: '#475569',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Fechar
+              </button>
             </div>
           </div>
         </div>
@@ -1193,12 +1528,12 @@ const Dia = memo(function Dia({
   dia,
   hoje,
   onBaixar,
-  onEstornar,
+  onVerDetalhes,
 }: {
   dia: DiaExtrato
   hoje: string
   onBaixar: (conta: ContaPagar, parcela: ContaPagarParcela) => void
-  onEstornar: (conta: ContaPagar, parcela: ContaPagarParcela) => void
+  onVerDetalhes: (conta: ContaPagar, parcela: ContaPagarParcela) => void
 }) {
   const { titulo, sub } = rotuloDia(dia.data, hoje)
   return (
@@ -1219,7 +1554,7 @@ const Dia = memo(function Dia({
             key={m.id}
             m={m}
             onBaixar={() => onBaixar(m.contaOriginal, m.parcelaOriginal)}
-            onEstornar={() => onEstornar(m.contaOriginal, m.parcelaOriginal)}
+            onVerDetalhes={() => onVerDetalhes(m.contaOriginal, m.parcelaOriginal)}
           />
         ))}
       </ul>
@@ -1230,11 +1565,11 @@ const Dia = memo(function Dia({
 const Linha = memo(function Linha({
   m,
   onBaixar,
-  onEstornar,
+  onVerDetalhes,
 }: {
   m: Movimento
   onBaixar: () => void
-  onEstornar: () => void
+  onVerDetalhes: () => void
 }) {
   const receber = m.tipo === 'receber'
   const { label, cls, Icon } = STATUS_INFO[m.status] || STATUS_INFO.aberta
@@ -1249,7 +1584,11 @@ const Linha = memo(function Linha({
     .join(' · ')
 
   return (
-    <li className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50/50 transition">
+    <li
+      onClick={onVerDetalhes}
+      className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50/80 transition cursor-pointer"
+      title="Clique para visualizar detalhes do lançamento"
+    >
       <span
         className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
           receber ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
@@ -1274,11 +1613,14 @@ const Linha = memo(function Linha({
           </span>
         </div>
 
-        {/* Ações da Parcela: Baixar ou Estornar */}
+        {/* Ações da Parcela: Baixar ou Visualizar (Estornar fica dentro do modal de detalhes) */}
         {m.status !== 'paga' ? (
           <button
             type="button"
-            onClick={onBaixar}
+            onClick={(e) => {
+              e.stopPropagation()
+              onBaixar()
+            }}
             className={`rounded-lg px-3 py-1.5 text-xs font-bold transition border ${
               receber
                 ? 'border-emerald-600 text-emerald-600 hover:bg-emerald-50'
@@ -1290,12 +1632,15 @@ const Linha = memo(function Linha({
         ) : (
           <button
             type="button"
-            onClick={onEstornar}
-            title="Estornar baixa"
-            className="inline-flex items-center gap-1 rounded-lg border border-amber-500 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-800 hover:bg-amber-100 transition"
+            onClick={(e) => {
+              e.stopPropagation()
+              onVerDetalhes()
+            }}
+            title="Visualizar detalhes do pedido e opções"
+            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-700 hover:bg-slate-100 transition shadow-sm"
           >
-            <RotateCcw size={11} aria-hidden />
-            Estornar
+            <Eye size={12} aria-hidden />
+            Visualizar
           </button>
         )}
       </div>

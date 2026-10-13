@@ -33,6 +33,8 @@ export type PedidoCompra = {
   observacao?: string | null
   total: number
   numeroParcelas: number
+  formaPagamento?: string
+  contaSaidaTag?: string
   itens: PedidoCompraItem[]
   created_at: string
   updated_at: string
