@@ -1,12 +1,9 @@
 import { useUser } from '@clerk/clerk-react'
 import {
   AlertTriangle,
-  Building2,
-  Calendar,
   ChevronLeft,
   ChevronRight,
   Clock,
-  History,
   ShoppingBag,
   Users,
 } from 'lucide-react'
@@ -24,7 +21,6 @@ import {
   parseGoalMoneyInput,
   parseMonthlyGoals,
   suggestMonthGoalFromHistory,
-  sumAllTimeSold,
   sumYearToDateSold,
 } from '../lib/salesGoals'
 import { clerkEmailCandidates } from '../lib/clerkEmails'
@@ -1142,8 +1138,8 @@ export function BemAvivHomePage() {
                     />
                     <YAxis hide domain={[0, (dataMax: number) => Math.max(1, dataMax * 1.25)]} />
                     <Tooltip
-                      formatter={(value: number) => [formatBRL(value), 'Confirmado']}
-                      labelFormatter={(label: string) => `Mês ${label}`}
+                      formatter={(value: unknown) => [formatBRL(Number(value) || 0), 'Confirmado']}
+                      labelFormatter={(label: unknown) => `Mês ${String(label ?? '')}`}
                       contentStyle={{ borderRadius: 8, fontSize: 12 }}
                     />
                     <Bar dataKey="totalConfirmed" radius={[4, 4, 0, 0]} maxBarSize={38}>
