@@ -2794,7 +2794,6 @@ export function BemAvivClientesPage() {
       {selectedClient ? (
         <div
           className="fixed inset-0 z-40 bg-slate-900/35 backdrop-blur-xs transition-opacity duration-300"
-          onClick={() => setSelectedClient(null)}
         />
       ) : null}
 

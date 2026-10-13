@@ -263,11 +263,6 @@ export function CreditCardsPage() {
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-3 sm:p-4"
           role="presentation"
-          onClick={() => {
-            setModalOpen(false)
-            setEditing(null)
-            reset()
-          }}
         >
           <div
             role="dialog"
