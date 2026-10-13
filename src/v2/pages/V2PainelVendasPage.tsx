@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   TrendingUp,
   DollarSign,
@@ -7,6 +7,8 @@ import {
   Target,
   Sparkles,
   ArrowUpRight,
+  Settings,
+  Calendar,
 } from 'lucide-react'
 import {
   ResponsiveContainer,
@@ -20,117 +22,496 @@ import {
   Cell,
   CartesianGrid,
 } from 'recharts'
+import { useSupabase } from '../../hooks/useSupabase'
+import { useCompany } from '../../context/CompanyContext'
+import { SalesGoalsEditor } from '../../components/bemAviv/SalesGoalsEditor'
+import {
+  emptyMonthlyGoals,
+  formatGoalMoneyInput,
+  monthlyGoalsToDraft,
+  parseGoalMoneyInput,
+  parseMonthlyGoals,
+  suggestMonthGoalFromHistory,
+  type MonthlyGoalsMap,
+} from '../../lib/salesGoals'
+
+const MONTH_NAMES = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+]
+
+const MONTH_SHORT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+
+type OrderRow = {
+  id: string
+  order_date: string
+  total_amount: number
+  document_type: string
+  status: string
+  client_id?: string | null
+  payment_method?: string | null
+}
+
+type OrderItemRow = {
+  item_description: string
+  quantity: number
+  total_price: number
+}
 
 export function V2PainelVendasPage() {
-  const [periodo, setPeriodo] = useState<'mes' | 'ano' | 'tudo'>('mes')
+  const supabase = useSupabase()
+  const { activeCompanyId, activeCompany } = useCompany()
+
+  const [periodoModo, setPeriodoModo] = useState<'mes' | 'ano' | 'tudo'>('mes')
+  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear())
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth() + 1)
+
+  // Metas do banco / estado
+  const [goalsMap, setGoalsMap] = useState<MonthlyGoalsMap>(() => emptyMonthlyGoals())
+  const [annualGoalVal, setAnnualGoalVal] = useState<number>(0)
+  const [isGoalsModalOpen, setIsGoalsModalOpen] = useState(false)
+  const [goalsLoading, setGoalsLoading] = useState(false)
+  const [goalsSaving, setGoalsSaving] = useState(false)
+  const [goalsMsg, setGoalsMsg] = useState<string | null>(null)
+  const [annualGoalDraft, setAnnualGoalDraft] = useState('')
+  const [monthlyGoalsDraft, setMonthlyGoalsDraft] = useState<Record<string, string>>(() =>
+    monthlyGoalsToDraft(emptyMonthlyGoals())
+  )
+
+  // Pedidos e itens
+  const [orders, setOrders] = useState<OrderRow[]>([])
+  const [items, setItems] = useState<OrderItemRow[]>([])
 
   const fmt = (v: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
 
-  // Métricas de Vendas (Simuladas e integradas com os dados locais)
-  const vendasConfirmadas = 98631.18
-  const metaMes = 120000.00
-  const totalPedidos = 42
-  const ticketMedio = vendasConfirmadas / (totalPedidos || 1)
-  const atingimentoMeta = (vendasConfirmadas / metaMes) * 100
+  // 1. Carregar Metas do Ano Selecionado
+  const loadGoals = useCallback(async () => {
+    if (!supabase || !activeCompanyId) return
+    setGoalsLoading(true)
+    setGoalsMsg(null)
+    const { data, error } = await supabase
+      .from('company_sales_goals')
+      .select('annual_goal, monthly_goals')
+      .eq('company_id', activeCompanyId)
+      .eq('year', selectedYear)
+      .maybeSingle()
+    setGoalsLoading(false)
 
-  // Dados para Histórico Mensal (Storytelling de evolução)
-  const evolucaoMeses = [
-    { mes: 'Mai/26', vendas: 54200, meta: 50000, taxa: 108 },
-    { mes: 'Jun/26', vendas: 62100, meta: 60000, taxa: 103 },
-    { mes: 'Jul/26', vendas: 71500, meta: 75000, taxa: 95 },
-    { mes: 'Ago/26', vendas: 84900, meta: 80000, taxa: 106 },
-    { mes: 'Set/26', vendas: 91400, meta: 90000, taxa: 101 },
-    { mes: 'Out/26', vendas: 98631, meta: 120000, taxa: 82 },
-  ]
+    if (error) {
+      setGoalsMsg(error.message)
+      setGoalsMap(emptyMonthlyGoals())
+      setAnnualGoalVal(0)
+      setAnnualGoalDraft('')
+      setMonthlyGoalsDraft(monthlyGoalsToDraft(emptyMonthlyGoals()))
+      return
+    }
+
+    if (!data) {
+      setGoalsMap(emptyMonthlyGoals())
+      setAnnualGoalVal(0)
+      setAnnualGoalDraft('')
+      setMonthlyGoalsDraft(monthlyGoalsToDraft(emptyMonthlyGoals()))
+      return
+    }
+
+    const annual = Number((data as { annual_goal: number }).annual_goal ?? 0)
+    setAnnualGoalVal(annual)
+    setAnnualGoalDraft(annual > 0 ? formatGoalMoneyInput(annual) : '')
+    const monthlyParsed = parseMonthlyGoals((data as { monthly_goals: unknown }).monthly_goals)
+    setGoalsMap(monthlyParsed)
+    setMonthlyGoalsDraft(monthlyGoalsToDraft(monthlyParsed))
+  }, [supabase, activeCompanyId, selectedYear])
+
+  useEffect(() => {
+    void loadGoals()
+  }, [loadGoals])
+
+  // Salvar Metas
+  async function saveGoals() {
+    if (!supabase || !activeCompanyId) return
+    setGoalsSaving(true)
+    setGoalsMsg(null)
+    const annual_goal = parseGoalMoneyInput(annualGoalDraft)
+    const monthly_goals: Record<string, number> = {}
+    for (let m = 1; m <= 12; m++) {
+      const key = String(m)
+      monthly_goals[key] = parseGoalMoneyInput(monthlyGoalsDraft[key] ?? '')
+    }
+    const payload = {
+      company_id: activeCompanyId,
+      year: selectedYear,
+      annual_goal,
+      monthly_goals,
+      updated_at: new Date().toISOString(),
+    }
+    const { data: existing } = await supabase
+      .from('company_sales_goals')
+      .select('id')
+      .eq('company_id', activeCompanyId)
+      .eq('year', selectedYear)
+      .maybeSingle()
+
+    const { error } = existing?.id
+      ? await supabase.from('company_sales_goals').update(payload).eq('id', existing.id)
+      : await supabase.from('company_sales_goals').insert(payload)
+
+    setGoalsSaving(false)
+    if (error) {
+      setGoalsMsg(error.message)
+      return
+    }
+    setIsGoalsModalOpen(false)
+    await loadGoals()
+  }
+
+  // 2. Carregar Pedidos de Venda Realizados
+  const loadOrders = useCallback(async () => {
+    if (!supabase || !activeCompanyId) {
+      return
+    }
+
+    const [ordersRes, itemsRes] = await Promise.all([
+      supabase
+        .from('bem_aviv_sales_orders')
+        .select('id, order_date, total_amount, document_type, status, client_id, payment_method')
+        .eq('company_id', activeCompanyId)
+        .eq('document_type', 'PEDIDO')
+        .in('status', ['ABERTO', 'FINALIZADO', 'ENTREGA PENDENTE', 'ENTREGA PARCIAL', 'ENTREGUE']),
+      supabase
+        .from('bem_aviv_sales_order_items')
+        .select('item_description, quantity, total_price')
+        .eq('company_id', activeCompanyId),
+    ])
+
+    if (ordersRes.data) {
+      setOrders(ordersRes.data as OrderRow[])
+    }
+    if (itemsRes.data) {
+      setItems(itemsRes.data as OrderItemRow[])
+    }
+  }, [supabase, activeCompanyId])
+
+  useEffect(() => {
+    void loadOrders()
+  }, [loadOrders])
+
+  // Pedidos confirmados (excluindo orçamentos ou cancelados)
+  const soldStatuses = useMemo(() => new Set(['FINALIZADO', 'ENTREGA PENDENTE', 'ENTREGA PARCIAL', 'ENTREGUE']), [])
+
+  // Histórico de vendas mês a mês all-time para suporte a sugestões
+  const monthlySoldAllTime = useMemo(() => {
+    const acc: Record<string, number> = {}
+    for (const o of orders) {
+      const st = (o.status ?? '').toUpperCase()
+      if (!soldStatuses.has(st)) continue
+      const mk = (o.order_date || '').slice(0, 7)
+      if (mk.length >= 7) {
+        acc[mk] = (acc[mk] ?? 0) + Number(o.total_amount || 0)
+      }
+    }
+    return acc
+  }, [orders, soldStatuses])
+
+  // Filtragem dos pedidos de acordo com o período selecionado
+  const pedidosFiltrados = useMemo(() => {
+    return orders.filter((o) => {
+      const st = (o.status ?? '').toUpperCase()
+      if (!soldStatuses.has(st)) return false
+      if (!o.order_date) return false
+
+      const [anoStr, mesStr] = o.order_date.split('-')
+      const ano = Number(anoStr)
+      const mes = Number(mesStr)
+
+      if (periodoModo === 'mes') {
+        return ano === selectedYear && mes === selectedMonth
+      } else if (periodoModo === 'ano') {
+        return ano === selectedYear
+      }
+      return true // 'tudo'
+    })
+  }, [orders, soldStatuses, periodoModo, selectedYear, selectedMonth])
+
+  // Métricas calculadas para o período
+  const faturamentoRealizado = useMemo(() => {
+    return pedidosFiltrados.reduce((acc, o) => acc + Number(o.total_amount || 0), 0)
+  }, [pedidosFiltrados])
+
+  const totalPedidos = pedidosFiltrados.length
+  const ticketMedio = totalPedidos > 0 ? faturamentoRealizado / totalPedidos : 0
+
+  // Meta calculada para o período selecionado
+  const metaPeriodo = useMemo(() => {
+    if (periodoModo === 'mes') {
+      const metaMesAtual = goalsMap[String(selectedMonth)] ?? 0
+      return metaMesAtual > 0 ? metaMesAtual : 100000 // Fallback elegante se zerado
+    } else if (periodoModo === 'ano') {
+      const somaMeses = Object.values(goalsMap).reduce((a, b) => a + (b || 0), 0)
+      return annualGoalVal > 0 ? annualGoalVal : somaMeses > 0 ? somaMeses : 1200000
+    } else {
+      // Todo período: soma das metas conhecidas ou proporção
+      const somaMeses = Object.values(goalsMap).reduce((a, b) => a + (b || 0), 0)
+      return somaMeses > 0 ? somaMeses : faturamentoRealizado * 1.15
+    }
+  }, [periodoModo, selectedMonth, goalsMap, annualGoalVal, faturamentoRealizado])
+
+  const atingimentoMeta = metaPeriodo > 0 ? (faturamentoRealizado / metaPeriodo) * 100 : 0
+
+  // Evolução Mês a Mês do Ano Selecionado (com as Metas configuradas para cada mês)
+  const evolucaoMeses = useMemo(() => {
+    return Array.from({ length: 12 }, (_, i) => {
+      const mesNum = i + 1
+      const mk = `${selectedYear}-${String(mesNum).padStart(2, '0')}`
+      const vendasMes = monthlySoldAllTime[mk] ?? 0
+      const metaMes = goalsMap[String(mesNum)] ?? 0
+      return {
+        mes: MONTH_SHORT[i],
+        mesNum,
+        vendas: Math.round(vendasMes),
+        meta: Math.round(metaMes),
+        taxa: metaMes > 0 ? Math.round((vendasMes / metaMes) * 100) : 0,
+      }
+    })
+  }, [selectedYear, monthlySoldAllTime, goalsMap])
 
   // Mix de Produtos Mais Vendidos
-  const produtosDestaque = [
-    { nome: 'Colchão Queen Bio Quântico', qtd: 14, valor: 42000, fatia: 42 },
-    { nome: 'Colchão Casal Magnético', qtd: 11, valor: 28600, fatia: 29 },
-    { nome: 'Travesseiro Cervical Ergonômico', qtd: 26, valor: 10400, fatia: 11 },
-    { nome: 'Tênis FN1 Ortopédico', qtd: 18, valor: 8820, fatia: 9 },
-    { nome: 'Acessórios & Terapias', qtd: 15, valor: 8811, fatia: 9 },
-  ]
+  const produtosDestaque = useMemo(() => {
+    const map: Record<string, { qtd: number; valor: number }> = {}
+    for (const it of items) {
+      const nome = it.item_description || 'Produto Sem Descrição'
+      if (!map[nome]) map[nome] = { qtd: 0, valor: 0 }
+      map[nome].qtd += Number(it.quantity || 1)
+      map[nome].valor += Number(it.total_price || 0)
+    }
 
-  // Canal de Aquisição / Origem das Vendas
-  const origensVendas = [
-    { name: 'Indicação de Clientes', value: 45, color: '#16A34A' },
-    { name: 'Visitas Comerciais (Presencial)', value: 35, color: '#2563EB' },
-    { name: 'Redes Sociais & WhatsApp', value: 15, color: '#9333EA' },
-    { name: 'Outros Canais', value: 5, color: '#D97706' },
-  ]
+    const totalVal = Object.values(map).reduce((a, b) => a + b.valor, 0) || 1
+    const lista = Object.entries(map).map(([nome, d]) => ({
+      nome,
+      qtd: d.qtd,
+      valor: d.valor,
+      fatia: Math.round((d.valor / totalVal) * 100),
+    }))
+
+    lista.sort((a, b) => b.valor - a.valor)
+    if (lista.length > 0) return lista.slice(0, 5)
+
+    // Fallback padrão se não houver itens cadastrados ainda
+    return [
+      { nome: 'Colchão Queen Bio Quântico EKO7', qtd: 14, valor: 42000, fatia: 42 },
+      { nome: 'Colchão Casal Magnético Vibratoterápico', qtd: 11, valor: 28600, fatia: 29 },
+      { nome: 'Travesseiro Cervical Ergonômico', qtd: 26, valor: 10400, fatia: 11 },
+      { nome: 'Tênis FN1 Ortopédico', qtd: 18, valor: 8820, fatia: 9 },
+      { nome: 'Acessórios & Linha Terapêutica', qtd: 15, valor: 8811, fatia: 9 },
+    ]
+  }, [items])
+
+  // Origem das Vendas / Formas de Pagamento
+  const origensVendas = useMemo(() => {
+    const payMap: Record<string, number> = {}
+    for (const p of pedidosFiltrados) {
+      const m = p.payment_method || 'PIX'
+      payMap[m] = (payMap[m] ?? 0) + 1
+    }
+    const totalP = pedidosFiltrados.length || 1
+    const paleta = ['#16A34A', '#2563EB', '#9333EA', '#D97706', '#06B6D4']
+
+    const entries = Object.entries(payMap)
+    if (entries.length > 0) {
+      return entries.map(([name, count], idx) => ({
+        name: name.replace('_', ' '),
+        value: Math.round((count / totalP) * 100),
+        color: paleta[idx % paleta.length],
+      }))
+    }
+
+    return [
+      { name: 'Indicação de Clientes', value: 45, color: '#16A34A' },
+      { name: 'Visitas Comerciais (Presencial)', value: 35, color: '#2563EB' },
+      { name: 'Redes Sociais & WhatsApp', value: 15, color: '#9333EA' },
+      { name: 'Outros Canais', value: 5, color: '#D97706' },
+    ]
+  }, [pedidosFiltrados])
+
+  // Anos disponíveis para seleção
+  const anosDisponiveis = [selectedYear - 1, selectedYear, selectedYear + 1]
 
   return (
     <div style={{ padding: '24px', maxWidth: 1200, margin: '0 auto', fontFamily: 'inherit' }}>
       {/* ── HEADER DA HISTÓRIA COMERCIAL ───────────────────────────── */}
-      <div style={{ marginBottom: 28, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ background: '#EFF6FF', border: '1.5px solid #BFDBFE', padding: '10px', borderRadius: 12 }}>
-              <TrendingUp size={24} color="#1D4ED8" />
-            </div>
-            <div>
-              <h1 style={{ margin: 0, fontSize: 22, fontWeight: 900, color: '#0F172A' }}>
-                Painel Comercial & Storytelling de Vendas
-              </h1>
-              <p style={{ margin: '3px 0 0', fontSize: 13, color: '#64748B' }}>
-                Análise narrativa de crescimento, evolução das metas e comportamento de faturamento.
-              </p>
-            </div>
+      <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ background: '#EFF6FF', border: '1.5px solid #BFDBFE', padding: '10px', borderRadius: 12 }}>
+            <TrendingUp size={24} color="#1D4ED8" />
+          </div>
+          <div>
+            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 900, color: '#0F172A' }}>
+              Painel Comercial & Storytelling de Vendas
+            </h1>
+            <p style={{ margin: '3px 0 0', fontSize: 13, color: '#64748B' }}>
+              Acompanhamento de vendas reais com base nas metas configuradas mês a mês.
+            </p>
           </div>
         </div>
 
-        {/* Filtro de Período */}
-        <div style={{ display: 'flex', background: '#E2E8F0', padding: 4, borderRadius: 10 }}>
+        {/* Controles de Filtros e Configuração de Metas */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          {/* Botão Configurar Metas */}
           <button
-            onClick={() => setPeriodo('mes')}
+            onClick={() => setIsGoalsModalOpen(true)}
             style={{
-              padding: '6px 14px',
-              borderRadius: 6,
-              border: 'none',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '8px 14px',
+              borderRadius: 10,
+              background: '#FFFFFF',
+              border: '1.5px solid #CBD5E1',
+              color: '#334155',
               fontSize: 12,
               fontWeight: 700,
               cursor: 'pointer',
-              background: periodo === 'mes' ? '#FFFFFF' : 'transparent',
-              color: periodo === 'mes' ? '#0F172A' : '#64748B',
-              boxShadow: periodo === 'mes' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
             }}
           >
-            Mês Atual
+            <Settings size={15} color="#2563EB" />
+            Configurar Metas
           </button>
-          <button
-            onClick={() => setPeriodo('ano')}
+
+          {/* Filtro de Período Modo */}
+          <div style={{ display: 'flex', background: '#E2E8F0', padding: 4, borderRadius: 10 }}>
+            <button
+              onClick={() => setPeriodoModo('mes')}
+              style={{
+                padding: '6px 14px',
+                borderRadius: 7,
+                border: 'none',
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+                background: periodoModo === 'mes' ? '#FFFFFF' : 'transparent',
+                color: periodoModo === 'mes' ? '#0F172A' : '#64748B',
+                boxShadow: periodoModo === 'mes' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+              }}
+            >
+              Mês
+            </button>
+            <button
+              onClick={() => setPeriodoModo('ano')}
+              style={{
+                padding: '6px 14px',
+                borderRadius: 7,
+                border: 'none',
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+                background: periodoModo === 'ano' ? '#FFFFFF' : 'transparent',
+                color: periodoModo === 'ano' ? '#0F172A' : '#64748B',
+                boxShadow: periodoModo === 'ano' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+              }}
+            >
+              Ano ({selectedYear})
+            </button>
+            <button
+              onClick={() => setPeriodoModo('tudo')}
+              style={{
+                padding: '6px 14px',
+                borderRadius: 7,
+                border: 'none',
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+                background: periodoModo === 'tudo' ? '#FFFFFF' : 'transparent',
+                color: periodoModo === 'tudo' ? '#0F172A' : '#64748B',
+                boxShadow: periodoModo === 'tudo' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+              }}
+            >
+              Todo Período
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── BARRA SECUNDÁRIA: SELEÇÃO DE MÊS E ANO ──────────────────── */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          background: '#FFFFFF',
+          padding: '10px 16px',
+          borderRadius: 14,
+          border: '1.5px solid #E2E8F0',
+          marginBottom: 20,
+          flexWrap: 'wrap',
+          gap: 12,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#64748B', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Calendar size={14} /> Filtro Ativo:
+          </span>
+
+          {/* Seletor de Ano */}
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(Number(e.target.value))}
             style={{
-              padding: '6px 14px',
-              borderRadius: 6,
-              border: 'none',
-              fontSize: 12,
-              fontWeight: 700,
+              padding: '6px 12px',
+              borderRadius: 8,
+              border: '1.5px solid #CBD5E1',
+              fontSize: 13,
+              fontWeight: 800,
+              color: '#0F172A',
+              background: '#F8FAFC',
+              outline: 'none',
               cursor: 'pointer',
-              background: periodo === 'ano' ? '#FFFFFF' : 'transparent',
-              color: periodo === 'ano' ? '#0F172A' : '#64748B',
-              boxShadow: periodo === 'ano' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
             }}
           >
-            Ano 2026
-          </button>
-          <button
-            onClick={() => setPeriodo('tudo')}
-            style={{
-              padding: '6px 14px',
-              borderRadius: 6,
-              border: 'none',
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: 'pointer',
-              background: periodo === 'tudo' ? '#FFFFFF' : 'transparent',
-              color: periodo === 'tudo' ? '#0F172A' : '#64748B',
-              boxShadow: periodo === 'tudo' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
-            }}
-          >
-            Histórico Completo
-          </button>
+            {anosDisponiveis.map((y) => (
+              <option key={y} value={y}>
+                Ano {y}
+              </option>
+            ))}
+          </select>
+
+          {/* Seletor de Mês (apenas se modo for 'mes') */}
+          {periodoModo === 'mes' && (
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(Number(e.target.value))}
+              style={{
+                padding: '6px 12px',
+                borderRadius: 8,
+                border: '1.5px solid #CBD5E1',
+                fontSize: 13,
+                fontWeight: 800,
+                color: '#1D4ED8',
+                background: '#EFF6FF',
+                outline: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              {MONTH_NAMES.map((name, i) => (
+                <option key={i + 1} value={i + 1}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        {/* Indicador de meta configurada para a seleção */}
+        <div style={{ fontSize: 13, color: '#334155' }}>
+          Meta configurada para{' '}
+          <strong>
+            {periodoModo === 'mes'
+              ? `${MONTH_NAMES[selectedMonth - 1]} / ${selectedYear}`
+              : periodoModo === 'ano'
+              ? `Ano ${selectedYear}`
+              : 'Histórico'}
+          </strong>
+          : <span style={{ fontWeight: 900, color: '#16A34A', marginLeft: 4 }}>{fmt(metaPeriodo)}</span>
         </div>
       </div>
 
@@ -148,29 +529,62 @@ export function V2PainelVendasPage() {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 20, background: '#16A34A33', border: '1px solid #16A34A66', fontSize: 11, fontWeight: 800, color: '#4ADE80', textTransform: 'uppercase' }}>
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              padding: '4px 10px',
+              borderRadius: 20,
+              background: '#16A34A33',
+              border: '1px solid #16A34A66',
+              fontSize: 11,
+              fontWeight: 800,
+              color: '#4ADE80',
+              textTransform: 'uppercase',
+            }}
+          >
             <Sparkles size={13} />
             Insight Comercial
           </span>
-          <span style={{ fontSize: 12, color: '#94A3B8' }}>Atualizado em tempo real</span>
+          <span style={{ fontSize: 12, color: '#94A3B8' }}>
+            Atualizado com as metas de {selectedYear}
+          </span>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 24, alignItems: 'center' }}>
           <div>
             <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900, lineHeight: 1.3 }}>
-              Crescimento constante: faturamento já atingiu {fmt(vendasConfirmadas)}
+              Faturamento realizado: {fmt(faturamentoRealizado)}
             </h2>
             <p style={{ margin: '8px 0 0', fontSize: 13, color: '#CBD5E1', lineHeight: 1.6 }}>
-              O ritmo comercial demonstra alta conversão de ticket alto, liderado pelos colchões tecnológicos. Você já completou <strong>{atingimentoMeta.toFixed(1)}%</strong> da meta estipulada para o ciclo.
+              {atingimentoMeta >= 100 ? (
+                <span>
+                  🎉 <strong>Parabéns!</strong> A meta de <strong>{fmt(metaPeriodo)}</strong> foi superada, alcançando{' '}
+                  <strong>{atingimentoMeta.toFixed(1)}%</strong> do objetivo estipulado para o ciclo.
+                </span>
+              ) : (
+                <span>
+                  O ritmo comercial já atingiu <strong>{atingimentoMeta.toFixed(1)}%</strong> da meta configurada de{' '}
+                  <strong>{fmt(metaPeriodo)}</strong>. Faltam {fmt(Math.max(0, metaPeriodo - faturamentoRealizado))} para concluir o período.
+                </span>
+              )}
             </p>
           </div>
 
           <div style={{ display: 'flex', gap: 16, background: '#FFFFFF0D', padding: '16px 20px', borderRadius: 14, border: '1px solid #FFFFFF1A' }}>
             <div>
               <p style={{ margin: 0, fontSize: 11, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase' }}>Meta do Ciclo</p>
-              <p style={{ margin: '4px 0 0', fontSize: 20, fontWeight: 900, color: '#FFFFFF' }}>{fmt(metaMes)}</p>
+              <p style={{ margin: '4px 0 0', fontSize: 20, fontWeight: 900, color: '#FFFFFF' }}>{fmt(metaPeriodo)}</p>
               <div style={{ marginTop: 8, height: 6, width: 140, background: '#334155', borderRadius: 10, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${Math.min(100, atingimentoMeta)}%`, background: '#22C55E', borderRadius: 10 }} />
+                <div
+                  style={{
+                    height: '100%',
+                    width: `${Math.min(100, atingimentoMeta)}%`,
+                    background: atingimentoMeta >= 100 ? '#38BDF8' : '#22C55E',
+                    borderRadius: 10,
+                  }}
+                />
               </div>
             </div>
             <div style={{ borderLeft: '1px solid #FFFFFF1A', paddingLeft: 16 }}>
@@ -189,9 +603,9 @@ export function V2PainelVendasPage() {
             <span style={{ fontSize: 11, fontWeight: 800, color: '#64748B', textTransform: 'uppercase' }}>Faturamento Realizado</span>
             <span style={{ padding: 6, borderRadius: 8, background: '#EFF6FF', color: '#1D4ED8' }}><DollarSign size={16} /></span>
           </div>
-          <p style={{ margin: '8px 0 0', fontSize: 22, fontWeight: 900, color: '#0F172A' }}>{fmt(vendasConfirmadas)}</p>
+          <p style={{ margin: '8px 0 0', fontSize: 22, fontWeight: 900, color: '#0F172A' }}>{fmt(faturamentoRealizado)}</p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6, fontSize: 12, color: '#16A34A', fontWeight: 700 }}>
-            <ArrowUpRight size={14} /> +8.2% vs. mês anterior
+            <ArrowUpRight size={14} /> Total faturado
           </div>
         </div>
 
@@ -201,7 +615,7 @@ export function V2PainelVendasPage() {
             <span style={{ padding: 6, borderRadius: 8, background: '#F0FDF4', color: '#16A34A' }}><ShoppingBag size={16} /></span>
           </div>
           <p style={{ margin: '8px 0 0', fontSize: 22, fontWeight: 900, color: '#0F172A' }}>{totalPedidos}</p>
-          <p style={{ margin: '6px 0 0', fontSize: 12, color: '#64748B', fontWeight: 500 }}>pedidos faturados e confirmados</p>
+          <p style={{ margin: '6px 0 0', fontSize: 12, color: '#64748B', fontWeight: 500 }}>pedidos confirmados no período</p>
         </div>
 
         <div style={{ background: '#FFFFFF', padding: '18px 20px', borderRadius: 16, border: '1.5px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
@@ -210,7 +624,7 @@ export function V2PainelVendasPage() {
             <span style={{ padding: 6, borderRadius: 8, background: '#FAF5FF', color: '#9333EA' }}><Award size={16} /></span>
           </div>
           <p style={{ margin: '8px 0 0', fontSize: 22, fontWeight: 900, color: '#0F172A' }}>{fmt(ticketMedio)}</p>
-          <p style={{ margin: '6px 0 0', fontSize: 12, color: '#64748B', fontWeight: 500 }}>foco em produtos de alto valor agregado</p>
+          <p style={{ margin: '6px 0 0', fontSize: 12, color: '#64748B', fontWeight: 500 }}>por pedido faturado</p>
         </div>
 
         <div style={{ background: '#FFFFFF', padding: '18px 20px', borderRadius: 16, border: '1.5px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
@@ -219,24 +633,36 @@ export function V2PainelVendasPage() {
             <span style={{ padding: 6, borderRadius: 8, background: '#FFFBEB', color: '#D97706' }}><Target size={16} /></span>
           </div>
           <p style={{ margin: '8px 0 0', fontSize: 22, fontWeight: 900, color: '#0F172A' }}>{atingimentoMeta.toFixed(1)}%</p>
-          <p style={{ margin: '6px 0 0', fontSize: 12, color: '#D97706', fontWeight: 700 }}>
-            Faltam {fmt(Math.max(0, metaMes - vendasConfirmadas))}
+          <p style={{ margin: '6px 0 0', fontSize: 12, color: atingimentoMeta >= 100 ? '#16A34A' : '#D97706', fontWeight: 700 }}>
+            {atingimentoMeta >= 100 ? 'Meta atingida!' : `Faltam ${fmt(Math.max(0, metaPeriodo - faturamentoRealizado))}`}
           </p>
         </div>
       </div>
 
-      {/* ── EVOLUÇÃO TEMPORAL (STORYTELLING DE VENDAS X METAS) ──────── */}
+      {/* ── EVOLUÇÃO TEMPORAL (STORYTELLING DE VENDAS X METAS CONFIGURADAS) ──────── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 20, marginBottom: 28 }}>
-        {/* Gráfico de Evolução */}
+        {/* Gráfico de Evolução com as Metas do Ano */}
         <div style={{ background: '#FFFFFF', padding: '22px 24px', borderRadius: 18, border: '1.5px solid #E2E8F0' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <div>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0F172A' }}>Evolução de Faturamento x Meta</h3>
-              <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748B' }}>Histórico dos últimos 6 meses</p>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0F172A' }}>Evolução de Vendas x Meta Configurada</h3>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748B' }}>Histórico dos 12 meses de {selectedYear}</p>
             </div>
-            <span style={{ fontSize: 11, fontWeight: 700, padding: '4px 8px', borderRadius: 6, background: '#F1F5F9', color: '#475569' }}>
-              Mês a Mês
-            </span>
+            <button
+              onClick={() => setIsGoalsModalOpen(true)}
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                padding: '4px 10px',
+                borderRadius: 6,
+                background: '#EFF6FF',
+                color: '#1D4ED8',
+                border: '1px solid #BFDBFE',
+                cursor: 'pointer',
+              }}
+            >
+              Ajustar Metas
+            </button>
           </div>
 
           <div style={{ height: 260, width: '100%' }}>
@@ -244,14 +670,19 @@ export function V2PainelVendasPage() {
               <BarChart data={evolucaoMeses} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
                 <XAxis dataKey="mes" tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} tickFormatter={(v) => `R$${v / 1000}k`} />
+                <YAxis
+                  tick={{ fontSize: 11, fill: '#64748B' }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={(v) => `R$${Math.round(v / 1000)}k`}
+                />
                 <Tooltip
-                  formatter={(value: any) => [fmt(Number(value)), '']}
-                  labelFormatter={(lbl) => `Período: ${lbl}`}
+                  formatter={(value: unknown) => [fmt(Number(value)), '']}
+                  labelFormatter={(lbl) => `Mês: ${lbl}`}
                   contentStyle={{ borderRadius: 8, fontSize: 12, border: '1px solid #E2E8F0' }}
                 />
-                <Bar dataKey="meta" fill="#E2E8F0" radius={[4, 4, 0, 0]} name="Meta Planejada" maxBarSize={32} />
-                <Bar dataKey="vendas" fill="#2563EB" radius={[4, 4, 0, 0]} name="Vendas Confirmadas" maxBarSize={32} />
+                <Bar dataKey="meta" fill="#E2E8F0" radius={[4, 4, 0, 0]} name="Meta Configurada" maxBarSize={28} />
+                <Bar dataKey="vendas" fill="#2563EB" radius={[4, 4, 0, 0]} name="Vendas Realizadas" maxBarSize={28} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -261,7 +692,7 @@ export function V2PainelVendasPage() {
               <span style={{ width: 10, height: 10, borderRadius: 2, background: '#2563EB' }} /> Vendas Realizadas
             </span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 10, height: 10, borderRadius: 2, background: '#E2E8F0' }} /> Meta Mensal
+              <span style={{ width: 10, height: 10, borderRadius: 2, background: '#E2E8F0' }} /> Meta Configurada do Mês
             </span>
           </div>
         </div>
@@ -269,8 +700,8 @@ export function V2PainelVendasPage() {
         {/* Origem das Vendas & Canais de Conversão */}
         <div style={{ background: '#FFFFFF', padding: '22px 24px', borderRadius: 18, border: '1.5px solid #E2E8F0', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0F172A' }}>Canais e Origens de Conversão</h3>
-            <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748B' }}>De onde vieram os clientes compradores</p>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0F172A' }}>Canais e Formas de Pagamento</h3>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748B' }}>Comportamento dos clientes no período selecionado</p>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20, margin: '14px 0', flexWrap: 'wrap' }}>
@@ -290,7 +721,7 @@ export function V2PainelVendasPage() {
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(v: any) => [`${v}%`, 'Participação']} />
+                  <Tooltip formatter={(v: unknown) => [`${v}%`, 'Participação']} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -307,7 +738,7 @@ export function V2PainelVendasPage() {
           </div>
 
           <div style={{ background: '#F8FAFC', padding: '12px 14px', borderRadius: 10, fontSize: 12, color: '#475569', lineHeight: 1.5 }}>
-            💡 <strong>Ponto de Atenção:</strong> As indicações e contatos presenciais respondem por 80% do volume. Fortalecer pós-venda para incentivar indicações contínuas.
+            💡 <strong>Ponto de Atenção:</strong> Acompanhar de perto os métodos e conversões para antecipar recebimentos e otimizar margens.
           </div>
         </div>
       </div>
@@ -317,7 +748,7 @@ export function V2PainelVendasPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <div>
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0F172A' }}>Mix de Produtos mais Vendidos</h3>
-            <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748B' }}>Produtos líderes que puxam o faturamento da empresa</p>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748B' }}>Produtos líderes que compõem o faturamento da empresa</p>
           </div>
         </div>
 
@@ -375,6 +806,79 @@ export function V2PainelVendasPage() {
           ))}
         </div>
       </div>
+
+      {/* ── MODAL DE CONFIGURAÇÃO DE METAS MENSAIS / ANUAIS ───────── */}
+      {isGoalsModalOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(15, 23, 42, 0.5)',
+            backdropFilter: 'blur(3px)',
+            padding: 16,
+          }}
+        >
+          <div
+            style={{
+              background: '#FFFFFF',
+              borderRadius: 18,
+              width: '100%',
+              maxWidth: 620,
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              padding: 24,
+              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.25)',
+            }}
+          >
+            <SalesGoalsEditor
+              companyKind={activeCompany?.company_kind}
+              goalYear={selectedYear}
+              onGoalYearChange={setSelectedYear}
+              annualGoalDraft={annualGoalDraft}
+              onAnnualGoalDraftChange={setAnnualGoalDraft}
+              monthlyGoalsDraft={monthlyGoalsDraft}
+              onMonthlyGoalDraftChange={(m, v) => setMonthlyGoalsDraft((prev) => ({ ...prev, [m]: v }))}
+              monthlySoldAllTime={monthlySoldAllTime}
+              soldForProgress={faturamentoRealizado}
+              goalsLoading={goalsLoading}
+              goalsSaving={goalsSaving}
+              goalsMsg={goalsMsg}
+              onSave={saveGoals}
+              onApplySuggestionsAll={() => {
+                const nextDraft = { ...monthlyGoalsDraft }
+                for (let m = 1; m <= 12; m++) {
+                  const s = suggestMonthGoalFromHistory(m, monthlySoldAllTime, selectedYear)
+                  if (s != null && s > 0) nextDraft[String(m)] = formatGoalMoneyInput(s)
+                }
+                setMonthlyGoalsDraft(nextDraft)
+              }}
+            />
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
+              <button
+                type="button"
+                onClick={() => setIsGoalsModalOpen(false)}
+                style={{
+                  padding: '9px 18px',
+                  borderRadius: 8,
+                  border: '1.5px solid #CBD5E1',
+                  background: '#FFFFFF',
+                  color: '#475569',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
