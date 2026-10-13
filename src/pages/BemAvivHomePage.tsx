@@ -1,21 +1,23 @@
 import { useUser } from '@clerk/clerk-react'
 import {
   AlertCircle,
+  BarChart2,
   Building2,
   CalendarPlus,
   ChevronLeft,
   ChevronRight,
   Clock,
   History,
+  Package,
   Pencil,
   Target,
   TrendingUp,
+  Zap,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { Bar, BarChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { SalesGoalsEditor } from '../components/bemAviv/SalesGoalsEditor'
-import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Progress } from '../components/ui/Progress'
 import { useSupabase } from '../hooks/useSupabase'
@@ -49,6 +51,13 @@ const EXCLUDED_FROM_FOLLOWUP_BY_CPF = new Set(['22112195867', '00742215903'])
 
 const WEEKDAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 
+const MONTH_NAMES = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+]
+
+const MONTH_NAMES_SHORT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+
 type ClientRow = {
   id: string
   full_name: string
@@ -62,8 +71,6 @@ type ClientRow = {
 }
 
 type FollowupHistoryRow = ClientFollowupRow
-
-type MetricsPeriod = 'TODO' | 'MES_ATUAL' | 'ULT_30' | 'ULT_90' | 'ULT_180' | 'ULT_365'
 
 /** Timeline e calendário da home: só pendente com data agendada; exclui cancelado e concluído. */
 function includeInFollowupTimeline(c: ClientRow): boolean {
@@ -229,11 +236,13 @@ export function BemAvivHomePage() {
   const [soldOrdersCount, setSoldOrdersCount] = useState(0)
   const [openOrdersCount, setOpenOrdersCount] = useState(0)
   const [openOrdersAmount, setOpenOrdersAmount] = useState(0)
-  const [metricsPeriod, setMetricsPeriod] = useState<MetricsPeriod>('TODO')
   const [monthlyTotals, setMonthlyTotals] = useState<Record<string, number>>({})
   const [monthlyOpenTotals, setMonthlyOpenTotals] = useState<Record<string, number>>({})
+  const [monthlyOrderCounts, setMonthlyOrderCounts] = useState<Record<string, number>>({})
+  const [monthlyOpenCounts, setMonthlyOpenCounts] = useState<Record<string, number>>({})
   const [monthlySoldAllTime, setMonthlySoldAllTime] = useState<Record<string, number>>({})
   const [goalYear, setGoalYear] = useState(() => new Date().getFullYear())
+  const [currentDashMonth, setCurrentDashMonth] = useState(() => new Date().getMonth() + 1)
   const [annualGoalDraft, setAnnualGoalDraft] = useState('')
   const [monthlyGoalsDraft, setMonthlyGoalsDraft] = useState<Record<string, string>>(() =>
     monthlyGoalsToDraft(emptyMonthlyGoals()),
@@ -291,30 +300,25 @@ export function BemAvivHomePage() {
       converted_order_id: string | null
     }>
 
-    /** Pedido pago / concluído no gráfico: entrega pendente conta como venda confirmada, igual finalizado/entregue. */
     const soldStatuses = new Set(['FINALIZADO', 'ENTREGA PENDENTE', 'ENTREGA PARCIAL', 'ENTREGUE'])
     const now = new Date()
-    const periodStart = (() => {
-      if (metricsPeriod === 'TODO') return null
-      if (metricsPeriod === 'MES_ATUAL') return new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0)
-      if (metricsPeriod === 'ULT_30') return new Date(now.getTime() - 30 * 86_400_000)
-      if (metricsPeriod === 'ULT_180') return new Date(now.getTime() - 180 * 86_400_000)
-      if (metricsPeriod === 'ULT_365') return new Date(now.getTime() - 365 * 86_400_000)
-      return new Date(now.getTime() - 90 * 86_400_000)
-    })()
+
     let sum = 0
     let openCount = 0
     let openAmount = 0
     let soldCount = 0
     const byMonth: Record<string, number> = {}
     const byMonthOpen: Record<string, number> = {}
+    const byMonthOrderCount: Record<string, number> = {}
+    const byMonthOpenCount: Record<string, number> = {}
     const byMonthAllTime: Record<string, number> = {}
+
     for (const o of orders) {
       const docType = (o.document_type ?? '').toUpperCase()
       const st = (o.status ?? '').toUpperCase()
       const amt = Number(o.total_amount ?? 0)
       const dt = new Date(o.order_date)
-      const inPeriod = !Number.isNaN(dt.getTime()) && (periodStart === null || (dt >= periodStart && dt <= now))
+      const inPeriod = !Number.isNaN(dt.getTime()) && dt <= now
       if (docType !== 'PEDIDO') continue
       const mk = monthKeyFromOrderDate(o.order_date || '')
       if (soldStatuses.has(st) && Number.isFinite(amt) && mk.length >= 7) {
@@ -324,7 +328,10 @@ export function BemAvivHomePage() {
       if (st === 'ABERTO') {
         openCount += 1
         if (Number.isFinite(amt)) openAmount += amt
-        if (mk.length >= 7 && Number.isFinite(amt)) byMonthOpen[mk] = (byMonthOpen[mk] ?? 0) + amt
+        if (mk.length >= 7 && Number.isFinite(amt)) {
+          byMonthOpen[mk] = (byMonthOpen[mk] ?? 0) + amt
+          byMonthOpenCount[mk] = (byMonthOpenCount[mk] ?? 0) + 1
+        }
       }
       if (!soldStatuses.has(st)) continue
       if (!Number.isFinite(amt)) continue
@@ -332,6 +339,7 @@ export function BemAvivHomePage() {
       soldCount += 1
       if (mk.length < 7) continue
       byMonth[mk] = (byMonth[mk] ?? 0) + amt
+      byMonthOrderCount[mk] = (byMonthOrderCount[mk] ?? 0) + 1
     }
     setMonthlySoldAllTime(byMonthAllTime)
     setTotalSold(sum)
@@ -340,11 +348,13 @@ export function BemAvivHomePage() {
     setOpenOrdersAmount(openAmount)
     setMonthlyTotals(byMonth)
     setMonthlyOpenTotals(byMonthOpen)
+    setMonthlyOrderCounts(byMonthOrderCount)
+    setMonthlyOpenCounts(byMonthOpenCount)
 
     setClients(((clientsRes.data ?? []) as ClientRow[]) ?? [])
 
     setLoading(false)
-  }, [supabase, metricsPeriod, activeCompanyId])
+  }, [supabase, activeCompanyId])
 
   useEffect(() => {
     void load()
@@ -425,6 +435,7 @@ export function BemAvivHomePage() {
       setTimeout(() => {
         setIsGoalsModalOpen(false)
         setGoalsMsg(null)
+        void loadGoals()
       }, 1000)
     }
   }
@@ -466,7 +477,30 @@ export function BemAvivHomePage() {
     () => (representante ? sumAllTimeSold(monthlySoldAllTime) : yearToDateSold),
     [representante, monthlySoldAllTime, yearToDateSold],
   )
-  const globalGoalReached = representante && annualGoalNum > 0 && soldForProgress >= annualGoalNum
+
+  // ── Métricas mensais ─────────────────────────────────────────
+  const currentMonthKey = `${goalYear}-${String(currentDashMonth).padStart(2, '0')}`
+  const prevMonthKey = addMonthsToKey(currentMonthKey, -1)
+
+  const currentMonthSold = monthlyTotals[currentMonthKey] ?? 0
+  const currentMonthOpenAmount = monthlyOpenTotals[currentMonthKey] ?? 0
+  const currentMonthProjection = currentMonthSold + currentMonthOpenAmount
+  const currentMonthOrdersCount = monthlyOrderCounts[currentMonthKey] ?? 0
+  const currentMonthOpenCount = monthlyOpenCounts[currentMonthKey] ?? 0
+  const currentMonthGoal = monthlyGoalsParsed[String(currentDashMonth)] ?? 0
+  const monthProgressPct = currentMonthGoal > 0 ? Math.min(100, (currentMonthSold / currentMonthGoal) * 100) : 0
+
+  const currentMonthAvgTicket = currentMonthOrdersCount > 0 ? currentMonthSold / currentMonthOrdersCount : 0
+  const avgTicket = soldOrdersCount > 0 ? totalSold / soldOrdersCount : 0
+
+  const prevMonthSold = monthlyTotals[prevMonthKey] ?? 0
+  const prevMonthProjection = prevMonthSold + (monthlyOpenTotals[prevMonthKey] ?? 0)
+  const monthVsLastMonth: number | null =
+    prevMonthProjection > 0
+      ? ((currentMonthProjection - prevMonthProjection) / prevMonthProjection) * 100
+      : null
+
+  const progressPct = Math.min(100, annualGoalNum > 0 ? (soldForProgress / annualGoalNum) * 100 : 0)
 
   const pendingWithDate = useMemo(() => clients.filter(includeInFollowupTimeline), [clients])
 
@@ -574,21 +608,6 @@ export function BemAvivHomePage() {
     return out
   }, [monthlyTotals])
 
-  const progressPct = Math.min(100, annualGoalNum > 0 ? (soldForProgress / annualGoalNum) * 100 : 0)
-  const avgTicket = soldOrdersCount > 0 ? totalSold / soldOrdersCount : 0
-  const periodLabel =
-    metricsPeriod === 'TODO'
-      ? 'todo período'
-      : metricsPeriod === 'MES_ATUAL'
-      ? 'mês atual'
-      : metricsPeriod === 'ULT_30'
-        ? 'últimos 30 dias'
-        : metricsPeriod === 'ULT_180'
-          ? 'últimos 180 dias'
-          : metricsPeriod === 'ULT_365'
-            ? 'últimos 365 dias'
-            : 'últimos 90 dias'
-
   const chartData = useMemo(
     () =>
       chartMonths.map((mk) => {
@@ -603,7 +622,6 @@ export function BemAvivHomePage() {
 
         const v = monthTotal(mk)
         const openRaw = monthlyOpenTotals[mk] ?? 0
-        /** Evita ruído numérico exibir faixa “aberto” fantasma. */
         const openV = openRaw >= 0.01 ? openRaw : 0
         const projected = v + openV
         const prevMonthTotal = monthTotal(addMonthsToKey(mk, -1))
@@ -809,6 +827,7 @@ export function BemAvivHomePage() {
 
   return (
     <div className="w-full min-w-0 max-w-none space-y-8 normal-case">
+      {/* ── CABEÇALHO ───────────────────────────────────────────── */}
       <header className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200/40 pb-5">
         <div className="flex flex-wrap items-start gap-4">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 text-sky-700 ring-1 ring-sky-500/10">
@@ -817,7 +836,7 @@ export function BemAvivHomePage() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">{"EKO'7 — Visão geral"}</h1>
             <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-500">
-              {representante ? 'Meta global de vendas' : 'Meta anual de vendas'}, acompanhamento comercial e follow-up.
+              {representante ? 'Meta global de vendas' : 'Meta mensal de vendas'}, acompanhamento comercial e follow-up.
               {activeCompany ? (
                 <>
                   {' '}
@@ -841,156 +860,348 @@ export function BemAvivHomePage() {
         <p className="text-sm text-slate-400 animate-pulse">Carregando indicadores…</p>
       ) : (
         <>
-          <section className="flex justify-end">
-            <label className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Período métricas
-              <select
-                value={metricsPeriod}
-                onChange={(e) => setMetricsPeriod(e.target.value as MetricsPeriod)}
-                className="rounded-lg border border-slate-200 bg-white/60 backdrop-blur-sm px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm outline-none focus:border-[#185FA5] focus:ring-1 focus:ring-[#185FA5]/30 transition-all cursor-pointer"
-              >
-                <option value="TODO">Todo período</option>
-                <option value="MES_ATUAL">Mês atual</option>
-                <option value="ULT_30">Últimos 30 dias</option>
-                <option value="ULT_90">Últimos 90 dias</option>
-                <option value="ULT_180">Últimos 180 dias</option>
-                <option value="ULT_365">Últimos 365 dias</option>
-              </select>
-            </label>
-          </section>
-
-          <section className="grid gap-6 md:grid-cols-2">
-            <Card className="border border-slate-200/50 bg-white/70 backdrop-blur-md shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 min-w-0">
-              <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
-                <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-450">
-                  {representante ? 'Meta global' : `Meta anual ${goalYear}`}
-                </CardTitle>
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#185FA5]/10 text-[#185FA5] ring-1 ring-[#185FA5]/10">
-                  <Target size={18} aria-hidden />
+          {/* ── DASHBOARD MENSAL ────────────────────────────────── */}
+          <section className="space-y-5">
+            {/* Cabeçalho do dashboard com seletor de mês/ano */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <h2 className="text-base font-bold text-slate-800">Dashboard Mensal</h2>
+                <span className="rounded-full bg-[#185FA5]/10 px-2.5 py-0.5 text-xs font-bold text-[#185FA5] capitalize">
+                  {new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(
+                    new Date(goalYear, currentDashMonth - 1, 1),
+                  )}
                 </span>
-              </CardHeader>
-              <CardContent className="space-y-4 pt-0">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-100/60 pb-4">
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      {representante ? 'Valor da meta global' : 'Valor da meta anual'}
-                    </p>
-                    <p className="mt-1 font-sans text-3xl font-extrabold tracking-tight tabular-nums text-slate-900">{formatBRL(annualGoalNum)}</p>
-                    <p className="mt-1.5 text-xs text-slate-500 font-medium">
-                      {representante ? (
-                        <>
-                          Vendido acumulado (todo o histórico): <strong className="text-slate-800 font-semibold">{formatBRL(soldForProgress)}</strong>
-                        </>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Mês
+                  <select
+                    value={currentDashMonth}
+                    onChange={(e) => setCurrentDashMonth(Number(e.target.value))}
+                    className="rounded-lg border border-slate-200 bg-white/60 px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm outline-none focus:border-[#185FA5] transition-all cursor-pointer"
+                  >
+                    {MONTH_NAMES.map((name, i) => (
+                      <option key={i + 1} value={i + 1}>{name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Ano
+                  <select
+                    value={goalYear}
+                    onChange={(e) => setGoalYear(Number(e.target.value))}
+                    className="rounded-lg border border-slate-200 bg-white/60 px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm outline-none focus:border-[#185FA5] transition-all cursor-pointer"
+                  >
+                    {[goalYear - 1, goalYear, goalYear + 1].map((y) => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            {/* KPI Cards — linha 1 */}
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              {/* Meta do mês */}
+              <Card className="border border-slate-200/50 bg-white/70 backdrop-blur-md shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 min-w-0">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Meta do mês</p>
+                      <p className="mt-1.5 font-sans text-2xl font-extrabold tabular-nums text-slate-900 truncate">
+                        {formatBRL(currentMonthGoal)}
+                      </p>
+                    </div>
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#185FA5]/10 text-[#185FA5] ring-1 ring-[#185FA5]/10">
+                      <Target size={17} aria-hidden />
+                    </span>
+                  </div>
+                  <div className="mt-3 space-y-1">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Progresso</span>
+                      <span className={`text-xs font-bold tabular-nums ${monthProgressPct >= 100 ? 'text-emerald-600' : 'text-[#185FA5]'}`}>
+                        {monthProgressPct.toFixed(1)}%
+                      </span>
+                    </div>
+                    <Progress
+                      value={monthProgressPct}
+                      className={`h-2 rounded-full bg-slate-100 ${monthProgressPct >= 100 ? '[&>div]:bg-emerald-500' : '[&>div]:bg-[#185FA5]'}`}
+                    />
+                    <p className="text-[10px] text-slate-500 font-medium pt-0.5">
+                      {currentMonthGoal > 0 && currentMonthSold >= currentMonthGoal ? (
+                        <span className="font-semibold text-emerald-700">🎉 Meta atingida!</span>
+                      ) : currentMonthGoal > 0 ? (
+                        <>Faltam <strong className="text-slate-700">{formatBRL(Math.max(0, currentMonthGoal - currentMonthSold))}</strong></>
                       ) : (
-                        <>
-                          Vendido no ano ({goalYear}) até agora: <strong className="text-slate-800 font-semibold">{formatBRL(soldForProgress)}</strong>
-                        </>
+                        <span className="text-slate-400 italic">Meta não configurada</span>
                       )}
                     </p>
                   </div>
-                  {!representante ? (
-                    <div className="flex items-center gap-2">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                        Ano da meta
-                        <select
-                          value={goalYear}
-                          onChange={(e) => setGoalYear(Number(e.target.value))}
-                          className="mt-1 block rounded-lg border border-slate-200 bg-white/85 px-2.5 py-1 text-sm font-semibold text-slate-800 shadow-xs outline-none focus:border-[#185FA5] transition-all cursor-pointer"
-                        >
-                          {[goalYear - 1, goalYear, goalYear + 1].map((y) => (
-                            <option key={y} value={y}>
-                              {y}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                </CardContent>
+              </Card>
+
+              {/* Vendas realizadas */}
+              <Card className="border border-slate-200/50 bg-white/70 backdrop-blur-md shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 min-w-0">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Vendas realizadas</p>
+                      <p className="mt-1.5 font-sans text-2xl font-extrabold tabular-nums text-slate-900 truncate">
+                        {formatBRL(currentMonthSold)}
+                      </p>
                     </div>
-                  ) : null}
-                </div>
-
-                <div className="border-b border-slate-100/60 pb-4">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Progresso no ano</span>
-                    <span className="text-sm font-bold tabular-nums text-[#185FA5]">{progressPct.toFixed(1)}%</span>
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 ring-1 ring-emerald-500/10">
+                      <TrendingUp size={17} aria-hidden />
+                    </span>
                   </div>
-                  <Progress value={progressPct} className="h-2 bg-slate-100 rounded-full [&>div]:bg-[#185FA5]" />
-                  <p className="mt-2.5 text-xs text-slate-500 font-medium">
-                    {annualGoalNum > 0 && soldForProgress >= annualGoalNum ? (
-                      <span className="font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
-                        {representante ? '🎉 Meta global atingida!' : '🎉 Meta anual atingida!'}
-                      </span>
-                    ) : (
-                      <>
-                        Faltam <strong className="text-slate-700 font-semibold">{formatBRL(Math.max(0, annualGoalNum - soldForProgress))}</strong> para atingir a{' '}
-                        {representante ? 'meta global' : 'meta anual'}
-                      </>
-                    )}
-                  </p>
-                  {globalGoalReached ? (
-                    <p className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50/60 px-3.5 py-2.5 text-xs leading-relaxed text-emerald-950 shadow-xs">
-                      Parabéns — meta global concluída. Para operar como distribuidor (com metas mensais de
-                      planejamento), altere o tipo em{' '}
-                      <Link to="/bem-aviv/empresa" className="font-semibold text-emerald-800 hover:text-emerald-950 underline transition-colors">
-                        Dados da empresa
-                      </Link>
-                      .
+                  <div className="mt-3 space-y-1 text-xs">
+                    <p className="flex justify-between text-slate-500">
+                      <span>Pedidos confirmados</span>
+                      <strong className="text-slate-800 tabular-nums">{currentMonthOrdersCount}</strong>
                     </p>
-                  ) : null}
-                </div>
+                    <p className="flex justify-between text-slate-500">
+                      <span>Pedidos em aberto</span>
+                      <strong className="text-slate-800 tabular-nums">{currentMonthOpenCount}</strong>
+                    </p>
+                    {monthVsLastMonth !== null && (
+                      <p className="flex justify-between text-slate-500 border-t border-slate-100 pt-1 mt-1">
+                        <span>vs. mês anterior</span>
+                        <strong className={`tabular-nums ${monthVsLastMonth >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                          {monthVsLastMonth >= 0 ? '+' : ''}{monthVsLastMonth.toFixed(1)}%
+                        </strong>
+                      </p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
 
-                <div className="flex justify-between items-center pt-1">
-                  <span className="text-[11px] text-slate-400 font-medium max-w-[65%]">
-                    {representante
-                      ? 'Representante: apenas meta global (sem divisão por ano ou por mês).'
-                      : 'Distribuidor: meta anual e metas mensais de planejamento.'}
+              {/* Ticket médio */}
+              <Card className="border border-slate-200/50 bg-white/70 backdrop-blur-md shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 min-w-0">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Ticket médio (mês)</p>
+                      <p className="mt-1.5 font-sans text-2xl font-extrabold tabular-nums text-slate-900 truncate">
+                        {formatBRL(currentMonthAvgTicket)}
+                      </p>
+                    </div>
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-500/10 text-violet-600 ring-1 ring-violet-500/10">
+                      <BarChart2 size={17} aria-hidden />
+                    </span>
+                  </div>
+                  <div className="mt-3 space-y-1 text-xs">
+                    <p className="flex justify-between text-slate-500">
+                      <span>Ticket médio (período)</span>
+                      <strong className="text-slate-800 tabular-nums">{formatBRL(avgTicket)}</strong>
+                    </p>
+                    <p className="flex justify-between text-slate-500">
+                      <span>Total pedidos (período)</span>
+                      <strong className="text-slate-800 tabular-nums">{soldOrdersCount}</strong>
+                    </p>
+                    <p className="flex justify-between text-slate-500 border-t border-slate-100 pt-1 mt-1">
+                      <span>Abertos (período)</span>
+                      <strong className="text-slate-800 tabular-nums">{openOrdersCount}</strong>
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Projeção do mês */}
+              <Card className="border border-slate-200/50 bg-white/70 backdrop-blur-md shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 min-w-0">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Projeção do mês</p>
+                      <p className="mt-1.5 font-sans text-2xl font-extrabold tabular-nums text-[#185FA5] truncate">
+                        {formatBRL(currentMonthProjection)}
+                      </p>
+                    </div>
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-amber-600 ring-1 ring-amber-500/10">
+                      <Zap size={17} aria-hidden />
+                    </span>
+                  </div>
+                  <div className="mt-3 space-y-1 text-xs">
+                    <p className="flex justify-between text-slate-500">
+                      <span>Confirmado</span>
+                      <strong className="text-slate-800 tabular-nums">{formatBRL(currentMonthSold)}</strong>
+                    </p>
+                    <p className="flex justify-between text-slate-500">
+                      <span>Em aberto</span>
+                      <strong className="text-slate-800 tabular-nums">{formatBRL(currentMonthOpenAmount)}</strong>
+                    </p>
+                    {currentMonthGoal > 0 && (
+                      <p className="flex justify-between text-slate-500 border-t border-slate-100 pt-1 mt-1">
+                        <span>Projeção vs meta</span>
+                        <strong className={`tabular-nums ${currentMonthProjection >= currentMonthGoal ? 'text-emerald-700' : 'text-amber-700'}`}>
+                          {((currentMonthProjection / currentMonthGoal) * 100).toFixed(1)}%
+                        </strong>
+                      </p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Linha 2: Meta anual + resumo geral + config metas */}
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {/* Meta anual — progresso YTD */}
+              <Card className="border border-slate-200/50 bg-white/70 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200 min-w-0">
+                <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2 pt-4 px-4">
+                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    {representante ? 'Meta global' : `Meta anual ${goalYear}`}
+                  </CardTitle>
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#185FA5]/10 text-[#185FA5] ring-1 ring-[#185FA5]/10">
+                    <Target size={16} aria-hidden />
                   </span>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 border border-slate-200/80 hover:bg-slate-50 hover:text-slate-800 rounded-lg transition-all"
-                    onClick={() => setIsGoalsModalOpen(true)}
-                  >
-                    <Pencil size={13} />
-                    Configurar Metas
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+                </CardHeader>
+                <CardContent className="px-4 pb-4 pt-0 space-y-3">
+                  <div>
+                    <p className="font-sans text-2xl font-extrabold tabular-nums text-slate-900">{formatBRL(annualGoalNum)}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Vendido {representante ? 'acumulado' : `no ano (${goalYear})`}:{' '}
+                      <strong className="text-slate-800">{formatBRL(soldForProgress)}</strong>
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Progresso no ano</span>
+                      <span className="text-sm font-bold tabular-nums text-[#185FA5]">{progressPct.toFixed(1)}%</span>
+                    </div>
+                    <Progress value={progressPct} className="h-2 bg-slate-100 rounded-full [&>div]:bg-[#185FA5]" />
+                    <p className="text-[10px] text-slate-500 pt-0.5">
+                      {annualGoalNum > 0 && soldForProgress >= annualGoalNum ? (
+                        <span className="font-semibold text-emerald-700">🎉 Meta anual atingida!</span>
+                      ) : (
+                        <>Faltam <strong className="text-slate-700">{formatBRL(Math.max(0, annualGoalNum - soldForProgress))}</strong></>
+                      )}
+                    </p>
+                  </div>
+                  <div className="border-t border-slate-100 pt-2 space-y-1 text-xs">
+                    <p className="flex justify-between text-slate-500">
+                      <span>Pedidos em aberto</span>
+                      <strong className="text-slate-800 tabular-nums">{openOrdersCount} · {formatBRL(openOrdersAmount)}</strong>
+                    </p>
+                    <p className="flex justify-between text-slate-500 border-t border-slate-100 pt-1">
+                      <span className="font-semibold text-slate-700">Projeção total</span>
+                      <strong className="text-[#185FA5] tabular-nums">{formatBRL(totalSold + openOrdersAmount)}</strong>
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
 
-            <Card className="border border-slate-200/50 bg-white/70 backdrop-blur-md shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 min-w-0">
-              <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
-                <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-450">Total vendido (pedidos)</CardTitle>
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 ring-1 ring-emerald-500/10">
-                  <TrendingUp size={18} aria-hidden />
-                </span>
-              </CardHeader>
-              <CardContent className="space-y-3 pt-0">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Faturamento Realizado</p>
-                  <p className="mt-1 font-sans text-3xl font-extrabold tracking-tight tabular-nums text-slate-900">{formatBRL(totalSold)}</p>
-                </div>
-                <p className="text-xs leading-relaxed text-slate-500 font-medium border-b border-slate-100/60 pb-3">
-                  Soma dos pedidos com status <strong className="font-semibold text-slate-850">Finalizado</strong> ou{' '}
-                  <strong className="font-semibold text-slate-850">Entregue</strong> no período de {periodLabel}.
-                </p>
-                <div className="space-y-1.5 pt-1 text-xs">
-                  <p className="text-slate-500 font-medium flex justify-between">
-                    <span>Pedidos em aberto (status Aberto): <strong className="font-semibold text-slate-700">{openOrdersCount}</strong></span>
-                    <span className="font-semibold text-slate-800 tabular-nums">{formatBRL(openOrdersAmount)}</span>
-                  </p>
-                  <p className="text-slate-500 font-medium flex justify-between">
-                    <span>Ticket médio (Finalizado/Entregue):</span>
-                    <strong className="font-semibold text-slate-800 tabular-nums">{formatBRL(avgTicket)}</strong>
-                  </p>
-                  <p className="text-slate-500 font-medium flex justify-between border-t border-slate-100/60 pt-2">
-                    <span className="font-semibold text-slate-750">Projeção (confirmado + em aberto):</span>
-                    <strong className="font-bold text-[#185FA5] tabular-nums">{formatBRL(totalSold + openOrdersAmount)}</strong>
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+              {/* Resumo do período */}
+              <Card className="border border-slate-200/50 bg-white/70 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200 min-w-0">
+                <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2 pt-4 px-4">
+                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Resumo geral (todo o período)
+                  </CardTitle>
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-500/10 text-violet-600 ring-1 ring-violet-500/10">
+                    <Package size={16} aria-hidden />
+                  </span>
+                </CardHeader>
+                <CardContent className="px-4 pb-4 pt-0">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-lg border border-slate-100 bg-slate-50/60 p-2.5">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total realizado</p>
+                      <p className="mt-1 text-base font-extrabold tabular-nums text-slate-900">{formatBRL(totalSold)}</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">todo período</p>
+                    </div>
+                    <div className="rounded-lg border border-slate-100 bg-slate-50/60 p-2.5">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Pedidos totais</p>
+                      <p className="mt-1 text-base font-extrabold tabular-nums text-slate-900">{soldOrdersCount}</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">confirmados</p>
+                    </div>
+                    <div className="rounded-lg border border-slate-100 bg-slate-50/60 p-2.5">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Ticket médio</p>
+                      <p className="mt-1 text-base font-extrabold tabular-nums text-slate-900">{formatBRL(avgTicket)}</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">por pedido</p>
+                    </div>
+                    <div className="rounded-lg border border-slate-100 bg-slate-50/60 p-2.5">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Em aberto</p>
+                      <p className="mt-1 text-base font-extrabold tabular-nums text-slate-900">{openOrdersCount}</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">{formatBRL(openOrdersAmount)}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Configuração de metas — painel rápido */}
+              <Card className="border border-slate-200/50 bg-white/70 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200 min-w-0 md:col-span-2 xl:col-span-1">
+                <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2 pt-4 px-4">
+                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Metas mensais — {goalYear}
+                  </CardTitle>
+                  <button
+                    type="button"
+                    onClick={() => setIsGoalsModalOpen(true)}
+                    className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                  >
+                    <Pencil size={11} />
+                    Editar
+                  </button>
+                </CardHeader>
+                <CardContent className="px-4 pb-4 pt-0 space-y-3">
+                  {!representante ? (
+                    <div className="grid grid-cols-4 gap-1">
+                      {MONTH_NAMES_SHORT.map((label, idx) => {
+                        const m = idx + 1
+                        const key = String(m)
+                        const goal = monthlyGoalsParsed[key] ?? 0
+                        const soldMk = `${goalYear}-${String(m).padStart(2, '0')}`
+                        const sold = monthlySoldAllTime[soldMk] ?? 0
+                        const pct = goal > 0 ? Math.min(100, (sold / goal) * 100) : 0
+                        const isCurrent = m === currentDashMonth
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => setCurrentDashMonth(m)}
+                            className={`rounded-lg border p-1.5 text-center transition-all cursor-pointer ${
+                              isCurrent
+                                ? 'border-[#185FA5] bg-[#185FA5]/10 shadow-sm'
+                                : 'border-slate-100 bg-slate-50/60 hover:border-slate-200 hover:bg-white'
+                            }`}
+                          >
+                            <p className={`text-[9px] font-bold uppercase tracking-wide ${isCurrent ? 'text-[#185FA5]' : 'text-slate-500'}`}>{label}</p>
+                            {goal > 0 ? (
+                              <>
+                                <div className={`mt-1 h-1 rounded-full overflow-hidden ${isCurrent ? 'bg-[#185FA5]/20' : 'bg-slate-200'}`}>
+                                  <div
+                                    className={`h-full rounded-full transition-all ${pct >= 100 ? 'bg-emerald-500' : isCurrent ? 'bg-[#185FA5]' : 'bg-slate-400'}`}
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </div>
+                                <p className={`mt-0.5 text-[8px] tabular-nums font-semibold ${pct >= 100 ? 'text-emerald-600' : isCurrent ? 'text-[#185FA5]' : 'text-slate-500'}`}>
+                                  {pct.toFixed(0)}%
+                                </p>
+                              </>
+                            ) : (
+                              <p className="mt-1 text-[8px] text-slate-300 font-medium">—</p>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-slate-100 bg-slate-50/60 p-3 text-center">
+                      <p className="text-xs text-slate-500">Meta global única para representantes.</p>
+                      <p className="mt-1 text-lg font-extrabold tabular-nums text-slate-900">{formatBRL(annualGoalNum)}</p>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsGoalsModalOpen(true)}
+                    className="w-full rounded-lg border border-slate-200/80 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-all cursor-pointer inline-flex items-center justify-center gap-1.5"
+                  >
+                    <Pencil size={12} />
+                    Configurar metas de vendas
+                  </button>
+                </CardContent>
+              </Card>
+            </div>
           </section>
 
+          {/* ── GRÁFICO MÊS A MÊS ──────────────────────────────── */}
           <Card className="border border-slate-200/50 bg-white/70 backdrop-blur-md shadow-sm transition-all duration-200 hover:shadow-md">
             <CardHeader className="pb-3">
               <CardTitle className="font-sans text-base font-bold text-slate-900">Resultado mês a mês (pedidos)</CardTitle>
@@ -1041,7 +1252,9 @@ export function BemAvivHomePage() {
             </CardContent>
           </Card>
 
+          {/* ── AGENDA + TIMELINE ────────────────────────────────── */}
           <section className="grid gap-6 xl:grid-cols-2">
+            {/* Agenda */}
             <div className="rounded-xl border border-slate-200/50 bg-white/70 backdrop-blur-md p-4 shadow-sm sm:p-5 transition-all duration-200 hover:shadow-md">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100/60 pb-3">
                 <h2 className="font-sans text-sm font-bold text-slate-900">Agenda por dia</h2>
@@ -1079,9 +1292,7 @@ export function BemAvivHomePage() {
                 <div className="mx-auto w-full max-w-[300px] shrink-0 sm:max-w-[320px] lg:mx-0">
                   <div className="grid grid-cols-7 gap-0.5 text-center text-[9px] font-bold tracking-wider uppercase text-slate-400">
                     {WEEKDAYS_SHORT.map((w) => (
-                      <div key={w} className="py-1">
-                        {w}
-                      </div>
+                      <div key={w} className="py-1">{w}</div>
                     ))}
                   </div>
                   <div className="mt-0.5 grid grid-cols-7 gap-0.5">
@@ -1151,6 +1362,7 @@ export function BemAvivHomePage() {
               </div>
             </div>
 
+            {/* Timeline crítica */}
             <div className="overflow-hidden rounded-xl border border-slate-200/50 bg-white/70 backdrop-blur-md shadow-sm transition-all duration-200 hover:shadow-md">
               <div className="border-b border-slate-100/60 bg-slate-50/20 px-4 py-4 sm:px-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1270,6 +1482,7 @@ export function BemAvivHomePage() {
         </>
       )}
 
+      {/* ── MODAL: HISTÓRICO ────────────────────────────────────── */}
       {historyModalClient ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/35 p-3">
           <div className="w-full max-w-5xl rounded-xl border border-slate-200 bg-white p-4 shadow-xl sm:p-5">
@@ -1285,24 +1498,14 @@ export function BemAvivHomePage() {
                   onClick={() => {
                     if (registerInlineOpen && editingHistoryId) {
                       setEditingHistoryId(null)
-                      setRegisterInlineForm({
-                        contacted_at: todayInputDate(),
-                        channel: 'WHATSAPP',
-                        result: '',
-                        notes: '',
-                      })
+                      setRegisterInlineForm({ contacted_at: todayInputDate(), channel: 'WHATSAPP', result: '', notes: '' })
                       return
                     }
                     setRegisterInlineOpen((prev) => {
                       const next = !prev
                       if (next) {
                         setEditingHistoryId(null)
-                        setRegisterInlineForm({
-                          contacted_at: todayInputDate(),
-                          channel: 'WHATSAPP',
-                          result: '',
-                          notes: '',
-                        })
+                        setRegisterInlineForm({ contacted_at: todayInputDate(), channel: 'WHATSAPP', result: '', notes: '' })
                       } else {
                         setEditingHistoryId(null)
                       }
@@ -1331,10 +1534,7 @@ export function BemAvivHomePage() {
                 <button
                   type="button"
                   className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                  onClick={() => {
-                    setEditingHistoryId(null)
-                    setHistoryModalClient(null)
-                  }}
+                  onClick={() => { setEditingHistoryId(null); setHistoryModalClient(null) }}
                 >
                   Fechar
                 </button>
@@ -1403,12 +1603,7 @@ export function BemAvivHomePage() {
                       onClick={() => {
                         setEditingHistoryId(null)
                         setRegisterInlineOpen(false)
-                        setRegisterInlineForm({
-                          contacted_at: todayInputDate(),
-                          channel: 'WHATSAPP',
-                          result: '',
-                          notes: '',
-                        })
+                        setRegisterInlineForm({ contacted_at: todayInputDate(), channel: 'WHATSAPP', result: '', notes: '' })
                       }}
                     >
                       Cancelar edição
@@ -1439,10 +1634,7 @@ export function BemAvivHomePage() {
                     {historyModalRows.map((r) => (
                       <tr
                         key={r.id}
-                        className={cn(
-                          'border-t border-slate-100',
-                          editingHistoryId === r.id && 'bg-sky-50/80',
-                        )}
+                        className={cn('border-t border-slate-100', editingHistoryId === r.id && 'bg-sky-50/80')}
                       >
                         <td className="px-3 py-2 text-slate-700">{formatDateOnly(r.contacted_at)}</td>
                         <td className="px-3 py-2 text-slate-700">{r.channel}</td>
@@ -1477,6 +1669,7 @@ export function BemAvivHomePage() {
         </div>
       ) : null}
 
+      {/* ── MODAL: CONFIGURAR METAS ──────────────────────────────── */}
       {isGoalsModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/35 p-3 backdrop-blur-sm">
           <div className="w-full max-w-5xl rounded-xl border border-slate-200 bg-white p-4 shadow-xl sm:p-6 max-h-[90vh] overflow-y-auto">
@@ -1492,15 +1685,12 @@ export function BemAvivHomePage() {
               <button
                 type="button"
                 className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
-                onClick={() => {
-                  setIsGoalsModalOpen(false)
-                  loadGoals() // Descarta alterações não salvas
-                }}
+                onClick={() => { setIsGoalsModalOpen(false); void loadGoals() }}
               >
                 Fechar
               </button>
             </div>
-            
+
             <SalesGoalsEditor
               companyKind={activeCompany?.company_kind}
               goalYear={goalYear}
