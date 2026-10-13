@@ -14,11 +14,13 @@ import {
   TrendingDown,
   TrendingUp,
   X,
+  RotateCcw,
 } from 'lucide-react'
 import {
   listContasPagar,
   updateContaPagar,
   saveContaPagar,
+  estornarBaixaParcela,
   ContaPagar,
   StatusConta,
   OrigemConta,
@@ -26,6 +28,12 @@ import {
   ContaPagarParcela,
   BaixaParcelaInfo,
 } from '../services/v2ContasPagarService'
+import {
+  listContasBancarias,
+  saveContaBancaria,
+  updateSaldoContaBancaria,
+  ContaBancaria,
+} from '../services/v2ContasBancariasService'
 
 const STATUS_CONFIG: Record<StatusConta, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
   aberta: { label: 'Aberta', color: '#2563EB', bg: '#EFF6FF', icon: <Clock size={13} /> },
@@ -92,6 +100,12 @@ export function V2ContasPagarPage() {
   const [baixaObs, setBaixaObs] = useState('')
   const [valorLiquidoInput, setValorLiquidoInput] = useState<string>('')
 
+  // Contas Bancárias / Carteiras para Baixa
+  const [contasBancarias, setContasBancarias] = useState<ContaBancaria[]>([])
+  const [contaBancariaSelecionadaId, setContaBancariaSelecionadaId] = useState<string>('')
+  const [criandoNovaContaTag, setCriandoNovaContaTag] = useState(false)
+  const [novoNomeContaTag, setNovoNomeContaTag] = useState('')
+
   // Modal de Nova Conta
   const [novaContaModal, setNovaContaModal] = useState(false)
   const [novaTipo, setNovaTipo] = useState<TipoLancamento>('pagar')
@@ -104,8 +118,15 @@ export function V2ContasPagarPage() {
 
   useEffect(() => {
     async function load() {
-      const data = await listContasPagar()
+      const [data, bancos] = await Promise.all([
+        listContasPagar(),
+        listContasBancarias(),
+      ])
       setContas(data)
+      setContasBancarias(bancos)
+      if (bancos.length > 0 && !contaBancariaSelecionadaId) {
+        setContaBancariaSelecionadaId(bancos[0].id)
+      }
     }
     load()
   }, [])
@@ -176,6 +197,15 @@ export function V2ContasPagarPage() {
       : (valorOriginal * Math.max(0, acrescimoValor)) / 100
   const valorFinalLiquido = Math.max(0, Math.round((valorOriginal - valorDescontoCalc + valorAcrescimoCalc) * 100) / 100)
 
+  const contaBancariaSelecionada = contasBancarias.find((cb) => cb.id === contaBancariaSelecionadaId)
+  const saldoPrevistoAposBaixa = contaBancariaSelecionada
+    ? Math.round(
+        (baixaModal?.conta.tipo === 'receber'
+          ? contaBancariaSelecionada.saldoAtual + valorFinalLiquido
+          : contaBancariaSelecionada.saldoAtual - valorFinalLiquido) * 100
+      ) / 100
+    : 0
+
   // Handlers sincronizados para o Valor Líquido Pago
   function handleValorLiquidoChange(valStr: string) {
     setValorLiquidoInput(valStr)
@@ -231,11 +261,35 @@ export function V2ContasPagarPage() {
     setValorLiquidoInput(parcela.valor.toFixed(2))
     setBaixaFormaPagto('PIX')
     setBaixaObs('')
+    setCriandoNovaContaTag(false)
+    setNovoNomeContaTag('')
+    if (contasBancarias.length > 0 && !contaBancariaSelecionadaId) {
+      setContaBancariaSelecionadaId(contasBancarias[0].id)
+    }
+  }
+
+  async function handleCriarNovaContaTag() {
+    if (!novoNomeContaTag.trim()) return
+    const nova = await saveContaBancaria({
+      nome: novoNomeContaTag.trim(),
+      tipo: 'carteira',
+      saldoAtual: 0,
+      cor: '#3B82F6',
+      ativo: true,
+    })
+    const lista = await listContasBancarias()
+    setContasBancarias(lista)
+    setContaBancariaSelecionadaId(nova.id)
+    setNovoNomeContaTag('')
+    setCriandoNovaContaTag(false)
   }
 
   async function confirmarBaixa() {
     if (!baixaModal) return
     const { conta, parcela } = baixaModal
+    const isPagar = (conta.tipo || 'pagar') === 'pagar'
+
+    const contaBancariaObj = contasBancarias.find((cb) => cb.id === contaBancariaSelecionadaId)
 
     const baixaInfo: BaixaParcelaInfo = {
       dataBaixa: baixaData,
@@ -249,6 +303,8 @@ export function V2ContasPagarPage() {
       valorFinalPago: valorFinalLiquido,
       formaPagamento: baixaFormaPagto,
       observacao: baixaObs.trim() || undefined,
+      contaBancariaId: contaBancariaObj?.id,
+      contaBancariaNome: contaBancariaObj?.nome,
     }
 
     const novasParcelas = conta.parcelas.map((p) => {
@@ -274,8 +330,42 @@ export function V2ContasPagarPage() {
     }
 
     await updateContaPagar(contaAtualizada)
+
+    // Atualiza saldo da conta bancária vinculada
+    if (contaBancariaObj) {
+      // Se pagar: deduz o valor do saldo (-valorFinalLiquido)
+      // Se receber: adiciona o valor ao saldo (+valorFinalLiquido)
+      const delta = isPagar ? -valorFinalLiquido : valorFinalLiquido
+      await updateSaldoContaBancaria(contaBancariaObj.id, delta)
+      const bancosAtualizados = await listContasBancarias()
+      setContasBancarias(bancosAtualizados)
+    }
+
     setContas((prev) => prev.map((c) => (c.id === contaAtualizada.id ? contaAtualizada : c)))
     setBaixaModal(null)
+  }
+
+  async function handleEstornarParcela(conta: ContaPagar, parcela: ContaPagarParcela) {
+    if (!parcela.baixa) return
+    const isPagar = (conta.tipo || 'pagar') === 'pagar'
+    const textoAcao = isPagar ? 'pagamento' : 'recebimento'
+    const conf = window.confirm(
+      `Confirma o estorno do ${textoAcao} da parcela #${parcela.numero} (${fmt(parcela.baixa.valorFinalPago)})?\n\n` +
+      `• O status da parcela voltará para Aberto;\n` +
+      `• O saldo da conta bancária (${parcela.baixa.contaBancariaNome || 'vinculada'}) será estornado/recomposto.`
+    )
+    if (!conf) return
+
+    try {
+      const atualizada = await estornarBaixaParcela(conta.id, parcela.numero)
+      if (atualizada) {
+        setContas((prev) => prev.map((c) => (c.id === atualizada.id ? atualizada : c)))
+        const bancosAtualizados = await listContasBancarias()
+        setContasBancarias(bancosAtualizados)
+      }
+    } catch {
+      alert('Erro ao realizar o estorno da parcela.')
+    }
   }
 
   async function handleSalvarNovaConta(e: React.FormEvent) {
@@ -707,6 +797,21 @@ export function V2ContasPagarPage() {
                                 Liquidado em {p.baixa.dataBaixa.split('-').reverse().join('/')} · Pago: {fmt(p.baixa.valorFinalPago)}
                                 {p.baixa.descontoFinal > 0 && ` (Desc: -${fmt(p.baixa.descontoFinal)})`}
                                 {p.baixa.acrescimoFinal > 0 && ` (Acrésc: +${fmt(p.baixa.acrescimoFinal)})`}
+                                {p.baixa.contaBancariaNome && (
+                                  <span
+                                    style={{
+                                      display: 'inline-block',
+                                      marginLeft: 6,
+                                      padding: '1px 6px',
+                                      background: '#E0F2FE',
+                                      color: '#0369A1',
+                                      borderRadius: 4,
+                                      fontWeight: 700,
+                                    }}
+                                  >
+                                    🏦 {p.baixa.contaBancariaNome}
+                                  </span>
+                                )}
                               </span>
                             )}
                           </span>
@@ -732,6 +837,29 @@ export function V2ContasPagarPage() {
                               }}
                             >
                               Baixar
+                            </button>
+                          )}
+
+                          {p.status === 'paga' && p.baixa && (
+                            <button
+                              onClick={() => handleEstornarParcela(conta, p)}
+                              title="Estornar baixa desta parcela"
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                padding: '5px 12px',
+                                borderRadius: 8,
+                                border: '1.5px solid #F59E0B',
+                                background: '#FFFBEB',
+                                color: '#B45309',
+                                fontSize: 12,
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <RotateCcw size={12} />
+                              Estornar
                             </button>
                           )}
                         </div>
@@ -974,6 +1102,111 @@ export function V2ContasPagarPage() {
                   <option value="DINHEIRO">Dinheiro em Espécie</option>
                   <option value="OUTRO">Outro</option>
                 </select>
+              </div>
+
+              {/* Conta Bancária / Carteira (Tag) e Saldo */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>
+                    Conta Bancária / Carteira (Tag de Liquidação)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setCriandoNovaContaTag(!criandoNovaContaTag)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#2563EB',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      padding: 0,
+                    }}
+                  >
+                    {criandoNovaContaTag ? 'Cancelar nova' : '+ Nova Conta / Tag'}
+                  </button>
+                </div>
+
+                {criandoNovaContaTag ? (
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                    <input
+                      type="text"
+                      placeholder="Nome da nova conta (ex: Santander PJ, Carteira 2)"
+                      value={novoNomeContaTag}
+                      onChange={(e) => setNovoNomeContaTag(e.target.value)}
+                      style={{ flex: 1, padding: '9px 12px', borderRadius: 8, border: '1.5px solid #3B82F6', fontSize: 13, outline: 'none' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCriarNovaContaTag}
+                      style={{ padding: '0 14px', borderRadius: 8, background: '#2563EB', color: '#fff', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                    >
+                      Salvar
+                    </button>
+                  </div>
+                ) : (
+                  <select
+                    value={contaBancariaSelecionadaId}
+                    onChange={(e) => {
+                      if (e.target.value === '__NOVA__') {
+                        setCriandoNovaContaTag(true)
+                      } else {
+                        setContaBancariaSelecionadaId(e.target.value)
+                      }
+                    }}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #CBD5E1', fontSize: 13, outline: 'none', background: '#FFFFFF' }}
+                  >
+                    {contasBancarias.map((cb) => (
+                      <option key={cb.id} value={cb.id}>
+                        {cb.nome} · Saldo: {fmt(cb.saldoAtual)}
+                      </option>
+                    ))}
+                    <option value="__NOVA__">+ Cadastrar outra conta...</option>
+                  </select>
+                )}
+
+                {/* Exibição em Tempo Real do Saldo da Conta */}
+                {contaBancariaSelecionada && (
+                  <div
+                    style={{
+                      marginTop: 8,
+                      padding: '10px 14px',
+                      borderRadius: 10,
+                      background: '#F8FAFC',
+                      border: '1.5px solid #E2E8F0',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 4,
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
+                      <span style={{ color: '#64748B', fontWeight: 600 }}>Saldo Atual Disponível:</span>
+                      <strong style={{ fontSize: 13, color: contaBancariaSelecionada.saldoAtual >= 0 ? '#0F172A' : '#DC2626' }}>
+                        {fmt(contaBancariaSelecionada.saldoAtual)}
+                      </strong>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, borderTop: '1px solid #E2E8F0', paddingTop: 4 }}>
+                      <span style={{ color: '#64748B', fontWeight: 600 }}>
+                        {baixaModal.conta.tipo === 'receber' ? 'Saldo após o recebimento:' : 'Saldo após o pagamento:'}
+                      </span>
+                      <strong
+                        style={{
+                          fontSize: 13,
+                          color: saldoPrevistoAposBaixa >= 0 ? '#16A34A' : '#DC2626',
+                        }}
+                      >
+                        {fmt(saldoPrevistoAposBaixa)}
+                      </strong>
+                    </div>
+
+                    {baixaModal.conta.tipo !== 'receber' && saldoPrevistoAposBaixa < 0 && (
+                      <span style={{ fontSize: 11, color: '#DC2626', fontWeight: 600, marginTop: 2 }}>
+                        ⚠️ Saldo da conta ficará negativo após esta baixa.
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Total Final a Liquidar */}

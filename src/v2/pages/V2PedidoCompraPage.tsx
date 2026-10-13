@@ -4,6 +4,7 @@ import {
   Edit3,
   RotateCcw,
   Search,
+  Eye,
 } from 'lucide-react'
 import { formatarMoeda } from '../../modules/lib/money'
 import { formatarData, hoje, somarDias } from '../../modules/lib/datas'
@@ -62,6 +63,7 @@ export function V2PedidoCompraPage() {
 
   // State: Formulario Novo / Edição
   const [pedidoEdicao, setPedidoEdicao] = useState<PedidoCompra | null>(null)
+  const [isVisualizacao, setIsVisualizacao] = useState(false)
   const [formFornecedor, setFormFornecedor] = useState('')
   const [formItens, setFormItens] = useState<PedidoCompraItem[]>([])
   const [formParcelas, setFormParcelas] = useState(1)
@@ -84,6 +86,7 @@ export function V2PedidoCompraPage() {
   // Iniciar formulário de novo pedido
   const handleIniciarNovoPedido = () => {
     setPedidoEdicao(null)
+    setIsVisualizacao(false)
     const fornPadrao = fornecedoresCadastrados[0]?.trade_name || 'SOUZA INDUSTRIA E COMERCIO DE COLCHOES LTDA'
     setFormFornecedor(fornPadrao)
 
@@ -116,8 +119,26 @@ export function V2PedidoCompraPage() {
     setViewMode('novo')
   }
 
-  const handleEditarPedido = (p: PedidoCompra) => {
+  // Visualizar Pedido (Modo somente leitura para pedidos recebidos)
+  const handleVisualizarPedido = (p: PedidoCompra) => {
     setPedidoEdicao(p)
+    setIsVisualizacao(true)
+    setFormFornecedor(p.fornecedor)
+    setFormItens(p.itens || [])
+    setFormParcelas(p.numeroParcelas || 1)
+    setFormDataEntrega(p.dataPrevistaEntrega || somarDias(dataHoje, 11))
+    setFormObservacao(p.observacao || '')
+    setViewMode('novo')
+  }
+
+  const handleEditarPedido = (p: PedidoCompra) => {
+    // Se o pedido estiver recebido, abre no modo visualização
+    if (p.status === 'recebido') {
+      handleVisualizarPedido(p)
+      return
+    }
+    setPedidoEdicao(p)
+    setIsVisualizacao(false)
     setFormFornecedor(p.fornecedor)
     setFormItens(p.itens || [])
     setFormParcelas(p.numeroParcelas || 1)
@@ -320,28 +341,34 @@ export function V2PedidoCompraPage() {
           </button>
         </div>
 
-        {/* Título e Subtítulo + Pill de Rascunho */}
+        {/* Título e Subtítulo + Pill de Status */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
           <div>
             <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700, color: '#0F2A43' }}>
-              {pedidoEdicao ? `Editar Pedido #${pedidoEdicao.numero}` : 'Novo pedido de compra'}
+              {isVisualizacao
+                ? `Visualizar Pedido #${pedidoEdicao?.numero}`
+                : pedidoEdicao
+                ? `Editar Pedido #${pedidoEdicao.numero}`
+                : 'Novo pedido de compra'}
             </h1>
             <p style={{ margin: '4px 0 0', fontSize: 14, color: '#475569' }}>
-              Três passos rápidos: de quem comprar, o que comprar e quando pagar e receber.
+              {isVisualizacao
+                ? 'Detalhes do pedido recebido e itens comprados (Modo Somente Leitura).'
+                : 'Três passos rápidos: de quem comprar, o que comprar e quando pagar e receber.'}
             </p>
           </div>
 
           <div
             style={{
-              background: '#E4EEE6',
+              background: isVisualizacao ? '#DCFCE7' : '#E4EEE6',
               padding: '6px 14px',
               borderRadius: 20,
               fontSize: 12,
               fontWeight: 700,
-              color: '#334155',
+              color: isVisualizacao ? '#15803D' : '#334155',
             }}
           >
-            Rascunho · ainda não salvo
+            {isVisualizacao ? '✓ Recebido · Somente Leitura' : 'Rascunho · ainda não salvo'}
           </div>
         </div>
 
@@ -386,6 +413,7 @@ export function V2PedidoCompraPage() {
                   Fornecedor
                 </label>
                 <select
+                  disabled={isVisualizacao}
                   value={formFornecedor}
                   onChange={(e) => setFormFornecedor(e.target.value)}
                   style={{
@@ -395,9 +423,10 @@ export function V2PedidoCompraPage() {
                     border: '1px solid #CBD5E1',
                     fontSize: 14,
                     color: '#0F2A43',
-                    background: '#FFFFFF',
+                    background: isVisualizacao ? '#F8FAFC' : '#FFFFFF',
                     outline: 'none',
                     boxSizing: 'border-box',
+                    cursor: isVisualizacao ? 'default' : 'pointer',
                   }}
                 >
                   {fornecedoresCadastrados.length > 0 ? (
@@ -497,6 +526,7 @@ export function V2PedidoCompraPage() {
                           Produto
                         </label>
                         <select
+                          disabled={isVisualizacao}
                           value={item.produto_id}
                           onChange={(e) => handleItemProdutoChange(idx, e.target.value)}
                           style={{
@@ -506,9 +536,10 @@ export function V2PedidoCompraPage() {
                             border: '1px solid #CBD5E1',
                             fontSize: 14,
                             color: '#0F2A43',
-                            background: '#FFFFFF',
+                            background: isVisualizacao ? '#F8FAFC' : '#FFFFFF',
                             outline: 'none',
                             boxSizing: 'border-box',
+                            cursor: isVisualizacao ? 'default' : 'pointer',
                           }}
                         >
                           {produtosDisponiveis.map((p) => (
@@ -529,6 +560,7 @@ export function V2PedidoCompraPage() {
                         <input
                           type="number"
                           min="1"
+                          disabled={isVisualizacao}
                           value={item.quantidade}
                           onChange={(e) => handleItemQuantidadeChange(idx, Number(e.target.value))}
                           style={{
@@ -539,6 +571,7 @@ export function V2PedidoCompraPage() {
                             fontSize: 14,
                             textAlign: 'center',
                             color: '#0F2A43',
+                            background: isVisualizacao ? '#F8FAFC' : '#FFFFFF',
                             boxSizing: 'border-box',
                           }}
                         />
@@ -551,6 +584,7 @@ export function V2PedidoCompraPage() {
                         <input
                           type="number"
                           step="0.01"
+                          disabled={isVisualizacao}
                           value={item.preco_unitario}
                           onChange={(e) => handleItemPrecoChange(idx, Number(e.target.value))}
                           style={{
@@ -560,6 +594,7 @@ export function V2PedidoCompraPage() {
                             border: '1px solid #CBD5E1',
                             fontSize: 14,
                             color: '#0F2A43',
+                            background: isVisualizacao ? '#F8FAFC' : '#FFFFFF',
                             boxSizing: 'border-box',
                           }}
                         />
@@ -571,25 +606,27 @@ export function V2PedidoCompraPage() {
                       <span style={{ fontSize: 17, fontWeight: 700, color: '#0F2A43' }}>
                         {formatarMoeda(item.total)}
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoverItem(idx)}
-                        style={{
-                          width: 36,
-                          height: 36,
-                          borderRadius: 8,
-                          border: '1px solid #CBD5E1',
-                          background: '#FFFFFF',
-                          color: '#475569',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: 14,
-                        }}
-                      >
-                        ✕
-                      </button>
+                      {!isVisualizacao && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoverItem(idx)}
+                          style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 8,
+                            border: '1px solid #CBD5E1',
+                            background: '#FFFFFF',
+                            color: '#475569',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: 14,
+                          }}
+                        >
+                          ✕
+                        </button>
+                      )}
                     </div>
 
                     {/* Dica de custo */}
@@ -602,26 +639,28 @@ export function V2PedidoCompraPage() {
               </div>
 
               {/* Botão + Adicionar outro produto */}
-              <button
-                type="button"
-                onClick={handleAdicionarItem}
-                style={{
-                  marginTop: 16,
-                  padding: '11px 18px',
-                  borderRadius: 10,
-                  border: '1px dashed #0D5BA3',
-                  background: '#FFFFFF',
-                  color: '#0D5BA3',
-                  fontSize: 14,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                }}
-              >
-                + Adicionar outro produto
-              </button>
+              {!isVisualizacao && (
+                <button
+                  type="button"
+                  onClick={handleAdicionarItem}
+                  style={{
+                    marginTop: 16,
+                    padding: '11px 18px',
+                    borderRadius: 10,
+                    border: '1px dashed #0D5BA3',
+                    background: '#FFFFFF',
+                    color: '#0D5BA3',
+                    fontSize: 14,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  + Adicionar outro produto
+                </button>
+              )}
             </div>
 
             {/* ── PASSO 3: QUANDO VOCÊ PAGA E QUANDO CHEGA? ── */}
@@ -662,6 +701,7 @@ export function V2PedidoCompraPage() {
                     Pagamento
                   </label>
                   <select
+                    disabled={isVisualizacao}
                     value={formParcelas}
                     onChange={(e) => setFormParcelas(Number(e.target.value))}
                     style={{
@@ -671,9 +711,10 @@ export function V2PedidoCompraPage() {
                       border: '1px solid #CBD5E1',
                       fontSize: 14,
                       color: '#0F2A43',
-                      background: '#FFFFFF',
+                      background: isVisualizacao ? '#F8FAFC' : '#FFFFFF',
                       outline: 'none',
                       boxSizing: 'border-box',
+                      cursor: isVisualizacao ? 'default' : 'pointer',
                     }}
                   >
                     <option value={1}>À vista (1x)</option>
@@ -690,6 +731,7 @@ export function V2PedidoCompraPage() {
                   </label>
                   <input
                     type="date"
+                    disabled={isVisualizacao}
                     value={formDataEntrega}
                     onChange={(e) => setFormDataEntrega(e.target.value)}
                     style={{
@@ -699,6 +741,7 @@ export function V2PedidoCompraPage() {
                       border: '1px solid #CBD5E1',
                       fontSize: 14,
                       color: '#0F2A43',
+                      background: isVisualizacao ? '#F8FAFC' : '#FFFFFF',
                       outline: 'none',
                       boxSizing: 'border-box',
                     }}
@@ -715,6 +758,7 @@ export function V2PedidoCompraPage() {
                 </label>
                 <textarea
                   rows={3}
+                  readOnly={isVisualizacao}
                   value={formObservacao}
                   onChange={(e) => setFormObservacao(e.target.value)}
                   placeholder="Ex: PEDIDO CLADIMOR"
@@ -725,9 +769,10 @@ export function V2PedidoCompraPage() {
                     border: '1px solid #CBD5E1',
                     fontSize: 14,
                     color: '#0F2A43',
+                    background: isVisualizacao ? '#F8FAFC' : '#FFFFFF',
                     outline: 'none',
                     boxSizing: 'border-box',
-                    resize: 'vertical',
+                    resize: isVisualizacao ? 'none' : 'vertical',
                   }}
                 />
               </div>
@@ -779,24 +824,44 @@ export function V2PedidoCompraPage() {
               <span style={{ fontSize: 26, fontWeight: 800, color: '#0D5BA3' }}>{formatarMoeda(totalCalculado)}</span>
             </div>
 
-            <button
-              type="button"
-              onClick={handleSalvarPedido}
-              style={{
-                width: '100%',
-                padding: '14px',
-                borderRadius: 12,
-                background: '#0D5BA3',
-                color: '#FFFFFF',
-                fontSize: 16,
-                fontWeight: 700,
-                border: 'none',
-                cursor: 'pointer',
-                marginBottom: 10,
-              }}
-            >
-              Salvar pedido
-            </button>
+            {isVisualizacao ? (
+              <div
+                style={{
+                  background: '#F0FDF4',
+                  border: '1.5px solid #BBF7D0',
+                  borderRadius: 12,
+                  padding: '14px',
+                  marginBottom: 12,
+                  textAlign: 'center',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, color: '#15803D', fontWeight: 800, fontSize: 14 }}>
+                  ✓ Pedido Recebido
+                </div>
+                <p style={{ margin: '6px 0 0', fontSize: 12, color: '#166534', lineHeight: 1.4 }}>
+                  Este pedido já foi recebido e integrado ao estoque e financeiro. Para editá-lo, retorne seu status para Aberto na listagem.
+                </p>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSalvarPedido}
+                style={{
+                  width: '100%',
+                  padding: '14px',
+                  borderRadius: 12,
+                  background: '#0D5BA3',
+                  color: '#FFFFFF',
+                  fontSize: 16,
+                  fontWeight: 700,
+                  border: 'none',
+                  cursor: 'pointer',
+                  marginBottom: 10,
+                }}
+              >
+                Salvar pedido
+              </button>
+            )}
 
             <button
               type="button"
@@ -813,7 +878,7 @@ export function V2PedidoCompraPage() {
                 cursor: 'pointer',
               }}
             >
-              Cancelar
+              {isVisualizacao ? 'Voltar para lista' : 'Cancelar'}
             </button>
 
             <p style={{ margin: '16px 0 0', fontSize: 12, color: '#475569', lineHeight: 1.5 }}>
@@ -1203,24 +1268,45 @@ export function V2PedidoCompraPage() {
 
               {/* Botões de Ação na Linha do Pedido (Editar e Voltar) */}
               <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                <button
-                  onClick={() => handleEditarPedido(pedido)}
-                  title="Editar pedido"
-                  style={{
-                    width: 38,
-                    height: 38,
-                    borderRadius: 8,
-                    border: '1px solid #CBD5E1',
-                    background: '#FFFFFF',
-                    color: '#0D5BA3',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <Edit3 size={16} />
-                </button>
+                {pedido.status === 'recebido' ? (
+                  <button
+                    onClick={() => handleVisualizarPedido(pedido)}
+                    title="Visualizar pedido (recebido)"
+                    style={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: 8,
+                      border: '1.5px solid #0D5BA3',
+                      background: '#EFF6FF',
+                      color: '#0D5BA3',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Eye size={16} />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleEditarPedido(pedido)}
+                    title="Editar pedido"
+                    style={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: 8,
+                      border: '1px solid #CBD5E1',
+                      background: '#FFFFFF',
+                      color: '#0D5BA3',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Edit3 size={16} />
+                  </button>
+                )}
 
                 <button
                   onClick={async () => {

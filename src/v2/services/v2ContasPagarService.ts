@@ -1,4 +1,5 @@
 import { supabase } from '../../lib/supabaseClient'
+import { updateSaldoContaBancaria } from './v2ContasBancariasService'
 
 export type TipoLancamento = 'pagar' | 'receber'
 export type StatusConta = 'aberta' | 'parcial' | 'paga' | 'cancelada' | 'vencida'
@@ -16,6 +17,8 @@ export type BaixaParcelaInfo = {
   valorFinalPago: number
   formaPagamento?: string
   observacao?: string
+  contaBancariaId?: string
+  contaBancariaNome?: string
 }
 
 export type ContaPagarParcela = {
@@ -166,3 +169,81 @@ export async function deleteContaPagarPorPedidoId(pedidoId: string): Promise<voi
     } catch {}
   }
 }
+
+export async function estornarBaixaParcela(
+  contaId: string,
+  numeroParcela: number
+): Promise<ContaPagar | null> {
+  const current = readFromStorage()
+  const conta = current.find((c) => c.id === contaId)
+  if (!conta) return null
+
+  const parcela = conta.parcelas.find((p) => p.numero === numeroParcela)
+  if (!parcela || !parcela.baixa) return null
+
+  const baixa = parcela.baixa
+  const isPagar = (conta.tipo || 'pagar') === 'pagar'
+
+  // Se a baixa tinha conta bancária vinculada, reverte o saldo
+  if (baixa.contaBancariaId) {
+    // Se era conta a pagar: o dinheiro saiu (-), logo no estorno o dinheiro volta (+)
+    // Se era conta a receber: o dinheiro entrou (+), logo no estorno o dinheiro sai (-)
+    const deltaReversao = isPagar ? baixa.valorFinalPago : -baixa.valorFinalPago
+    await updateSaldoContaBancaria(baixa.contaBancariaId, deltaReversao)
+  }
+
+  // Verifica se a parcela está vencida hoje
+  const hojeStr = new Date().toISOString().split('T')[0]
+  const statusRevertido: StatusConta =
+    parcela.vencimento < hojeStr ? 'vencida' : 'aberta'
+
+  const novasParcelas = conta.parcelas.map((p) => {
+    if (p.numero === numeroParcela) {
+      return {
+        ...p,
+        status: statusRevertido,
+        baixa: undefined,
+      }
+    }
+    return p
+  })
+
+  // Recalcula total pago
+  const novoTotalPago = Math.max(0, Math.round((conta.totalPago - parcela.valor) * 100) / 100)
+
+  // Recalcula status geral da conta
+  let novoStatusConta: StatusConta = 'aberta'
+  const temAlgumaPaga = novasParcelas.some((p) => p.status === 'paga')
+  const todasPagas = novasParcelas.every((p) => p.status === 'paga')
+  const temVencida = novasParcelas.some((p) => p.status === 'vencida')
+
+  if (todasPagas) {
+    novoStatusConta = 'paga'
+  } else if (temAlgumaPaga || novoTotalPago > 0) {
+    novoStatusConta = 'parcial'
+  } else if (temVencida) {
+    novoStatusConta = 'vencida'
+  } else {
+    novoStatusConta = 'aberta'
+  }
+
+  const contaAtualizada: ContaPagar = {
+    ...conta,
+    parcelas: novasParcelas,
+    totalPago: novoTotalPago,
+    status: novoStatusConta,
+    updated_at: new Date().toISOString(),
+  }
+
+  const updatedList = current.map((c) => (c.id === contaId ? contaAtualizada : c))
+  writeToStorage(updatedList)
+
+  if (supabase) {
+    try {
+      await supabase.from(SUPABASE_TABLE).upsert(contaAtualizada)
+    } catch {}
+  }
+
+  return contaAtualizada
+}
+
