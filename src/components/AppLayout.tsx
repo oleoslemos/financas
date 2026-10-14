@@ -37,6 +37,8 @@ import { isBemAvivOnlyUser } from '../lib/userAccess'
 import { CompanySelectionGate } from './CompanySelectionGate'
 import { CompanyProvider, useCompany } from '../context/CompanyContext'
 import { PushNotificationModal } from './PushNotificationModal'
+import { useSupabase } from '../hooks/useSupabase'
+import { fetchPendingNotificationItems } from '../services/notificationAlertsService'
 
 type MenuItem = {
   label: string
@@ -127,6 +129,8 @@ function AppLayoutShell() {
   const [openSectionKey, setOpenSectionKey] = useState<string | null>(null)
   const [openTreeGroupKeys, setOpenTreeGroupKeys] = useState<string[]>([])
   const [isPushModalOpen, setIsPushModalOpen] = useState(false)
+  const [pendingCount, setPendingCount] = useState<number>(0)
+  const supabase = useSupabase()
   const emails = clerkEmailCandidates(user)
   const {
     companies,
@@ -267,6 +271,17 @@ function AppLayoutShell() {
     }
     setMobileMenuOpen(false)
   }, [location.pathname])
+
+  useEffect(() => {
+    if (!supabase) return
+    let isCancelled = false
+    void fetchPendingNotificationItems(supabase, activeCompanyId).then((items) => {
+      if (!isCancelled) setPendingCount(items.length)
+    })
+    return () => {
+      isCancelled = true
+    }
+  }, [supabase, activeCompanyId, isPushModalOpen])
 
   const breadcrumb = useMemo(() => getHubBreadcrumb(location.pathname), [location.pathname])
 
@@ -575,18 +590,29 @@ function AppLayoutShell() {
                   ? "border-slate-200/90 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300" 
                   : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
               )}
-              aria-label="Configurar notificações push"
-              title="Notificações Push do Sistema"
+              aria-label="Central de notificações e alertas"
+              title={pendingCount > 0 ? `${pendingCount} notificações pendentes` : "Central de Notificações"}
               onClick={() => setIsPushModalOpen(true)}
             >
               <div className="relative flex items-center justify-center">
                 <Bell className="h-4 w-4 text-[#0F3764]" />
-                <span className="absolute -top-1 -right-1 flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
+                {pendingCount > 0 ? (
+                  <span className="absolute -top-1.5 -right-2 flex h-4 w-4 items-center justify-center rounded-full bg-rose-600 text-[10px] font-black text-white ring-2 ring-white shadow-xs">
+                    {pendingCount > 9 ? '9+' : pendingCount}
+                  </span>
+                ) : (
+                  <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                )}
               </div>
               <span className="hidden sm:inline font-bold text-slate-800">Notificações</span>
+              {pendingCount > 0 && (
+                <span className="hidden md:inline rounded-full bg-rose-100 px-1.5 py-0.2 text-[10px] font-extrabold text-rose-700">
+                  {pendingCount}
+                </span>
+              )}
             </button>
           </div>
         </header>

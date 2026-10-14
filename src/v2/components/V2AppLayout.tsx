@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { getCurrentV2User, logoutV2User } from '../../v2/services/v2AuthService'
 import { CompanyProvider } from '../../context/CompanyContext'
@@ -20,6 +20,8 @@ import {
   TrendingUp,
 } from 'lucide-react'
 import { PushNotificationModal } from '../../components/PushNotificationModal'
+import { supabase } from '../../lib/supabaseClient'
+import { fetchPendingNotificationItems } from '../../services/notificationAlertsService'
 
 export function V2AppLayout() {
   return (
@@ -34,6 +36,17 @@ function V2AppLayoutInner() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [sidebarExpanded, setSidebarExpanded] = useState(true)
   const [isPushModalOpen, setIsPushModalOpen] = useState(false)
+  const [pendingCount, setPendingCount] = useState<number>(0)
+
+  useEffect(() => {
+    let isCancelled = false
+    void fetchPendingNotificationItems(supabase).then((items) => {
+      if (!isCancelled) setPendingCount(items.length)
+    })
+    return () => {
+      isCancelled = true
+    }
+  }, [isPushModalOpen])
 
   const v2User = getCurrentV2User()
   const userName = v2User?.full_name?.split(' ')[0] || v2User?.username || 'Usuário'
@@ -178,14 +191,20 @@ function V2AppLayoutInner() {
                 <button
                   type="button"
                   onClick={() => setIsPushModalOpen(true)}
-                  title="Configurar Notificações"
+                  title={pendingCount > 0 ? `${pendingCount} pendências` : "Configurar Notificações"}
                   className="relative p-1.5 rounded-lg shrink-0 transition"
                   style={{ color: 'rgba(255,255,255,0.7)', background: 'none', border: 'none', cursor: 'pointer' }}
                   onMouseEnter={(e) => { e.currentTarget.style.color = '#FFFFFF'; e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
                   onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.7)'; e.currentTarget.style.background = 'none' }}
                 >
                   <Bell className="h-4 w-4" />
-                  <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  {pendingCount > 0 ? (
+                    <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white shadow-xs">
+                      {pendingCount > 9 ? '9+' : pendingCount}
+                    </span>
+                  ) : (
+                    <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  )}
                 </button>
 
                 {/* Logout */}
@@ -210,14 +229,20 @@ function V2AppLayoutInner() {
               <button
                 type="button"
                 onClick={() => setIsPushModalOpen(true)}
-                title="Configurar Notificações"
+                title={pendingCount > 0 ? `${pendingCount} pendências` : "Configurar Notificações"}
                 className="relative w-full flex items-center justify-center py-1.5 rounded-xl transition"
                 style={{ color: 'rgba(255,255,255,0.7)', background: 'none', border: 'none', cursor: 'pointer' }}
                 onMouseEnter={(e) => { e.currentTarget.style.color = '#FFFFFF'; e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
                 onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.7)'; e.currentTarget.style.background = 'none' }}
               >
                 <Bell className="h-4 w-4" />
-                <span className="absolute top-1 right-2.5 h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                {pendingCount > 0 ? (
+                  <span className="absolute -top-1 right-2 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white shadow-xs">
+                    {pendingCount > 9 ? '9+' : pendingCount}
+                  </span>
+                ) : (
+                  <span className="absolute top-1 right-2.5 h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                )}
               </button>
               <button
                 type="button"
@@ -267,7 +292,13 @@ function V2AppLayoutInner() {
               title="Configurar Notificações"
             >
               <Bell className="h-4 w-4" />
-              <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              {pendingCount > 0 ? (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white">
+                  {pendingCount > 9 ? '9+' : pendingCount}
+                </span>
+              ) : (
+                <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              )}
             </button>
 
             <button

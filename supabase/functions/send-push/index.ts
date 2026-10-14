@@ -10,7 +10,6 @@ const corsHeaders = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function nowInBR(): Date {
-  // Retorna a data/hora ajustada para o fuso horário de Brasília (UTC-3)
   return new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }))
 }
 
@@ -19,12 +18,6 @@ function timeStringToMinutes(timeStr: string): number {
   const [h, m] = timeStr.split(":").map(Number)
   if (isNaN(h) || isNaN(m)) return -1
   return h * 60 + m
-}
-
-function diffDays(dateStr: string, fromDate: Date): number {
-  const d = new Date(dateStr + "T00:00:00")
-  const from = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate())
-  return Math.round((d.getTime() - from.getTime()) / 86400000)
 }
 
 function formatPhone(phone: string): string {
@@ -140,12 +133,10 @@ serve(async (req) => {
   let totalSent = 0
 
   for (const pref of prefs ?? []) {
-    // Lista de horários do usuário: ex: ["08:00", "12:00", "18:00"]
     let scheduleTimes: string[] = []
     if (Array.isArray(pref.schedule_times) && pref.schedule_times.length > 0) {
       scheduleTimes = pref.schedule_times
     } else {
-      // Fallback para os campos antigos
       const mStr = `${String(pref.morning_hour ?? 8).padStart(2, "0")}:${String(pref.morning_minute ?? 0).padStart(2, "0")}`
       scheduleTimes.push(mStr)
       if (pref.evening_enabled) {
@@ -154,18 +145,14 @@ serve(async (req) => {
       }
     }
 
-    // Se NÃO for force, verifica se algum horário bate com a janela atual
     let matchingSlot: string | null = null
     if (isForce) {
       matchingSlot = scheduleTimes[0] || "manual"
     } else {
-      // Janela de tolerância de 10 minutos (ex: se o cron roda a cada 5min)
       for (const slot of scheduleTimes) {
         const slotMins = timeStringToMinutes(slot)
         if (slotMins < 0) continue
-        // Se a hora atual está entre slot e slot + 9 minutos
         if (currentMinutes >= slotMins && currentMinutes <= slotMins + 9) {
-          // Checa se já enviamos neste slot hoje
           const { data: existingLog } = await supabase
             .from("push_notification_dispatch_logs")
             .select("id")
@@ -182,12 +169,8 @@ serve(async (req) => {
       }
     }
 
-    // Se não há horário compatível para este usuário neste momento, pula
-    if (!matchingSlot) {
-      continue
-    }
+    if (!matchingSlot) continue
 
-    // Busca as inscrições push ativas deste usuário
     const { data: subs } = await supabase
       .from("push_subscriptions")
       .select("id, endpoint, p256dh, auth")
@@ -196,7 +179,6 @@ serve(async (req) => {
 
     if (!subs || subs.length === 0) continue
 
-    // Identifica o company_id associado ao usuário
     const { data: memberRow } = await supabase
       .from("company_members")
       .select("company_id")
@@ -207,7 +189,7 @@ serve(async (req) => {
     const companyId = memberRow?.company_id
     let userSentCount = 0
 
-    // ── 1. Follow-ups de HOJE ─────────────────────────────────────────────
+    // ── 1. Follow-ups de HOJE (ITEM POR ITEM com WhatsApp direto) ────────
     if (pref.notify_followup_today) {
       let query = supabase
         .from("bem_aviv_clients")
@@ -220,26 +202,24 @@ serve(async (req) => {
       if (companyId) query = query.eq("company_id", companyId)
       const { data: followups } = await query
 
-      if (followups && followups.length > 0) {
-        const names = followups.slice(0, 3).map((c) => c.full_name.split(" ")[0]).join(", ")
-        const more = followups.length > 3 ? ` e mais ${followups.length - 3}` : ""
-        const firstPhone = followups[0].phone_1 ? formatPhone(followups[0].phone_1) : ""
-        const url = firstPhone
-          ? whatsappLink(firstPhone, `Olá! Tudo bem? Passando para dar continuidade ao nosso contato.`)
-          : "/bem-aviv/follow-up"
+      for (const f of followups ?? []) {
+        const firstName = f.full_name.trim().split(" ")[0]
+        const phone = f.phone_1 ? formatPhone(f.phone_1) : ""
+        const waMsg = `Olá ${firstName}, tudo bem? Aqui é da Bem Aviv. Gostaria de dar seguimento ao nosso contato combinado para hoje!`
+        const url = phone ? whatsappLink(phone, waMsg) : "/bem-aviv/follow-up"
 
         const r = await sendPush(supabase, subs, {
-          title: `📋 ${followups.length} follow-up${followups.length > 1 ? "s" : ""} para hoje`,
-          body: `${names}${more} aguardam contato. Toque para iniciar no WhatsApp.`,
+          title: `📋 Follow-up Hoje: ${f.full_name}`,
+          body: phone ? `Toque para falar com ${firstName} no WhatsApp agora` : `Agendado para hoje. Toque para abrir`,
           url,
-          tag: `followup-today-${todayIso}`,
+          tag: `fu-today-${f.id}-${todayIso}`,
         })
         userSentCount += r.sent
         totalSent += r.sent
       }
     }
 
-    // ── 2. Follow-ups ATRASADOS ───────────────────────────────────────────
+    // ── 2. Follow-ups ATRASADOS (ITEM POR ITEM com WhatsApp direto) ───────
     if (pref.notify_followup_overdue) {
       let query = supabase
         .from("bem_aviv_clients")
@@ -251,23 +231,29 @@ serve(async (req) => {
       if (companyId) query = query.eq("company_id", companyId)
       const { data: overdue } = await query
 
-      if (overdue && overdue.length > 0) {
+      for (const o of overdue ?? []) {
+        const firstName = o.full_name.trim().split(" ")[0]
+        const phone = o.phone_1 ? formatPhone(o.phone_1) : ""
+        const waMsg = `Olá ${firstName}, tudo bem? Estou entrando em contato para darmos continuidade ao seu atendimento!`
+        const url = phone ? whatsappLink(phone, waMsg) : "/bem-aviv/follow-up"
+
         const r = await sendPush(supabase, subs, {
-          title: `⚠️ ${overdue.length} follow-up${overdue.length > 1 ? "s" : ""} em atraso`,
-          body: overdue.slice(0, 3).map((c) => c.full_name.split(" ")[0]).join(", ") + " — toque para conferir",
-          url: "/bem-aviv/follow-up",
-          tag: `followup-overdue-${todayIso}`,
+          title: `⚠️ Follow-up Atrasado: ${o.full_name}`,
+          body: phone ? `Pendente. Toque para iniciar conversa no WhatsApp` : `Contato pendente. Toque para abrir`,
+          url,
+          tag: `fu-overdue-${o.id}-${todayIso}`,
         })
         userSentCount += r.sent
         totalSent += r.sent
       }
     }
 
-    // ── 3. ANIVERSARIANTES de hoje (com WhatsApp direto) ───────────────────
+    // ── 3. ANIVERSARIANTES DE HOJE (ITEM POR ITEM com WhatsApp direto) ───
     if (pref.notify_birthdays_today) {
       const mm = String(todayBR.getMonth() + 1).padStart(2, "0")
       const dd = String(todayBR.getDate()).padStart(2, "0")
 
+      // Clientes
       let cQuery = supabase.from("bem_aviv_clients").select("id, full_name, birth_date, phone_1").not("birth_date", "is", null)
       if (companyId) cQuery = cQuery.eq("company_id", companyId)
       const { data: birthClients } = await cQuery
@@ -278,8 +264,24 @@ serve(async (req) => {
         return parts[1] === mm && parts[2] === dd
       })
 
+      for (const b of birthdays) {
+        const firstName = b.full_name.trim().split(" ")[0]
+        const phone = b.phone_1 ? formatPhone(b.phone_1) : ""
+        const waMsg = `Parabéns ${firstName}! 🎂 Desejo a você um feliz aniversário, muita saúde, paz e conquistas!`
+        const url = phone ? whatsappLink(phone, waMsg) : "/bem-aviv/clientes"
+
+        const r = await sendPush(supabase, subs, {
+          title: `🎂 Aniversário Hoje: ${b.full_name}`,
+          body: phone ? `Toque para parabenizar ${firstName} no WhatsApp agora!` : `Aniversariante de hoje!`,
+          url,
+          tag: `bday-client-${b.id}-${todayIso}`,
+        })
+        userSentCount += r.sent
+        totalSent += r.sent
+      }
+
       // Familiares
-      let rQuery = supabase.from("bem_aviv_client_relatives").select("id, name, birth_date, phone, client_id").not("birth_date", "is", null)
+      let rQuery = supabase.from("bem_aviv_client_relatives").select("id, name, birth_date, phone, relationship, client_id").not("birth_date", "is", null)
       if (companyId) rQuery = rQuery.eq("company_id", companyId)
       const { data: relBirths } = await rQuery
 
@@ -289,31 +291,24 @@ serve(async (req) => {
         return parts[1] === mm && parts[2] === dd
       })
 
-      const total = birthdays.length + relBirthdays.length
-
-      if (total > 0) {
-        const allNames = [
-          ...birthdays.map((c) => c.full_name.split(" ")[0]),
-          ...relBirthdays.map((r) => r.name.split(" ")[0]),
-        ]
-        const phones = [...birthdays.map((c) => c.phone_1), ...relBirthdays.map((r) => r.phone)].filter(Boolean)
-        const firstPhone = phones[0] ?? ""
-        const waUrl = firstPhone
-          ? whatsappLink(firstPhone, `Feliz aniversário! 🎂 Que o seu dia seja repleto de realizações, saúde e felicidade!`)
-          : "/bem-aviv/clientes"
+      for (const rb of relBirthdays) {
+        const firstName = rb.name.trim().split(" ")[0]
+        const phone = rb.phone ? formatPhone(rb.phone) : ""
+        const waMsg = `Parabéns ${firstName}! 🎂 Que seu dia seja muito especial e repleto de felicidades!`
+        const url = phone ? whatsappLink(phone, waMsg) : "/bem-aviv/clientes"
 
         const r = await sendPush(supabase, subs, {
-          title: `🎂 ${total} aniversariante${total > 1 ? "s" : ""} hoje!`,
-          body: allNames.slice(0, 3).join(", ") + (total > 3 ? ` e +${total - 3}` : "") + " — toque para parabenizar no WhatsApp",
-          url: waUrl,
-          tag: `birthdays-today-${todayIso}`,
+          title: `🎂 Aniversário Hoje: ${rb.name} (${rb.relationship || "Familiar"})`,
+          body: phone ? `Toque para parabenizar no WhatsApp!` : `Familiar aniversariante hoje`,
+          url,
+          tag: `bday-rel-${rb.id}-${todayIso}`,
         })
         userSentCount += r.sent
         totalSent += r.sent
       }
     }
 
-    // ── 4. FEEDBACK pós-entrega (3, 10 e 30 dias) ────────────────────────
+    // ── 4. FEEDBACK PÓS-ENTREGA (ITEM POR ITEM com WhatsApp direto) ───────
     const feedbackWindows = [
       { days: 3, enabled: pref.notify_feedback_3d, tag: "feedback-3d", label: "3 dias" },
       { days: 10, enabled: pref.notify_feedback_10d, tag: "feedback-10d", label: "10 dias" },
@@ -349,16 +344,16 @@ serve(async (req) => {
           const client = clientMap.get(order.client_id)
           if (!client) continue
 
-          const firstName = client.full_name.split(" ")[0]
+          const firstName = client.full_name.trim().split(" ")[0]
           const phone = client.phone_1 ? formatPhone(client.phone_1) : ""
-          const waMsg = `Olá ${firstName}, tudo bem? Faz ${fw.label} desde a entrega do seu produto. Como está sendo sua experiência? Se puder nos dar um feedback, agradecemos muito! 😊`
+          const waMsg = `Olá ${firstName}, tudo bem? Faz ${fw.label} desde a entrega do seu produto. Como está sendo sua experiência? Gostaríamos muito de saber! 😊`
           const waUrl = phone ? whatsappLink(phone, waMsg) : `/bem-aviv/clientes`
 
           const r = await sendPush(supabase, subs, {
-            title: `📦 Feedback ${fw.label} — ${firstName}`,
-            body: `Entregue há ${fw.days} dias. Toque para enviar mensagem no WhatsApp.`,
+            title: `📦 Feedback ${fw.label}: ${client.full_name}`,
+            body: phone ? `Entregue há ${fw.days} dias. Toque para pedir feedback no WhatsApp` : `Entregue há ${fw.days} dias.`,
             url: waUrl,
-            tag: `${fw.tag}-${order.id}`,
+            tag: `${fw.tag}-${order.id}-${todayIso}`,
           })
           userSentCount += r.sent
           totalSent += r.sent
@@ -366,7 +361,7 @@ serve(async (req) => {
       }
     }
 
-    // ── 5. VALIDADE DE GARANTIA DO PRODUTO (30 dias antes) ────────────────
+    // ── 5. VALIDADE DE GARANTIA DO PRODUTO (ITEM POR ITEM com WhatsApp) ───
     if (pref.notify_product_expiry_30d) {
       const expiryTarget = new Date(todayClean)
       expiryTarget.setDate(expiryTarget.getDate() + 30)
@@ -389,43 +384,51 @@ serve(async (req) => {
 
         if (expiryDateIso !== expiryIso) continue
 
-        const firstName = c.full_name.split(" ")[0]
+        const firstName = c.full_name.trim().split(" ")[0]
         const phone = c.phone_1 ? formatPhone(c.phone_1) : ""
-        const waMsg = `Olá ${firstName}! A garantia do seu produto vence em 30 dias (${expiryDate.toLocaleDateString("pt-BR")}). Gostaríamos de verificar se você precisa de alguma revisão ou assistência! 😊`
+        const waMsg = `Olá ${firstName}! A garantia do seu produto vence em 30 dias (${expiryDate.toLocaleDateString("pt-BR")}). Gostaríamos de saber se precisa de alguma revisão ou assistência! 😊`
         const waUrl = phone ? whatsappLink(phone, waMsg) : `/bem-aviv/clientes`
 
         const r = await sendPush(supabase, subs, {
-          title: `⏰ Garantia vence em 30 dias — ${firstName}`,
-          body: `Vence em ${expiryDate.toLocaleDateString("pt-BR")}. Toque para abrir no WhatsApp.`,
+          title: `⏰ Garantia Vence em 30d: ${c.full_name}`,
+          body: `Vence em ${expiryDate.toLocaleDateString("pt-BR")}. Toque para abrir no WhatsApp`,
           url: waUrl,
-          tag: `expiry-${c.id}-${todayIso}`,
+          tag: `expiry-30d-${c.id}-${todayIso}`,
         })
         userSentCount += r.sent
         totalSent += r.sent
       }
     }
 
-    // ── 6. Se nenhum alerta específico disparou, envia resumo geral da conta ──
-    if (userSentCount === 0 && !isForce) {
-      // Se era horário agendado, manda um aviso de conferência caso haja follow-ups abertos
-      const { count: pendingCount } = await supabase
-        .from("bem_aviv_clients")
-        .select("id", { count: "exact", head: true })
-        .eq("next_followup_status", "PENDENTE")
+    // ── 6. PEDIDOS COM ENTREGA ATRASADA (ITEM POR ITEM) ───────────────────
+    if (pref.notify_orders_pending) {
+      let pQuery = supabase
+        .from("bem_aviv_sales_orders")
+        .select("id, client_id, document_number, expected_arrival_date, status")
+        .in("status", ["CONFIRMADO", "EM_PRODUCAO", "PRONTO_PARA_ENTREGA"])
 
-      if (pendingCount && pendingCount > 0) {
+      if (companyId) pQuery = pQuery.eq("company_id", companyId)
+      const { data: pending } = await pQuery
+
+      const overdueOrders = (pending ?? []).filter((o) => {
+        if (!o.expected_arrival_date) return false
+        return o.expected_arrival_date < todayIso
+      })
+
+      for (const ord of overdueOrders) {
+        const docNum = ord.document_number ? `#${ord.document_number}` : `#${ord.id.slice(0, 6)}`
         const r = await sendPush(supabase, subs, {
-          title: `🔔 Bem Aviv Hub — Horário de Alerta (${matchingSlot})`,
-          body: `Você tem ${pendingCount} follow-up(s) pendente(s) no sistema. Toque para acompanhar!`,
-          url: "/bem-aviv/follow-up",
-          tag: `reminder-${matchingSlot}-${todayIso}`,
+          title: `🚚 Entrega Atrasada: Pedido ${docNum}`,
+          body: `Previsão era ${ord.expected_arrival_date}. Toque para abrir pedidos`,
+          url: "/bem-aviv/pedidos",
+          tag: `order-overdue-${ord.id}-${todayIso}`,
         })
         userSentCount += r.sent
         totalSent += r.sent
       }
     }
 
-    // Registra que o slot de hoje foi executado para este usuário
+    // Registra o disparo do slot para evitar repetição no mesmo dia
     if (!isForce && matchingSlot) {
       await supabase.from("push_notification_dispatch_logs").upsert(
         {
