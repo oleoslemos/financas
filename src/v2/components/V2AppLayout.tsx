@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { getCurrentV2User, logoutV2User } from '../../v2/services/v2AuthService'
 import { CompanyProvider } from '../../context/CompanyContext'
 import {
+  Bell,
   LogOut,
   Home,
   Settings,
@@ -18,6 +19,7 @@ import {
   Wallet,
   TrendingUp,
 } from 'lucide-react'
+import { PushNotificationModal } from '../../components/PushNotificationModal'
 
 export function V2AppLayout() {
   return (
@@ -31,6 +33,7 @@ function V2AppLayoutInner() {
   const navigate = useNavigate()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [sidebarExpanded, setSidebarExpanded] = useState(true)
+  const [isPushModalOpen, setIsPushModalOpen] = useState(false)
 
   const v2User = getCurrentV2User()
   const userName = v2User?.full_name?.split(' ')[0] || v2User?.username || 'Usuário'
@@ -171,6 +174,20 @@ function V2AppLayoutInner() {
                   </p>
                 </div>
 
+                {/* Push Notifications */}
+                <button
+                  type="button"
+                  onClick={() => setIsPushModalOpen(true)}
+                  title="Configurar Notificações"
+                  className="relative p-1.5 rounded-lg shrink-0 transition"
+                  style={{ color: 'rgba(255,255,255,0.7)', background: 'none', border: 'none', cursor: 'pointer' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = '#FFFFFF'; e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.7)'; e.currentTarget.style.background = 'none' }}
+                >
+                  <Bell className="h-4 w-4" />
+                  <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                </button>
+
                 {/* Logout */}
                 <button
                   type="button"
@@ -187,19 +204,33 @@ function V2AppLayoutInner() {
             )}
           </div>
 
-          {/* Collapsed logout: separate row */}
+          {/* Collapsed buttons: separate row */}
           {!sidebarExpanded && (
-            <button
-              type="button"
-              onClick={handleSignOut}
-              title="Sair"
-              className="w-full flex items-center justify-center mt-1.5 py-1.5 rounded-xl transition"
-              style={{ color: 'rgba(255,255,255,0.45)', background: 'none', border: 'none', cursor: 'pointer' }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = '#FFCDD2'; e.currentTarget.style.background = 'rgba(229,57,53,0.15)' }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.45)'; e.currentTarget.style.background = 'none' }}
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
+            <div className="flex flex-col gap-1 mt-1.5 items-center">
+              <button
+                type="button"
+                onClick={() => setIsPushModalOpen(true)}
+                title="Configurar Notificações"
+                className="relative w-full flex items-center justify-center py-1.5 rounded-xl transition"
+                style={{ color: 'rgba(255,255,255,0.7)', background: 'none', border: 'none', cursor: 'pointer' }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = '#FFFFFF'; e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.7)'; e.currentTarget.style.background = 'none' }}
+              >
+                <Bell className="h-4 w-4" />
+                <span className="absolute top-1 right-2.5 h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              </button>
+              <button
+                type="button"
+                onClick={handleSignOut}
+                title="Sair"
+                className="w-full flex items-center justify-center py-1.5 rounded-xl transition"
+                style={{ color: 'rgba(255,255,255,0.45)', background: 'none', border: 'none', cursor: 'pointer' }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = '#FFCDD2'; e.currentTarget.style.background = 'rgba(229,57,53,0.15)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.45)'; e.currentTarget.style.background = 'none' }}
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
           )}
         </div>
       </aside>
@@ -227,14 +258,27 @@ function V2AppLayoutInner() {
             <span className="text-sm font-black text-white">Bem Aviv</span>
           </div>
 
-          <button
-            type="button"
-            className="p-1.5 rounded-xl transition"
-            style={{ color: '#FFFFFF', background: 'rgba(255,255,255,0.15)', border: 'none', cursor: 'pointer' }}
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          >
-            {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              className="relative p-1.5 rounded-xl transition"
+              style={{ color: '#FFFFFF', background: 'rgba(255,255,255,0.15)', border: 'none', cursor: 'pointer' }}
+              onClick={() => setIsPushModalOpen(true)}
+              title="Configurar Notificações"
+            >
+              <Bell className="h-4 w-4" />
+              <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            </button>
+
+            <button
+              type="button"
+              className="p-1.5 rounded-xl transition"
+              style={{ color: '#FFFFFF', background: 'rgba(255,255,255,0.15)', border: 'none', cursor: 'pointer' }}
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            >
+              {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+            </button>
+          </div>
         </header>
 
         {/* Mobile Nav Drawer */}
@@ -260,6 +304,18 @@ function V2AppLayoutInner() {
             ))}
             <button
               type="button"
+              onClick={() => {
+                setMobileMenuOpen(false)
+                setIsPushModalOpen(true)
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold w-full"
+              style={{ background: 'transparent', color: 'rgba(255,255,255,0.7)', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+            >
+              <Bell className="h-4 w-4" />
+              Notificações Push
+            </button>
+            <button
+              type="button"
               onClick={handleSignOut}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold w-full"
               style={{ background: 'transparent', color: 'rgba(255,255,255,0.7)', border: 'none', cursor: 'pointer', textAlign: 'left' }}
@@ -275,6 +331,12 @@ function V2AppLayoutInner() {
           <Outlet />
         </main>
       </div>
+
+      <PushNotificationModal
+        isOpen={isPushModalOpen}
+        onClose={() => setIsPushModalOpen(false)}
+        systemSource="v2"
+      />
     </div>
   )
 }

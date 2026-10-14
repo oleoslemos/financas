@@ -35,6 +35,7 @@ import { canAccessProjects } from '../lib/projectsAccess'
 import { isBemAvivOnlyUser } from '../lib/userAccess'
 import { CompanySelectionGate } from './CompanySelectionGate'
 import { CompanyProvider, useCompany } from '../context/CompanyContext'
+import { PushNotificationModal } from './PushNotificationModal'
 
 type MenuItem = {
   label: string
@@ -124,6 +125,7 @@ function AppLayoutShell() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [openSectionKey, setOpenSectionKey] = useState<string | null>(null)
   const [openTreeGroupKeys, setOpenTreeGroupKeys] = useState<string[]>([])
+  const [isPushModalOpen, setIsPushModalOpen] = useState(false)
   const emails = clerkEmailCandidates(user)
   const {
     companies,
@@ -572,14 +574,15 @@ function AppLayoutShell() {
                   ? "border-slate-200/50 bg-white/50 hover:bg-white/80" 
                   : "border-slate-200 bg-slate-50 hover:bg-slate-100"
               )}
-              aria-label="Notificações (em breve)"
-              disabled
+              aria-label="Configurar notificações"
+              title="Notificações Push"
+              onClick={() => setIsPushModalOpen(true)}
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
                 <path d="M7 1a4 4 0 014 4v2.5l1 2H2l1-2V5a4 4 0 014-4z" />
                 <path d="M5.5 11.5a1.5 1.5 0 003 0" />
               </svg>
-              <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-red-500" aria-hidden />
+              <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" aria-hidden />
             </button>
           </div>
         </header>
@@ -617,6 +620,12 @@ function AppLayoutShell() {
           </CompanySelectionGate>
         </main>
       </div>
+
+      <PushNotificationModal
+        isOpen={isPushModalOpen}
+        onClose={() => setIsPushModalOpen(false)}
+        systemSource="v1"
+      />
     </div>
   )
 }
