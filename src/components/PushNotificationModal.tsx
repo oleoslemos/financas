@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Bell, BellOff, CheckCircle2, AlertCircle, Smartphone, Send, X,
-  ShieldAlert, Settings2, Calendar, Package, MessageCircle, Clock, Save
+  ShieldAlert, Settings2, Calendar, Package, MessageCircle, Clock, Save,
+  Plus, Trash2, RefreshCw
 } from 'lucide-react'
 import {
   isPushNotificationSupported,
@@ -40,11 +41,7 @@ type Prefs = {
   notify_orders_pending: boolean
   notify_orders_payment: boolean
   notify_new_order: boolean
-  morning_hour: number
-  morning_minute: number
-  evening_enabled: boolean
-  evening_hour: number
-  evening_minute: number
+  schedule_times: string[]
 }
 
 const DEFAULT_PREFS: Prefs = {
@@ -59,11 +56,7 @@ const DEFAULT_PREFS: Prefs = {
   notify_orders_pending: true,
   notify_orders_payment: false,
   notify_new_order: false,
-  morning_hour: 8,
-  morning_minute: 0,
-  evening_enabled: false,
-  evening_hour: 17,
-  evening_minute: 30,
+  schedule_times: ['08:00', '18:00'],
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -79,9 +72,11 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
         checked ? 'bg-[#0F3764]' : 'bg-slate-200'
       }`}
     >
-      <span className={`pointer-events-none block h-4 w-4 rounded-full bg-white shadow-sm ring-0 transition-transform duration-200 ${
-        checked ? 'translate-x-4' : 'translate-x-0'
-      }`} />
+      <span
+        className={`pointer-events-none block h-4 w-4 rounded-full bg-white shadow-sm ring-0 transition-transform duration-200 ${
+          checked ? 'translate-x-4' : 'translate-x-0'
+        }`}
+      />
     </button>
   )
 }
@@ -102,7 +97,7 @@ function PrefRow({
   return (
     <div className="flex items-start justify-between gap-3 py-2.5 border-b border-slate-100 last:border-0">
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-xs font-semibold text-slate-800">{label}</span>
           {whatsapp && (
             <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-0.5">
@@ -138,9 +133,11 @@ export function PushNotificationModal({ isOpen, onClose, systemSource = 'v1', cu
   const [isSubscribed, setIsSubscribed] = useState(false)
   const [loading, setLoading] = useState(false)
   const [savingPrefs, setSavingPrefs] = useState(false)
+  const [testingAlerts, setTestingAlerts] = useState(false)
   const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null)
   const [prefsFeedback, setPrefsFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS)
+  const [newTimeInput, setNewTimeInput] = useState('12:00')
 
   const isInstalled = isPwaInstalled()
   const isIos = isIosDevice()
@@ -166,7 +163,21 @@ export function PushNotificationModal({ isOpen, onClose, systemSource = 'v1', cu
         .eq('user_id', targetUserId)
         .eq('system_source', systemSource)
         .maybeSingle()
+
       if (data) {
+        let times: string[] = []
+        if (Array.isArray(data.schedule_times) && data.schedule_times.length > 0) {
+          times = data.schedule_times
+        } else {
+          // Migração de fallback
+          const m = `${String(data.morning_hour ?? 8).padStart(2, '0')}:${String(data.morning_minute ?? 0).padStart(2, '0')}`
+          times.push(m)
+          if (data.evening_enabled) {
+            const e = `${String(data.evening_hour ?? 18).padStart(2, '0')}:${String(data.evening_minute ?? 0).padStart(2, '0')}`
+            times.push(e)
+          }
+        }
+
         setPrefs({
           notify_followup_today: data.notify_followup_today ?? true,
           notify_followup_overdue: data.notify_followup_overdue ?? true,
@@ -179,14 +190,12 @@ export function PushNotificationModal({ isOpen, onClose, systemSource = 'v1', cu
           notify_orders_pending: data.notify_orders_pending ?? true,
           notify_orders_payment: data.notify_orders_payment ?? false,
           notify_new_order: data.notify_new_order ?? false,
-          morning_hour: data.morning_hour ?? 8,
-          morning_minute: data.morning_minute ?? 0,
-          evening_enabled: data.evening_enabled ?? false,
-          evening_hour: data.evening_hour ?? 17,
-          evening_minute: data.evening_minute ?? 30,
+          schedule_times: times.length > 0 ? Array.from(new Set(times)).sort() : ['08:00', '18:00'],
         })
       }
-    } catch { /* usa defaults */ }
+    } catch {
+      /* usa defaults */
+    }
   }, [supabase, targetUserId, systemSource])
 
   useEffect(() => {
@@ -202,6 +211,29 @@ export function PushNotificationModal({ isOpen, onClose, systemSource = 'v1', cu
 
   function setPref<K extends keyof Prefs>(key: K, value: Prefs[K]) {
     setPrefs((prev) => ({ ...prev, [key]: value }))
+  }
+
+  function handleAddTime() {
+    if (!newTimeInput) return
+    const current = prefs.schedule_times || []
+    if (current.includes(newTimeInput)) {
+      setPrefsFeedback({ type: 'error', text: `O horário ${newTimeInput} já está adicionado.` })
+      return
+    }
+    const updated = [...current, newTimeInput].sort()
+    setPref('schedule_times', updated)
+    setPrefsFeedback(null)
+  }
+
+  function handleRemoveTime(timeToRemove: string) {
+    const current = prefs.schedule_times || []
+    if (current.length <= 1) {
+      setPrefsFeedback({ type: 'error', text: 'Você precisa manter pelo menos 1 horário configurado.' })
+      return
+    }
+    const updated = current.filter((t) => t !== timeToRemove)
+    setPref('schedule_times', updated)
+    setPrefsFeedback(null)
   }
 
   async function handleToggleSubscription() {
@@ -261,6 +293,40 @@ export function PushNotificationModal({ isOpen, onClose, systemSource = 'v1', cu
     }
   }
 
+  async function handleTriggerMyAlertsNow() {
+    if (!targetUserId) return
+    setTestingAlerts(true)
+    setPrefsFeedback(null)
+    try {
+      // Dispara a Edge Function passando o userId do usuário atual
+      const response = await fetch('https://jhttqeayoxjqwxioxgki.supabase.co/functions/v1/send-push', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          force: true,
+          userId: targetUserId,
+        }),
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        setPrefsFeedback({
+          type: 'success',
+          text: `✓ Alertas avaliados e disparados agora para seus aparelhos! (${data.totalSent ?? 0} enviados)`,
+        })
+      } else {
+        throw new Error(data.error || 'Erro ao disparar alertas')
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setPrefsFeedback({ type: 'error', text: `Falha ao testar disparo: ${msg}` })
+    } finally {
+      setTestingAlerts(false)
+    }
+  }
+
   async function handleSavePrefs() {
     if (!supabase || !targetUserId) {
       setPrefsFeedback({ type: 'error', text: 'Você precisa estar logado para salvar preferências.' })
@@ -269,18 +335,32 @@ export function PushNotificationModal({ isOpen, onClose, systemSource = 'v1', cu
     setSavingPrefs(true)
     setPrefsFeedback(null)
     try {
+      const times = prefs.schedule_times.length > 0 ? prefs.schedule_times : ['08:00', '18:00']
       const payload = {
         user_id: targetUserId,
         user_email: targetEmail,
         system_source: systemSource,
-        ...prefs,
+        notify_followup_today: prefs.notify_followup_today,
+        notify_followup_overdue: prefs.notify_followup_overdue,
+        notify_birthdays_today: prefs.notify_birthdays_today,
+        notify_birthdays_upcoming: prefs.notify_birthdays_upcoming,
+        notify_feedback_3d: prefs.notify_feedback_3d,
+        notify_feedback_10d: prefs.notify_feedback_10d,
+        notify_feedback_30d: prefs.notify_feedback_30d,
+        notify_product_expiry_30d: prefs.notify_product_expiry_30d,
+        notify_orders_pending: prefs.notify_orders_pending,
+        notify_orders_payment: prefs.notify_orders_payment,
+        notify_new_order: prefs.notify_new_order,
+        schedule_times: times,
         updated_at: new Date().toISOString(),
       }
+
       const { error } = await supabase
         .from('push_notification_preferences')
         .upsert(payload, { onConflict: 'user_id,system_source' })
+
       if (error) throw error
-      setPrefsFeedback({ type: 'success', text: '✓ Preferências salvas com sucesso!' })
+      setPrefsFeedback({ type: 'success', text: '✓ Suas preferências e horários foram salvos com sucesso!' })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
       setPrefsFeedback({ type: 'error', text: msg || 'Erro ao salvar preferências.' })
@@ -289,21 +369,11 @@ export function PushNotificationModal({ isOpen, onClose, systemSource = 'v1', cu
     }
   }
 
-  function padTime(h: number, m: number) {
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
-  }
-
-  function parseTime(val: string): [number, number] {
-    const [h, m] = val.split(':').map(Number)
-    return [h ?? 8, m ?? 0]
-  }
-
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-3 sm:p-4 backdrop-blur-sm">
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-2xl flex flex-col max-h-[90vh]">
-
         {/* ── Header ── */}
         <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3 border-b border-slate-100 shrink-0">
           <div className="flex items-center gap-2.5">
@@ -312,7 +382,9 @@ export function PushNotificationModal({ isOpen, onClose, systemSource = 'v1', cu
             </span>
             <div>
               <h3 className="text-sm font-bold text-slate-900">Notificações Push</h3>
-              <p className="text-[11px] text-slate-400 font-medium">Bem Aviv Hub</p>
+              <p className="text-[11px] text-slate-400 font-medium">
+                {targetEmail ? `${targetEmail}` : 'Bem Aviv Hub'}
+              </p>
             </div>
           </div>
           <button
@@ -348,23 +420,26 @@ export function PushNotificationModal({ isOpen, onClose, systemSource = 'v1', cu
             }`}
           >
             <Settings2 className="h-3.5 w-3.5" />
-            Preferências
+            Meus Alertas e Horários
           </button>
         </div>
 
         {/* ── Scrollable Content ── */}
         <div className="overflow-y-auto flex-1 min-h-0">
-
           {/* ═══ ABA: DISPOSITIVO ═══ */}
           {tab === 'device' && (
             <div className="p-5 space-y-4">
               {/* Feedback */}
               {feedbackMsg && (
-                <div className={`flex items-start gap-2 p-3 rounded-xl text-xs font-semibold ${
-                  feedbackMsg.type === 'success' ? 'bg-emerald-50 text-emerald-900 border border-emerald-200'
-                  : feedbackMsg.type === 'error' ? 'bg-rose-50 text-rose-900 border border-rose-200'
-                  : 'bg-sky-50 text-sky-950 border border-sky-200'
-                }`}>
+                <div
+                  className={`flex items-start gap-2 p-3 rounded-xl text-xs font-semibold ${
+                    feedbackMsg.type === 'success'
+                      ? 'bg-emerald-50 text-emerald-900 border border-emerald-200'
+                      : feedbackMsg.type === 'error'
+                      ? 'bg-rose-50 text-rose-900 border border-rose-200'
+                      : 'bg-sky-50 text-sky-950 border border-sky-200'
+                  }`}
+                >
                   {feedbackMsg.type === 'success' && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" />}
                   {feedbackMsg.type === 'error' && <AlertCircle className="h-3.5 w-3.5 text-rose-600 shrink-0 mt-0.5" />}
                   {feedbackMsg.type === 'info' && <Bell className="h-3.5 w-3.5 text-sky-600 shrink-0 mt-0.5" />}
@@ -382,11 +457,15 @@ export function PushNotificationModal({ isOpen, onClose, systemSource = 'v1', cu
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-slate-500 font-medium">Permissão do sistema:</span>
-                  <span className={`font-bold uppercase tracking-tight ${
-                    permission === 'granted' ? 'text-emerald-700'
-                    : permission === 'denied' ? 'text-rose-600'
-                    : 'text-amber-700'
-                  }`}>
+                  <span
+                    className={`font-bold uppercase tracking-tight ${
+                      permission === 'granted'
+                        ? 'text-emerald-700'
+                        : permission === 'denied'
+                        ? 'text-rose-600'
+                        : 'text-amber-700'
+                    }`}
+                  >
                     {permission === 'granted' ? '✓ Permitido' : permission === 'denied' ? '✗ Bloqueado' : 'Pendente'}
                   </span>
                 </div>
@@ -398,9 +477,7 @@ export function PushNotificationModal({ isOpen, onClose, systemSource = 'v1', cu
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-slate-500 font-medium">App instalado (PWA):</span>
-                  <span className="font-bold text-slate-700">
-                    {isInstalled ? '✓ Standalone' : 'No Navegador'}
-                  </span>
+                  <span className="font-bold text-slate-700">{isInstalled ? '✓ Standalone' : 'No Navegador'}</span>
                 </div>
               </div>
 
@@ -412,7 +489,8 @@ export function PushNotificationModal({ isOpen, onClose, systemSource = 'v1', cu
                     Dica para iPhone / iPad
                   </div>
                   <p className="text-[11px] leading-relaxed text-amber-900">
-                    No Safari do iOS, notificações push só funcionam após adicionar à tela de início. Toque em <strong>Compartilhar</strong> → <strong>Adicionar à Tela de Início</strong>.
+                    No Safari do iOS, notificações push só funcionam após adicionar à tela de início. Toque em{' '}
+                    <strong>Compartilhar</strong> → <strong>Adicionar à Tela de Início</strong>.
                   </p>
                 </div>
               )}
@@ -425,7 +503,8 @@ export function PushNotificationModal({ isOpen, onClose, systemSource = 'v1', cu
                     Notificações bloqueadas
                   </div>
                   <p className="text-[11px] leading-relaxed text-rose-900">
-                    Clique no ícone de cadeado 🔒 na barra de endereço do navegador e altere a permissão de notificações para "Permitir".
+                    Clique no ícone de cadeado 🔒 na barra de endereço do navegador e altere a permissão de notificações
+                    para "Permitir".
                   </p>
                 </div>
               )}
@@ -471,24 +550,104 @@ export function PushNotificationModal({ isOpen, onClose, systemSource = 'v1', cu
             </div>
           )}
 
-          {/* ═══ ABA: PREFERÊNCIAS ═══ */}
+          {/* ═══ ABA: PREFERÊNCIAS E HORÁRIOS ═══ */}
           {tab === 'prefs' && (
             <div className="p-5 space-y-4">
               {!isSubscribed && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 flex items-start gap-2">
                   <AlertCircle className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />
-                  <span>Ative as notificações na aba <strong>Dispositivo</strong> primeiro para que os alertas sejam entregues.</span>
+                  <span>
+                    Ative as notificações na aba <strong>Dispositivo</strong> para receber os alertas configurados.
+                  </span>
                 </div>
               )}
+
+              {/* ── HORÁRIOS CONFIGURÁVEIS (MÚLTIPLOS HORÁRIOS POR USUÁRIO) ── */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <SectionTitle icon={Clock} label="Horários de Envio" />
+                  <span className="text-[10px] font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-full border border-sky-200">
+                    Por usuário
+                  </span>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-3">
+                  <p className="text-[11px] text-slate-500 leading-snug">
+                    Defina quantos horários desejar. O servidor verificará e enviará seus alertas nestes horários:
+                  </p>
+
+                  {/* Lista de horários já cadastrados */}
+                  <div className="flex flex-wrap gap-2">
+                    {prefs.schedule_times.map((timeStr) => (
+                      <span
+                        key={timeStr}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-300 shadow-xs text-xs font-bold text-slate-800"
+                      >
+                        <Clock className="h-3 w-3 text-[#0F3764]" />
+                        {timeStr}
+                        <button
+                          type="button"
+                          title={`Remover ${timeStr}`}
+                          onClick={() => handleRemoveTime(timeStr)}
+                          className="text-slate-400 hover:text-rose-600 ml-0.5 cursor-pointer transition-colors"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* Input para adicionar novo horário */}
+                  <div className="flex items-center gap-2 pt-1 border-t border-slate-200/60">
+                    <input
+                      type="time"
+                      value={newTimeInput}
+                      onChange={(e) => setNewTimeInput(e.target.value)}
+                      className="text-xs font-bold text-slate-800 border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white cursor-pointer shadow-xs focus:outline-[#0F3764]"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddTime}
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#0F3764] hover:bg-[#0c2c50] text-white flex items-center gap-1 transition-colors cursor-pointer shadow-xs"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Adicionar Horário
+                    </button>
+                  </div>
+
+                  {/* Sugestões rápidas de 1 clique */}
+                  <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                    <span className="text-[10px] text-slate-400 font-semibold">Sugestões:</span>
+                    {['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00'].map((sug) => {
+                      const alreadyHas = prefs.schedule_times.includes(sug)
+                      if (alreadyHas) return null
+                      return (
+                        <button
+                          key={sug}
+                          type="button"
+                          onClick={() => {
+                            const updated = [...prefs.schedule_times, sug].sort()
+                            setPref('schedule_times', updated)
+                          }}
+                          className="text-[10px] font-semibold text-slate-600 bg-white hover:bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 transition-colors cursor-pointer"
+                        >
+                          +{sug}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
 
               {/* ── CRM / FOLLOW-UP ── */}
               <div className="space-y-0">
                 <SectionTitle icon={Calendar} label="CRM · Follow-ups e Agenda" />
                 <PrefRow
-                  label="Follow-ups do dia (resumo matinal)"
+                  label="Follow-ups do dia"
                   description="Lista de clientes agendados para contato hoje"
                   checked={prefs.notify_followup_today}
                   onChange={(v) => setPref('notify_followup_today', v)}
+                  whatsapp
                 />
                 <PrefRow
                   label="Follow-ups em atraso"
@@ -503,14 +662,14 @@ export function PushNotificationModal({ isOpen, onClose, systemSource = 'v1', cu
                 <SectionTitle icon={Calendar} label="🎂 Aniversários" />
                 <PrefRow
                   label="Aniversariantes de hoje"
-                  description="Clientes e familiares com aniversário no dia — com link para WhatsApp"
+                  description="Clientes e familiares aniversariantes — com link WhatsApp"
                   checked={prefs.notify_birthdays_today}
                   onChange={(v) => setPref('notify_birthdays_today', v)}
                   whatsapp
                 />
                 <PrefRow
                   label="Próximos aniversários (3 dias)"
-                  description="Prévia de aniversários nos próximos 3 dias para preparar o contato"
+                  description="Prévia para preparar contato com antecedência"
                   checked={prefs.notify_birthdays_upcoming}
                   onChange={(v) => setPref('notify_birthdays_upcoming', v)}
                 />
@@ -521,14 +680,14 @@ export function PushNotificationModal({ isOpen, onClose, systemSource = 'v1', cu
                 <SectionTitle icon={MessageCircle} label="📦 Feedback pós-entrega" />
                 <PrefRow
                   label="3 dias após entrega"
-                  description="Lembrete com link WhatsApp para verificar satisfação inicial"
+                  description="Lembrete com link WhatsApp para avaliar satisfação inicial"
                   checked={prefs.notify_feedback_3d}
                   onChange={(v) => setPref('notify_feedback_3d', v)}
                   whatsapp
                 />
                 <PrefRow
                   label="10 dias após entrega"
-                  description="Follow-up de uso e primeiras impressões"
+                  description="Follow-up de adaptação e uso com link WhatsApp"
                   checked={prefs.notify_feedback_10d}
                   onChange={(v) => setPref('notify_feedback_10d', v)}
                   whatsapp
@@ -552,9 +711,6 @@ export function PushNotificationModal({ isOpen, onClose, systemSource = 'v1', cu
                   onChange={(v) => setPref('notify_product_expiry_30d', v)}
                   whatsapp
                 />
-                <div className="bg-sky-50 border border-sky-200 rounded-lg p-2.5 text-[11px] text-sky-800 leading-snug">
-                  <strong>Como configurar:</strong> no cadastro de cada cliente, preencha a <em>Data de compra</em> e os <em>Meses de garantia</em> para que o alerta seja calculado automaticamente.
-                </div>
               </div>
 
               {/* ── PEDIDOS ── */}
@@ -562,79 +718,45 @@ export function PushNotificationModal({ isOpen, onClose, systemSource = 'v1', cu
                 <SectionTitle icon={Package} label="Pedidos e Vendas" />
                 <PrefRow
                   label="Entregas em atraso"
-                  description="Pedidos confirmados cuja data prevista de entrega já passou"
+                  description="Pedidos confirmados com entrega prevista vencida"
                   checked={prefs.notify_orders_pending}
                   onChange={(v) => setPref('notify_orders_pending', v)}
                 />
                 <PrefRow
                   label="Pagamentos pendentes"
-                  description="Pedidos aguardando confirmação de entrada financeira"
+                  description="Pedidos aguardando entrada financeira"
                   checked={prefs.notify_orders_payment}
                   onChange={(v) => setPref('notify_orders_payment', v)}
                 />
-                <PrefRow
-                  label="Novo pedido criado"
-                  description="Notificação imediata ao registrar um novo pedido/orçamento"
-                  checked={prefs.notify_new_order}
-                  onChange={(v) => setPref('notify_new_order', v)}
-                />
               </div>
 
-              {/* ── HORÁRIOS ── */}
-              <div className="space-y-2.5">
-                <SectionTitle icon={Clock} label="Horários de envio" />
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold text-slate-800">Resumo da manhã</p>
-                      <p className="text-[11px] text-slate-400">Follow-ups + aniversários do dia</p>
-                    </div>
-                    <input
-                      type="time"
-                      value={padTime(prefs.morning_hour, prefs.morning_minute)}
-                      onChange={(e) => {
-                        const [h, m] = parseTime(e.target.value)
-                        setPref('morning_hour', h)
-                        setPref('morning_minute', m)
-                      }}
-                      className="text-xs font-bold text-slate-800 border border-slate-300 rounded-lg px-2 py-1.5 bg-white cursor-pointer"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold text-slate-800">Resumo do fim do dia</p>
-                      <p className="text-[11px] text-slate-400">Pendências não atendidas</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Toggle checked={prefs.evening_enabled} onChange={(v) => setPref('evening_enabled', v)} />
-                      {prefs.evening_enabled && (
-                        <input
-                          type="time"
-                          value={padTime(prefs.evening_hour, prefs.evening_minute)}
-                          onChange={(e) => {
-                            const [h, m] = parseTime(e.target.value)
-                            setPref('evening_hour', h)
-                            setPref('evening_minute', m)
-                          }}
-                          className="text-xs font-bold text-slate-800 border border-slate-300 rounded-lg px-2 py-1.5 bg-white cursor-pointer"
-                        />
-                      )}
-                    </div>
-                  </div>
-                </div>
+              {/* Botão de disparo teste sob demanda */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  disabled={testingAlerts}
+                  onClick={handleTriggerMyAlertsNow}
+                  className="w-full py-2 px-3 rounded-xl border border-sky-300 bg-sky-50 hover:bg-sky-100 text-sky-900 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-60"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 text-sky-700 ${testingAlerts ? 'animate-spin' : ''}`} />
+                  {testingAlerts ? 'Verificando e disparando...' : '🔔 Disparar meus alertas agora (teste imediato)'}
+                </button>
               </div>
 
               {/* Feedback de salvar */}
               {prefsFeedback && (
-                <div className={`flex items-start gap-2 p-3 rounded-xl text-xs font-semibold ${
-                  prefsFeedback.type === 'success'
-                    ? 'bg-emerald-50 text-emerald-900 border border-emerald-200'
-                    : 'bg-rose-50 text-rose-900 border border-rose-200'
-                }`}>
-                  {prefsFeedback.type === 'success'
-                    ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                    : <AlertCircle className="h-3.5 w-3.5 text-rose-600 shrink-0 mt-0.5" />}
+                <div
+                  className={`flex items-start gap-2 p-3 rounded-xl text-xs font-semibold ${
+                    prefsFeedback.type === 'success'
+                      ? 'bg-emerald-50 text-emerald-900 border border-emerald-200'
+                      : 'bg-rose-50 text-rose-900 border border-rose-200'
+                  }`}
+                >
+                  {prefsFeedback.type === 'success' ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertCircle className="h-3.5 w-3.5 text-rose-600 shrink-0 mt-0.5" />
+                  )}
                   <span>{prefsFeedback.text}</span>
                 </div>
               )}

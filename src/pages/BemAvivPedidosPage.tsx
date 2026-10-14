@@ -19,6 +19,7 @@ import {
   FileText,
   Printer,
   MessageCircle,
+  Scale,
 } from 'lucide-react'
 import { buildWhatsappUrlWithText } from '../lib/whatsapp'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -42,6 +43,7 @@ import { PartialDeliveryModal } from '../components/bemAviv/PartialDeliveryModal
 import { FullDeliveryModal } from '../components/bemAviv/FullDeliveryModal'
 import { ExpectedArrivalModal } from '../components/bemAviv/ExpectedArrivalModal'
 import { ConfirmPaymentModal } from '../components/bemAviv/ConfirmPaymentModal'
+import { OrcamentosComparisonModal } from '../components/bemAviv/OrcamentosComparisonModal'
 import { formatBRL } from '../lib/format'
 import { formatDateOnly } from '../lib/dates'
 import { fetchOrderDeliveryHistory, type OrderDeliveryHistoryRow } from '../lib/bemAvivOrderDeliveries'
@@ -350,6 +352,40 @@ export function BemAvivPedidosPage() {
   const [expectedArrivalOrder, setExpectedArrivalOrder] = useState<Pedido | null>(null)
   const [confirmPaymentOrder, setConfirmPaymentOrder] = useState<Pedido | null>(null)
   const detailModalReopenedRef = useRef(false)
+
+  const [isCompareModalOpen, setIsCompareModalOpen] = useState(false)
+  const [compareQuoteAId, setCompareQuoteAId] = useState<string | null>(null)
+  const [compareQuoteBId, setCompareQuoteBId] = useState<string | null>(null)
+  const [selectedQuoteIdsForCompare, setSelectedQuoteIdsForCompare] = useState<string[]>([])
+
+  const handleToggleSelectQuoteForCompare = (quoteId: string) => {
+    setSelectedQuoteIdsForCompare((prev) => {
+      if (prev.includes(quoteId)) {
+        return prev.filter((id) => id !== quoteId)
+      }
+      if (prev.length >= 2) {
+        return [prev[1], quoteId]
+      }
+      return [...prev, quoteId]
+    })
+  }
+
+  const handleOpenCompare = (quoteAId?: string, quoteBId?: string) => {
+    if (quoteAId) {
+      setCompareQuoteAId(quoteAId)
+      setCompareQuoteBId(quoteBId || (selectedQuoteIdsForCompare.find((id) => id !== quoteAId) ?? null))
+    } else if (selectedQuoteIdsForCompare.length >= 2) {
+      setCompareQuoteAId(selectedQuoteIdsForCompare[0])
+      setCompareQuoteBId(selectedQuoteIdsForCompare[1])
+    } else if (selectedQuoteIdsForCompare.length === 1) {
+      setCompareQuoteAId(selectedQuoteIdsForCompare[0])
+      setCompareQuoteBId(null)
+    } else {
+      setCompareQuoteAId(null)
+      setCompareQuoteBId(null)
+    }
+    setIsCompareModalOpen(true)
+  }
 
   const [relatives, setRelatives] = useState<RelativeOpt[]>([])
 
@@ -1066,7 +1102,22 @@ export function BemAvivPedidosPage() {
             </Link>
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {typeTab === 'ORCAMENTO' && (
+            <button
+              type="button"
+              onClick={() => handleOpenCompare()}
+              className="inline-flex h-11 items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 text-sm font-semibold tracking-wide text-indigo-700 hover:bg-indigo-100 hover:border-indigo-300 transition-all duration-150 shadow-sm hover:scale-[1.02] active:scale-95"
+            >
+              <Scale size={18} />
+              Comparar Orçamentos
+              {selectedQuoteIdsForCompare.length > 0 && (
+                <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-xs font-bold text-white">
+                  {selectedQuoteIdsForCompare.length}
+                </span>
+              )}
+            </button>
+          )}
           <Link
             to="/bem-aviv/pedidos/novo"
             state={{ document_type: typeTab }}
@@ -1320,6 +1371,12 @@ export function BemAvivPedidosPage() {
             <table className="w-full min-w-[720px] text-slate-700">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/50">
+                  {typeTab === 'ORCAMENTO' && (
+                    <th className="w-10 px-3 py-3.5 text-center text-xs font-bold tracking-wider text-slate-400 uppercase">
+                      <span className="sr-only">Comparar</span>
+                      <Scale size={14} className="mx-auto text-slate-400" />
+                    </th>
+                  )}
                   <th className="px-4 py-3.5 text-xs font-bold tracking-wider text-slate-400 uppercase">Nº Documento</th>
                   <th className="px-4 py-3.5 text-xs font-bold tracking-wider text-slate-400 uppercase">Data</th>
                   <th className="px-4 py-3.5 text-xs font-bold tracking-wider text-slate-400 uppercase">Cliente</th>
@@ -1340,6 +1397,18 @@ export function BemAvivPedidosPage() {
                   const downMethod = parsePaymentMethod(r.down_payment_method ?? r.payment_method)
                   return (
                     <tr key={r.id} className="hover:bg-slate-50/80 transition-colors duration-150">
+                      {typeTab === 'ORCAMENTO' && (
+                        <td className="px-3 py-4 text-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedQuoteIdsForCompare.includes(r.id)}
+                            onChange={() => handleToggleSelectQuoteForCompare(r.id)}
+                            title="Selecionar para comparar"
+                            aria-label={`Selecionar orçamento ${r.document_number ?? ''} para comparar`}
+                            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                          />
+                        </td>
+                      )}
                       <td className="whitespace-nowrap px-4 py-4 font-bold text-slate-900 tabular-nums">
                         <div className="flex flex-col">
                           <span>{r.document_number || '—'}</span>
@@ -1395,6 +1464,17 @@ export function BemAvivPedidosPage() {
                       </td>
                       <td className="px-4 py-4 text-right">
                         <div className="flex flex-wrap items-center justify-end gap-1.5">
+                          {r.document_type === 'ORCAMENTO' && (
+                            <button
+                              type="button"
+                              className={`${iconBtn} border-indigo-100 text-indigo-700 hover:bg-indigo-50`}
+                              title="Comparar com outro orçamento"
+                              aria-label="Comparar com outro orçamento"
+                              onClick={() => handleOpenCompare(r.id)}
+                            >
+                              <Scale size={16} />
+                            </button>
+                          )}
                           {canEditOrcamento(r) && (
                             <button
                               type="button"
@@ -1536,7 +1616,7 @@ export function BemAvivPedidosPage() {
                 })}
                 {!loading && filteredRows.length === 0 && (
                   <tr>
-                    <td colSpan={typeTab === 'PEDIDO' ? 9 : 8} className="py-16 text-center">
+                    <td colSpan={9} className="py-16 text-center">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <FileText size={32} className="text-slate-300" />
                         <p className="text-sm font-semibold text-slate-500 uppercase">
@@ -1553,6 +1633,39 @@ export function BemAvivPedidosPage() {
           </div>
         )}
       </div>
+
+      {/* Floating comparison selection bar */}
+      {typeTab === 'ORCAMENTO' && selectedQuoteIdsForCompare.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/95 px-5 py-3 shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-4">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 font-bold text-xs">
+              {selectedQuoteIdsForCompare.length}
+            </span>
+            <span className="text-xs font-semibold text-slate-800">
+              {selectedQuoteIdsForCompare.length === 1
+                ? '1 orçamento selecionado (selecione mais 1 para comparar)'
+                : '2 orçamentos selecionados para comparar'}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleOpenCompare()}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold uppercase tracking-wider text-white shadow-md shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all"
+            >
+              <Scale size={15} />
+              Comparar Agora
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedQuoteIdsForCompare([])}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 active:scale-95 transition-all"
+            >
+              Limpar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Modern Two-Column Detail Modal */}
       {detailModalPedido && (
@@ -1852,6 +1965,19 @@ export function BemAvivPedidosPage() {
           if (order) {
             await updateOrderStatus(order, nextStatus)
           }
+        }}
+      />
+      <OrcamentosComparisonModal
+        isOpen={isCompareModalOpen}
+        onClose={() => setIsCompareModalOpen(false)}
+        quotes={rows}
+        initialQuoteAId={compareQuoteAId}
+        initialQuoteBId={compareQuoteBId}
+        clientsMap={clientNameById}
+        relativesMap={relativeNameById}
+        onConvertQuoteToOrder={async (quote) => {
+          setIsCompareModalOpen(false)
+          await closeQuoteAndCreateOrder(quote)
         }}
       />
     </div>
