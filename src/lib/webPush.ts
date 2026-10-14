@@ -47,7 +47,10 @@ export function getNotificationPermission(): NotificationPermission {
 export async function getExistingPushSubscription(): Promise<PushSubscription | null> {
   if (!isPushNotificationSupported()) return null
   try {
-    const registration = await navigator.serviceWorker.ready
+    const regPromise = navigator.serviceWorker.ready
+    const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500))
+    const registration = await Promise.race([regPromise, timeoutPromise])
+    if (!registration) return null
     return await registration.pushManager.getSubscription()
   } catch (err) {
     console.warn('Erro ao obter assinatura push existente:', err)

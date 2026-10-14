@@ -45,24 +45,35 @@ self.addEventListener('push', (event: PushEvent) => {
   }
 })
 
+// ── Ciclo de Vida do SW ─────────────────────────────────────────
+self.addEventListener('install', () => {
+  void self.skipWaiting()
+})
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim())
+})
+
 // ── Listener de Clique na Notificação ──────────────────────────
 self.addEventListener('notificationclick', (event: NotificationEvent) => {
   event.notification.close()
 
-  const targetUrl = event.notification.data?.url || '/'
+  const rawUrl = event.notification.data?.url || '/'
+  const targetUrl = new URL(rawUrl, self.location.origin).href
 
   event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Se houver uma aba aberta no mesmo origin, foca nela e navega para a URL
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clientList) => {
+      // 1. Procura aba/janela aberta no mesmo domínio
       for (const client of clientList) {
-        if ('navigate' in client && 'focus' in client) {
-          const clientUrl = new URL(client.url)
-          if (clientUrl.origin === self.location.origin) {
-            return client.navigate(targetUrl).then((focusedClient) => focusedClient?.focus())
+        if ('focus' in client) {
+          await client.focus()
+          if ('navigate' in client && client.url !== targetUrl) {
+            await client.navigate(targetUrl)
           }
+          return
         }
       }
-      // Se não houver janela aberta, abre uma nova janela/aba
+      // 2. Se nenhuma janela estiver aberta, abre uma nova
       if (self.clients.openWindow) {
         return self.clients.openWindow(targetUrl)
       }
@@ -73,6 +84,6 @@ self.addEventListener('notificationclick', (event: NotificationEvent) => {
 // Permite ao app solicitar skipWaiting
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting()
+    void self.skipWaiting()
   }
 })

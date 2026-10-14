@@ -1,6 +1,7 @@
 import { useUser } from '../hooks/useClerkCompat'
 import { UserButton } from './ui/AuthComponents'
 import {
+  Bell,
   BriefcaseBusiness,
   Building2,
   Calculator,
@@ -569,20 +570,23 @@ function AppLayoutShell() {
             <button
               type="button"
               className={cn(
-                "relative flex h-[30px] w-[30px] items-center justify-center rounded-lg border text-slate-600 transition-colors duration-200",
+                "relative flex h-9 items-center gap-2 rounded-xl border px-3 text-xs font-semibold transition-all duration-150 shadow-xs cursor-pointer select-none",
                 isBemAviv 
-                  ? "border-slate-200/50 bg-white/50 hover:bg-white/80" 
-                  : "border-slate-200 bg-slate-50 hover:bg-slate-100"
+                  ? "border-slate-200/90 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300" 
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
               )}
-              aria-label="Configurar notificações"
-              title="Notificações Push"
+              aria-label="Configurar notificações push"
+              title="Notificações Push do Sistema"
               onClick={() => setIsPushModalOpen(true)}
             >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-                <path d="M7 1a4 4 0 014 4v2.5l1 2H2l1-2V5a4 4 0 014-4z" />
-                <path d="M5.5 11.5a1.5 1.5 0 003 0" />
-              </svg>
-              <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" aria-hidden />
+              <div className="relative flex items-center justify-center">
+                <Bell className="h-4 w-4 text-[#0F3764]" />
+                <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+              </div>
+              <span className="hidden sm:inline font-bold text-slate-800">Notificações</span>
             </button>
           </div>
         </header>
