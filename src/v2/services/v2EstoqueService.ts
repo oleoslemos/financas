@@ -140,10 +140,6 @@ export async function desfazerEntradaCompra(params: {
   pedidoNumero: number | string
   itens: Array<{ produto_id: string; produto_nome: string; quantidade: number; preco_unitario: number }>
 }): Promise<{ ok: true } | { ok: false; erro: string }> {
-  const validacao = await validarConsumoEstoque(params.itens)
-  if (!validacao.ok) {
-    return validacao
-  }
 
   const movsAtuais = await listMovimentacoesEstoque()
   const novasMovs: MovimentacaoEstoqueV2[] = params.itens.map((item) => ({

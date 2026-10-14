@@ -116,8 +116,9 @@ export default function App() {
           <Route path="/v2/produtos" element={<V2ProdutosPage />} />
           <Route path="/v2/tabela-preco" element={<V2TabelaPrecoPage />} />
           <Route path="/v2/pedido-compra" element={<V2PedidoCompraPage />} />
-          <Route path="/v2/pedido-vendas" element={<V2PedidoVendasPage />} />
-          <Route path="/v2/pedido-vendas-distribuidor" element={<V2PedidoVendasPage />} />
+          <Route path="/v2/propostas-vendas" element={<V2PedidoVendasPage />} />
+          <Route path="/v2/pedido-vendas" element={<Navigate to="/v2/propostas-vendas" replace />} />
+          <Route path="/v2/pedido-vendas-distribuidor" element={<Navigate to="/v2/propostas-vendas" replace />} />
           <Route path="/v2/estoque" element={<V2EstoquePage />} />
           <Route path="/v2/configuracoes" element={<V2SettingsPage />} />
                  <Route path="/v2/contas-pagar" element={<V2ContasPagarPage />} />
@@ -138,6 +139,7 @@ export default function App() {
               <Route path="/calculadora-orcamento" element={<CalculadoraOrcamentoPage />} />
               <Route path="/bem-aviv" element={<BemAvivHomePage />} />
               <Route path="/bem-aviv/clientes" element={<BemAvivClientesPage />} />
+              <Route path="/bem-aviv/agenda" element={<Navigate to="/bem-aviv/follow-up" replace />} />
               <Route path="/bem-aviv/follow-up/agendar/:clientId" element={<BemAvivFollowupSchedulePage />} />
               <Route path="/bem-aviv/follow-up" element={<BemAvivFollowupPage />} />
               <Route path="/bem-aviv/follow-up/produtividade" element={<BemAvivFollowupProdutividadePage />} />

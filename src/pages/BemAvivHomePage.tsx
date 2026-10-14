@@ -1,11 +1,16 @@
 import { useUser } from '@clerk/clerk-react'
 import {
   AlertTriangle,
+  Calendar,
+  CalendarPlus,
   ChevronLeft,
   ChevronRight,
   Clock,
+  MessageCircle,
+  Plus,
   ShoppingBag,
   Users,
+  X,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -27,12 +32,47 @@ import { clerkEmailCandidates } from '../lib/clerkEmails'
 import { resolveDataOwnerId } from '../lib/dataOwner'
 import { cn } from '../lib/cn'
 import { formatBRL } from '../lib/format'
+import { buildWhatsappUrl } from '../lib/whatsapp'
 import { dateInputToIso, formatDateOnly, todayInputDate, toInputDate } from '../lib/dates'
 import {
   buildCriticalFollowupEntries,
   type ClientFollowupRow,
   fetchLatestFollowupsByClientIds,
 } from '../lib/bemAvivClientFollowups'
+
+function splitFollowupNote(note?: string | null) {
+  const raw = (note ?? '').trim()
+  if (!raw) return { summary: '', details: '' }
+  const marker = 'RESUMO:'
+  if (raw.toUpperCase().startsWith(marker)) {
+    const firstBreak = raw.indexOf('\n')
+    if (firstBreak > -1) {
+      return {
+        summary: raw.slice(marker.length, firstBreak).trim(),
+        details: raw.slice(firstBreak + 1).trim(),
+      }
+    }
+    return { summary: raw.slice(marker.length).trim(), details: '' }
+  }
+  return { summary: '', details: raw }
+}
+
+function composeFollowupNote(summary: string, details: string) {
+  const s = summary.trim()
+  const d = details.trim()
+  if (s && d) return `RESUMO: ${s}\n${d}`
+  if (s) return `RESUMO: ${s}`
+  return d
+}
+
+function formatPhone(v?: string | null) {
+  const d = (v ?? '').replace(/\D/g, '')
+  if (!d) return ''
+  if (d.length <= 2) return `(${d}`
+  if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2)}`
+  if (d.length <= 11) return `(${d.slice(0, 2)}) ${d.slice(2, d.length - 4)}-${d.slice(d.length - 4)}`
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7, 11)}`
+}
 
 const NO_CONTACT_ALERT_DAYS = 30
 const EXCLUDED_FROM_CRITICAL_TIMELINE = new Set(['LEONARDO SILVA LEMOS', 'SUELEN JOAO ALVES'])
@@ -156,6 +196,17 @@ export function BemAvivHomePage() {
   const [clients, setClients] = useState<ClientRow[]>([])
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()))
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
+  const [scheduleModalClient, setScheduleModalClient] = useState<ClientRow | null>(null)
+  const [scheduleForm, setScheduleForm] = useState({
+    next_followup_at: '',
+    summary: '',
+    notes: '',
+    contact_done: false,
+  })
+  const [scheduleSaving, setScheduleSaving] = useState(false)
+  const [scheduleMsg, setScheduleMsg] = useState<string | null>(null)
+  const [quickScheduleModalDay, setQuickScheduleModalDay] = useState<string | null>(null)
+  const [clientSearchQuery, setClientSearchQuery] = useState('')
   const [historyModalClient, setHistoryModalClient] = useState<ClientRow | null>(null)
   const [historyModalRows, setHistoryModalRows] = useState<FollowupHistoryRow[]>([])
   const [historyModalLoading, setHistoryModalLoading] = useState(false)
@@ -705,6 +756,160 @@ export function BemAvivHomePage() {
     setRegisterInlineSaving(false)
   }
 
+  const clientMap = useMemo(() => {
+    const map = new Map<string, ClientRow>()
+    for (const c of clients) map.set(c.id, c)
+    return map
+  }, [clients])
+
+  const selectedDayFormatted = useMemo(() => {
+    if (!selectedDay) return ''
+    const [y, m, d] = selectedDay.split('-').map(Number)
+    if (!y || !m || !d) return selectedDay
+    const dt = new Date(y, m - 1, d, 12, 0, 0)
+    const weekday = new Intl.DateTimeFormat('pt-BR', { weekday: 'long' }).format(dt)
+    const weekdayCap = weekday.charAt(0).toUpperCase() + weekday.slice(1)
+    return `${weekdayCap}, ${d} de ${MONTH_NAMES[m - 1]?.toLowerCase()} de ${y}`
+  }, [selectedDay])
+
+  const selectedDayClients = useMemo(() => {
+    if (!selectedDay) return []
+    return clients.filter((c) => {
+      if (!c.next_followup_at) return false
+      const st = (c.next_followup_status ?? 'PENDENTE').toUpperCase()
+      if (st === 'CANCELADO') return false
+      const key = toLocalDateKey(c.next_followup_at)
+      return key === selectedDay
+    })
+  }, [clients, selectedDay])
+
+  const filteredClientsForQuickSchedule = useMemo(() => {
+    const q = clientSearchQuery.trim().toLowerCase()
+    if (!q) return clients.slice(0, 40)
+    return clients
+      .filter((c) => c.full_name.toLowerCase().includes(q) || (c.phone_1 && c.phone_1.includes(q)) || (c.phone_2 && c.phone_2.includes(q)))
+      .slice(0, 40)
+  }, [clients, clientSearchQuery])
+
+  function openDirectContactModal(client: ClientRow) {
+    void openHistoryModal(client)
+    setRegisterInlineOpen(true)
+  }
+
+  function openDirectScheduleModal(client: ClientRow, prefillDate?: string) {
+    const parsed = splitFollowupNote(client.next_followup_note)
+    const defaultDate = prefillDate || toInputDate(client.next_followup_at) || todayInputDate()
+    setScheduleModalClient(client)
+    setScheduleMsg(null)
+    setScheduleForm({
+      next_followup_at: defaultDate,
+      summary: parsed.summary,
+      notes: parsed.details,
+      contact_done: false,
+    })
+  }
+
+  async function submitScheduleForm(e: React.FormEvent) {
+    e.preventDefault()
+    if (!supabase || !scheduleModalClient || !activeCompanyId) return
+    if (!scheduleForm.next_followup_at) {
+      setScheduleMsg('Selecione a data do agendamento.')
+      return
+    }
+    setScheduleSaving(true)
+    setScheduleMsg(null)
+
+    const isoDate = dateInputToIso(scheduleForm.next_followup_at)
+    const fullNote = composeFollowupNote(scheduleForm.summary, scheduleForm.notes)
+    const nowIso = new Date().toISOString()
+
+    const updateData: Record<string, unknown> = {
+      next_followup_at: isoDate,
+      next_followup_note: fullNote || null,
+      next_followup_status: 'PENDENTE',
+    }
+
+    if (scheduleForm.contact_done) {
+      updateData.last_contact_at = nowIso
+    }
+
+    const { error: clientErr } = await supabase
+      .from('bem_aviv_clients')
+      .update(updateData)
+      .eq('id', scheduleModalClient.id)
+      .eq('company_id', activeCompanyId)
+
+    if (clientErr) {
+      setScheduleMsg(clientErr.message)
+      setScheduleSaving(false)
+      return
+    }
+
+    if (scheduleForm.contact_done) {
+      const followupUserId = ownerUserId ? ownerUserId.toUpperCase() : null
+      await supabase.from('bem_aviv_client_followups').insert({
+        user_id: followupUserId,
+        company_id: activeCompanyId,
+        created_by_user_id: user?.id ?? null,
+        created_by_name: followupActorName,
+        client_id: scheduleModalClient.id,
+        contacted_at: nowIso,
+        channel: 'WHATSAPP',
+        result: scheduleForm.summary || 'Follow-up agendado com contato prévio',
+        notes: scheduleForm.notes || null,
+      })
+    }
+
+    setClients((prev) =>
+      prev.map((c) =>
+        c.id === scheduleModalClient.id
+          ? {
+              ...c,
+              next_followup_at: isoDate,
+              next_followup_note: fullNote || null,
+              next_followup_status: 'PENDENTE',
+              last_contact_at: scheduleForm.contact_done ? nowIso : c.last_contact_at,
+            }
+          : c,
+      ),
+    )
+
+    setScheduleSaving(false)
+    setScheduleModalClient(null)
+    void load()
+  }
+
+  async function removeScheduledFollowup() {
+    if (!supabase || !scheduleModalClient || !activeCompanyId) return
+    if (!confirm('Deseja excluir o agendamento deste cliente?')) return
+    setScheduleSaving(true)
+    const { error } = await supabase
+      .from('bem_aviv_clients')
+      .update({
+        next_followup_at: null,
+        next_followup_note: null,
+        next_followup_status: 'PENDENTE',
+      })
+      .eq('id', scheduleModalClient.id)
+      .eq('company_id', activeCompanyId)
+
+    setScheduleSaving(false)
+    if (error) {
+      setScheduleMsg(error.message)
+      return
+    }
+
+    setClients((prev) =>
+      prev.map((c) =>
+        c.id === scheduleModalClient.id
+          ? { ...c, next_followup_at: null, next_followup_note: null, next_followup_status: 'PENDENTE' }
+          : c,
+      ),
+    )
+    setScheduleModalClient(null)
+    void load()
+  }
+
   // Formatação do subtítulo da página
   const subtitleDate = useMemo(() => {
     const weekdayStr = new Intl.DateTimeFormat('pt-BR', { weekday: 'long' }).format(now)
@@ -1192,10 +1397,10 @@ export function BemAvivHomePage() {
           </section>
 
           {/* ── SEÇÃO INFERIOR: QUEM CONTATAR PRIMEIRO + AGENDA ─────── */}
-          <section className="grid gap-6 md:grid-cols-2 items-start">
+          <section className="grid gap-6 grid-cols-1 lg:grid-cols-2 items-start">
             {/* QUEM CONTATAR PRIMEIRO */}
-            <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-xs space-y-4">
-              <div className="flex items-start justify-between gap-3">
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs space-y-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-bold text-slate-900">Quem contatar primeiro</h3>
                   <p className="text-xs text-slate-400 mt-0.5">
@@ -1211,7 +1416,7 @@ export function BemAvivHomePage() {
                 </button>
               </div>
 
-              {/* Lista dos 4 contatos */}
+              {/* Lista dos contatos prioritários */}
               {topCriticalClients.length === 0 ? (
                 <p className="py-8 text-center text-xs text-slate-400 font-medium">
                   Nenhum contato pendente no momento.
@@ -1219,17 +1424,21 @@ export function BemAvivHomePage() {
               ) : (
                 <div className="space-y-3">
                   {topCriticalClients.map(({ client, isOverdue, lastTouchIso }) => {
-                    const diffDays = client.next_followup_at
-                      ? Math.floor((Date.now() - new Date(client.next_followup_at).getTime()) / 86_400_000)
+                    const fullClient = clientMap.get(client.id) || (client as ClientRow)
+                    const rawPhone = fullClient.phone_1 || fullClient.phone_2
+                    const waUrl = buildWhatsappUrl(rawPhone)
+                    const diffDays = fullClient.next_followup_at
+                      ? Math.floor((Date.now() - new Date(fullClient.next_followup_at).getTime()) / 86_400_000)
                       : 0
+
                     return (
                       <div
                         key={client.id}
-                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-slate-100 bg-slate-50/40 hover:bg-slate-50 transition-colors"
+                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors"
                       >
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-sm font-bold text-slate-900 truncate">{client.full_name}</p>
+                            <p className="text-sm font-bold text-slate-900 truncate">{fullClient.full_name}</p>
                             {isOverdue && diffDays > 0 && (
                               <span className="rounded-md bg-amber-100/70 border border-amber-200/80 px-1.5 py-0.5 text-[10px] font-bold text-amber-900">
                                 Atrasado há {diffDays} dias
@@ -1238,16 +1447,58 @@ export function BemAvivHomePage() {
                           </div>
                           <p className="text-[11px] text-slate-500 mt-0.5">
                             {lastTouchIso ? `Último contato ${formatDateOnly(lastTouchIso)}` : 'Sem contato prévio'}
-                            {client.next_followup_at ? ` · Próximo previsto ${formatDateOnly(client.next_followup_at)}` : ''}
+                            {fullClient.next_followup_at ? ` · Próximo previsto ${formatDateOnly(fullClient.next_followup_at)}` : ''}
                           </p>
+                          {rawPhone && (
+                            <p className="text-[10px] text-slate-400 mt-0.5">
+                              Tel: {formatPhone(rawPhone)}
+                            </p>
+                          )}
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => void openHistoryModal(client as ClientRow)}
-                          className="rounded-lg bg-[#0F3764] hover:bg-[#0c2c50] text-white px-3.5 py-1.5 text-xs font-bold transition-colors cursor-pointer shrink-0 shadow-xs"
-                        >
-                          Registrar contato
-                        </button>
+
+                        {/* Ações: WhatsApp, Registrar Contato, Agendamento */}
+                        <div className="flex flex-wrap items-center gap-1.5 shrink-0 self-start sm:self-center">
+                          {waUrl ? (
+                            <a
+                              href={waUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/40 bg-emerald-50 hover:bg-emerald-100/80 text-emerald-800 px-2.5 py-1.5 text-xs font-bold transition-all shadow-2xs"
+                              title="Abrir conversa no WhatsApp"
+                            >
+                              <MessageCircle size={13} className="text-emerald-600" />
+                              <span className="hidden sm:inline">WhatsApp</span>
+                            </a>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled
+                              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 text-slate-400 px-2 py-1.5 text-xs font-medium cursor-not-allowed opacity-60"
+                              title="Cliente sem telefone cadastrado"
+                            >
+                              <MessageCircle size={13} />
+                              <span className="hidden sm:inline">WhatsApp</span>
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => openDirectContactModal(fullClient)}
+                            className="rounded-lg bg-[#0F3764] hover:bg-[#0c2c50] text-white px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer shrink-0 shadow-xs"
+                          >
+                            Registrar contato
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => openDirectScheduleModal(fullClient)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-2.5 py-1.5 text-xs font-bold transition-colors cursor-pointer shrink-0 shadow-xs"
+                            title="Agendar retorno"
+                          >
+                            <CalendarPlus size={13} className="text-slate-600" />
+                            <span className="hidden sm:inline">Agendar</span>
+                          </button>
+                        </div>
                       </div>
                     )
                   })}
@@ -1256,7 +1507,7 @@ export function BemAvivHomePage() {
             </div>
 
             {/* AGENDA DO MÊS */}
-            <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-xs space-y-4">
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs space-y-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-bold text-slate-900">Agenda de {selectedMonthName.toLowerCase()}</h3>
@@ -1296,8 +1547,10 @@ export function BemAvivHomePage() {
                     }
                     const key = formatYmd(cell.date)
                     const n = countByDayInViewMonth.get(key) ?? 0
-                    const isToday = formatYmd(now) === key
-                    const isPast = cell.date < now && !isToday
+                    const todayKey = formatYmd(now)
+                    const isToday = todayKey === key
+                    const isPast = key < todayKey
+                    const isSelected = selectedDay === key
 
                     return (
                       <button
@@ -1305,23 +1558,33 @@ export function BemAvivHomePage() {
                         type="button"
                         onClick={() => setSelectedDay((prev) => (prev === key ? null : key))}
                         className={cn(
-                          'relative flex h-11 sm:h-12 flex-col items-center justify-between p-1 rounded-lg border text-xs font-semibold transition-all cursor-pointer',
+                          'relative flex h-11 sm:h-13 flex-col items-center justify-between p-1 rounded-lg border text-xs font-semibold transition-all cursor-pointer',
                           isToday
                             ? 'bg-[#0F3764] text-white border-[#0F3764] shadow-xs'
                             : n > 0 && isPast
-                              ? 'bg-amber-100/70 text-amber-950 border-amber-300/80 font-bold'
+                              ? 'bg-[#FEF7D6] text-amber-950 border-[#F5E188] font-bold shadow-2xs hover:border-amber-400'
                               : n > 0
-                                ? 'bg-sky-50 text-sky-950 border-sky-200 font-bold'
-                                : 'border-slate-100 bg-white text-slate-700 hover:border-slate-200',
-                          selectedDay === key && !isToday && 'ring-2 ring-[#0F3764]',
+                                ? 'bg-[#EBF3FC] text-[#0F3764] border-[#CBE0F8] font-bold shadow-2xs hover:border-sky-400'
+                                : 'border-slate-100 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50/50',
+                          isSelected && !isToday && 'ring-2 ring-[#0F3764] ring-offset-1',
+                          isSelected && isToday && 'ring-2 ring-sky-400 ring-offset-1',
                         )}
                       >
-                        <span className="text-[11px] self-center">{cell.date.getDate()}</span>
+                        <span className={cn('text-[11px] self-center', isToday ? 'text-white font-bold' : 'text-slate-800')}>
+                          {cell.date.getDate()}
+                        </span>
                         {isToday ? (
-                          <span className="text-[8px] font-bold uppercase tracking-tight text-white/90">Hoje</span>
+                          <span className="rounded bg-white/20 px-1 py-0.5 text-[8px] font-extrabold uppercase tracking-tight text-white">
+                            HOJE
+                          </span>
                         ) : n > 0 ? (
-                          <span className="text-[8px] leading-tight text-center font-bold">
-                            {n} {isPast ? 'pendente' : 'follow-up'}
+                          <span
+                            className={cn(
+                              'rounded px-1 py-0.5 text-[8px] leading-none text-center font-extrabold uppercase tracking-tight',
+                              isPast ? 'text-amber-900 bg-amber-200/60' : 'text-[#0F3764] bg-sky-200/60',
+                            )}
+                          >
+                            {n} {isPast ? 'PENDENTE' : 'FOLLOW-UP'}
                           </span>
                         ) : null}
                       </button>
@@ -1337,19 +1600,179 @@ export function BemAvivHomePage() {
                   Hoje
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-sky-100 border border-sky-300" />
+                  <span className="w-2.5 h-2.5 rounded-sm bg-[#EBF3FC] border border-[#CBE0F8]" />
                   Follow-up marcado
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-amber-100 border border-amber-300" />
+                  <span className="w-2.5 h-2.5 rounded-sm bg-[#FEF7D6] border border-[#F5E188]" />
                   Passou sem registro
                 </span>
               </div>
 
+              {/* ── RELAÇÃO DE CONTATOS DO DIA SELECIONADO ── */}
+              {selectedDay && (
+                <div className="mt-3 rounded-xl border border-slate-200/90 bg-slate-50/90 p-3.5 sm:p-4 space-y-3 transition-all animate-fadeIn">
+                  <div className="flex items-center justify-between gap-2 border-b border-slate-200/70 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[#0F3764] text-white">
+                        <Calendar size={13} />
+                      </span>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900">{selectedDayFormatted}</h4>
+                        <p className="text-[10px] text-slate-500 font-medium">
+                          {selectedDayClients.length === 0
+                            ? 'Nenhum agendamento marcado para esta data'
+                            : `${selectedDayClients.length} ${selectedDayClients.length === 1 ? 'cliente com retorno' : 'clientes com retorno'}`}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuickScheduleModalDay(selectedDay)
+                          setClientSearchQuery('')
+                        }}
+                        className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-100 transition-colors shadow-2xs"
+                        title="Agendar cliente para este dia"
+                      >
+                        <Plus size={12} />
+                        <span>Novo</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDay(null)}
+                        className="rounded-md p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition-colors"
+                        title="Fechar relação do dia"
+                      >
+                        <X size={15} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Lista de clientes do dia selecionado */}
+                  {selectedDayClients.length === 0 ? (
+                    <div className="py-4 text-center space-y-2">
+                      <p className="text-xs text-slate-400 font-medium">
+                        Nenhum follow-up registrado para {selectedDayFormatted}.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuickScheduleModalDay(selectedDay)
+                          setClientSearchQuery('')
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 px-3 py-1.5 text-xs font-bold transition-all shadow-xs"
+                      >
+                        <CalendarPlus size={13} className="text-slate-600" />
+                        Agendar cliente para esta data
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+                      {selectedDayClients.map((client) => {
+                        const parsed = splitFollowupNote(client.next_followup_note)
+                        const phone = client.phone_1 || client.phone_2
+                        const waUrl = buildWhatsappUrl(phone)
+                        const isPast = selectedDay < formatYmd(now)
+                        const isToday = selectedDay === formatYmd(now)
+                        const isConcluido = client.next_followup_status === 'CONCLUIDO'
+
+                        return (
+                          <div
+                            key={client.id}
+                            className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl border border-slate-200/80 bg-white shadow-2xs hover:border-slate-300 transition-colors"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-xs font-bold text-slate-900 truncate">{client.full_name}</p>
+                                {isConcluido ? (
+                                  <span className="rounded bg-emerald-50 text-emerald-800 border border-emerald-200 px-1.5 py-0.2 text-[9px] font-bold">
+                                    Concluído
+                                  </span>
+                                ) : isPast ? (
+                                  <span className="rounded bg-amber-50 text-amber-900 border border-amber-200 px-1.5 py-0.2 text-[9px] font-bold">
+                                    Pendente
+                                  </span>
+                                ) : isToday ? (
+                                  <span className="rounded bg-sky-50 text-[#0F3764] border border-sky-200 px-1.5 py-0.2 text-[9px] font-bold">
+                                    Hoje
+                                  </span>
+                                ) : (
+                                  <span className="rounded bg-sky-50 text-sky-900 border border-sky-200 px-1.5 py-0.2 text-[9px] font-bold">
+                                    Agendado
+                                  </span>
+                                )}
+                              </div>
+                              {parsed.summary && (
+                                <p className="text-[11px] text-slate-700 font-semibold mt-1 line-clamp-1">
+                                  🎯 {parsed.summary}
+                                </p>
+                              )}
+                              {parsed.details && (
+                                <p className="text-[10px] text-slate-500 mt-0.5 line-clamp-1">
+                                  {parsed.details}
+                                </p>
+                              )}
+                              {phone && (
+                                <p className="text-[10px] text-slate-400 mt-0.5">
+                                  Tel: {formatPhone(phone)}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Ações da linha do dia */}
+                            <div className="flex flex-wrap items-center gap-1.5 shrink-0 self-start sm:self-center">
+                              {waUrl ? (
+                                <a
+                                  href={waUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 text-[11px] font-bold transition-colors shadow-2xs"
+                                  title="Conversar no WhatsApp"
+                                >
+                                  <MessageCircle size={12} />
+                                  <span>WhatsApp</span>
+                                </a>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled
+                                  className="inline-flex items-center gap-1 rounded-md bg-slate-100 text-slate-400 px-2 py-1 text-[11px] font-medium cursor-not-allowed opacity-60"
+                                  title="Sem telefone cadastrado"
+                                >
+                                  <MessageCircle size={12} />
+                                  <span>WhatsApp</span>
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => openDirectContactModal(client)}
+                                className="rounded-md bg-[#0F3764] hover:bg-[#0c2c50] text-white px-2.5 py-1 text-[11px] font-bold transition-colors shadow-2xs"
+                              >
+                                Registrar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openDirectScheduleModal(client, selectedDay)}
+                                className="rounded-md border border-slate-300 hover:bg-slate-100 text-slate-700 px-2 py-1 text-[11px] font-bold transition-colors"
+                                title="Reagendar follow-up"
+                              >
+                                <CalendarPlus size={12} />
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Botão Abrir agenda completa */}
               <button
                 type="button"
-                onClick={() => navigate('/bem-aviv/agenda')}
+                onClick={() => navigate('/bem-aviv/follow-up')}
                 className="w-full rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 py-2 text-xs font-bold transition-all cursor-pointer shadow-xs"
               >
                 Abrir agenda completa
@@ -1421,18 +1844,49 @@ export function BemAvivHomePage() {
                       value={registerInlineForm.result}
                       onChange={(e) => setRegisterInlineForm((prev) => ({ ...prev, result: e.target.value }))}
                       placeholder="Ex: Cliente interessado, pediu orçamento do colchão"
-                      className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs"
+                      className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium"
+                    />
+                  </label>
+                  <label className="text-xs font-semibold text-slate-600 sm:col-span-2">
+                    Observações detalhadas (opcional)
+                    <textarea
+                      rows={2}
+                      value={registerInlineForm.notes}
+                      onChange={(e) => setRegisterInlineForm((prev) => ({ ...prev, notes: e.target.value }))}
+                      placeholder="Anotações sobre a conversa, dúvidas levantadas, etc."
+                      className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium"
                     />
                   </label>
                 </div>
-                <div className="flex justify-end gap-2 pt-1">
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/60">
                   <button
-                    type="submit"
-                    disabled={registerInlineSaving}
-                    className="rounded-lg bg-[#0F3764] px-4 py-1.5 text-xs font-bold text-white hover:bg-[#0c2c50] disabled:opacity-60"
+                    type="button"
+                    onClick={() => {
+                      const c = historyModalClient
+                      setHistoryModalClient(null)
+                      openDirectScheduleModal(c)
+                    }}
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-[#185FA5] hover:underline cursor-pointer"
                   >
-                    {registerInlineSaving ? 'Salvando...' : 'Salvar contato'}
+                    <CalendarPlus size={14} />
+                    <span>Agendar próximo retorno após contato</span>
                   </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setRegisterInlineOpen(false)}
+                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={registerInlineSaving}
+                      className="rounded-lg bg-[#0F3764] px-4 py-1.5 text-xs font-bold text-white hover:bg-[#0c2c50] disabled:opacity-60 shadow-xs cursor-pointer"
+                    >
+                      {registerInlineSaving ? 'Salvando...' : 'Salvar contato'}
+                    </button>
+                  </div>
                 </div>
               </form>
             )}
@@ -1481,6 +1935,202 @@ export function BemAvivHomePage() {
                   </tbody>
                 </table>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: AGENDAMENTO DE FOLLOW-UP ───────────────────────── */}
+      {scheduleModalClient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-3 sm:p-4 backdrop-blur-xs">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Agendar Follow-up</h3>
+                <p className="text-xs font-semibold text-[#185FA5] mt-0.5">{scheduleModalClient.full_name}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setScheduleModalClient(null)}
+                className="rounded-lg border border-slate-300 bg-white p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors"
+                title="Fechar"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {scheduleMsg && (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 p-2.5 text-xs font-medium text-amber-900">
+                {scheduleMsg}
+              </div>
+            )}
+
+            <form onSubmit={submitScheduleForm} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-bold text-slate-700">
+                  Data do próximo contato / retorno *
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={scheduleForm.next_followup_at}
+                  onChange={(e) => setScheduleForm((prev) => ({ ...prev, next_followup_at: e.target.value }))}
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-2xs outline-none focus:border-[#0F3764] focus:ring-1 focus:ring-[#0F3764]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700">
+                  Resumo / Objetivo do contato
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: Retorno sobre orçamento do colchão, agendar visita..."
+                  value={scheduleForm.summary}
+                  onChange={(e) => setScheduleForm((prev) => ({ ...prev, summary: e.target.value }))}
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 shadow-2xs outline-none focus:border-[#0F3764] focus:ring-1 focus:ring-[#0F3764]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700">
+                  Detalhes / Observações (opcional)
+                </label>
+                <textarea
+                  rows={3}
+                  placeholder="Anotações importantes sobre preferências do cliente, valores combinados, etc."
+                  value={scheduleForm.notes}
+                  onChange={(e) => setScheduleForm((prev) => ({ ...prev, notes: e.target.value }))}
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 shadow-2xs outline-none focus:border-[#0F3764] focus:ring-1 focus:ring-[#0F3764]"
+                />
+              </div>
+
+              <label className="flex items-start gap-2.5 pt-1 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={scheduleForm.contact_done}
+                  onChange={(e) => setScheduleForm((prev) => ({ ...prev, contact_done: e.target.checked }))}
+                  className="mt-0.5 rounded border-slate-300 text-[#0F3764] focus:ring-[#0F3764]"
+                />
+                <span className="text-xs text-slate-600 leading-snug">
+                  <strong>Marcar que conversei com o cliente hoje</strong> (registra um novo toque no histórico com a data atual)
+                </span>
+              </label>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100">
+                {scheduleModalClient.next_followup_at ? (
+                  <button
+                    type="button"
+                    disabled={scheduleSaving}
+                    onClick={() => void removeScheduledFollowup()}
+                    className="text-xs font-bold text-rose-600 hover:text-rose-700 hover:underline cursor-pointer"
+                  >
+                    Excluir agendamento
+                  </button>
+                ) : (
+                  <div />
+                )}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setScheduleModalClient(null)}
+                    className="rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 transition-colors shadow-2xs"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={scheduleSaving}
+                    className="rounded-lg bg-[#0F3764] hover:bg-[#0c2c50] text-white px-4 py-1.5 text-xs font-bold transition-colors shadow-xs disabled:opacity-60 cursor-pointer"
+                  >
+                    {scheduleSaving ? 'Salvando...' : 'Salvar agendamento'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: SELECIONAR CLIENTE PARA O DIA ESPECÍFICO ───────── */}
+      {quickScheduleModalDay && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-3 sm:p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Agendar cliente</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Para o dia <strong className="text-slate-800">{formatDateOnly(quickScheduleModalDay)}</strong>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setQuickScheduleModalDay(null)}
+                className="rounded-lg border border-slate-300 bg-white p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors"
+                title="Fechar"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div>
+              <input
+                type="text"
+                autoFocus
+                placeholder="Buscar cliente por nome ou telefone..."
+                value={clientSearchQuery}
+                onChange={(e) => setClientSearchQuery(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 shadow-2xs outline-none focus:border-[#0F3764] focus:ring-1 focus:ring-[#0F3764]"
+              />
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-1.5 min-h-[200px] max-h-[340px] pr-1">
+              {filteredClientsForQuickSchedule.length === 0 ? (
+                <p className="text-center text-xs text-slate-400 py-8">
+                  Nenhum cliente encontrado com esse termo.
+                </p>
+              ) : (
+                filteredClientsForQuickSchedule.map((c) => {
+                  const phone = c.phone_1 || c.phone_2
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => {
+                        const targetDay = quickScheduleModalDay
+                        setQuickScheduleModalDay(null)
+                        openDirectScheduleModal(c, targetDay)
+                      }}
+                      className="w-full text-left p-2.5 rounded-lg border border-slate-100 hover:border-slate-300 hover:bg-slate-50 transition-all flex items-center justify-between gap-2 group cursor-pointer"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-900 truncate group-hover:text-[#0F3764]">
+                          {c.full_name}
+                        </p>
+                        {phone && (
+                          <p className="text-[10px] text-slate-400">
+                            {formatPhone(phone)}
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-[11px] font-bold text-[#185FA5] opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                        Selecionar →
+                      </span>
+                    </button>
+                  )
+                })
+              )}
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setQuickScheduleModalDay(null)}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 transition-colors shadow-2xs"
+              >
+                Cancelar
+              </button>
             </div>
           </div>
         </div>
