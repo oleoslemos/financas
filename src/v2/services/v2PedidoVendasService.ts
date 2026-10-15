@@ -1,5 +1,5 @@
 import { supabase } from '../../lib/supabaseClient'
-import { saveContaPagar, StatusConta } from './v2ContasPagarService'
+import { saveContaPagar, StatusConta, deleteContaPagarPorPedidoId } from './v2ContasPagarService'
 
 export type CanalVenda = 'representacao' | 'distribuicao'
 
@@ -365,6 +365,9 @@ export async function excluirPedidoVenda(pedidoId: string): Promise<{ ok: true }
       await supabase.from(SUPABASE_TABLE).delete().eq('id', pedidoId)
     } catch {}
   }
+
+  // Delete associated financial record
+  await deleteContaPagarPorPedidoId(pedidoId)
 
   const list = current.filter((p) => p.id !== pedidoId)
   writeToStorage(list)

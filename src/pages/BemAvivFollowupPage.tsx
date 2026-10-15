@@ -113,53 +113,7 @@ function endOfToday() {
   return d
 }
 
-/** Lista 2: concluídos com último toque (cadastro ou histórico) acima deste limite. */
-const STALE_CONCLUIDO_DAYS = 30
 
-/** Maior instante entre `last_contact_at` e o último `bem_aviv_client_followups`. Zero = nenhum dos dois. */
-function lastTouchMsFromClientAndFollowup(client: Cliente, latestFollowup: FollowupHistoryRow | undefined): number {
-  let m = 0
-  if (client.last_contact_at) {
-    const t = new Date(client.last_contact_at).getTime()
-    if (!Number.isNaN(t)) m = Math.max(m, t)
-  }
-  if (latestFollowup?.contacted_at) {
-    const t = new Date(latestFollowup.contacted_at).getTime()
-    if (!Number.isNaN(t)) m = Math.max(m, t)
-  }
-  return m
-}
-
-/** CONCLUÍDO e já houve contacto alguma vez, mas o último toque (cadastro ou histórico) é há mais de N dias. */
-function isConcluidoMaisNDiasSemContactar(
-  client: Cliente,
-  latestFollowup: FollowupHistoryRow | undefined,
-  staleDays: number,
-): boolean {
-  if ((client.next_followup_status ?? 'PENDENTE') !== 'CONCLUIDO') return false
-  const touch = lastTouchMsFromClientAndFollowup(client, latestFollowup)
-  if (touch === 0) return false
-  return Date.now() - touch > staleDays * 86_400_000
-}
-
-function formatDaysAgoLabel(iso: string | null): string {
-  if (!iso) return 'sem data no cadastro'
-  const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000)
-  if (d <= 0) return 'hoje'
-  return `há ${d} dias`
-}
-
-function truncateText(s: string | null, max: number) {
-  if (!s) return '—'
-  const t = s.trim()
-  if (t.length <= max) return t
-  return `${t.slice(0, max)}…`
-}
-
-function formatDaysSinceTouchMs(ms: number): string {
-  if (ms === 0) return 'sem contato (cadastro nem histórico)'
-  return formatDaysAgoLabel(new Date(ms).toISOString())
-}
 
 type FollowupLocationState = {
   bemAvivClientFocus?: { id: string; mode: 'history' }
@@ -205,9 +159,7 @@ export function BemAvivFollowupPage() {
     notes: '',
   })
 
-  /** Último registo em bem_aviv_client_followups por cliente (para regras sem contacto / 30 dias). */
-  const [latestFollowupByClientId, setLatestFollowupByClientId] = useState<Record<string, FollowupHistoryRow>>({})
-  const [latestFollowupsReady, setLatestFollowupsReady] = useState(false)
+
 
   const load = useCallback(async () => {
     if (!supabase || !activeCompanyId) {
@@ -441,73 +393,7 @@ export function BemAvivFollowupPage() {
     setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
   }
 
-  const concluidoMais30DiasSemContactar = useMemo(() => {
-    if (!latestFollowupsReady) return []
-    return rows
-      .filter((r) => isConcluidoMaisNDiasSemContactar(r, latestFollowupByClientId[r.id], STALE_CONCLUIDO_DAYS))
-      .sort(
-        (a, b) =>
-          lastTouchMsFromClientAndFollowup(a, latestFollowupByClientId[a.id]) -
-          lastTouchMsFromClientAndFollowup(b, latestFollowupByClientId[b.id]),
-      )
-  }, [rows, latestFollowupByClientId, latestFollowupsReady])
 
-  useEffect(() => {
-    if (!supabase || !activeCompanyId) {
-      setLatestFollowupByClientId({})
-      setLatestFollowupsReady(true)
-      return
-    }
-    const ids = rows.map((r) => r.id)
-    if (ids.length === 0) {
-      setLatestFollowupByClientId({})
-      setLatestFollowupsReady(true)
-      return
-    }
-    setLatestFollowupsReady(false)
-    let cancelled = false
-    const CHUNK = 120
-    void (async () => {
-      const map: Record<string, FollowupHistoryRow> = {}
-      for (let i = 0; i < ids.length; i += CHUNK) {
-        if (cancelled) return
-        const chunk = ids.slice(i, i + CHUNK)
-        const { data, error } = await supabase
-          .from('bem_aviv_client_followups')
-          .select('id, client_id, contacted_at, channel, created_by_name, result, notes')
-          .is('deleted_at', null)
-          .eq('company_id', activeCompanyId)
-          .in('client_id', chunk)
-          .order('contacted_at', { ascending: false })
-        if (cancelled) return
-        if (error) {
-          if (!cancelled) {
-            setLatestFollowupByClientId({})
-            setLatestFollowupsReady(true)
-          }
-          return
-        }
-        const list = (data ?? []) as Array<FollowupHistoryRow & { client_id: string }>
-        for (const row of list) {
-          if (map[row.client_id]) continue
-          map[row.client_id] = {
-            id: row.id,
-            contacted_at: row.contacted_at,
-            channel: row.channel,
-            created_by_name: row.created_by_name,
-            result: row.result,
-            notes: row.notes,
-          }
-        }
-      }
-      if (cancelled) return
-      setLatestFollowupByClientId(map)
-      setLatestFollowupsReady(true)
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [supabase, rows, activeCompanyId])
 
   const startFollowupClientOptions = useMemo(() => {
     const source = startFollowupForm.onlyWithoutSchedule ? rows.filter((r) => !r.next_followup_at) : rows
