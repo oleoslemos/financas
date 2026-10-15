@@ -358,11 +358,6 @@ export function V2PedidoVendasPage() {
     )
   }, [tabelasPreco, formTabelaPrecoNome])
 
-  // Propostas disponíveis para comparação
-  const propostasDisponiveis = useMemo(() => {
-    return pedidos.filter((p) => p.status === 'proposta' || p.status === 'aprovado')
-  }, [pedidos])
-
   // Filtro de clientes para autocomplete
   const clientesFiltrados = useMemo(() => {
     if (!clienteBuscaTexto.trim()) return clientes.slice(0, 8)
@@ -2105,7 +2100,8 @@ export function V2PedidoVendasPage() {
       <V2OrcamentosComparisonModal
         isOpen={isCompareModalOpen}
         onClose={() => setIsCompareModalOpen(false)}
-        propostas={propostasDisponiveis}
+        propostas={pedidos}
+        selectedIds={selectedPropostaIds}
         initialAId={compareAId}
         initialBId={compareBId}
         onAprovarProposta={handleAprovar}
