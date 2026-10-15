@@ -13,15 +13,12 @@ import {
   Printer,
   MessageCircle,
   DollarSign,
-  Package,
-  Calendar,
   User,
   ShoppingBag,
   CreditCard,
   FileSpreadsheet,
   Trash2,
   X,
-  Sparkles,
 } from 'lucide-react'
 import { formatarMoeda } from '../../modules/lib/money'
 import { formatarData, hoje, somarDias } from '../../modules/lib/datas'
