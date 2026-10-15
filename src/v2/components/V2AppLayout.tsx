@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { getCurrentV2User, logoutV2User } from '../../v2/services/v2AuthService'
 import { CompanyProvider } from '../../context/CompanyContext'
 import {
@@ -71,13 +71,32 @@ function V2AppLayoutInner() {
     navigate('/v2/login')
   }
 
-  type NavItem = { to: string; icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; label: string }
+  const location = useLocation()
+
+  type NavSubItem = { to: string; label: string }
+  type NavItem = {
+    to: string
+    icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
+    label: string
+    subItems?: NavSubItem[]
+  }
   type NavGroup = { group: string; items: NavItem[] }
   type NavEntry = NavItem | NavGroup
 
   const navEntries: NavEntry[] = [
     { to: '/v2/inicio', icon: Home, label: 'Início' },
     { to: '/v2/painel-vendas', icon: TrendingUp, label: 'Painel de Vendas' },
+    {
+      to: '/v2/crm',
+      icon: UserCheck,
+      label: 'CRM',
+      subItems: [
+        { to: '/v2/crm', label: 'Visão Geral' },
+        { to: '/v2/crm/follow-up', label: 'Follow-up' },
+        { to: '/v2/crm/produtividade', label: 'Produtividade' },
+        { to: '/v2/crm/atividades', label: 'Atividades V2' },
+      ],
+    },
     { to: '/v2/clientes', icon: Users, label: 'Clientes' },
     {
       group: 'Comercial',
@@ -91,7 +110,6 @@ function V2AppLayoutInner() {
         { to: '/v2/tags', icon: Tag, label: 'Tags' },
       ],
     },
-    { to: '/v2/crm', icon: UserCheck, label: 'CRM' },
     { to: '/v2/configuracoes', icon: Settings, label: 'Configurações' },
   ]
 
@@ -148,26 +166,59 @@ function V2AppLayoutInner() {
 
         {/* Nav links */}
         <nav className="flex-1 py-5 px-2 space-y-1 overflow-x-hidden">
-          {navItems.map(({ to, icon: Icon, label }) => (
-            <NavLink
-              key={to}
-              to={to}
-              title={!sidebarExpanded ? label : undefined}
-              className={() =>
-                'flex items-center gap-3 rounded-xl text-sm font-bold transition-all hover:bg-white/10 overflow-hidden'
-              }
-              style={({ isActive }) => ({
-                padding: sidebarExpanded ? '10px 12px' : '10px 0',
-                justifyContent: sidebarExpanded ? 'flex-start' : 'center',
-                background: isActive ? 'rgba(255,255,255,0.2)' : undefined,
-                color: isActive ? '#FFFFFF' : 'rgba(255,255,255,0.7)',
-                border: isActive ? '1px solid rgba(255,255,255,0.25)' : '1px solid transparent',
-              })}
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              {sidebarExpanded && <span className="whitespace-nowrap">{label}</span>}
-            </NavLink>
-          ))}
+          {navItems.map((item) => {
+            const { to, icon: Icon, label, subItems } = item
+            const isCrm = to === '/v2/crm'
+            const isCrmActive = isCrm && location.pathname.startsWith('/v2/crm')
+
+            return (
+              <div key={to} className="space-y-0.5">
+                <NavLink
+                  to={to}
+                  title={!sidebarExpanded ? label : undefined}
+                  className={() =>
+                    'flex items-center gap-3 rounded-xl text-sm font-bold transition-all hover:bg-white/10 overflow-hidden'
+                  }
+                  style={({ isActive }) => ({
+                    padding: sidebarExpanded ? '10px 12px' : '10px 0',
+                    justifyContent: sidebarExpanded ? 'flex-start' : 'center',
+                    background: isActive || isCrmActive ? 'rgba(255,255,255,0.2)' : undefined,
+                    color: isActive || isCrmActive ? '#FFFFFF' : 'rgba(255,255,255,0.7)',
+                    border: isActive || isCrmActive ? '1px solid rgba(255,255,255,0.25)' : '1px solid transparent',
+                  })}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  {sidebarExpanded && <span className="whitespace-nowrap">{label}</span>}
+                </NavLink>
+
+                {/* Submenus dentro de CRM na V2 */}
+                {subItems && sidebarExpanded && (
+                  <div className="pl-6 pr-1 py-0.5 space-y-0.5 border-l-2 border-white/20 ml-5 my-0.5">
+                    {subItems.map((sub) => {
+                      const isSubActive =
+                        sub.to === '/v2/crm'
+                          ? location.pathname === '/v2/crm' || location.pathname === '/v2/crm/visao-geral'
+                          : location.pathname === sub.to
+
+                      return (
+                        <NavLink
+                          key={sub.to}
+                          to={sub.to}
+                          className={`block rounded-lg px-2.5 py-1 text-xs font-semibold transition-all ${
+                            isSubActive
+                              ? 'bg-white/25 text-white font-bold'
+                              : 'text-white/70 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          {sub.label}
+                        </NavLink>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </nav>
 
         {/* ── User section (bottom of sidebar) ── */}
@@ -332,21 +383,54 @@ function V2AppLayoutInner() {
             className="sm:hidden flex flex-col gap-1 px-4 py-3 shrink-0"
             style={{ background: 'rgba(13, 107, 175, 1)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}
           >
-            {navItems.map(({ to, icon: Icon, label }) => (
-              <NavLink
-                key={to}
-                to={to}
-                onClick={() => setMobileMenuOpen(false)}
-                className={() => 'flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all'}
-                style={({ isActive }) => ({
-                  background: isActive ? 'rgba(255,255,255,0.2)' : 'transparent',
-                  color: isActive ? '#FFFFFF' : 'rgba(255,255,255,0.7)',
-                })}
-              >
-                <Icon className="h-4 w-4" />
-                {label}
-              </NavLink>
-            ))}
+            {navItems.map((item) => {
+              const { to, icon: Icon, label, subItems } = item
+              const isCrm = to === '/v2/crm'
+              const isCrmActive = isCrm && location.pathname.startsWith('/v2/crm')
+
+              return (
+                <div key={to} className="space-y-1">
+                  <NavLink
+                    to={to}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={() => 'flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all'}
+                    style={({ isActive }) => ({
+                      background: isActive || isCrmActive ? 'rgba(255,255,255,0.2)' : 'transparent',
+                      color: isActive || isCrmActive ? '#FFFFFF' : 'rgba(255,255,255,0.7)',
+                    })}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {label}
+                  </NavLink>
+
+                  {subItems && (
+                    <div className="pl-6 pr-2 py-0.5 space-y-1">
+                      {subItems.map((sub) => {
+                        const isSubActive =
+                          sub.to === '/v2/crm'
+                            ? location.pathname === '/v2/crm' || location.pathname === '/v2/crm/visao-geral'
+                            : location.pathname === sub.to
+
+                        return (
+                          <NavLink
+                            key={sub.to}
+                            to={sub.to}
+                            onClick={() => setMobileMenuOpen(false)}
+                            className={`block rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+                              isSubActive
+                                ? 'bg-white/20 text-white font-bold'
+                                : 'text-white/70 hover:text-white hover:bg-white/10'
+                            }`}
+                          >
+                            • {sub.label}
+                          </NavLink>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
             <button
               type="button"
               onClick={() => {

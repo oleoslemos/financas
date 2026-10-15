@@ -121,10 +121,14 @@ export default function App() {
           <Route path="/v2/pedido-vendas-distribuidor" element={<Navigate to="/v2/propostas-vendas" replace />} />
           <Route path="/v2/estoque" element={<V2EstoquePage />} />
           <Route path="/v2/configuracoes" element={<V2SettingsPage />} />
-                 <Route path="/v2/contas-pagar" element={<V2ContasPagarPage />} />
-         <Route path="/v2/tags" element={<V2TagsPage />} />
-         <Route path="/v2/crm" element={<V2CrmPage />} />
-         </Route>
+          <Route path="/v2/contas-pagar" element={<V2ContasPagarPage />} />
+          <Route path="/v2/tags" element={<V2TagsPage />} />
+          <Route path="/v2/crm" element={<V2CrmPage />} />
+          <Route path="/v2/crm/visao-geral" element={<V2CrmPage />} />
+          <Route path="/v2/crm/follow-up" element={<V2CrmPage />} />
+          <Route path="/v2/crm/produtividade" element={<V2CrmPage />} />
+          <Route path="/v2/crm/atividades" element={<V2CrmPage />} />
+        </Route>
 
         <Route path="/sign-in/*" element={<SignInPage />} />
         <Route path="/sign-up/*" element={<SignUpPage />} />
