@@ -359,7 +359,7 @@ export function V2PainelVendasPage() {
   const anosDisponiveis = [selectedYear - 1, selectedYear, selectedYear + 1]
 
   return (
-    <div style={{ padding: '24px', maxWidth: 1200, margin: '0 auto', fontFamily: 'inherit' }}>
+    <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 font-sans">
       {/* ── HEADER DA HISTÓRIA COMERCIAL ───────────────────────────── */}
       <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

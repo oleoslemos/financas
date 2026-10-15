@@ -394,7 +394,7 @@ export function V2PedidoCompraPage() {
   // ──────────────────────────────────────────────────────────────────────────
   if (viewMode === 'novo') {
     return (
-      <div style={{ padding: '24px 32px', maxWidth: 1180, margin: '0 auto', fontFamily: 'inherit' }}>
+      <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 font-sans">
         {/* Voltar para pedidos de compra */}
         <div style={{ marginBottom: 12 }}>
           <button
@@ -1097,7 +1097,7 @@ export function V2PedidoCompraPage() {
   // TELA 2: LISTAGEM DE PEDIDOS DE COMPRA (IMAGEM 02)
   // ──────────────────────────────────────────────────────────────────────────
   return (
-    <div style={{ padding: '24px 32px', maxWidth: 1180, margin: '0 auto', fontFamily: 'inherit' }}>
+    <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 font-sans">
       {/* ── HEADER SUPERIOR ── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

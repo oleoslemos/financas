@@ -34,9 +34,23 @@ export function V2AppLayout() {
 function V2AppLayoutInner() {
   const navigate = useNavigate()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [sidebarExpanded, setSidebarExpanded] = useState(true)
+  const [sidebarExpanded, setSidebarExpanded] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
+  )
   const [isPushModalOpen, setIsPushModalOpen] = useState(false)
   const [pendingCount, setPendingCount] = useState<number>(0)
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 1024) {
+        setSidebarExpanded(false)
+      } else {
+        setSidebarExpanded(true)
+      }
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   useEffect(() => {
     let isCancelled = false

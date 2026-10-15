@@ -62,7 +62,7 @@ export function V2EstoquePage() {
   const valorTotalEstoque = saldos.reduce((acc, i) => acc + i.saldo * i.custo_medio, 0)
 
   return (
-    <div style={{ padding: '24px', maxWidth: 1100, margin: '0 auto' }}>
+    <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 font-sans">
       {/* Cabeçalho */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
         <div

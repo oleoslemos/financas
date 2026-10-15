@@ -11,6 +11,8 @@ export type PedidoVendaItem = {
   quantidade: number
   preco_tabela: number
   preco_unitario: number
+  preco_fabrica?: number
+  preco_venda_minimo?: number
   desconto_percentual?: number
   total: number
 }
@@ -35,6 +37,11 @@ export type PedidoVenda = {
   subtotal: number
   descontoTotal: number
   total: number
+  desconto5xPercentual?: number
+  total5x?: number
+  descontoVistaPercentual?: number
+  totalVista?: number
+  condicaoSelecionada?: 'sem_desconto' | 'ate_5x' | 'a_vista'
   itens: PedidoVendaItem[]
   created_at: string
   updated_at: string
