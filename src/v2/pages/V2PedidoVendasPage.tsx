@@ -23,6 +23,7 @@ import {
   AlertTriangle,
   Info,
   Calendar,
+  Copy,
 } from 'lucide-react'
 import { formatarMoeda } from '../../modules/lib/money'
 import { formatarData, hoje, somarDias } from '../../modules/lib/datas'
@@ -80,6 +81,167 @@ const MESES_LISTA = [
   { num: '12', short: 'DEZ' },
 ]
 
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPERS PARA FORMATAÇÃO DO NÚMERO DA VENDA: #YYYYMMSEQ (Ex: #202610001)
+// ─────────────────────────────────────────────────────────────────────────────
+export function gerarNumeroVenda(pedidosExistentes: PedidoVenda[], dataEmissao: string = hoje()): string {
+  const ano = dataEmissao.slice(0, 4) || '2026'
+  const mes = dataEmissao.slice(5, 7) || '10'
+  const prefixo = `#${ano}${mes}`
+
+  let maiorSeq = 0
+  for (const p of pedidosExistentes) {
+    if (!p.numero) continue
+    const limpo = p.numero.replace(/^#/, '').replace(/^PV-/, '')
+    if (limpo.startsWith(`${ano}${mes}`)) {
+      const seqParte = limpo.slice(6)
+      const num = parseInt(seqParte, 10)
+      if (!isNaN(num) && num > maiorSeq) {
+        maiorSeq = num
+      }
+    }
+  }
+
+  const seqFormatado = String(maiorSeq + 1).padStart(3, '0')
+  return `${prefixo}${seqFormatado}`
+}
+
+export function formatarNumeroVendaExibicao(numero: string): string {
+  if (!numero) return '#202610001'
+  if (numero.startsWith('#')) return numero
+  if (numero.startsWith('PV-')) {
+    const semPv = numero.replace(/^PV-/, '')
+    return `#${semPv}`
+  }
+  return `#${numero}`
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COMPONENTE: CAMPO DE PRODUTO AUTOCOMPLETE / PESQUISÁVEL (IMAGENS 04 & 05)
+// ─────────────────────────────────────────────────────────────────────────────
+interface ProdutoSearchInputProps {
+  item: PedidoVendaItem
+  index: number
+  produtos: V2Product[]
+  formTabelaPrecoNome: string
+  getPrecosDoProduto: (prodId: string, tabelaNome?: string) => { precoFabrica: number; precoVenda: number; precoSugestao: number }
+  onSelectProduct: (index: number, prodId: string) => void
+}
+
+function ProdutoSearchInput({
+  item,
+  index,
+  produtos,
+  formTabelaPrecoNome,
+  getPrecosDoProduto,
+  onSelectProduct,
+}: ProdutoSearchInputProps) {
+  const [buscaTexto, setBuscaTexto] = useState(item.produto_nome || '')
+  const [isOpen, setIsOpen] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    setBuscaTexto(item.produto_nome || '')
+  }, [item.produto_nome])
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const produtosFiltrados = useMemo(() => {
+    if (!buscaTexto.trim()) return produtos.slice(0, 8)
+    const termo = buscaTexto.toLowerCase().trim()
+    return produtos
+      .filter(
+        (p) =>
+          p.name.toLowerCase().includes(termo) ||
+          (p.code_sku && p.code_sku.toLowerCase().includes(termo)) ||
+          (p.product_line && p.product_line.toLowerCase().includes(termo))
+      )
+      .slice(0, 10)
+  }, [produtos, buscaTexto])
+
+  return (
+    <div className="space-y-1 relative" ref={dropdownRef}>
+      <label className="text-[11px] font-bold uppercase text-slate-500 flex items-center justify-between">
+        <span>Produto do Catálogo *</span>
+        {item.produto_id && (
+          <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.2 rounded">
+            ✓ Selecionado
+          </span>
+        )}
+      </label>
+
+      <div className="relative">
+        <input
+          type="text"
+          value={buscaTexto}
+          onChange={(e) => {
+            setBuscaTexto(e.target.value)
+            setIsOpen(true)
+          }}
+          onFocus={() => setIsOpen(true)}
+          placeholder="Digite o nome ou SKU para pesquisar..."
+          className="w-full rounded-xl border border-slate-200 bg-white pl-3.5 pr-8 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-indigo-500 shadow-2xs transition"
+        />
+        <Search
+          size={14}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+        />
+      </div>
+
+      {isOpen && (
+        <div className="absolute top-full left-0 right-0 mt-1 z-30 max-h-60 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl py-1 divide-y divide-slate-100">
+          {produtosFiltrados.length > 0 ? (
+            produtosFiltrados.map((p) => {
+              const precos = getPrecosDoProduto(p.id, formTabelaPrecoNome)
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => {
+                    onSelectProduct(index, p.id)
+                    setBuscaTexto(p.name)
+                    setIsOpen(false)
+                  }}
+                  className="w-full text-left px-3.5 py-2.5 hover:bg-indigo-50/80 transition flex items-center justify-between gap-2"
+                >
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-slate-900 truncate">{p.name}</p>
+                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-500">
+                      {p.code_sku && <span className="bg-slate-100 px-1 rounded font-mono">{p.code_sku}</span>}
+                      {p.product_line && <span>Linha: {p.product_line}</span>}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="text-xs font-black text-indigo-700 block">
+                      {formatarMoeda(precos.precoSugestao)}
+                    </span>
+                    <span className="text-[9px] text-slate-400 font-medium">Sugestão</span>
+                  </div>
+                </button>
+              )
+            })
+          ) : (
+            <div className="px-4 py-3 text-center text-xs text-slate-400 font-medium">
+              Nenhum produto encontrado com este termo.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COMPONENTE PRINCIPAL
+// ─────────────────────────────────────────────────────────────────────────────
 export function V2PedidoVendasPage() {
   const dataHoje = hoje()
 
@@ -100,16 +262,13 @@ export function V2PedidoVendasPage() {
   const [clientes, setClientes] = useState<BemAvivClient[]>([])
   const [loading, setLoading] = useState(true)
 
-  // State: Seleção de Pedido na Lista para a Barra de Ações Rápidas (imagem 02)
-  const [selectedPedidoId, setSelectedPedidoId] = useState<string | null>(null)
-
-  // State: Comparison Modal
+  // State: Comparison Modal (até 5 pedidos do mesmo cliente)
   const [isCompareModalOpen, setIsCompareModalOpen] = useState(false)
   const [selectedPropostaIds, setSelectedPropostaIds] = useState<string[]>([])
   const [compareAId, setCompareAId] = useState<string | null>(null)
   const [compareBId, setCompareBId] = useState<string | null>(null)
 
-  // State: Detail / Print / WhatsApp View Modal
+  // State: Drawer de Detalhes / Visualização / Ações (ao estilo da V2)
   const [visualizandoPedido, setVisualizandoPedido] = useState<PedidoVenda | null>(null)
 
   // State: Form (Novo / Edição)
@@ -199,12 +358,6 @@ export function V2PedidoVendasPage() {
     )
   }, [tabelasPreco, formTabelaPrecoNome])
 
-  // Pedido selecionado atualmente na lista
-  const pedidoSelecionado = useMemo(() => {
-    if (!selectedPedidoId) return null
-    return pedidos.find((p) => p.id === selectedPedidoId) || null
-  }, [pedidos, selectedPedidoId])
-
   // Propostas disponíveis para comparação
   const propostasDisponiveis = useMemo(() => {
     return pedidos.filter((p) => p.status === 'proposta' || p.status === 'aprovado')
@@ -227,10 +380,8 @@ export function V2PedidoVendasPage() {
   // Filter and Search logic para a lista de vendas
   const pedidosFiltrados = useMemo(() => {
     return pedidos.filter((p) => {
-      // Filtro de status
       if (filtroStatus !== 'todos' && p.status !== filtroStatus) return false
 
-      // Filtro de ano e mês (baseado na data de emissão)
       if (p.dataEmissao) {
         const anoPed = p.dataEmissao.slice(0, 4)
         const mesPed = p.dataEmissao.slice(5, 7)
@@ -238,7 +389,6 @@ export function V2PedidoVendasPage() {
         if (mesPed !== filtroMesNum) return false
       }
 
-      // Busca textual
       if (busca.trim()) {
         const q = busca.toLowerCase()
         const matchNum = p.numero.toLowerCase().includes(q)
@@ -316,27 +466,43 @@ export function V2PedidoVendasPage() {
     }
   }, [pedidos, filtroAno, filtroMesNum])
 
-  // Selecionar / Deselecionar proposta para comparar
+  // ──────────────────────────────────────────────────────────────────────────
+  // COMPARAÇÃO: SELECIONAR ATÉ 5 ORÇAMENTOS DO MESMO CLIENTE (REQUISITO NOVO)
+  // ──────────────────────────────────────────────────────────────────────────
   const handleToggleSelectProposta = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation()
+    const ped = pedidos.find((p) => p.id === id)
+    if (!ped) return
+
     setSelectedPropostaIds((prev) => {
       if (prev.includes(id)) {
         return prev.filter((item) => item !== id)
       }
-      if (prev.length >= 2) {
-        return [prev[1], id]
+
+      // Se já houver propostas selecionadas, verificar se é do mesmo cliente
+      if (prev.length > 0) {
+        const primeiroSelecionado = pedidos.find((p) => p.id === prev[0])
+        const mesmoCliente =
+          primeiroSelecionado &&
+          (primeiroSelecionado.cliente_id && ped.cliente_id
+            ? primeiroSelecionado.cliente_id === ped.cliente_id
+            : primeiroSelecionado.cliente_nome.toLowerCase().trim() === ped.cliente_nome.toLowerCase().trim())
+
+        if (!mesmoCliente) {
+          alert(
+            `Você pode selecionar até 5 orçamentos do mesmo cliente para comparar.\n\nCliente selecionado: ${primeiroSelecionado?.cliente_nome}\nTentativa: ${ped.cliente_nome}`
+          )
+          return prev
+        }
+
+        if (prev.length >= 5) {
+          alert('Limite máximo de 5 orçamentos para comparação atingido.')
+          return prev
+        }
       }
+
       return [...prev, id]
     })
-  }
-
-  // Alternar seleção de linha de pedido para a barra de ações
-  const handleSelectPedidoLinha = (id: string) => {
-    if (selectedPedidoId === id) {
-      setSelectedPedidoId(null)
-    } else {
-      setSelectedPedidoId(id)
-    }
   }
 
   // Abrir modal de comparação
@@ -390,7 +556,7 @@ export function V2PedidoVendasPage() {
     setPedidoEdicao(null)
     setFormCanal('distribuicao')
 
-    // 1. Tabela marcada como padrão (conforme requisito)
+    // Tabela marcada como padrão
     const tabelaPadrao =
       tabelasPreco.find((t) => t.is_default && t.active) ||
       tabelasPreco.find((t) => t.is_default) ||
@@ -413,7 +579,7 @@ export function V2PedidoVendasPage() {
     setFormContaEntradaTag(contasBancarias[0]?.nome ? `#${contasBancarias[0].nome}` : '#Inter')
     setFormObservacao('')
 
-    // Descontos das 3 condições padrão
+    // Descontos padrão
     setFormDesconto5xPercentual(5)
     setFormDescontoVistaPercentual(10)
     setFormCondicaoSelecionada('sem_desconto')
@@ -452,12 +618,10 @@ export function V2PedidoVendasPage() {
     setFormContaEntradaTag(pedido.contaEntradaTag || '')
     setFormObservacao(pedido.observacao || '')
 
-    // Carregar descontos
     setFormDesconto5xPercentual(pedido.desconto5xPercentual ?? 5)
     setFormDescontoVistaPercentual(pedido.descontoVistaPercentual ?? 10)
     setFormCondicaoSelecionada(pedido.condicaoSelecionada ?? 'sem_desconto')
 
-    // Carregar itens com cálculo de preços
     const itensCarregados =
       pedido.itens.length > 0
         ? pedido.itens.map((it) => {
@@ -484,6 +648,37 @@ export function V2PedidoVendasPage() {
           ]
 
     setFormItens(itensCarregados)
+    setVisualizandoPedido(null)
+    setViewMode('formulario')
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // AÇÃO DUPLICAR PEDIDO / PROPOSTA (REQUISITO IMAGEM 03)
+  // ──────────────────────────────────────────────────────────────────────────
+  const handleDuplicarPedido = (original: PedidoVenda) => {
+    setPedidoEdicao(null) // Cria como novo pedido
+    setFormCanal(original.canal)
+    setFormClienteId(original.cliente_id)
+    setFormClienteNome(original.cliente_nome)
+    setClienteBuscaTexto(original.cliente_nome)
+    setFormClienteDocumento(original.cliente_documento || '')
+    setFormClienteCidade(original.cliente_cidade || '')
+    setFormTabelaPrecoNome(original.tabela_preco_nome || tabelasPreco[0]?.name || '')
+    setFormDataEntrega(somarDias(dataHoje, 10))
+    setFormFormaPagamento(original.formaPagamento)
+    setFormNumeroParcelas(original.numeroParcelas || 1)
+    setFormContaEntradaTag(original.contaEntradaTag || '')
+    setFormObservacao(
+      original.observacao
+        ? `[Cópia do orçamento ${formatarNumeroVendaExibicao(original.numero)}] ${original.observacao}`
+        : `[Cópia do orçamento ${formatarNumeroVendaExibicao(original.numero)}]`
+    )
+    setFormDesconto5xPercentual(original.desconto5xPercentual ?? 5)
+    setFormDescontoVistaPercentual(original.descontoVistaPercentual ?? 10)
+    setFormCondicaoSelecionada(original.condicaoSelecionada ?? 'sem_desconto')
+    setFormItens(original.itens.map((it) => ({ ...it })))
+
+    setVisualizandoPedido(null)
     setViewMode('formulario')
   }
 
@@ -494,6 +689,9 @@ export function V2PedidoVendasPage() {
     if (res.ok) {
       await loadData()
       setIsCompareModalOpen(false)
+      if (visualizandoPedido && visualizandoPedido.id === id) {
+        setVisualizandoPedido((prev) => (prev ? { ...prev, status: 'aprovado' } : null))
+      }
     } else {
       alert(res.erro)
     }
@@ -504,6 +702,9 @@ export function V2PedidoVendasPage() {
     const res = await faturarPedidoVenda(id)
     if (res.ok) {
       await loadData()
+      if (visualizandoPedido && visualizandoPedido.id === id) {
+        setVisualizandoPedido((prev) => (prev ? { ...prev, status: 'faturado' } : null))
+      }
     } else {
       alert(res.erro)
     }
@@ -514,6 +715,9 @@ export function V2PedidoVendasPage() {
     const res = await entregarPedidoVenda(id)
     if (res.ok) {
       await loadData()
+      if (visualizandoPedido && visualizandoPedido.id === id) {
+        setVisualizandoPedido((prev) => (prev ? { ...prev, status: 'entregue' } : null))
+      }
     } else {
       alert(res.erro)
     }
@@ -524,6 +728,9 @@ export function V2PedidoVendasPage() {
     const res = await cancelarPedidoVenda(id)
     if (res.ok) {
       await loadData()
+      if (visualizandoPedido && visualizandoPedido.id === id) {
+        setVisualizandoPedido((prev) => (prev ? { ...prev, status: 'cancelado' } : null))
+      }
     } else {
       alert(res.erro)
     }
@@ -534,6 +741,9 @@ export function V2PedidoVendasPage() {
     const res = await voltarPedidoVendaStatus(id, 'proposta')
     if (res.ok) {
       await loadData()
+      if (visualizandoPedido && visualizandoPedido.id === id) {
+        setVisualizandoPedido((prev) => (prev ? { ...prev, status: 'proposta' } : null))
+      }
     } else {
       alert(res.erro)
     }
@@ -624,8 +834,6 @@ export function V2PedidoVendasPage() {
     setFormItens((prev) => prev.filter((_, idx) => idx !== index))
   }
 
-  // Ao selecionar um produto no combobox:
-  // Preço unitário inicial DEVE ser a sugestão de vendas!
   const handleSelectProduct = (index: number, produtoId: string) => {
     const prod = produtosDisponiveis.find((p) => p.id === produtoId)
     if (!prod) return
@@ -654,7 +862,6 @@ export function V2PedidoVendasPage() {
     )
   }
 
-  // Ao mudar a tabela de preços, atualizar referências nos itens
   const handleChangeTabelaPreco = (novaTabelaNome: string) => {
     setFormTabelaPrecoNome(novaTabelaNome)
     setFormItens((prev) =>
@@ -704,32 +911,27 @@ export function V2PedidoVendasPage() {
     return formItens.reduce((acc, it) => acc + (it.quantidade || 0) * (it.preco_unitario || 0), 0)
   }, [formItens])
 
-  // 1. Valor Total sem desconto
   const totalSemDesconto = subtotalForm
 
-  // 2. Valor Total com pagamento até 5x (desconto padrão 5%, editável)
   const totalAte5x = useMemo(() => {
     const desc = Math.max(0, Math.min(100, formDesconto5xPercentual))
     return Math.round(totalSemDesconto * (1 - desc / 100) * 100) / 100
   }, [totalSemDesconto, formDesconto5xPercentual])
 
-  // 3. Valor Total com pagamento à vista (desconto padrão 10%, editável)
   const totalVista = useMemo(() => {
     const desc = Math.max(0, Math.min(100, formDescontoVistaPercentual))
     return Math.round(totalSemDesconto * (1 - desc / 100) * 100) / 100
   }, [totalSemDesconto, formDescontoVistaPercentual])
 
-  // Total final de acordo com a condição selecionada ou soma dos itens
   const totalForm = useMemo(() => {
     if (formCondicaoSelecionada === 'ate_5x') return totalAte5x
     if (formCondicaoSelecionada === 'a_vista') return totalVista
-    // Se sem desconto ou personalizado por item
     return formItens.reduce((acc, it) => acc + (it.total || 0), 0)
   }, [formCondicaoSelecionada, totalAte5x, totalVista, formItens])
 
   const descontoTotalForm = Math.max(0, subtotalForm - totalForm)
 
-  // Salvar Formulário
+  // Salvar Formulário: gera número no formato #YYYYMMSEQ (Ex: #202610001)
   const handleSalvarVenda = async (statusFinal: StatusVenda) => {
     if (!formClienteNome.trim()) {
       alert('Por favor, informe ou selecione o cliente.')
@@ -742,9 +944,11 @@ export function V2PedidoVendasPage() {
       return
     }
 
+    const numeroGerado = pedidoEdicao ? pedidoEdicao.numero : gerarNumeroVenda(pedidos, dataHoje)
+
     const payload: Omit<PedidoVenda, 'id' | 'created_at' | 'updated_at'> & { id?: string } = {
       id: pedidoEdicao ? pedidoEdicao.id : undefined,
-      numero: pedidoEdicao ? pedidoEdicao.numero : `PV-${dataHoje.replace(/-/g, '')}${String(Date.now()).slice(-3)}`,
+      numero: numeroGerado,
       canal: formCanal,
       status: statusFinal,
       cliente_id: formClienteId,
@@ -828,7 +1032,7 @@ export function V2PedidoVendasPage() {
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // TELA 1: FORMULÁRIO DE NOVO PEDIDO / ORÇAMENTO (IMAGEM 01)
+  // TELA 1: FORMULÁRIO DE NOVO PEDIDO / ORÇAMENTO
   // ──────────────────────────────────────────────────────────────────────────
   if (viewMode === 'formulario') {
     return (
@@ -848,7 +1052,7 @@ export function V2PedidoVendasPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-              {pedidoEdicao ? `Editar Pedido #${pedidoEdicao.numero}` : 'Novo Pedido de Venda / Orçamento'}
+              {pedidoEdicao ? `Editar Pedido ${formatarNumeroVendaExibicao(pedidoEdicao.numero)}` : 'Novo Pedido de Venda / Orçamento'}
             </h1>
             <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
               Defina os produtos, condições de pagamento e salve como Proposta Comercial (Orçamento) ou Pedido Aprovado.
@@ -859,23 +1063,22 @@ export function V2PedidoVendasPage() {
             <button
               type="button"
               onClick={() => handleSalvarVenda('proposta')}
-              className="flex-1 sm:flex-none rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-amber-800 shadow-xs hover:bg-amber-100 active:scale-95 transition-all text-center"
+              className="flex-1 sm:flex-none rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-amber-800 shadow-xs hover:bg-amber-100 active:scale-95 transition-all text-center cursor-pointer"
             >
               Salvar como Orçamento (Proposta)
             </button>
             <button
               type="button"
               onClick={() => handleSalvarVenda('aprovado')}
-              className="flex-1 sm:flex-none rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white shadow-xs hover:bg-slate-800 active:scale-95 transition-all text-center"
+              className="flex-1 sm:flex-none rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white shadow-xs hover:bg-slate-800 active:scale-95 transition-all text-center cursor-pointer"
             >
               Salvar como Pedido Aprovado
             </button>
           </div>
         </div>
 
-        {/* Grid de Edição Principal: 2 Colunas para Dados/Itens + 1 Coluna para Condições */}
+        {/* Grid de Edição Principal */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Coluna 1 & 2: Cliente e Produtos */}
           <div className="lg:col-span-2 space-y-6">
             {/* Card 1: Cliente e Canal Comercial */}
             <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-6 shadow-sm space-y-4">
@@ -887,18 +1090,17 @@ export function V2PedidoVendasPage() {
                   </h3>
                 </div>
 
-                {/* Botão de cadastro rápido de cliente */}
                 <button
                   type="button"
                   onClick={handleAbrirCadastroRapidoCliente}
-                  className="inline-flex items-center gap-1.5 text-xs font-bold text-sky-700 hover:text-sky-900 bg-sky-50 hover:bg-sky-100 px-3 py-1.5 rounded-lg transition"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-sky-700 hover:text-sky-900 bg-sky-50 hover:bg-sky-100 px-3 py-1.5 rounded-lg transition cursor-pointer"
                 >
                   <UserPlus size={14} /> + Cadastrar Novo Cliente
                 </button>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                {/* Autocomplete de Cliente com busca rápida */}
+                {/* Autocomplete de Cliente */}
                 <div className="sm:col-span-2 space-y-1 relative" ref={clienteDropdownRef}>
                   <label className="text-xs font-bold uppercase text-slate-500 flex items-center justify-between">
                     <span>Nome do Cliente *</span>
@@ -928,7 +1130,6 @@ export function V2PedidoVendasPage() {
                     />
                   </div>
 
-                  {/* Dropdown de sugestões de cliente */}
                   {isClienteDropdownOpen && (
                     <div className="absolute top-full left-0 right-0 mt-1 z-30 max-h-60 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl py-1 divide-y divide-slate-100">
                       {clientesFiltrados.length > 0 ? (
@@ -937,7 +1138,7 @@ export function V2PedidoVendasPage() {
                             key={cli.id}
                             type="button"
                             onClick={() => handleSelectCliente(cli)}
-                            className="w-full text-left px-3.5 py-2.5 hover:bg-sky-50/80 transition flex items-center justify-between"
+                            className="w-full text-left px-3.5 py-2.5 hover:bg-sky-50/80 transition flex items-center justify-between cursor-pointer"
                           >
                             <div>
                               <p className="text-xs font-bold text-slate-900">{cli.full_name}</p>
@@ -962,7 +1163,7 @@ export function V2PedidoVendasPage() {
                           <button
                             type="button"
                             onClick={handleAbrirCadastroRapidoCliente}
-                            className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-sky-700 bg-sky-50 hover:bg-sky-100 px-3 py-1.5 rounded-lg transition"
+                            className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-sky-700 bg-sky-50 hover:bg-sky-100 px-3 py-1.5 rounded-lg transition cursor-pointer"
                           >
                             <UserPlus size={14} /> Cadastrar "{clienteBuscaTexto}" agora
                           </button>
@@ -978,7 +1179,7 @@ export function V2PedidoVendasPage() {
                   <select
                     value={formCanal}
                     onChange={(e) => setFormCanal(e.target.value as CanalVenda)}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 cursor-pointer"
                   >
                     <option value="distribuicao">Distribuição</option>
                     <option value="representacao">Representação</option>
@@ -1037,7 +1238,7 @@ export function V2PedidoVendasPage() {
               </div>
             </div>
 
-            {/* Card 2: Produtos e Itens com Busca e Informações de Margem */}
+            {/* Card 2: Produtos e Itens com Busca Autocomplete (Imagens 04 & 05) */}
             <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-6 shadow-sm space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div className="flex items-center gap-2">
@@ -1049,7 +1250,7 @@ export function V2PedidoVendasPage() {
                 <button
                   type="button"
                   onClick={handleAddItem}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition-colors"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition-colors cursor-pointer"
                 >
                   <Plus size={14} /> Adicionar Produto
                 </button>
@@ -1057,13 +1258,10 @@ export function V2PedidoVendasPage() {
 
               <div className="space-y-4">
                 {formItens.map((item, idx) => {
-                  // Margem e desconto máximo permitido
                   const precoRef = item.preco_unitario || item.preco_tabela || 0
                   const precoVendaMin = item.preco_venda_minimo || 0
                   const maxDescontoValor = Math.max(0, precoRef - precoVendaMin)
                   const maxDescontoPerc = precoRef > 0 ? (maxDescontoValor / precoRef) * 100 : 0
-
-                  // Preço praticado efetivo por unidade
                   const precoEfetivoUnitario = precoRef * (1 - (item.desconto_percentual || 0) / 100)
                   const isAbaixoTabelaVenda = precoVendaMin > 0 && precoEfetivoUnitario < precoVendaMin - 0.01
 
@@ -1076,28 +1274,17 @@ export function V2PedidoVendasPage() {
                           : 'border-slate-200/90 bg-slate-50/40'
                       }`}
                     >
-                      {/* Linha principal: Produto (Select Pesquisável), Qtd, Preço Unitário, Desconto %, Total */}
                       <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-                        {/* Seletor com pesquisa de produto */}
-                        <div className="sm:col-span-5 space-y-1">
-                          <label className="text-[11px] font-bold uppercase text-slate-500">
-                            Produto do Catálogo *
-                          </label>
-                          <select
-                            value={item.produto_id}
-                            onChange={(e) => handleSelectProduct(idx, e.target.value)}
-                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-800 outline-none focus:border-indigo-500 shadow-2xs"
-                          >
-                            <option value="">Pesquise e selecione um produto...</option>
-                            {produtosDisponiveis.map((p) => {
-                              const precos = getPrecosDoProduto(p.id, formTabelaPrecoNome)
-                              return (
-                                <option key={p.id} value={p.id}>
-                                  {p.name} · Sugestão: {formatarMoeda(precos.precoSugestao)}
-                                </option>
-                              )
-                            })}
-                          </select>
+                        {/* Campo Produto Autocomplete Pesquisável (Imagem 05) */}
+                        <div className="sm:col-span-5">
+                          <ProdutoSearchInput
+                            item={item}
+                            index={idx}
+                            produtos={produtosDisponiveis}
+                            formTabelaPrecoNome={formTabelaPrecoNome}
+                            getPrecosDoProduto={getPrecosDoProduto}
+                            onSelectProduct={handleSelectProduct}
+                          />
                         </div>
 
                         {/* Quantidade */}
@@ -1145,7 +1332,7 @@ export function V2PedidoVendasPage() {
                             onClick={() => handleRemoveItem(idx)}
                             disabled={formItens.length === 1}
                             title="Remover produto da proposta"
-                            className="p-1.5 text-slate-400 hover:text-rose-600 disabled:opacity-30 transition-colors"
+                            className="p-1.5 text-slate-400 hover:text-rose-600 disabled:opacity-30 transition-colors cursor-pointer"
                           >
                             <Trash2 size={16} />
                           </button>
@@ -1172,7 +1359,6 @@ export function V2PedidoVendasPage() {
                             </div>
                           </div>
 
-                          {/* Informação e controle do desconto permitido */}
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-0.5">
                             <div className="flex items-center gap-1.5 text-[11px] text-slate-600">
                               <Info size={14} className="text-sky-600 shrink-0" />
@@ -1185,7 +1371,6 @@ export function V2PedidoVendasPage() {
                               </span>
                             </div>
 
-                            {/* Desconto Aplicado neste Item */}
                             <div className="flex items-center gap-2">
                               <label className="text-[11px] font-bold text-slate-500 uppercase">
                                 Desconto Aplicado:
@@ -1207,7 +1392,6 @@ export function V2PedidoVendasPage() {
                             </div>
                           </div>
 
-                          {/* Alerta de violação da margem mínima */}
                           {isAbaixoTabelaVenda && (
                             <div className="flex items-center gap-2 rounded-lg bg-amber-100/70 border border-amber-300 px-3 py-1.5 text-[11px] font-bold text-amber-900">
                               <AlertTriangle size={14} className="text-amber-700 shrink-0" />
@@ -1225,7 +1409,7 @@ export function V2PedidoVendasPage() {
             </div>
           </div>
 
-          {/* Coluna 3: Condições de Pagamento e TOTALIZAÇÃO EM 3 VALORES (Requisito Especial) */}
+          {/* Coluna 3: Condições de Pagamento e TOTALIZAÇÃO EM 3 VALORES */}
           <div className="space-y-6">
             <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-6 shadow-sm space-y-5">
               <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
@@ -1241,7 +1425,7 @@ export function V2PedidoVendasPage() {
                   <select
                     value={formFormaPagamento}
                     onChange={(e) => setFormFormaPagamento(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none focus:border-emerald-500"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none focus:border-emerald-500 cursor-pointer"
                   >
                     {FORMAS_PAGAMENTO.map((fp) => (
                       <option key={fp} value={fp}>
@@ -1274,7 +1458,7 @@ export function V2PedidoVendasPage() {
                     type="date"
                     value={formDataEntrega}
                     onChange={(e) => setFormDataEntrega(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white cursor-pointer"
                   />
                 </div>
 
@@ -1290,13 +1474,13 @@ export function V2PedidoVendasPage() {
                 </div>
               </div>
 
-              {/* ── QUEBRA EM 3 VALORES TOTAIS (REQUISITO ESPECIFICADO) ── */}
+              {/* SIMULAÇÃO COMERCIAL DOS 3 TOTAIS */}
               <div className="pt-4 border-t border-slate-200 space-y-3">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
                   Simulação Comercial dos 3 Totais
                 </span>
 
-                {/* Valor 1: Total Sem Desconto */}
+                {/* 1. Total Sem Desconto */}
                 <div
                   onClick={() => setFormCondicaoSelecionada('sem_desconto')}
                   className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
@@ -1314,7 +1498,7 @@ export function V2PedidoVendasPage() {
                   <p className="text-[10px] text-slate-400 mt-1">Preço de tabela de vendas integral</p>
                 </div>
 
-                {/* Valor 2: Total Até 5x (Padrão 5% com % configurável) */}
+                {/* 2. Total Até 5x (Padrão 5%, editável) */}
                 <div
                   onClick={() => setFormCondicaoSelecionada('ate_5x')}
                   className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
@@ -1351,7 +1535,7 @@ export function V2PedidoVendasPage() {
                   </div>
                 </div>
 
-                {/* Valor 3: Total À Vista (Padrão 10% com % configurável) */}
+                {/* 3. Total À Vista (Padrão 10%, editável) */}
                 <div
                   onClick={() => setFormCondicaoSelecionada('a_vista')}
                   className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
@@ -1408,14 +1592,14 @@ export function V2PedidoVendasPage() {
                 <button
                   type="button"
                   onClick={() => handleSalvarVenda('proposta')}
-                  className="w-full rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs font-bold uppercase tracking-wider text-amber-800 shadow-xs hover:bg-amber-100 active:scale-95 transition-all text-center"
+                  className="w-full rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs font-bold uppercase tracking-wider text-amber-800 shadow-xs hover:bg-amber-100 active:scale-95 transition-all text-center cursor-pointer"
                 >
                   Salvar como Orçamento (Proposta)
                 </button>
                 <button
                   type="button"
                   onClick={() => handleSalvarVenda('aprovado')}
-                  className="w-full rounded-xl bg-slate-900 px-4 py-3 text-xs font-bold uppercase tracking-wider text-white shadow-xs hover:bg-slate-800 active:scale-95 transition-all text-center"
+                  className="w-full rounded-xl bg-slate-900 px-4 py-3 text-xs font-bold uppercase tracking-wider text-white shadow-xs hover:bg-slate-800 active:scale-95 transition-all text-center cursor-pointer"
                 >
                   Salvar como Pedido Aprovado
                 </button>
@@ -1424,7 +1608,7 @@ export function V2PedidoVendasPage() {
           </div>
         </div>
 
-        {/* Modal Simples de Cadastro Rápido de Cliente (Nome + Data de Nascimento) */}
+        {/* Modal Simples de Cadastro Rápido de Cliente */}
         {isNovoClienteModalOpen && (
           <div
             className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs"
@@ -1440,7 +1624,7 @@ export function V2PedidoVendasPage() {
                 <button
                   type="button"
                   onClick={() => setIsNovoClienteModalOpen(false)}
-                  className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
+                  className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
                 >
                   <X size={18} />
                 </button>
@@ -1517,14 +1701,14 @@ export function V2PedidoVendasPage() {
                   <button
                     type="button"
                     onClick={() => setIsNovoClienteModalOpen(false)}
-                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer"
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
                     disabled={salvandoCliente}
-                    className="rounded-xl bg-sky-600 px-5 py-2 text-xs font-bold uppercase tracking-wider text-white shadow-sm hover:bg-sky-700 disabled:opacity-50"
+                    className="rounded-xl bg-sky-600 px-5 py-2 text-xs font-bold uppercase tracking-wider text-white shadow-sm hover:bg-sky-700 disabled:opacity-50 cursor-pointer"
                   >
                     {salvandoCliente ? 'Cadastrando...' : 'Cadastrar e Selecionar'}
                   </button>
@@ -1538,55 +1722,28 @@ export function V2PedidoVendasPage() {
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // TELA 2: LISTAGEM DE PROPOSTAS & PEDIDOS DE VENDAS (IMAGEM 02)
+  // TELA 2: LISTAGEM DE PROPOSTAS & PEDIDOS DE VENDAS
   // ──────────────────────────────────────────────────────────────────────────
   return (
-    <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-6 font-sans">
-      {/* ── CABEÇALHO PRINCIPAL DA PÁGINA ── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-50 text-sky-600 border border-sky-100 shadow-xs">
-              <ClipboardList size={22} />
-            </span>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
-              PROPOSTAS & PEDIDOS DE VENDAS
-            </h1>
-          </div>
-          <p className="mt-1 text-xs sm:text-sm text-slate-500 leading-relaxed">
-            Gerencie orçamentos e pedidos de vendas por canais de distribuição e representação.
-          </p>
+    <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-6 font-sans relative">
+      {/* ── CABEÇALHO PRINCIPAL DA PÁGINA (Botões de topo removidos conforme Imagem 04) ── */}
+      <div>
+        <div className="flex items-center gap-2.5">
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-50 text-sky-600 border border-sky-100 shadow-xs">
+            <ClipboardList size={22} />
+          </span>
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
+            PROPOSTAS & PEDIDOS DE VENDAS
+          </h1>
         </div>
-
-        <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            type="button"
-            onClick={() => handleOpenComparar()}
-            className="inline-flex h-11 items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 text-xs sm:text-sm font-semibold tracking-wide text-indigo-700 hover:bg-indigo-100 hover:border-indigo-300 transition-all shadow-xs active:scale-95"
-          >
-            <Scale size={18} />
-            Comparar Orçamentos
-            {selectedPropostaIds.length > 0 && (
-              <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-xs font-bold text-white">
-                {selectedPropostaIds.length}
-              </span>
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleNovoPedido}
-            className="inline-flex h-11 items-center gap-2 rounded-xl bg-slate-900 px-5 text-xs sm:text-sm font-semibold tracking-wide text-white hover:bg-slate-800 transition-all shadow-xs active:scale-95"
-          >
-            <Plus size={18} strokeWidth={2.5} />
-            NOVA VENDA / PROPOSTA
-          </button>
-        </div>
+        <p className="mt-1 text-xs sm:text-sm text-slate-500 leading-relaxed">
+          Gerencie orçamentos e pedidos de vendas por canais de distribuição e representação.
+        </p>
       </div>
 
       {/* ── CARDS DE KPIS RESPONSIVOS ── */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-        {/* KPI 1: Orçado / Propostas */}
+        {/* KPI 1 */}
         <div className="relative overflow-hidden rounded-2xl border border-slate-100 bg-white p-5 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
@@ -1607,7 +1764,7 @@ export function V2PedidoVendasPage() {
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-amber-400" />
         </div>
 
-        {/* KPI 2: Aprovados */}
+        {/* KPI 2 */}
         <div className="relative overflow-hidden rounded-2xl border border-slate-100 bg-white p-5 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
@@ -1628,7 +1785,7 @@ export function V2PedidoVendasPage() {
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-500" />
         </div>
 
-        {/* KPI 3: Faturamento Realizado */}
+        {/* KPI 3 */}
         <div className="relative overflow-hidden rounded-2xl border border-slate-100 bg-white p-5 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
@@ -1649,7 +1806,7 @@ export function V2PedidoVendasPage() {
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-emerald-500" />
         </div>
 
-        {/* KPI 4: Entregas */}
+        {/* KPI 4 */}
         <div className="relative overflow-hidden rounded-2xl border border-slate-100 bg-white p-5 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
@@ -1673,7 +1830,7 @@ export function V2PedidoVendasPage() {
 
       {/* ── CARD COM ABAS, SELEÇÃO DE ANO/MÊS E BUSCA ── */}
       <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs space-y-4">
-        {/* Abas Superiores */}
+        {/* Abas */}
         <div className="flex gap-4 border-b border-slate-100 pb-3 overflow-x-auto">
           {ABAS_STATUS.map((aba) => {
             const isSelected = filtroStatus === aba.value
@@ -1684,7 +1841,7 @@ export function V2PedidoVendasPage() {
                 key={aba.value}
                 type="button"
                 onClick={() => setFiltroStatus(aba.value)}
-                className={`inline-flex items-center gap-2 pb-2 text-xs font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${
+                className={`inline-flex items-center gap-2 pb-2 text-xs font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap cursor-pointer ${
                   isSelected
                     ? 'border-sky-600 text-sky-700'
                     : 'border-transparent text-slate-400 hover:text-slate-700'
@@ -1703,10 +1860,9 @@ export function V2PedidoVendasPage() {
           })}
         </div>
 
-        {/* Barra de Filtros: Ano + Meses + Busca */}
+        {/* Filtros */}
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 pt-1">
           <div className="flex flex-wrap items-center gap-2">
-            {/* Seletor de Ano */}
             <select
               value={filtroAno}
               onChange={(e) => setFiltroAno(Number(e.target.value))}
@@ -1719,7 +1875,6 @@ export function V2PedidoVendasPage() {
               ))}
             </select>
 
-            {/* Pílulas de Meses com scroll suave em telas menores */}
             <div className="inline-flex items-center gap-1 overflow-x-auto max-w-full pb-1 sm:pb-0">
               {MESES_LISTA.map((m) => {
                 const isSelected = filtroMesNum === m.num
@@ -1728,7 +1883,7 @@ export function V2PedidoVendasPage() {
                     key={m.num}
                     type="button"
                     onClick={() => setFiltroMesNum(m.num)}
-                    className={`rounded-xl px-3 py-1.5 text-xs font-bold transition-all shrink-0 ${
+                    className={`rounded-xl px-3 py-1.5 text-xs font-bold transition-all shrink-0 cursor-pointer ${
                       isSelected
                         ? 'bg-sky-700 text-white shadow-xs'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -1741,7 +1896,6 @@ export function V2PedidoVendasPage() {
             </div>
           </div>
 
-          {/* Campo de Busca de Clientes / Documento / Nº */}
           <div className="relative w-full lg:max-w-xs">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
             <input
@@ -1755,142 +1909,50 @@ export function V2PedidoVendasPage() {
         </div>
       </div>
 
-      {/* ── BARRA DE AÇÕES RÁPIDAS (HABILITADA AO SELECIONAR UM PEDIDO - REQUISITO IMAGEM 02) ── */}
-      {pedidoSelecionado ? (
-        <div className="rounded-2xl border border-sky-300 bg-gradient-to-r from-sky-50 via-white to-sky-50/70 p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in duration-200">
-          {/* Identificação do Pedido Selecionado */}
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-sky-600 text-white font-black text-xs shadow-xs">
-              ✓
+      {/* ── BARRA FLUTUANTE DE COMPARAÇÃO (ATÉ 5 ORÇAMENTOS DO MESMO CLIENTE) ── */}
+      {selectedPropostaIds.length > 0 && (
+        <div className="rounded-2xl border border-indigo-200 bg-gradient-to-r from-indigo-50 via-white to-indigo-50 p-3.5 shadow-sm flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-200">
+          <div className="flex items-center gap-2.5">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-600 text-white font-bold text-xs shadow-xs">
+              {selectedPropostaIds.length}
             </span>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-500 uppercase">Ações para:</span>
-                <span className="text-sm font-black text-slate-900">{pedidoSelecionado.numero}</span>
-                {renderStatusBadge(pedidoSelecionado.status)}
-              </div>
-              <p className="text-xs text-slate-600 mt-0.5 font-semibold">
-                Cliente: <strong className="text-slate-900">{pedidoSelecionado.cliente_nome}</strong> · Total:{' '}
-                <strong className="text-slate-900 font-black">{formatarMoeda(pedidoSelecionado.total)}</strong>
+              <p className="text-xs font-bold text-slate-900">
+                {selectedPropostaIds.length === 1
+                  ? '1 orçamento selecionado (selecione mais para comparar até 5 do mesmo cliente)'
+                  : `${selectedPropostaIds.length} orçamentos selecionados para comparar`}
+              </p>
+              <p className="text-[10px] text-indigo-700 font-medium">
+                Cliente:{' '}
+                <strong>
+                  {pedidos.find((p) => p.id === selectedPropostaIds[0])?.cliente_nome}
+                </strong>
               </p>
             </div>
           </div>
 
-          {/* Botões de Ação Dinâmicos Conforme o Status */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Visualizar / Espelho / WhatsApp */}
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setVisualizandoPedido(pedidoSelecionado)}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-2xs transition active:scale-95"
+              disabled={selectedPropostaIds.length < 2}
+              onClick={() => handleOpenComparar()}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white shadow-md shadow-indigo-600/20 hover:bg-indigo-700 disabled:opacity-50 active:scale-95 transition-all cursor-pointer"
             >
-              <Eye size={15} className="text-sky-600" />
-              Visualizar
+              <Scale size={15} />
+              Comparar Agora
             </button>
-
-            {/* Editar (Orçamento ou Aprovado) */}
-            {(pedidoSelecionado.status === 'proposta' || pedidoSelecionado.status === 'aprovado') && (
-              <button
-                type="button"
-                onClick={() => handleEditarPedido(pedidoSelecionado)}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-2xs transition active:scale-95"
-              >
-                <Edit3 size={15} className="text-indigo-600" />
-                Editar Pedido
-              </button>
-            )}
-
-            {/* Aprovar Proposta */}
-            {pedidoSelecionado.status === 'proposta' && (
-              <button
-                type="button"
-                onClick={() => void handleAprovar(pedidoSelecionado.id)}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white hover:bg-emerald-700 shadow-2xs transition active:scale-95"
-              >
-                <CheckCircle size={15} />
-                Aprovar Pedido
-              </button>
-            )}
-
-            {/* Faturar Pedido Aprovado */}
-            {pedidoSelecionado.status === 'aprovado' && (
-              <button
-                type="button"
-                onClick={() => void handleFaturar(pedidoSelecionado.id)}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white hover:bg-purple-700 shadow-2xs transition active:scale-95"
-              >
-                <DollarSign size={15} />
-                Faturar Venda
-              </button>
-            )}
-
-            {/* Confirmar Entrega */}
-            {pedidoSelecionado.status === 'faturado' && (
-              <button
-                type="button"
-                onClick={() => void handleEntregar(pedidoSelecionado.id)}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white hover:bg-blue-700 shadow-2xs transition active:scale-95"
-              >
-                <Truck size={15} />
-                Confirmar Entrega
-              </button>
-            )}
-
-            {/* Cancelar */}
-            {pedidoSelecionado.status !== 'cancelado' && pedidoSelecionado.status !== 'entregue' && (
-              <button
-                type="button"
-                onClick={() => void handleCancelar(pedidoSelecionado.id)}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-100 transition active:scale-95"
-              >
-                <XCircle size={15} />
-                Cancelar
-              </button>
-            )}
-
-            {/* Reabrir Cancelado */}
-            {pedidoSelecionado.status === 'cancelado' && (
-              <button
-                type="button"
-                onClick={() => void handleReabrir(pedidoSelecionado.id)}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2 text-xs font-bold text-amber-700 hover:bg-amber-100 transition active:scale-95"
-              >
-                <RotateCcw size={15} />
-                Reabrir Proposta
-              </button>
-            )}
-
-            {/* Desmarcar */}
             <button
               type="button"
-              onClick={() => setSelectedPedidoId(null)}
-              className="p-2 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition"
-              title="Desmarcar seleção"
+              onClick={() => setSelectedPropostaIds([])}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
             >
-              <X size={16} />
+              Limpar
             </button>
           </div>
         </div>
-      ) : (
-        /* Barra sutil de instrução quando nenhum pedido está selecionado */
-        <div className="rounded-2xl border border-slate-200/60 bg-slate-50/70 px-4 py-2.5 text-xs text-slate-500 flex items-center justify-between">
-          <span className="flex items-center gap-2">
-            <Info size={14} className="text-sky-600" />
-            Clique em qualquer pedido na tabela abaixo ou marque a caixa para habilitar as ações rápidas.
-          </span>
-          {selectedPropostaIds.length > 0 && (
-            <button
-              type="button"
-              onClick={() => handleOpenComparar()}
-              className="text-xs font-bold text-indigo-700 hover:underline inline-flex items-center gap-1"
-            >
-              <Scale size={13} /> {selectedPropostaIds.length} selecionado(s) para comparar
-            </button>
-          )}
-        </div>
       )}
 
-      {/* ── TABELA DE VENDAS E PROPOSTAS RESPONSIVA ── */}
+      {/* ── TABELA DE VENDAS E PROPOSTAS (AÇÕES OCULTADAS NA LINHA - REQUISITO IMAGEM 02) ── */}
       <div className="rounded-2xl border border-slate-200/80 bg-white shadow-xs overflow-hidden">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
@@ -1899,12 +1961,28 @@ export function V2PedidoVendasPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs text-slate-700 min-w-[850px]">
+            <table className="w-full text-xs text-slate-700 min-w-[780px]">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/60">
-                  <th className="w-10 px-3 py-3.5 text-center text-xs font-bold tracking-wider text-slate-400 uppercase">
-                    <span className="sr-only">Comparar</span>
-                    <Scale size={14} className="mx-auto text-slate-400" />
+                  {/* Ícone da coluna de comparação clicável */}
+                  <th className="w-12 px-3 py-3.5 text-center text-xs font-bold tracking-wider text-slate-400 uppercase">
+                    <button
+                      type="button"
+                      disabled={selectedPropostaIds.length < 2}
+                      onClick={() => handleOpenComparar()}
+                      title={
+                        selectedPropostaIds.length >= 2
+                          ? `Clique para comparar os ${selectedPropostaIds.length} orçamentos selecionados`
+                          : 'Marque até 5 orçamentos do mesmo cliente para comparar'
+                      }
+                      className={`inline-flex items-center justify-center p-1.5 rounded-lg transition-all ${
+                        selectedPropostaIds.length >= 2
+                          ? 'bg-indigo-600 text-white shadow-xs hover:bg-indigo-700 cursor-pointer animate-pulse'
+                          : 'text-slate-400 hover:text-slate-600'
+                      }`}
+                    >
+                      <Scale size={15} />
+                    </button>
                   </th>
                   <th className="px-4 py-3.5 text-left font-bold tracking-wider text-slate-400 uppercase">Nº Venda</th>
                   <th className="px-4 py-3.5 text-left font-bold tracking-wider text-slate-400 uppercase">Data</th>
@@ -1913,42 +1991,40 @@ export function V2PedidoVendasPage() {
                   <th className="px-4 py-3.5 text-left font-bold tracking-wider text-slate-400 uppercase">Status</th>
                   <th className="px-4 py-3.5 text-left font-bold tracking-wider text-slate-400 uppercase">Pagamento</th>
                   <th className="px-4 py-3.5 text-right font-bold tracking-wider text-slate-400 uppercase">Total</th>
-                  <th className="px-4 py-3.5 text-right font-bold tracking-wider text-slate-400 uppercase">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {pedidosFiltrados.map((p) => {
                   const isCheckedCompare = selectedPropostaIds.includes(p.id)
-                  const isSelectedRow = selectedPedidoId === p.id
 
                   return (
                     <tr
                       key={p.id}
-                      onClick={() => handleSelectPedidoLinha(p.id)}
-                      className={`cursor-pointer transition-colors ${
-                        isSelectedRow
-                          ? 'bg-sky-50/80 hover:bg-sky-50'
-                          : 'hover:bg-slate-50/80'
-                      }`}
+                      className="hover:bg-slate-50/80 transition-colors"
                     >
                       {/* Checkbox Comparar */}
-                      <td className="px-3 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-3 py-4 text-center">
                         <input
                           type="checkbox"
                           checked={isCheckedCompare}
                           onChange={(e) => handleToggleSelectProposta(p.id, e as any)}
-                          title="Selecionar para comparar orçamentos"
-                          aria-label={`Selecionar venda ${p.numero} para comparar`}
+                          title="Selecionar para comparar orçamentos do mesmo cliente (até 5)"
+                          aria-label={`Selecionar venda ${formatarNumeroVendaExibicao(p.numero)} para comparar`}
                           className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                         />
                       </td>
 
-                      {/* Nº Venda */}
-                      <td className="px-4 py-4 font-bold text-slate-900 tabular-nums">
-                        <span className="flex items-center gap-1.5">
-                          {isSelectedRow && <span className="h-2 w-2 rounded-full bg-sky-600" />}
-                          {p.numero}
-                        </span>
+                      {/* Nº Venda Clicável para abrir o Drawer de Detalhes (Imagem 02) */}
+                      <td className="px-4 py-4 tabular-nums">
+                        <button
+                          type="button"
+                          onClick={() => setVisualizandoPedido(p)}
+                          className="inline-flex items-center gap-1.5 text-sky-700 hover:text-sky-950 font-black hover:underline group cursor-pointer text-left text-xs"
+                          title="Clique para abrir detalhes, opções e ações deste pedido"
+                        >
+                          <Eye size={13} className="text-sky-500 group-hover:scale-110 transition-transform shrink-0" />
+                          <span>{formatarNumeroVendaExibicao(p.numero)}</span>
+                        </button>
                       </td>
 
                       {/* Data */}
@@ -1966,7 +2042,7 @@ export function V2PedidoVendasPage() {
                       {/* Cliente */}
                       <td className="px-4 py-4">
                         <div className="flex flex-col">
-                          <span className="font-bold text-slate-900 truncate max-w-[220px]">{p.cliente_nome}</span>
+                          <span className="font-bold text-slate-900 truncate max-w-[240px]">{p.cliente_nome}</span>
                           {p.cliente_cidade && (
                             <span className="text-[10px] text-slate-400 truncate">{p.cliente_cidade}</span>
                           )}
@@ -1992,60 +2068,13 @@ export function V2PedidoVendasPage() {
                       <td className="px-4 py-4 text-right font-black text-slate-900 tabular-nums">
                         {formatarMoeda(p.total)}
                       </td>
-
-                      {/* Ações Rápidas na Linha */}
-                      <td className="px-4 py-4 text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setVisualizandoPedido(p)}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 transition-colors"
-                            title="Visualizar detalhes do pedido"
-                          >
-                            <Eye size={15} />
-                          </button>
-
-                          {(p.status === 'proposta' || p.status === 'aprovado') && (
-                            <button
-                              type="button"
-                              onClick={() => handleEditarPedido(p)}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 transition-colors"
-                              title="Editar pedido"
-                            >
-                              <Edit3 size={15} />
-                            </button>
-                          )}
-
-                          {p.status === 'proposta' && (
-                            <button
-                              type="button"
-                              onClick={() => void handleAprovar(p.id)}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
-                              title="Aprovar proposta"
-                            >
-                              <CheckCircle size={15} />
-                            </button>
-                          )}
-
-                          {p.status === 'aprovado' && (
-                            <button
-                              type="button"
-                              onClick={() => void handleFaturar(p.id)}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors"
-                              title="Faturar pedido"
-                            >
-                              <DollarSign size={15} />
-                            </button>
-                          )}
-                        </div>
-                      </td>
                     </tr>
                   )
                 })}
 
                 {!loading && pedidosFiltrados.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="py-16 text-center text-slate-400">
+                    <td colSpan={8} className="py-16 text-center text-slate-400">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <ClipboardList size={32} className="text-slate-300" />
                         <span className="text-xs font-bold uppercase tracking-wider">
@@ -2061,6 +2090,17 @@ export function V2PedidoVendasPage() {
         )}
       </div>
 
+      {/* ── BOTÃO FLUTUANTE "+ NOVA VENDA / PROPOSTA" (FAB - REQUISITO IMAGEM 04) ── */}
+      <button
+        type="button"
+        onClick={handleNovoPedido}
+        title="Nova Venda / Proposta"
+        aria-label="Adicionar Nova Venda ou Proposta"
+        className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#0D6BAF] text-white shadow-2xl hover:bg-[#095287] hover:scale-105 active:scale-95 transition-all cursor-pointer ring-4 ring-white/80"
+      >
+        <Plus size={28} strokeWidth={2.8} />
+      </button>
+
       {/* ── MODAL DE COMPARAÇÃO DE ORÇAMENTOS V2 ── */}
       <V2OrcamentosComparisonModal
         isOpen={isCompareModalOpen}
@@ -2071,92 +2111,112 @@ export function V2PedidoVendasPage() {
         onAprovarProposta={handleAprovar}
       />
 
-      {/* ── MODAL DE DETALHES / VISUALIZAÇÃO / WHATSAPP DO PEDIDO ── */}
+      {/* ── DRAWER LATERAL DIREITO DE DETALHES E AÇÕES DA VENDA (AO ESTILO DA V2 - IMAGEM 03) ── */}
       {visualizandoPedido && (
-        <div
-          className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-3 sm:p-4 backdrop-blur-xs overflow-y-auto"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div className="flex max-h-[92vh] w-full max-w-2xl flex-col rounded-3xl border border-slate-200 bg-white shadow-2xl overflow-hidden">
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/60 px-5 sm:px-6 py-4">
-              <div className="flex items-center gap-2">
-                <ClipboardList size={20} className="text-sky-600" />
-                <h3 className="text-base font-bold text-slate-900">
-                  Venda #{visualizandoPedido.numero}
-                </h3>
-                {renderStatusBadge(visualizandoPedido.status)}
+        <>
+          {/* Backdrop escuro com clique para fechar */}
+          <div
+            onClick={() => setVisualizandoPedido(null)}
+            className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs z-50 transition-opacity duration-300"
+          />
+
+          {/* Drawer Lateral Deslizante */}
+          <div
+            className="fixed top-0 right-0 bottom-0 w-full max-w-xl bg-white shadow-2xl z-50 flex flex-col transform transition-transform duration-300 ease-out font-sans animate-in slide-in-from-right duration-300"
+            role="dialog"
+            aria-modal="true"
+          >
+            {/* Header do Drawer */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-[#0D6BAF] text-white">
+              <div className="flex items-center gap-2.5">
+                <div className="h-9 w-9 rounded-xl bg-white/15 flex items-center justify-center">
+                  <ClipboardList size={20} className="text-white" />
+                </div>
+                <div>
+                  <h2 className="text-base font-black tracking-tight leading-tight">
+                    Venda {formatarNumeroVendaExibicao(visualizandoPedido.numero)}
+                  </h2>
+                  <p className="text-[11px] text-white/70 mt-0.5">
+                    Canal: {visualizandoPedido.canal === 'distribuicao' ? 'Distribuição' : 'Representação'} · Emissão:{' '}
+                    {formatarData(visualizandoPedido.dataEmissao)}
+                  </p>
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setVisualizandoPedido(null)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
-              >
-                <X size={18} />
-              </button>
+
+              <div className="flex items-center gap-2">
+                {renderStatusBadge(visualizandoPedido.status)}
+                <button
+                  type="button"
+                  onClick={() => setVisualizandoPedido(null)}
+                  className="p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition cursor-pointer"
+                >
+                  <X size={20} />
+                </button>
+              </div>
             </div>
 
-            {/* Conteúdo */}
-            <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4 text-xs text-slate-700">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-2xl bg-slate-50 p-4 border border-slate-100">
-                <div>
-                  <span className="text-slate-400 font-semibold uppercase block">Cliente</span>
-                  <span className="font-bold text-sm text-slate-900">{visualizandoPedido.cliente_nome}</span>
-                  {visualizandoPedido.cliente_cidade && (
-                    <span className="text-slate-500 block">{visualizandoPedido.cliente_cidade}</span>
-                  )}
-                  {visualizandoPedido.cliente_documento && (
-                    <span className="text-slate-500 block">Doc: {visualizandoPedido.cliente_documento}</span>
-                  )}
-                </div>
-                <div>
-                  <span className="text-slate-400 font-semibold uppercase block">Condição de Pagamento</span>
-                  <span className="font-bold text-slate-900">{visualizandoPedido.formaPagamento}</span>
-                  <span className="text-slate-500 block">
-                    {visualizandoPedido.numeroParcelas > 1
-                      ? `${visualizandoPedido.numeroParcelas}x de ${formatarMoeda(
-                          visualizandoPedido.total / visualizandoPedido.numeroParcelas
-                        )}`
-                      : 'À vista'}
-                  </span>
-                  <span className="text-slate-400 block mt-1">
-                    Emissão: {formatarData(visualizandoPedido.dataEmissao)}
-                  </span>
+            {/* Conteúdo com Scroll Independente */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-5 text-xs text-slate-700">
+              {/* Card Cliente */}
+              <div className="rounded-2xl bg-slate-50 p-4 border border-slate-200/80 space-y-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                  Cliente & Entrega
+                </span>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">{visualizandoPedido.cliente_nome}</h3>
+                    {visualizandoPedido.cliente_cidade && (
+                      <p className="text-slate-500 text-[11px] mt-0.5">{visualizandoPedido.cliente_cidade}</p>
+                    )}
+                    {visualizandoPedido.cliente_documento && (
+                      <p className="text-slate-400 text-[10px] mt-0.5">Doc: {visualizandoPedido.cliente_documento}</p>
+                    )}
+                  </div>
+
+                  <div className="sm:text-right">
+                    <span className="text-slate-400 text-[10px] uppercase font-bold block">Previsão Entrega</span>
+                    <span className="font-bold text-slate-800 text-xs">
+                      {visualizandoPedido.dataPrevistaEntrega
+                        ? formatarData(visualizandoPedido.dataPrevistaEntrega)
+                        : 'Não definida'}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              {/* Tabela de Itens */}
-              <div>
-                <span className="text-xs font-bold uppercase text-slate-400 block mb-2">Produtos da Venda</span>
-                <div className="rounded-xl border border-slate-100 overflow-x-auto">
-                  <table className="w-full text-left min-w-[450px]">
-                    <thead className="bg-slate-50 border-b border-slate-100 text-slate-400 font-bold uppercase text-[10px]">
+              {/* Tabela de Produtos */}
+              <div className="space-y-2">
+                <span className="text-xs font-bold uppercase text-slate-500 block">Produtos da Proposta</span>
+                <div className="rounded-2xl border border-slate-200/80 overflow-hidden">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-400 font-bold uppercase text-[10px]">
                       <tr>
-                        <th className="px-3 py-2">Item</th>
-                        <th className="px-3 py-2 text-center">Qtd</th>
-                        <th className="px-3 py-2 text-right">Preço Unit.</th>
-                        <th className="px-3 py-2 text-right">Total</th>
+                        <th className="px-3.5 py-2.5">Item</th>
+                        <th className="px-3 py-2.5 text-center">Qtd</th>
+                        <th className="px-3 py-2.5 text-right">Preço Unit.</th>
+                        <th className="px-3.5 py-2.5 text-right">Total</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {visualizandoPedido.itens.map((it, idx) => (
-                        <tr key={idx}>
-                          <td className="px-3 py-2 font-semibold text-slate-800">{it.produto_nome}</td>
-                          <td className="px-3 py-2 text-center tabular-nums">{it.quantidade}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{formatarMoeda(it.preco_unitario)}</td>
-                          <td className="px-3 py-2 text-right font-bold tabular-nums text-slate-900">
+                        <tr key={idx} className="hover:bg-slate-50/50">
+                          <td className="px-3.5 py-2.5 font-semibold text-slate-800">{it.produto_nome}</td>
+                          <td className="px-3 py-2.5 text-center tabular-nums font-bold">{it.quantidade}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">
+                            {formatarMoeda(it.preco_unitario)}
+                          </td>
+                          <td className="px-3.5 py-2.5 text-right font-black tabular-nums text-slate-900">
                             {formatarMoeda(it.total)}
                           </td>
                         </tr>
                       ))}
                     </tbody>
-                    <tfoot className="bg-slate-50 border-t border-slate-100 font-bold text-slate-900">
+                    <tfoot className="bg-slate-50 border-t border-slate-200 font-bold text-slate-900">
                       <tr>
-                        <td colSpan={3} className="px-3 py-2 text-right uppercase">
-                          Total do Pedido:
+                        <td colSpan={3} className="px-3.5 py-2.5 text-right uppercase text-xs">
+                          Total da Venda:
                         </td>
-                        <td className="px-3 py-2 text-right tabular-nums text-sm font-black">
+                        <td className="px-3.5 py-2.5 text-right tabular-nums text-sm font-black text-slate-950">
                           {formatarMoeda(visualizandoPedido.total)}
                         </td>
                       </tr>
@@ -2165,53 +2225,75 @@ export function V2PedidoVendasPage() {
                 </div>
               </div>
 
-              {/* Box com os 3 totais na visualização */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-3 rounded-2xl bg-slate-50/70 border border-slate-200/80 text-[11px]">
-                <div>
-                  <span className="text-slate-400 uppercase font-bold block">1. Total sem desconto</span>
-                  <strong className="text-slate-900 text-xs font-black">
-                    {formatarMoeda(visualizandoPedido.subtotal)}
-                  </strong>
-                </div>
-                <div>
-                  <span className="text-slate-400 uppercase font-bold block">
-                    2. Até 5x ({visualizandoPedido.desconto5xPercentual ?? 5}% off)
-                  </span>
-                  <strong className="text-indigo-900 text-xs font-black">
-                    {formatarMoeda(
-                      visualizandoPedido.total5x ??
-                        visualizandoPedido.subtotal * (1 - (visualizandoPedido.desconto5xPercentual ?? 5) / 100)
-                    )}
-                  </strong>
-                </div>
-                <div>
-                  <span className="text-slate-400 uppercase font-bold block">
-                    3. À Vista ({visualizandoPedido.descontoVistaPercentual ?? 10}% off)
-                  </span>
-                  <strong className="text-emerald-900 text-xs font-black">
-                    {formatarMoeda(
-                      visualizandoPedido.totalVista ??
-                        visualizandoPedido.subtotal * (1 - (visualizandoPedido.descontoVistaPercentual ?? 10) / 100)
-                    )}
-                  </strong>
+              {/* Box com os 3 Totais Comerciais (Imagem 03) */}
+              <div className="space-y-2">
+                <span className="text-xs font-bold uppercase text-slate-500 block">
+                  Simulação Comercial das 3 Modalidades
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-4 rounded-2xl bg-slate-50/80 border border-slate-200/80 text-[11px]">
+                  <div>
+                    <span className="text-slate-400 uppercase font-bold block">1. Total sem Desconto</span>
+                    <strong className="text-slate-900 text-sm font-black block mt-0.5">
+                      {formatarMoeda(visualizandoPedido.subtotal)}
+                    </strong>
+                    <span className="text-[10px] text-slate-400">Preço de tabela integral</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 uppercase font-bold block">
+                      2. Até 5x ({visualizandoPedido.desconto5xPercentual ?? 5}% off)
+                    </span>
+                    <strong className="text-indigo-900 text-sm font-black block mt-0.5">
+                      {formatarMoeda(
+                        visualizandoPedido.total5x ??
+                          visualizandoPedido.subtotal * (1 - (visualizandoPedido.desconto5xPercentual ?? 5) / 100)
+                      )}
+                    </strong>
+                    <span className="text-[10px] text-indigo-700 font-semibold">
+                      5x de{' '}
+                      {formatarMoeda(
+                        (visualizandoPedido.total5x ??
+                          visualizandoPedido.subtotal * (1 - (visualizandoPedido.desconto5xPercentual ?? 5) / 100)) / 5
+                      )}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 uppercase font-bold block">
+                      3. À Vista ({visualizandoPedido.descontoVistaPercentual ?? 10}% off)
+                    </span>
+                    <strong className="text-emerald-900 text-sm font-black block mt-0.5">
+                      {formatarMoeda(
+                        visualizandoPedido.totalVista ??
+                          visualizandoPedido.subtotal * (1 - (visualizandoPedido.descontoVistaPercentual ?? 10) / 100)
+                      )}
+                    </strong>
+                    <span className="text-[10px] text-emerald-700 font-semibold">
+                      Economia:{' '}
+                      {formatarMoeda(
+                        visualizandoPedido.subtotal -
+                          (visualizandoPedido.totalVista ?? visualizandoPedido.subtotal * 0.9)
+                      )}
+                    </span>
+                  </div>
                 </div>
               </div>
 
+              {/* Observações */}
               {visualizandoPedido.observacao && (
-                <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3">
-                  <span className="text-slate-400 font-semibold uppercase block mb-1 text-[10px]">Observações</span>
-                  <p className="text-slate-700 whitespace-pre-line">{visualizandoPedido.observacao}</p>
+                <div className="rounded-2xl border border-slate-200/80 bg-slate-50/60 p-4">
+                  <span className="text-slate-400 font-bold uppercase block mb-1 text-[10px]">Observações / Notas</span>
+                  <p className="text-slate-700 whitespace-pre-line text-xs">{visualizandoPedido.observacao}</p>
                 </div>
               )}
             </div>
 
-            {/* Footer */}
-            <div className="flex flex-col sm:flex-row items-center justify-between border-t border-slate-100 bg-slate-50/60 px-5 sm:px-6 py-4 gap-3">
-              <div className="flex items-center gap-2 w-full sm:w-auto">
+            {/* ── RODAPÉ FIXO DO DRAWER COM TODAS AS AÇÕES (DUPLICAR, CANCELAR, ETC.) ── */}
+            <div className="p-4 sm:p-5 border-t border-slate-200 bg-slate-50/80 space-y-2.5 shrink-0">
+              {/* Linha 1 de Ações: Comunicação & Impressão */}
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => {
-                    const text = `📋 *PROPOSTA / PEDIDO DE VENDA #${visualizandoPedido.numero}*
+                    const text = `📋 *PROPOSTA / PEDIDO DE VENDA ${formatarNumeroVendaExibicao(visualizandoPedido.numero)}*
 Cliente: ${visualizandoPedido.cliente_nome}
 Total: ${formatarMoeda(visualizandoPedido.total)}
 Condição: ${visualizandoPedido.formaPagamento} (${visualizandoPedido.numeroParcelas}x)
@@ -2224,28 +2306,115 @@ Opções de Pagamento:
                       `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`
                     window.open(url, '_blank')
                   }}
-                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 transition-all"
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 transition cursor-pointer"
                 >
                   <MessageCircle size={15} /> WhatsApp
                 </button>
+
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-50 transition-all"
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 transition cursor-pointer"
                 >
                   <Printer size={15} /> Imprimir
                 </button>
+
+                {/* Duplicar Orçamento / Pedido (Requisito Imagem 03) */}
+                <button
+                  type="button"
+                  onClick={() => handleDuplicarPedido(visualizandoPedido)}
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700 shadow-2xs hover:bg-indigo-100 transition cursor-pointer"
+                  title="Duplicar este orçamento como uma nova proposta"
+                >
+                  <Copy size={15} /> Duplicar
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setVisualizandoPedido(null)}
-                className="w-full sm:w-auto rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
-              >
-                Fechar
-              </button>
+
+              {/* Linha 2 de Ações: Status & Edição */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Editar */}
+                {(visualizandoPedido.status === 'proposta' || visualizandoPedido.status === 'aprovado') && (
+                  <button
+                    type="button"
+                    onClick={() => handleEditarPedido(visualizandoPedido)}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition cursor-pointer shadow-2xs"
+                  >
+                    <Edit3 size={15} className="text-indigo-600" />
+                    Editar
+                  </button>
+                )}
+
+                {/* Aprovar Proposta */}
+                {visualizandoPedido.status === 'proposta' && (
+                  <button
+                    type="button"
+                    onClick={() => void handleAprovar(visualizandoPedido.id)}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold uppercase tracking-wider text-white hover:bg-emerald-700 transition cursor-pointer shadow-xs"
+                  >
+                    <CheckCircle size={15} />
+                    Aprovar
+                  </button>
+                )}
+
+                {/* Faturar */}
+                {visualizandoPedido.status === 'aprovado' && (
+                  <button
+                    type="button"
+                    onClick={() => void handleFaturar(visualizandoPedido.id)}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-purple-600 px-3.5 py-2 text-xs font-bold uppercase tracking-wider text-white hover:bg-purple-700 transition cursor-pointer shadow-xs"
+                  >
+                    <DollarSign size={15} />
+                    Faturar
+                  </button>
+                )}
+
+                {/* Confirmar Entrega */}
+                {visualizandoPedido.status === 'faturado' && (
+                  <button
+                    type="button"
+                    onClick={() => void handleEntregar(visualizandoPedido.id)}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3.5 py-2 text-xs font-bold uppercase tracking-wider text-white hover:bg-blue-700 transition cursor-pointer shadow-xs"
+                  >
+                    <Truck size={15} />
+                    Entregar
+                  </button>
+                )}
+
+                {/* Cancelar (Requisito Imagem 03) */}
+                {visualizandoPedido.status !== 'cancelado' && visualizandoPedido.status !== 'entregue' && (
+                  <button
+                    type="button"
+                    onClick={() => void handleCancelar(visualizandoPedido.id)}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-100 transition cursor-pointer"
+                  >
+                    <XCircle size={15} />
+                    Cancelar
+                  </button>
+                )}
+
+                {/* Reabrir se Cancelado */}
+                {visualizandoPedido.status === 'cancelado' && (
+                  <button
+                    type="button"
+                    onClick={() => void handleReabrir(visualizandoPedido.id)}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700 hover:bg-amber-100 transition cursor-pointer"
+                  >
+                    <RotateCcw size={15} />
+                    Reabrir
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setVisualizandoPedido(null)}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                >
+                  Fechar
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   )
