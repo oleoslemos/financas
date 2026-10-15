@@ -22,6 +22,7 @@ import {
   StickyNote,
   Table2,
   Tags,
+  PhoneForwarded,
   UserCircle,
   Users,
   Workflow,
@@ -205,6 +206,7 @@ function AppLayoutShell() {
       items: [
         { kind: 'link', key: '/bem-aviv', label: 'Visão geral', to: '/bem-aviv', icon: LayoutGrid },
         { kind: 'link', key: '/bem-aviv/clientes', label: 'Clientes', to: '/bem-aviv/clientes', icon: UserCircle },
+        { kind: 'link', key: '/bem-aviv/follow-up', label: 'Follow-up', to: '/bem-aviv/follow-up', icon: PhoneForwarded },
         { kind: 'link', key: '/bem-aviv/pedidos', label: 'Pedidos e orçamentos', to: '/bem-aviv/pedidos', icon: ShoppingCart },
         { kind: 'link', key: '/calculadora-orcamento', label: 'Calculadora Orçamento', to: '/calculadora-orcamento', icon: Calculator },
         { kind: 'link', key: '/bem-aviv/relatorios', label: 'Relatórios de vendas', to: '/bem-aviv/relatorios', icon: PieChart },

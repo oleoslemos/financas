@@ -1120,7 +1120,7 @@ export function BemAvivHomePage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => navigate('/bem-aviv/clientes')}
+                  onClick={() => navigate('/bem-aviv/follow-up')}
                   className="w-full rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 py-2 text-xs font-bold transition-colors cursor-pointer shadow-xs"
                 >
                   Iniciar contatos
