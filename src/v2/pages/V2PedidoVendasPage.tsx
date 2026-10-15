@@ -36,6 +36,7 @@ import {
   entregarPedidoVenda,
   cancelarPedidoVenda,
   voltarPedidoVendaStatus,
+  excluirPedidoVenda,
   PedidoVenda,
   PedidoVendaItem,
   StatusVenda,
@@ -375,7 +376,12 @@ export function V2PedidoVendasPage() {
   // Filter and Search logic para a lista de vendas
   const pedidosFiltrados = useMemo(() => {
     return pedidos.filter((p) => {
-      if (filtroStatus !== 'todos' && p.status !== filtroStatus) return false
+      // Ao selecionar 'todos', não pode mostrar os pedidos cancelados
+      if (filtroStatus === 'todos') {
+        if (p.status === 'cancelado') return false
+      } else if (p.status !== filtroStatus) {
+        return false
+      }
 
       if (p.dataEmissao) {
         const anoPed = p.dataEmissao.slice(0, 4)
@@ -414,7 +420,10 @@ export function V2PedidoVendasPage() {
         const mesPed = p.dataEmissao.slice(5, 7)
         if (Number(anoPed) !== filtroAno || mesPed !== filtroMesNum) continue
       }
-      counts.todos = (counts.todos || 0) + 1
+      // 'todos' não inclui pedidos cancelados
+      if (p.status !== 'cancelado') {
+        counts.todos = (counts.todos || 0) + 1
+      }
       if (counts[p.status] !== undefined) {
         counts[p.status] += 1
       }
@@ -739,6 +748,26 @@ export function V2PedidoVendasPage() {
       if (visualizandoPedido && visualizandoPedido.id === id) {
         setVisualizandoPedido((prev) => (prev ? { ...prev, status: 'proposta' } : null))
       }
+    } else {
+      alert(res.erro)
+    }
+  }
+
+  const handleExcluir = async (id: string) => {
+    if (
+      !confirm(
+        'Tem certeza que deseja excluir definitivamente este pedido cancelado do sistema? Esta ação não pode ser desfeita.'
+      )
+    ) {
+      return
+    }
+    const res = await excluirPedidoVenda(id)
+    if (res.ok) {
+      await loadData()
+      if (visualizandoPedido && visualizandoPedido.id === id) {
+        setVisualizandoPedido(null)
+      }
+      setSelectedPropostaIds((prev) => prev.filter((item) => item !== id))
     } else {
       alert(res.erro)
     }
@@ -1843,13 +1872,15 @@ export function V2PedidoVendasPage() {
                 }`}
               >
                 <span>{aba.label}</span>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-black ${
-                    isSelected ? 'bg-sky-100 text-sky-800' : 'bg-slate-100 text-slate-500'
-                  }`}
-                >
-                  {count}
-                </span>
+                {aba.value !== 'cancelado' && (
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-black ${
+                      isSelected ? 'bg-sky-100 text-sky-800' : 'bg-slate-100 text-slate-500'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                )}
               </button>
             )
           })}
@@ -2397,6 +2428,19 @@ Opções de Pagamento:
                   >
                     <RotateCcw size={15} />
                     Reabrir
+                  </button>
+                )}
+
+                {/* Excluir Definitivamente se Cancelado */}
+                {visualizandoPedido.status === 'cancelado' && (
+                  <button
+                    type="button"
+                    onClick={() => void handleExcluir(visualizandoPedido.id)}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-rose-600 px-3 py-2 text-xs font-bold text-white hover:bg-rose-700 transition cursor-pointer shadow-xs"
+                    title="Excluir este pedido cancelado definitivamente do sistema"
+                  >
+                    <Trash2 size={15} />
+                    Excluir
                   </button>
                 )}
 

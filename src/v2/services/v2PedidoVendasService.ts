@@ -329,3 +329,20 @@ export async function voltarPedidoVendaStatus(
   await updatePedidoVenda(pedido)
   return { ok: true }
 }
+
+export async function excluirPedidoVenda(pedidoId: string): Promise<{ ok: true } | { ok: false; erro: string }> {
+  const current = await listPedidosVenda()
+  const pedido = current.find((p) => p.id === pedidoId)
+  if (!pedido) return { ok: false, erro: 'Pedido não encontrado.' }
+
+  if (supabase) {
+    try {
+      await supabase.from(SUPABASE_TABLE).delete().eq('id', pedidoId)
+    } catch {}
+  }
+
+  const list = current.filter((p) => p.id !== pedidoId)
+  writeToStorage(list)
+  return { ok: true }
+}
+
