@@ -443,53 +443,52 @@ export function V2ContasPagarPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
+    <div className="mx-auto w-full max-w-5xl px-3 sm:px-6 py-4 sm:py-6">
       {/* ── TOPO ── */}
-      <header className="mb-5 flex items-center justify-between gap-3">
+      <header className="mb-4 sm:mb-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-blue-100 bg-blue-50 text-blue-700">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-100 bg-blue-50 text-blue-700">
             <Wallet size={20} aria-hidden />
           </span>
           <div>
-            <h1 className="font-hub text-xl font-bold uppercase tracking-tight text-slate-900">Financeiro</h1>
-            <p className="text-sm text-slate-500">Seu extrato de contas a pagar e a receber</p>
+            <h1 className="font-hub text-lg sm:text-xl font-bold uppercase tracking-tight text-slate-900">Financeiro</h1>
+            <p className="text-xs sm:text-sm text-slate-500">Seu extrato de contas a pagar e a receber</p>
           </div>
         </div>
         <button
           type="button"
           onClick={() => setNovaContaModal(true)}
-          className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-semibold uppercase text-white shadow-sm transition hover:bg-blue-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+          className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-blue-700 px-4 py-2.5 text-xs sm:text-sm font-semibold uppercase text-white shadow-sm transition hover:bg-blue-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 active:scale-[0.99] cursor-pointer"
         >
           <Plus size={16} aria-hidden />
-          <span className="sm:hidden">Novo</span>
-          <span className="hidden sm:inline">Novo lançamento</span>
+          <span>Novo lançamento</span>
         </button>
       </header>
 
       {/* ── SALDO + KPIS ── */}
-      <section className="grid gap-3 lg:grid-cols-[1.35fr_1fr]" aria-label="Resumo">
-        <div className="rounded-2xl bg-gradient-to-br from-blue-700 to-blue-900 p-5 text-white shadow-sm">
+      <section className="grid gap-2.5 sm:gap-3 lg:grid-cols-[1.35fr_1fr]" aria-label="Resumo">
+        <div className="rounded-2xl bg-gradient-to-br from-blue-700 to-blue-900 p-4 sm:p-5 text-white shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wider text-blue-100">Saldo em caixa</p>
           {carregando ? (
-            <div className="mt-3 h-10 w-48 animate-pulse rounded-lg bg-white/20" />
+            <div className="mt-3 h-8 sm:h-10 w-44 sm:w-48 animate-pulse rounded-lg bg-white/20" />
           ) : (
-            <p className="mt-1 font-hub text-4xl font-bold tabular-nums">{formatBRL(saldoGeral.saldoRealizado)}</p>
+            <p className="mt-1 font-hub text-2xl sm:text-4xl font-bold tabular-nums break-words leading-tight">{formatBRL(saldoGeral.saldoRealizado)}</p>
           )}
-          <div className="mt-4 grid grid-cols-2 gap-3 border-t border-white/15 pt-3 text-sm">
+          <div className="mt-3 sm:mt-4 grid grid-cols-2 gap-2 sm:gap-3 border-t border-white/15 pt-3 text-xs sm:text-sm">
             <div>
-              <p className="text-xs uppercase text-blue-100">Projetado</p>
-              <p className="font-semibold tabular-nums">{carregando ? '—' : formatBRL(saldoGeral.saldoProjetado)}</p>
+              <p className="text-[10px] sm:text-xs uppercase text-blue-100 font-medium">Projetado</p>
+              <p className="font-semibold tabular-nums mt-0.5 truncate">{carregando ? '—' : formatBRL(saldoGeral.saldoProjetado)}</p>
             </div>
             <div>
-              <p className="text-xs uppercase text-blue-100">Vencido</p>
-              <p className="font-semibold tabular-nums">
+              <p className="text-[10px] sm:text-xs uppercase text-blue-100 font-medium">Vencido</p>
+              <p className="font-semibold tabular-nums mt-0.5 truncate">
                 {carregando ? '—' : formatBRL(saldoGeral.vencidoPagar + saldoGeral.vencidoReceber)}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3">
           <Kpi rotulo="Recebido" valor={totais.recebido} cor="text-emerald-600" carregando={carregando} />
           <Kpi rotulo="Pago" valor={totais.pago} cor="text-rose-600" carregando={carregando} />
           <Kpi rotulo="A receber" valor={totais.aReceber} cor="text-emerald-600" carregando={carregando} />
@@ -501,7 +500,7 @@ export function V2ContasPagarPage() {
       {!carregando && (
         <section
           aria-live="polite"
-          className={`mt-3 rounded-2xl border border-l-4 bg-white p-4 shadow-sm ${
+          className={`mt-3 rounded-2xl border border-l-4 bg-white p-3.5 sm:p-4 shadow-sm ${
             historia.tom === 'atencao'
               ? 'border-amber-200 border-l-amber-500'
               : historia.tom === 'positivo'
@@ -509,52 +508,54 @@ export function V2ContasPagarPage() {
                 : 'border-slate-200 border-l-slate-300'
           }`}
         >
-          <h2 className="text-base font-semibold text-slate-900">{historia.titulo}</h2>
-          <p className="mt-1 text-sm leading-relaxed text-slate-600">{historia.texto}</p>
+          <h2 className="text-sm sm:text-base font-semibold text-slate-900">{historia.titulo}</h2>
+          <p className="mt-1 text-xs sm:text-sm leading-relaxed text-slate-600">{historia.texto}</p>
         </section>
       )}
 
       {/* ── FILTROS ── */}
-      <div className="sticky top-0 z-10 -mx-4 mt-4 space-y-2 bg-[#eff5ee]/90 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6">
-        <div className="flex flex-wrap items-center gap-2">
-          <div role="tablist" aria-label="Tipo de conta" className="flex rounded-xl bg-white p-1 shadow-sm">
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-6 mt-4 space-y-2.5 bg-[#eff5ee]/95 px-3 sm:px-6 py-2.5 backdrop-blur-md">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          <div role="tablist" aria-label="Tipo de conta" className="flex overflow-x-auto no-scrollbar rounded-xl bg-white p-1 shadow-xs shrink-0 max-w-full">
             <Aba ativa={tipo === 'todos'} onClick={() => setTipo('todos')} texto={`Todos (${contagem.todos})`} />
             <Aba ativa={tipo === 'pagar'} onClick={() => setTipo('pagar')} texto={`A pagar (${contagem.pagar})`} />
             <Aba ativa={tipo === 'receber'} onClick={() => setTipo('receber')} texto={`A receber (${contagem.receber})`} />
           </div>
 
-          <label className="relative min-w-[200px] flex-1">
-            <span className="sr-only">Buscar lançamentos</span>
-            <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden />
-            <input
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              placeholder="Buscar descrição, fornecedor ou cliente"
-              className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-            />
-          </label>
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <label className="relative flex-1 min-w-0">
+              <span className="sr-only">Buscar lançamentos</span>
+              <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden />
+              <input
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Buscar descrição, fornecedor..."
+                className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+              />
+            </label>
 
-          <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
-            <span className="text-xs font-semibold uppercase text-slate-500">Mês</span>
-            <select
-              value={mes}
-              onChange={(e) => setMes(e.target.value)}
-              className="bg-transparent font-semibold text-slate-800 focus:outline-none"
-            >
-              <option value="todos">Todos os meses</option>
-              {meses.map((m) => (
-                <option key={m} value={m}>
-                  {rotuloMes(m)}
-                </option>
-              ))}
-            </select>
-          </label>
+            <label className="flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 sm:px-3 py-2 text-xs sm:text-sm">
+              <span className="text-[10px] sm:text-xs font-semibold uppercase text-slate-500">Mês</span>
+              <select
+                value={mes}
+                onChange={(e) => setMes(e.target.value)}
+                className="bg-transparent font-semibold text-slate-800 focus:outline-none text-xs sm:text-sm max-w-[110px] sm:max-w-none cursor-pointer"
+              >
+                <option value="todos">Todos</option>
+                {meses.map((m) => (
+                  <option key={m} value={m}>
+                    {rotuloMes(m)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex rounded-xl bg-white p-1 shadow-sm" role="group" aria-label="Base da data">
-            <Aba ativa={base === 'vencimento'} onClick={() => setBase('vencimento')} texto="Por vencimento" />
-            <Aba ativa={base === 'pagamento'} onClick={() => setBase('pagamento')} texto="Por pagamento" />
+          <div className="flex rounded-xl bg-white p-1 shadow-xs shrink-0" role="group" aria-label="Base da data">
+            <Aba ativa={base === 'vencimento'} onClick={() => setBase('vencimento')} texto="Vencimento" />
+            <Aba ativa={base === 'pagamento'} onClick={() => setBase('pagamento')} texto="Pagamento" />
           </div>
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="Status">
             {STATUS_ORDEM.map((s) => {
@@ -566,11 +567,11 @@ export function V2ContasPagarPage() {
                   type="button"
                   aria-pressed={ativo}
                   onClick={() => alternarStatus(s)}
-                  className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-semibold uppercase transition ${
-                    ativo ? `${cls} border-current` : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] sm:text-xs font-semibold uppercase transition cursor-pointer ${
+                    ativo ? `${cls} border-current shadow-xs` : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
                   }`}
                 >
-                  <Icon size={12} aria-hidden /> {label}
+                  <Icon size={11} aria-hidden /> {label}
                 </button>
               )
             })}
@@ -579,9 +580,9 @@ export function V2ContasPagarPage() {
             <button
               type="button"
               onClick={limpar}
-              className="ml-auto inline-flex items-center gap-1 text-xs font-semibold uppercase text-blue-700 hover:underline"
+              className="ml-auto inline-flex items-center gap-1 text-[11px] sm:text-xs font-semibold uppercase text-blue-700 hover:underline cursor-pointer"
             >
-              <X size={12} aria-hidden /> Limpar filtros
+              <X size={12} aria-hidden /> Limpar
             </button>
           )}
         </div>
@@ -608,7 +609,7 @@ export function V2ContasPagarPage() {
               <button
                 type="button"
                 onClick={() => setLimite((l) => l + DIAS_POR_PAGINA)}
-                className="mx-auto block rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300 shadow-sm"
+                className="mx-auto block rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs sm:text-sm font-semibold text-slate-700 hover:border-slate-300 shadow-sm transition cursor-pointer"
               >
                 Ver mais dias ({dias.length - limite} restantes)
               </button>
@@ -620,73 +621,62 @@ export function V2ContasPagarPage() {
       {/* ── MODAL DE BAIXA COM DESCONTO, ACRÉSCIMO E CONTA BANCÁRIA ── */}
       {baixaModal && (
         <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 9999,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'rgba(15, 23, 42, 0.45)',
-            backdropFilter: 'blur(3px)',
-            padding: 16,
-          }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="baixa-modal-title"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto"
         >
-          <div
-            style={{
-              background: '#FFFFFF',
-              borderRadius: 16,
-              width: '100%',
-              maxWidth: 520,
-              padding: 24,
-              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: '#0F172A' }}>
+          <div className="relative flex flex-col w-full max-w-lg bg-white rounded-2xl shadow-2xl max-h-[92vh] sm:max-h-[88vh] overflow-hidden my-auto border border-slate-100">
+            {/* Cabeçalho Fixo */}
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 shrink-0 bg-white">
+              <div className="min-w-0 pr-2">
+                <h3 id="baixa-modal-title" className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
                   Baixar Parcela #{baixaModal.parcela.numero}
                 </h3>
-                <p style={{ margin: '4px 0 0', fontSize: 12, color: '#64748B' }}>
+                <p className="text-xs text-slate-500 truncate mt-0.5 max-w-[260px] sm:max-w-md">
                   {baixaModal.conta.descricao}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setBaixaModal(null)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', padding: 4 }}
+                className="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition shrink-0 cursor-pointer"
+                title="Fechar"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {/* Corpo Rolável */}
+            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-3.5">
               {/* Valor Original */}
-              <div style={{ background: '#F8FAFC', padding: '10px 14px', borderRadius: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 13, color: '#64748B', fontWeight: 600 }}>Valor Nominal</span>
-                <span style={{ fontSize: 16, fontWeight: 800, color: '#0F172A' }}>{formatBRL(baixaModal.parcela.valor)}</span>
+              <div className="bg-slate-50 p-3 sm:px-3.5 sm:py-2.5 rounded-xl border border-slate-200/80 flex justify-between items-center">
+                <span className="text-xs sm:text-sm text-slate-500 font-semibold">Valor Nominal</span>
+                <span className="text-base sm:text-lg font-black text-slate-900 tabular-nums">
+                  {formatBRL(baixaModal.parcela.valor)}
+                </span>
               </div>
 
               {/* Data da Baixa */}
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 4 }}>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
                   Data do Pagamento / Liquidação
                 </label>
                 <input
                   type="date"
                   value={baixaData}
                   onChange={(e) => setBaixaData(e.target.value)}
-                  style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #CBD5E1', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm outline-none focus:border-blue-500 bg-white"
                 />
               </div>
 
               {/* Campo Direto: Valor Líquido Pago */}
-              <div style={{ background: '#F8FAFC', padding: '12px 14px', borderRadius: 10, border: '1.5px solid #CBD5E1' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <label style={{ fontSize: 13, fontWeight: 800, color: '#0F172A' }}>
+              <div className="bg-blue-50/40 p-3 sm:p-3.5 rounded-xl border border-blue-200/70">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 mb-1.5">
+                  <label className="text-xs sm:text-sm font-black text-slate-900">
                     💵 Valor Líquido Pago / Recebido (R$)
                   </label>
-                  <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600 }}>Calcula desconto/acréscimo automático</span>
+                  <span className="text-[11px] text-slate-500 font-medium">Calcula desconto/acréscimo automático</span>
                 </div>
                 <input
                   type="number"
@@ -695,59 +685,32 @@ export function V2ContasPagarPage() {
                   placeholder="0,00"
                   value={valorLiquidoInput}
                   onChange={(e) => handleValorLiquidoChange(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '10px 14px',
-                    borderRadius: 8,
-                    border: '2px solid #3B82F6',
-                    fontSize: 16,
-                    fontWeight: 800,
-                    color: '#1E3A8A',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                    background: '#FFFFFF',
-                  }}
+                  className="w-full px-3 py-2 sm:py-2.5 rounded-xl border-2 border-blue-500 text-base sm:text-lg font-black text-blue-900 outline-none bg-white tabular-nums shadow-xs"
                 />
               </div>
 
               {/* Desconto */}
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 4 }}>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
                   Desconto Concedido / Obtido
                 </label>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <div style={{ display: 'flex', background: '#F1F5F9', borderRadius: 8, padding: 2 }}>
+                <div className="flex items-center gap-2">
+                  <div className="flex bg-slate-100 rounded-lg p-0.5 shrink-0">
                     <button
                       type="button"
                       onClick={() => handleDescontoChange(descontoValor, 'R$')}
-                      style={{
-                        padding: '6px 12px',
-                        border: 'none',
-                        borderRadius: 6,
-                        fontSize: 12,
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        background: descontoTipo === 'R$' ? '#FFFFFF' : 'transparent',
-                        color: descontoTipo === 'R$' ? '#0F172A' : '#64748B',
-                        boxShadow: descontoTipo === 'R$' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
-                      }}
+                      className={`px-2.5 sm:px-3 py-1.5 rounded-md text-xs font-bold transition cursor-pointer ${
+                        descontoTipo === 'R$' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                      }`}
                     >
                       R$
                     </button>
                     <button
                       type="button"
                       onClick={() => handleDescontoChange(descontoValor, '%')}
-                      style={{
-                        padding: '6px 12px',
-                        border: 'none',
-                        borderRadius: 6,
-                        fontSize: 12,
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        background: descontoTipo === '%' ? '#FFFFFF' : 'transparent',
-                        color: descontoTipo === '%' ? '#0F172A' : '#64748B',
-                        boxShadow: descontoTipo === '%' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
-                      }}
+                      className={`px-2.5 sm:px-3 py-1.5 rounded-md text-xs font-bold transition cursor-pointer ${
+                        descontoTipo === '%' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                      }`}
                     >
                       %
                     </button>
@@ -759,10 +722,10 @@ export function V2ContasPagarPage() {
                     placeholder="0,00"
                     value={descontoValor || ''}
                     onChange={(e) => handleDescontoChange(Number(e.target.value), descontoTipo)}
-                    style={{ flex: 1, padding: '9px 12px', borderRadius: 8, border: '1.5px solid #CBD5E1', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                    className="flex-1 min-w-[90px] px-3 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm outline-none focus:border-blue-500"
                   />
                   {valorDescontoCalc > 0 && (
-                    <div style={{ padding: '9px 12px', fontSize: 12, fontWeight: 700, color: '#16A34A', background: '#F0FDF4', borderRadius: 8, alignSelf: 'center' }}>
+                    <div className="px-2.5 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 rounded-xl shrink-0">
                       -{formatBRL(valorDescontoCalc)}
                     </div>
                   )}
@@ -771,42 +734,26 @@ export function V2ContasPagarPage() {
 
               {/* Acréscimo */}
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 4 }}>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
                   Acréscimo (Juros / Multa / Taxa)
                 </label>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <div style={{ display: 'flex', background: '#F1F5F9', borderRadius: 8, padding: 2 }}>
+                <div className="flex items-center gap-2">
+                  <div className="flex bg-slate-100 rounded-lg p-0.5 shrink-0">
                     <button
                       type="button"
                       onClick={() => handleAcrescimoChange(acrescimoValor, 'R$')}
-                      style={{
-                        padding: '6px 12px',
-                        border: 'none',
-                        borderRadius: 6,
-                        fontSize: 12,
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        background: acrescimoTipo === 'R$' ? '#FFFFFF' : 'transparent',
-                        color: acrescimoTipo === 'R$' ? '#0F172A' : '#64748B',
-                        boxShadow: acrescimoTipo === 'R$' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
-                      }}
+                      className={`px-2.5 sm:px-3 py-1.5 rounded-md text-xs font-bold transition cursor-pointer ${
+                        acrescimoTipo === 'R$' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                      }`}
                     >
                       R$
                     </button>
                     <button
                       type="button"
                       onClick={() => handleAcrescimoChange(acrescimoValor, '%')}
-                      style={{
-                        padding: '6px 12px',
-                        border: 'none',
-                        borderRadius: 6,
-                        fontSize: 12,
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        background: acrescimoTipo === '%' ? '#FFFFFF' : 'transparent',
-                        color: acrescimoTipo === '%' ? '#0F172A' : '#64748B',
-                        boxShadow: acrescimoTipo === '%' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
-                      }}
+                      className={`px-2.5 sm:px-3 py-1.5 rounded-md text-xs font-bold transition cursor-pointer ${
+                        acrescimoTipo === '%' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                      }`}
                     >
                       %
                     </button>
@@ -818,10 +765,10 @@ export function V2ContasPagarPage() {
                     placeholder="0,00"
                     value={acrescimoValor || ''}
                     onChange={(e) => handleAcrescimoChange(Number(e.target.value), acrescimoTipo)}
-                    style={{ flex: 1, padding: '9px 12px', borderRadius: 8, border: '1.5px solid #CBD5E1', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                    className="flex-1 min-w-[90px] px-3 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm outline-none focus:border-blue-500"
                   />
                   {valorAcrescimoCalc > 0 && (
-                    <div style={{ padding: '9px 12px', fontSize: 12, fontWeight: 700, color: '#DC2626', background: '#FEF2F2', borderRadius: 8, alignSelf: 'center' }}>
+                    <div className="px-2.5 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 rounded-xl shrink-0">
                       +{formatBRL(valorAcrescimoCalc)}
                     </div>
                   )}
@@ -830,13 +777,13 @@ export function V2ContasPagarPage() {
 
               {/* Forma de Pagamento */}
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 4 }}>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
                   Forma de Pagamento
                 </label>
                 <select
                   value={baixaFormaPagto}
                   onChange={(e) => setBaixaFormaPagto(e.target.value)}
-                  style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #CBD5E1', fontSize: 13, fontWeight: 600, outline: 'none', background: '#FFFFFF' }}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm font-semibold outline-none bg-white focus:border-blue-500"
                 >
                   {FORMAS_PAGAMENTO_FINANCEIRO.map((f) => (
                     <option key={f} value={f}>
@@ -848,41 +795,33 @@ export function V2ContasPagarPage() {
 
               {/* Conta Bancária / Carteira (Tag de Saída / Entrada) */}
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 700, color: '#334155' }}>
-                    <Tag size={13} color="#2563EB" />
+                <div className="flex justify-between items-center mb-1">
+                  <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
+                    <Tag size={13} className="text-blue-600" />
                     Conta de Saída (Tag / Origem do Recurso)
                   </label>
                   <button
                     type="button"
                     onClick={() => setCriandoNovaContaTag(!criandoNovaContaTag)}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#2563EB',
-                      fontSize: 12,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      padding: 0,
-                    }}
+                    className="text-blue-600 hover:text-blue-800 text-xs font-bold cursor-pointer"
                   >
                     {criandoNovaContaTag ? 'Cancelar' : '+ Nova Conta'}
                   </button>
                 </div>
 
                 {criandoNovaContaTag ? (
-                  <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                  <div className="flex gap-2 mb-2">
                     <input
                       type="text"
                       placeholder="Nome da nova conta (ex: Santander PJ, Cofre)"
                       value={novoNomeContaTag}
                       onChange={(e) => setNovoNomeContaTag(e.target.value)}
-                      style={{ flex: 1, padding: '9px 12px', borderRadius: 8, border: '1.5px solid #3B82F6', fontSize: 13, outline: 'none' }}
+                      className="flex-1 px-3 py-2 rounded-xl border border-blue-400 text-xs sm:text-sm outline-none"
                     />
                     <button
                       type="button"
                       onClick={handleCriarNovaContaTag}
-                      style={{ padding: '0 14px', borderRadius: 8, background: '#2563EB', color: '#fff', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                      className="px-3.5 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 cursor-pointer shrink-0"
                     >
                       Salvar
                     </button>
@@ -901,12 +840,12 @@ export function V2ContasPagarPage() {
                         )
                         if (correspondente) setContaBancariaSelecionadaId(correspondente.id)
                       }}
-                      style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #CBD5E1', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm outline-none focus:border-blue-500"
                     />
 
                     {/* Chips de Atalho das Contas Cadastradas */}
                     {contasBancarias.length > 0 && (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                      <div className="flex flex-wrap gap-1.5 mt-2 max-h-24 overflow-y-auto">
                         {contasBancarias.map((cb) => {
                           const tagFormatada = `#${cb.nome.replace(/\s+/g, '')}`
                           const isSel = baixaContaTag === tagFormatada || contaBancariaSelecionadaId === cb.id
@@ -918,16 +857,11 @@ export function V2ContasPagarPage() {
                                 setBaixaContaTag(tagFormatada)
                                 setContaBancariaSelecionadaId(cb.id)
                               }}
-                              style={{
-                                padding: '3px 8px',
-                                borderRadius: 12,
-                                fontSize: 11,
-                                fontWeight: 600,
-                                border: isSel ? '1px solid #2563EB' : '1px solid #CBD5E1',
-                                background: isSel ? '#EFF6FF' : '#F8FAFC',
-                                color: isSel ? '#1D4ED8' : '#475569',
-                                cursor: 'pointer',
-                              }}
+                              className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition cursor-pointer ${
+                                isSel
+                                  ? 'border-blue-600 bg-blue-50 text-blue-700 font-bold shadow-xs'
+                                  : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300'
+                              }`}
                             >
                               {tagFormatada} ({formatBRL(cb.saldoAtual)})
                             </button>
@@ -940,87 +874,63 @@ export function V2ContasPagarPage() {
 
                 {/* Exibição em Tempo Real do Saldo da Conta */}
                 {contaBancariaSelecionada && (
-                  <div
-                    style={{
-                      marginTop: 8,
-                      padding: '10px 14px',
-                      borderRadius: 10,
-                      background: '#F8FAFC',
-                      border: '1.5px solid #E2E8F0',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 4,
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
-                      <span style={{ color: '#64748B', fontWeight: 600 }}>Saldo Atual Disponível:</span>
-                      <strong style={{ fontSize: 13, color: contaBancariaSelecionada.saldoAtual >= 0 ? '#0F172A' : '#DC2626' }}>
+                  <div className="mt-2.5 p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5 text-xs">
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-500 font-medium">Saldo Atual Disponível:</span>
+                      <strong className={`tabular-nums ${contaBancariaSelecionada.saldoAtual >= 0 ? 'text-slate-900' : 'text-rose-600'}`}>
                         {formatBRL(contaBancariaSelecionada.saldoAtual)}
                       </strong>
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, borderTop: '1px solid #E2E8F0', paddingTop: 4 }}>
-                      <span style={{ color: '#64748B', fontWeight: 600 }}>
+                    <div className="flex justify-between items-center border-t border-slate-200 pt-1.5">
+                      <span className="text-slate-500 font-medium">
                         {baixaModal.conta.tipo === 'receber' ? 'Saldo após o recebimento:' : 'Saldo após o pagamento:'}
                       </span>
-                      <strong
-                        style={{
-                          fontSize: 13,
-                          color: saldoPrevistoAposBaixa >= 0 ? '#16A34A' : '#DC2626',
-                        }}
-                      >
+                      <strong className={`tabular-nums ${saldoPrevistoAposBaixa >= 0 ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold'}`}>
                         {formatBRL(saldoPrevistoAposBaixa)}
                       </strong>
                     </div>
 
                     {baixaModal.conta.tipo !== 'receber' && saldoPrevistoAposBaixa < 0 && (
-                      <span style={{ fontSize: 11, color: '#DC2626', fontWeight: 600, marginTop: 2 }}>
+                      <span className="block text-[11px] text-rose-600 font-semibold mt-1">
                         ⚠️ Saldo da conta ficará negativo após esta baixa.
                       </span>
                     )}
                   </div>
                 )}
               </div>
+            </div>
 
-              {/* Total Final a Liquidar */}
-              <div
-                style={{
-                  background: '#EFF6FF',
-                  border: '1.5px solid #BFDBFE',
-                  padding: '14px 16px',
-                  borderRadius: 12,
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginTop: 6,
-                }}
-              >
-                <div>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#1E40AF', textTransform: 'uppercase' }}>
+            {/* Rodapé Fixo com Total e Ações (Sempre visível em qualquer altura de tela) */}
+            <div className="px-4 sm:px-6 py-3.5 border-t border-slate-100 bg-slate-50/95 shrink-0 space-y-3">
+              <div className="bg-blue-50/80 border border-blue-200/80 p-3 sm:px-4 sm:py-2.5 rounded-xl flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <span className="text-[11px] font-bold text-blue-800 uppercase tracking-wide block">
                     Valor Efetivo da Baixa
                   </span>
-                  <p style={{ margin: 0, fontSize: 11, color: '#64748B' }}>
-                    Nominal: {formatBRL(valorOriginal)} {valorDescontoCalc > 0 ? ` - ${formatBRL(valorDescontoCalc)}` : ''} {valorAcrescimoCalc > 0 ? ` + ${formatBRL(valorAcrescimoCalc)}` : ''}
+                  <p className="text-[11px] text-slate-500 truncate">
+                    Nominal: {formatBRL(valorOriginal)}
+                    {valorDescontoCalc > 0 ? ` - ${formatBRL(valorDescontoCalc)}` : ''}
+                    {valorAcrescimoCalc > 0 ? ` + ${formatBRL(valorAcrescimoCalc)}` : ''}
                   </p>
                 </div>
-                <span style={{ fontSize: 20, fontWeight: 900, color: '#1E3A8A' }}>
+                <span className="text-lg sm:text-xl font-black text-blue-900 tabular-nums shrink-0">
                   {formatBRL(valorFinalLiquido)}
                 </span>
               </div>
 
-              {/* Botões */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
+              <div className="flex items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setBaixaModal(null)}
-                  style={{ padding: '10px 18px', borderRadius: 8, border: '1.5px solid #CBD5E1', background: '#FFFFFF', color: '#475569', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                  className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs sm:text-sm font-bold hover:bg-slate-50 transition cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="button"
                   onClick={confirmarBaixa}
-                  style={{ padding: '10px 20px', borderRadius: 8, border: 'none', background: '#16A34A', color: '#FFFFFF', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}
+                  className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl border-none bg-emerald-600 text-white text-xs sm:text-sm font-black hover:bg-emerald-700 transition shadow-sm shadow-emerald-600/20 cursor-pointer"
                 >
                   Confirmar Baixa
                 </button>
@@ -1033,51 +943,26 @@ export function V2ContasPagarPage() {
       {/* ── MODAL DE DETALHES DO LANÇAMENTO / PEDIDO (COM BOTÃO ESTORNAR) ── */}
       {detalhesModal && (
         <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 9999,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'rgba(15, 23, 42, 0.45)',
-            backdropFilter: 'blur(3px)',
-            padding: 16,
-          }}
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto"
         >
-          <div
-            style={{
-              background: '#FFFFFF',
-              borderRadius: 16,
-              width: '100%',
-              maxWidth: 540,
-              padding: 24,
-              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)',
-              maxHeight: '90vh',
-              overflowY: 'auto',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, borderBottom: '1px solid #E2E8F0', paddingBottom: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div className="relative flex flex-col w-full max-w-lg bg-white rounded-2xl shadow-2xl max-h-[92vh] sm:max-h-[88vh] overflow-hidden my-auto border border-slate-100">
+            {/* Header Fixo */}
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 shrink-0 bg-white">
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 pr-2">
                 <div
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 10,
-                    background: detalhesModal.conta.tipo === 'receber' ? '#DCFCE7' : '#FEE2E2',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: detalhesModal.conta.tipo === 'receber' ? '#15803D' : '#DC2626',
-                  }}
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                    detalhesModal.conta.tipo === 'receber' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                  }`}
                 >
                   <Eye size={18} />
                 </div>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: '#0F172A' }}>
+                <div className="min-w-0">
+                  <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight truncate">
                     Visualizar Lançamento
                   </h3>
-                  <span style={{ fontSize: 12, color: '#64748B' }}>
+                  <span className="text-xs text-slate-500 block truncate">
                     {detalhesModal.conta.tipo === 'receber' ? 'Conta a Receber' : 'Conta a Pagar'} · Parcela #{detalhesModal.parcela.numero} de {detalhesModal.conta.parcelas.length}
                   </span>
                 </div>
@@ -1085,74 +970,64 @@ export function V2ContasPagarPage() {
               <button
                 type="button"
                 onClick={() => setDetalhesModal(null)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', padding: 4 }}
+                className="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition shrink-0 cursor-pointer"
+                title="Fechar"
               >
                 <X size={20} />
               </button>
             </div>
 
-            {/* Informações Gerais da Conta / Pedido */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {/* Informações Gerais da Conta / Pedido (Scrollable) */}
+            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-3.5">
               <div>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', display: 'block', marginBottom: 2 }}>
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide block mb-1">
                   Descrição / Origem
                 </span>
-                <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0F172A', lineHeight: 1.4 }}>
+                <p className="text-sm sm:text-base font-bold text-slate-900 leading-snug">
                   {detalhesModal.conta.descricao}
                 </p>
                 {detalhesModal.conta.origem === 'compra' && (
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      marginTop: 4,
-                      fontSize: 11,
-                      fontWeight: 700,
-                      padding: '2px 8px',
-                      borderRadius: 6,
-                      background: '#EFF6FF',
-                      color: '#1D4ED8',
-                    }}
-                  >
+                  <span className="inline-block mt-1 text-[11px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700">
                     📦 Gerado a partir de Pedido de Compra
                   </span>
                 )}
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div style={{ background: '#F8FAFC', padding: '10px 12px', borderRadius: 10 }}>
-                  <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600, display: 'block' }}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <span className="text-[11px] text-slate-500 font-semibold block">
                     {detalhesModal.conta.tipo === 'receber' ? 'Cliente' : 'Fornecedor'}
                   </span>
-                  <strong style={{ fontSize: 13, color: '#0F172A', display: 'block', marginTop: 2 }}>
+                  <strong className="text-xs sm:text-sm text-slate-900 block mt-0.5 truncate">
                     {detalhesModal.conta.fornecedor || 'Não informado'}
                   </strong>
                 </div>
 
-                <div style={{ background: '#F8FAFC', padding: '10px 12px', borderRadius: 10 }}>
-                  <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600, display: 'block' }}>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <span className="text-[11px] text-slate-500 font-semibold block">
                     Categoria
                   </span>
-                  <strong style={{ fontSize: 13, color: '#0F172A', display: 'block', marginTop: 2 }}>
+                  <strong className="text-xs sm:text-sm text-slate-900 block mt-0.5 truncate">
                     {detalhesModal.conta.categoria || 'Geral'}
                   </strong>
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div style={{ background: '#F8FAFC', padding: '10px 12px', borderRadius: 10 }}>
-                  <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600, display: 'block' }}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <span className="text-[11px] text-slate-500 font-semibold block">
                     Vencimento Nominal
                   </span>
-                  <strong style={{ fontSize: 13, color: '#0F172A', display: 'block', marginTop: 2 }}>
+                  <strong className="text-xs sm:text-sm text-slate-900 block mt-0.5">
                     {fmtData(detalhesModal.parcela.vencimento)}
                   </strong>
                 </div>
 
-                <div style={{ background: '#F8FAFC', padding: '10px 12px', borderRadius: 10 }}>
-                  <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600, display: 'block' }}>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <span className="text-[11px] text-slate-500 font-semibold block">
                     Valor Nominal
                   </span>
-                  <strong style={{ fontSize: 15, color: '#0F172A', display: 'block', marginTop: 2 }}>
+                  <strong className="text-sm sm:text-base text-slate-900 font-black block mt-0.5 tabular-nums">
                     {formatBRL(detalhesModal.parcela.valor)}
                   </strong>
                 </div>
@@ -1160,98 +1035,74 @@ export function V2ContasPagarPage() {
 
               {/* Status e Dados da Quitação (se Paga) */}
               {detalhesModal.parcela.status === 'paga' ? (
-                <div
-                  style={{
-                    background: '#F0FDF4',
-                    border: '1.5px solid #BBF7D0',
-                    borderRadius: 12,
-                    padding: '14px',
-                    marginTop: 6,
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, fontWeight: 800, color: '#15803D' }}>
+                <div className="bg-emerald-50/70 border border-emerald-200 rounded-2xl p-3.5 sm:p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-black text-emerald-800">
                       <CheckCircle2 size={16} /> Parcela Liquidada / Paga
                     </span>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#166534' }}>
+                    <span className="text-xs font-bold text-emerald-700">
                       {detalhesModal.parcela.baixa?.dataBaixa ? `Em ${fmtData(detalhesModal.parcela.baixa.dataBaixa)}` : 'Confirmada'}
                     </span>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12, color: '#334155' }}>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-700 pt-1">
                     <div>
-                      <span style={{ color: '#64748B', display: 'block' }}>Forma de Pagamento:</span>
-                      <strong style={{ color: '#0F172A' }}>
+                      <span className="text-slate-500 block">Forma de Pagamento:</span>
+                      <strong className="text-slate-900 font-bold">
                         {detalhesModal.parcela.baixa?.formaPagamento || 'Boleto'}
                       </strong>
                     </div>
                     <div>
-                      <span style={{ color: '#64748B', display: 'block' }}>Conta de Saída (Tag):</span>
-                      <strong style={{ color: '#1D4ED8' }}>
+                      <span className="text-slate-500 block">Conta de Saída (Tag):</span>
+                      <strong className="text-blue-700 font-bold">
                         {detalhesModal.parcela.baixa?.contaBancariaNome || 'Não especificada'}
                       </strong>
                     </div>
                     {detalhesModal.parcela.baixa?.descontoFinal ? (
                       <div>
-                        <span style={{ color: '#64748B', display: 'block' }}>Desconto Obtido:</span>
-                        <strong style={{ color: '#15803D' }}>
+                        <span className="text-slate-500 block">Desconto Obtido:</span>
+                        <strong className="text-emerald-700 font-bold">
                           -{formatBRL(detalhesModal.parcela.baixa.descontoFinal)}
                         </strong>
                       </div>
                     ) : null}
                     {detalhesModal.parcela.baixa?.acrescimoFinal ? (
                       <div>
-                        <span style={{ color: '#64748B', display: 'block' }}>Acréscimo / Juros:</span>
-                        <strong style={{ color: '#DC2626' }}>
+                        <span className="text-slate-500 block">Acréscimo / Juros:</span>
+                        <strong className="text-rose-700 font-bold">
                           +{formatBRL(detalhesModal.parcela.baixa.acrescimoFinal)}
                         </strong>
                       </div>
                     ) : null}
                   </div>
 
-                  <div style={{ borderTop: '1px solid #DCFCE7', paddingTop: 10, marginTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#166534' }}>
+                  <div className="border-t border-emerald-200/80 pt-2.5 flex justify-between items-center">
+                    <span className="text-xs sm:text-sm font-bold text-emerald-900">
                       Valor Líquido Baixado:
                     </span>
-                    <span style={{ fontSize: 18, fontWeight: 900, color: '#15803D' }}>
+                    <span className="text-base sm:text-lg font-black text-emerald-800 tabular-nums">
                       {formatBRL(detalhesModal.parcela.baixa?.valorFinalPago ?? detalhesModal.parcela.valor)}
                     </span>
                   </div>
 
                   {detalhesModal.parcela.baixa?.observacao && (
-                    <p style={{ margin: '8px 0 0', fontSize: 12, color: '#475569', fontStyle: 'italic' }}>
+                    <p className="text-xs text-slate-600 italic">
                       Obs: {detalhesModal.parcela.baixa.observacao}
                     </p>
                   )}
 
-                  {/* ── BOTÃO ESTORNAR (LOCALIZADO DENTRO DO MODAL DE VISUALIZAÇÃO) ── */}
+                  {/* ── BOTÃO ESTORNAR (DENTRO DO MODAL DE VISUALIZAÇÃO) ── */}
                   <button
                     type="button"
                     onClick={() => handleEstornarParcela(detalhesModal.conta, detalhesModal.parcela)}
-                    style={{
-                      width: '100%',
-                      marginTop: 14,
-                      padding: '12px',
-                      borderRadius: 10,
-                      border: '1.5px solid #F59E0B',
-                      background: '#FFFBEB',
-                      color: '#B45309',
-                      fontSize: 14,
-                      fontWeight: 800,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 8,
-                      transition: 'all 0.15s ease',
-                    }}
+                    className="w-full mt-2 py-2.5 px-4 rounded-xl border border-amber-300 bg-amber-50 text-amber-800 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 hover:bg-amber-100 transition cursor-pointer"
                   >
-                    <RotateCcw size={16} />
+                    <RotateCcw size={15} />
                     <span>Estornar Pagamento da Parcela</span>
                   </button>
                 </div>
               ) : (
-                <div style={{ marginTop: 8 }}>
+                <div className="pt-2">
                   <button
                     type="button"
                     onClick={() => {
@@ -1260,21 +1111,7 @@ export function V2ContasPagarPage() {
                       setDetalhesModal(null)
                       abrirModalBaixa(c, p)
                     }}
-                    style={{
-                      width: '100%',
-                      padding: '12px',
-                      borderRadius: 10,
-                      border: 'none',
-                      background: '#2563EB',
-                      color: '#FFFFFF',
-                      fontSize: 14,
-                      fontWeight: 800,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 8,
-                    }}
+                    className="w-full py-3 px-4 rounded-xl bg-blue-600 text-white text-xs sm:text-sm font-black flex items-center justify-center gap-2 hover:bg-blue-700 transition cursor-pointer shadow-sm shadow-blue-600/20"
                   >
                     <span>Realizar Baixa / Liquidar Parcela</span>
                   </button>
@@ -1282,20 +1119,12 @@ export function V2ContasPagarPage() {
               )}
             </div>
 
-            <div style={{ marginTop: 16, textAlign: 'right' }}>
+            {/* Rodapé Fixo */}
+            <div className="px-4 sm:px-6 py-3 border-t border-slate-100 bg-slate-50 shrink-0 flex justify-end">
               <button
                 type="button"
                 onClick={() => setDetalhesModal(null)}
-                style={{
-                  padding: '9px 18px',
-                  borderRadius: 8,
-                  border: '1px solid #CBD5E1',
-                  background: '#FFFFFF',
-                  color: '#475569',
-                  fontSize: 13,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                }}
+                className="w-full sm:w-auto px-5 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs sm:text-sm font-bold hover:bg-slate-100 transition cursor-pointer"
               >
                 Fechar
               </button>
@@ -1307,178 +1136,151 @@ export function V2ContasPagarPage() {
       {/* ── MODAL DE NOVO LANÇAMENTO (PAGAR OU RECEBER) ── */}
       {novaContaModal && (
         <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 9999,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'rgba(15, 23, 42, 0.45)',
-            backdropFilter: 'blur(3px)',
-            padding: 16,
-          }}
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto"
         >
-          <div
-            style={{
-              background: '#FFFFFF',
-              borderRadius: 16,
-              width: '100%',
-              maxWidth: 520,
-              padding: 24,
-              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: '#0F172A' }}>
+          <div className="relative flex flex-col w-full max-w-lg bg-white rounded-2xl shadow-2xl max-h-[92vh] sm:max-h-[88vh] overflow-hidden my-auto border border-slate-100">
+            {/* Header Fixo */}
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 shrink-0 bg-white">
+              <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
                 Novo Lançamento Financeiro
               </h3>
               <button
                 type="button"
                 onClick={() => setNovaContaModal(false)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', padding: 4 }}
+                className="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition shrink-0 cursor-pointer"
+                title="Fechar"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleSalvarNovaConta} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {/* Tipo de Operação */}
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button
-                  type="button"
-                  onClick={() => setNovaTipo('pagar')}
-                  style={{
-                    flex: 1,
-                    padding: '10px',
-                    borderRadius: 8,
-                    border: 'none',
-                    fontWeight: 700,
-                    fontSize: 13,
-                    cursor: 'pointer',
-                    background: novaTipo === 'pagar' ? '#DC2626' : '#F1F5F9',
-                    color: novaTipo === 'pagar' ? '#FFFFFF' : '#64748B',
-                  }}
-                >
-                  Conta a Pagar (Despesa)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setNovaTipo('receber')}
-                  style={{
-                    flex: 1,
-                    padding: '10px',
-                    borderRadius: 8,
-                    border: 'none',
-                    fontWeight: 700,
-                    fontSize: 13,
-                    cursor: 'pointer',
-                    background: novaTipo === 'receber' ? '#16A34A' : '#F1F5F9',
-                    color: novaTipo === 'receber' ? '#FFFFFF' : '#64748B',
-                  }}
-                >
-                  Conta a Receber (Receita)
-                </button>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 4 }}>
-                  Descrição *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: Aluguel da Loja, Manutenção, Venda Avulsa..."
-                  value={novaDescricao}
-                  onChange={(e) => setNovaDescricao(e.target.value)}
-                  style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #CBD5E1', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 4 }}>
-                    {novaTipo === 'pagar' ? 'Fornecedor / Beneficiário' : 'Cliente / Pagador'}
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Nome da pessoa ou empresa"
-                    value={novaPessoa}
-                    onChange={(e) => setNovaPessoa(e.target.value)}
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #CBD5E1', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 4 }}>
-                    Categoria
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Ex: Operacional, Marketing, Salários..."
-                    value={novaCategoria}
-                    onChange={(e) => setNovaCategoria(e.target.value)}
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #CBD5E1', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 10 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 4 }}>
-                    Valor Total (R$) *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    required
-                    placeholder="0,00"
-                    value={novaTotal || ''}
-                    onChange={(e) => setNovaTotal(Number(e.target.value))}
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #CBD5E1', fontSize: 13, outline: 'none', boxSizing: 'border-box', fontWeight: 700 }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 4 }}>
-                    1º Vencimento *
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={novaVencimento}
-                    onChange={(e) => setNovaVencimento(e.target.value)}
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #CBD5E1', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 4 }}>
-                    Nº Parcelas
-                  </label>
-                  <select
-                    value={novaQtdParcelas}
-                    onChange={(e) => setNovaQtdParcelas(Number(e.target.value))}
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #CBD5E1', fontSize: 13, outline: 'none', background: '#FFFFFF' }}
+            <form onSubmit={handleSalvarNovaConta} className="flex-1 overflow-y-auto flex flex-col">
+              {/* Form Body Scrollable */}
+              <div className="px-4 sm:px-6 py-4 space-y-3.5 flex-1">
+                {/* Tipo de Operação */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNovaTipo('pagar')}
+                    className={`py-2 px-3 rounded-xl font-bold text-xs sm:text-sm transition cursor-pointer ${
+                      novaTipo === 'pagar' ? 'bg-rose-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
                   >
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((num) => (
-                      <option key={num} value={num}>
-                        {num === 1 ? '1x À vista' : `${num}x Parcelas`}
-                      </option>
-                    ))}
-                  </select>
+                    Conta a Pagar (Despesa)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNovaTipo('receber')}
+                    className={`py-2 px-3 rounded-xl font-bold text-xs sm:text-sm transition cursor-pointer ${
+                      novaTipo === 'receber' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Conta a Receber (Receita)
+                  </button>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Descrição *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: Aluguel da Loja, Manutenção, Venda Avulsa..."
+                    value={novaDescricao}
+                    onChange={(e) => setNovaDescricao(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      {novaTipo === 'pagar' ? 'Fornecedor / Beneficiário' : 'Cliente / Pagador'}
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Nome da pessoa ou empresa"
+                      value={novaPessoa}
+                      onChange={(e) => setNovaPessoa(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Categoria
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Operacional, Marketing, Salários..."
+                      value={novaCategoria}
+                      onChange={(e) => setNovaCategoria(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Valor Total (R$) *
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      required
+                      placeholder="0,00"
+                      value={novaTotal || ''}
+                      onChange={(e) => setNovaTotal(Number(e.target.value))}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm font-bold outline-none focus:border-blue-500 tabular-nums"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      1º Vencimento *
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={novaVencimento}
+                      onChange={(e) => setNovaVencimento(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Nº Parcelas
+                    </label>
+                    <select
+                      value={novaQtdParcelas}
+                      onChange={(e) => setNovaQtdParcelas(Number(e.target.value))}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm outline-none focus:border-blue-500 bg-white cursor-pointer"
+                    >
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((num) => (
+                        <option key={num} value={num}>
+                          {num === 1 ? '1x À vista' : `${num}x Parcelas`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
+              {/* Rodapé Fixo */}
+              <div className="px-4 sm:px-6 py-3.5 border-t border-slate-100 bg-slate-50 shrink-0 flex items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setNovaContaModal(false)}
-                  style={{ padding: '10px 18px', borderRadius: 8, border: '1.5px solid #CBD5E1', background: '#FFFFFF', color: '#475569', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                  className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs sm:text-sm font-bold hover:bg-slate-100 transition cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  style={{ padding: '10px 22px', borderRadius: 8, border: 'none', background: '#1D4ED8', color: '#FFFFFF', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}
+                  className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl border-none bg-blue-700 text-white text-xs sm:text-sm font-black hover:bg-blue-800 transition shadow-sm shadow-blue-700/20 cursor-pointer"
                 >
                   Criar Lançamento
                 </button>
@@ -1495,12 +1297,12 @@ export function V2ContasPagarPage() {
 
 function Kpi({ rotulo, valor, cor, carregando }: { rotulo: string; valor: number; cor: string; carregando: boolean }) {
   return (
-    <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{rotulo}</p>
+    <div className="rounded-2xl border border-slate-100 bg-white p-3 sm:p-4 shadow-sm min-w-0">
+      <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-wide text-slate-500 truncate">{rotulo}</p>
       {carregando ? (
         <div className="mt-2 h-6 w-20 animate-pulse rounded bg-slate-100" />
       ) : (
-        <p className={`mt-1 font-hub text-lg font-bold tabular-nums ${cor}`}>{formatBRL(valor)}</p>
+        <p className={`mt-1 font-hub text-base sm:text-lg font-bold tabular-nums truncate ${cor}`}>{formatBRL(valor)}</p>
       )}
     </div>
   )
@@ -1513,8 +1315,8 @@ function Aba({ ativa, onClick, texto }: { ativa: boolean; onClick: () => void; t
       role="tab"
       aria-selected={ativa}
       onClick={onClick}
-      className={`rounded-lg px-3 py-1.5 text-xs font-semibold uppercase transition ${
-        ativa ? 'bg-blue-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
+      className={`rounded-lg px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-semibold uppercase transition cursor-pointer whitespace-nowrap ${
+        ativa ? 'bg-blue-700 text-white shadow-xs' : 'text-slate-500 hover:text-slate-800'
       }`}
     >
       {texto}
@@ -1539,11 +1341,11 @@ const Dia = memo(function Dia({
   return (
     <section style={dayStyle} aria-label={`${titulo}, ${sub}`}>
       <div className="mb-1 flex items-baseline justify-between px-1">
-        <h3 className="text-sm font-semibold text-slate-800">
-          {titulo} <span className="text-xs font-normal uppercase text-slate-400">{sub}</span>
+        <h3 className="text-xs sm:text-sm font-semibold text-slate-800">
+          {titulo} <span className="text-[11px] sm:text-xs font-normal uppercase text-slate-400">{sub}</span>
         </h3>
         {dia.saldoDia !== 0 && (
-          <span className={`text-xs font-semibold tabular-nums ${dia.saldoDia > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+          <span className={`text-[11px] sm:text-xs font-semibold tabular-nums ${dia.saldoDia > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
             {dia.saldoDia > 0 ? '+' : '−'} {formatBRL(Math.abs(dia.saldoDia))} em baixas
           </span>
         )}
@@ -1586,34 +1388,42 @@ const Linha = memo(function Linha({
   return (
     <li
       onClick={onVerDetalhes}
-      className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50/80 transition cursor-pointer"
+      className="p-3 sm:px-4 sm:py-3 hover:bg-slate-50/80 transition cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3"
       title="Clique para visualizar detalhes do lançamento"
     >
-      <span
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
-          receber ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
-        }`}
-        title={receber ? 'A receber' : 'A pagar'}
-      >
-        <Seta size={16} aria-hidden />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="line-clamp-2 text-sm font-semibold text-slate-900">{m.descricao}</p>
-        <p className="truncate text-xs text-slate-500">{detalhe}</p>
+      <div className="flex items-start sm:items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+        <span
+          className={`flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl mt-0.5 sm:mt-0 ${
+            receber ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
+          }`}
+          title={receber ? 'A receber' : 'A pagar'}
+        >
+          <Seta size={16} aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2 sm:block">
+            <p className="line-clamp-2 text-xs sm:text-sm font-semibold text-slate-900 leading-snug">{m.descricao}</p>
+            {/* Em telas menores (mobile), valor destacado no topo direito */}
+            <span className={`sm:hidden text-xs sm:text-sm font-bold tabular-nums whitespace-nowrap shrink-0 ${receber ? 'text-emerald-600' : 'text-rose-600'}`}>
+              {receber ? '+' : '−'} {formatBRL(m.valor)}
+            </span>
+          </div>
+          <p className="truncate text-[11px] sm:text-xs text-slate-500 mt-0.5">{detalhe}</p>
+        </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-3">
-        <div className="flex flex-col items-end gap-1">
-          <span className={`text-sm font-bold tabular-nums ${receber ? 'text-emerald-600' : 'text-rose-600'}`}>
+      <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-3 pt-1.5 sm:pt-0 border-t border-slate-50 sm:border-0 shrink-0">
+        <div className="flex items-center sm:flex-col sm:items-end gap-2 sm:gap-1">
+          <span className={`hidden sm:inline text-sm font-bold tabular-nums ${receber ? 'text-emerald-600' : 'text-rose-600'}`}>
             {receber ? '+' : '−'} {formatBRL(m.valor)}
           </span>
-          <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold uppercase ${cls}`}>
+          <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] sm:text-xs font-semibold uppercase ${cls}`}>
             <Icon size={10} aria-hidden />
             {m.status === 'parcial' ? `Faltam ${formatBRL(m.restante)}` : label}
           </span>
         </div>
 
-        {/* Ações da Parcela: Baixar ou Visualizar (Estornar fica dentro do modal de detalhes) */}
+        {/* Ações da Parcela: Baixar ou Visualizar */}
         {m.status !== 'paga' ? (
           <button
             type="button"
@@ -1621,10 +1431,10 @@ const Linha = memo(function Linha({
               e.stopPropagation()
               onBaixar()
             }}
-            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition border ${
+            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition border min-h-[30px] cursor-pointer ${
               receber
-                ? 'border-emerald-600 text-emerald-600 hover:bg-emerald-50'
-                : 'border-rose-600 text-rose-600 hover:bg-rose-50'
+                ? 'border-emerald-600 text-emerald-600 hover:bg-emerald-50 active:bg-emerald-100'
+                : 'border-rose-600 text-rose-600 hover:bg-rose-50 active:bg-rose-100'
             }`}
           >
             Baixar
@@ -1637,7 +1447,7 @@ const Linha = memo(function Linha({
               onVerDetalhes()
             }}
             title="Visualizar detalhes do pedido e opções"
-            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-700 hover:bg-slate-100 transition shadow-sm"
+            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 transition shadow-xs min-h-[30px] cursor-pointer"
           >
             <Eye size={12} aria-hidden />
             Visualizar

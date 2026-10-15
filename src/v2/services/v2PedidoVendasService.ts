@@ -30,6 +30,7 @@ export type PedidoVenda = {
   tabela_preco_nome?: string
   dataEmissao: string
   dataPrevistaEntrega?: string | null
+  dataEntrega?: string | null
   formaPagamento: string
   numeroParcelas: number
   contaEntradaTag?: string
@@ -297,14 +298,18 @@ export async function faturarPedidoVenda(pedidoId: string): Promise<{ ok: true }
   return { ok: true }
 }
 
-export async function entregarPedidoVenda(pedidoId: string): Promise<{ ok: true } | { ok: false; erro: string }> {
+export async function entregarPedidoVenda(
+  pedidoId: string,
+  dataEntrega: string = new Date().toISOString().split('T')[0]
+): Promise<{ ok: true; pedido: PedidoVenda } | { ok: false; erro: string }> {
   const current = await listPedidosVenda()
   const pedido = current.find((p) => p.id === pedidoId)
   if (!pedido) return { ok: false, erro: 'Pedido não encontrado.' }
 
   pedido.status = 'entregue'
+  pedido.dataEntrega = dataEntrega
   await updatePedidoVenda(pedido)
-  return { ok: true }
+  return { ok: true, pedido }
 }
 
 export async function cancelarPedidoVenda(pedidoId: string): Promise<{ ok: true } | { ok: false; erro: string }> {

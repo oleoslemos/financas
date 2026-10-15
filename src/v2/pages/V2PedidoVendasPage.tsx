@@ -24,9 +24,14 @@ import {
   Info,
   Calendar,
   Copy,
+  Clock,
+  PackageCheck,
 } from 'lucide-react'
 import { formatarMoeda } from '../../modules/lib/money'
 import { formatarData, hoje, somarDias } from '../../modules/lib/datas'
+import { supabase } from '../../lib/supabaseClient'
+import { useCompany } from '../../context/CompanyContext'
+import { getCurrentV2User } from '../services/v2AuthService'
 import {
   listPedidosVenda,
   savePedidoVenda,
@@ -271,6 +276,15 @@ export function V2PedidoVendasPage() {
 
   // State: Drawer de Detalhes / Visualização / Ações (ao estilo da V2)
   const [visualizandoPedido, setVisualizandoPedido] = useState<PedidoVenda | null>(null)
+
+  // Contexto da Empresa
+  const { activeCompanyId } = useCompany()
+
+  // State: Modal de Confirmação de Entrega & Tarefas no CRM (D+3 e D+10)
+  const [isModalEntregaOpen, setIsModalEntregaOpen] = useState(false)
+  const [pedidoParaEntrega, setPedidoParaEntrega] = useState<PedidoVenda | null>(null)
+  const [dataEntregaEfetiva, setDataEntregaEfetiva] = useState(() => dataHoje)
+  const [salvandoEntrega, setSalvandoEntrega] = useState(false)
 
   // State: Form (Novo / Edição)
   const [pedidoEdicao, setPedidoEdicao] = useState<PedidoVenda | null>(null)
@@ -714,16 +728,158 @@ export function V2PedidoVendasPage() {
     }
   }
 
-  const handleEntregar = async (id: string) => {
-    if (!confirm('Confirmar entrega desta venda ao cliente?')) return
-    const res = await entregarPedidoVenda(id)
-    if (res.ok) {
-      await loadData()
-      if (visualizandoPedido && visualizandoPedido.id === id) {
-        setVisualizandoPedido((prev) => (prev ? { ...prev, status: 'entregue' } : null))
+  // ──────────────────────────────────────────────────────────────────────────
+  // AÇÃO ENTREGAR: PREENCHER DATA E AGENDAR TAREFAS NO CRM PARA D+3 E D+10
+  // ──────────────────────────────────────────────────────────────────────────
+  const handleAbrirModalEntrega = (pedido: PedidoVenda) => {
+    setPedidoParaEntrega(pedido)
+    setDataEntregaEfetiva(hoje())
+    setIsModalEntregaOpen(true)
+  }
+
+  const handleConfirmarEntrega = async () => {
+    if (!pedidoParaEntrega) return
+    if (!dataEntregaEfetiva) {
+      alert('Por favor, informe a data da entrega.')
+      return
+    }
+
+    setSalvandoEntrega(true)
+    try {
+      // 1. Atualizar status da venda para 'entregue' e salvar data de entrega
+      const res = await entregarPedidoVenda(pedidoParaEntrega.id, dataEntregaEfetiva)
+      if (!res.ok) {
+        alert(res.erro)
+        setSalvandoEntrega(false)
+        return
       }
-    } else {
-      alert(res.erro)
+
+      // 2. Calcular datas D+3 e D+10 a partir da data de entrega
+      const dataD3 = somarDias(dataEntregaEfetiva, 3)
+      const dataD10 = somarDias(dataEntregaEfetiva, 10)
+      const dataD3Iso = `${dataD3}T10:00:00.000Z`
+      const dataD10Iso = `${dataD10}T10:00:00.000Z`
+
+      // 3. Roteiro dos produtos conforme pedido
+      const nomesProdutos =
+        pedidoParaEntrega.itens && pedidoParaEntrega.itens.length > 0
+          ? pedidoParaEntrega.itens
+              .map((it) => `${it.produto_nome}${it.quantidade > 1 ? ` (${it.quantidade} un)` : ''}`)
+              .join(', ')
+          : 'Produtos do pedido'
+
+      const currentUser = getCurrentV2User()
+      const userName = currentUser?.full_name || currentUser?.username || 'Sistema V2'
+
+      // 4. Localizar ou vincular cliente em bem_aviv_clients
+      let clienteId = pedidoParaEntrega.cliente_id
+      let clienteObj = clientes.find((c) => c.id === clienteId)
+
+      if (!clienteObj) {
+        const nomeBuscado = pedidoParaEntrega.cliente_nome.trim().toLowerCase()
+        clienteObj = clientes.find((c) => c.full_name.trim().toLowerCase() === nomeBuscado)
+        if (clienteObj) clienteId = clienteObj.id
+      }
+
+      if (!clienteObj && supabase) {
+        try {
+          const { data: found } = await supabase
+            .from('bem_aviv_clients')
+            .select('*')
+            .ilike('full_name', `%${pedidoParaEntrega.cliente_nome.trim()}%`)
+            .limit(1)
+            .maybeSingle()
+          if (found) {
+            clienteObj = found as BemAvivClient
+            clienteId = found.id
+          }
+        } catch {}
+      }
+
+      // Se ainda não existir no cadastro de clientes, criar para garantir o CRM
+      if (!clienteObj) {
+        const payloadNovoCli: any = {
+          full_name: pedidoParaEntrega.cliente_nome.trim(),
+          cpf: pedidoParaEntrega.cliente_documento?.trim() || '',
+          address_city: pedidoParaEntrega.cliente_cidade?.trim() || null,
+          company_id: activeCompanyId || null,
+          client_status: 'CLIENTE - COLCHÃO/DIVERSOS',
+          commercial_stage: 'FECHADO DEMAIS PRODUTOS',
+          next_followup_at: dataD3Iso,
+          next_followup_status: 'PENDENTE',
+          next_followup_note: `RESUMO: Pós-venda D+3 (Benefícios)\nQuestionar quais os benefícios que sentiu no uso do produto: ${nomesProdutos} (Venda ${formatarNumeroVendaExibicao(pedidoParaEntrega.numero)})`,
+        }
+        const created = await createClient(payloadNovoCli)
+        if (created.data) {
+          clienteObj = created.data
+          clienteId = created.data.id
+        }
+      }
+
+      // 5. Se o cliente estiver cadastrado, registrar as tarefas no CRM
+      if (clienteId && supabase) {
+        const companyIdFinal = activeCompanyId || clienteObj?.company_id || null
+
+        // 5.1 Atualizar o próximo retorno do cliente para D+3
+        await supabase
+          .from('bem_aviv_clients')
+          .update({
+            next_followup_at: dataD3Iso,
+            next_followup_status: 'PENDENTE',
+            next_followup_note: `RESUMO: Pós-venda D+3 (Benefícios do produto)\nQuestionar quais os benefícios que sentiu no uso do(s) produto(s): ${nomesProdutos} (Venda ${formatarNumeroVendaExibicao(pedidoParaEntrega.numero)})`,
+          })
+          .eq('id', clienteId)
+
+        // 5.2 Inserir tarefa D+3 na tabela unificada de follow-ups
+        await supabase.from('bem_aviv_client_followups').insert({
+          company_id: companyIdFinal,
+          client_id: clienteId,
+          contacted_at: dataD3Iso,
+          channel: 'AGENDAMENTO',
+          result: 'PENDENTE|Pós-venda D+3: Benefícios do produto',
+          notes: `Questionar quais os benefícios que sentiu no uso do produto ou dos produtos conforme pedido: ${nomesProdutos} (Venda ${formatarNumeroVendaExibicao(pedidoParaEntrega.numero)})`,
+          created_by_name: userName,
+        })
+
+        // 5.3 Inserir tarefa D+10 na tabela unificada de follow-ups
+        await supabase.from('bem_aviv_client_followups').insert({
+          company_id: companyIdFinal,
+          client_id: clienteId,
+          contacted_at: dataD10Iso,
+          channel: 'AGENDAMENTO',
+          result: 'PENDENTE|Pós-venda D+10: Benefícios do produto',
+          notes: `Questionar quais os benefícios que sentiu no uso do produto ou dos produtos após 10 dias de uso: ${nomesProdutos} (Venda ${formatarNumeroVendaExibicao(pedidoParaEntrega.numero)})`,
+          created_by_name: userName,
+        })
+      }
+
+      // 6. Atualizar bem_aviv_sales_orders se existir no Supabase
+      if (supabase) {
+        try {
+          await supabase
+            .from('bem_aviv_sales_orders')
+            .update({
+              status: 'ENTREGUE',
+              delivered_at: dataEntregaEfetiva,
+            })
+            .or(`id.eq.${pedidoParaEntrega.id},document_number.eq.${pedidoParaEntrega.numero}`)
+        } catch {}
+      }
+
+      // Recarregar dados e atualizar visualizador
+      await loadData()
+      if (visualizandoPedido && visualizandoPedido.id === pedidoParaEntrega.id) {
+        setVisualizandoPedido((prev) =>
+          prev ? { ...prev, status: 'entregue', dataEntrega: dataEntregaEfetiva } : null
+        )
+      }
+
+      setIsModalEntregaOpen(false)
+      setPedidoParaEntrega(null)
+    } catch (err: any) {
+      alert(`Erro ao registrar entrega e tarefas do CRM: ${err?.message || err}`)
+    } finally {
+      setSalvandoEntrega(false)
     }
   }
 
@@ -2201,11 +2357,15 @@ export function V2PedidoVendasPage() {
                   </div>
 
                   <div className="sm:text-right">
-                    <span className="text-slate-400 text-[10px] uppercase font-bold block">Previsão Entrega</span>
+                    <span className="text-slate-400 text-[10px] uppercase font-bold block">
+                      {visualizandoPedido.status === 'entregue' ? 'Data da Entrega' : 'Previsão Entrega'}
+                    </span>
                     <span className="font-bold text-slate-800 text-xs">
-                      {visualizandoPedido.dataPrevistaEntrega
-                        ? formatarData(visualizandoPedido.dataPrevistaEntrega)
-                        : 'Não definida'}
+                      {visualizandoPedido.status === 'entregue' && visualizandoPedido.dataEntrega
+                        ? formatarData(visualizandoPedido.dataEntrega)
+                        : visualizandoPedido.dataPrevistaEntrega
+                          ? formatarData(visualizandoPedido.dataPrevistaEntrega)
+                          : 'Não definida'}
                     </span>
                   </div>
                 </div>
@@ -2399,7 +2559,7 @@ Opções de Pagamento:
                 {visualizandoPedido.status === 'faturado' && (
                   <button
                     type="button"
-                    onClick={() => void handleEntregar(visualizandoPedido.id)}
+                    onClick={() => handleAbrirModalEntrega(visualizandoPedido)}
                     className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3.5 py-2 text-xs font-bold uppercase tracking-wider text-white hover:bg-blue-700 transition cursor-pointer shadow-xs"
                   >
                     <Truck size={15} />
@@ -2456,6 +2616,122 @@ Opções de Pagamento:
           </div>
         </>
       )}
+
+      {/* MODAL CONFIRMAÇÃO DE ENTREGA & CRIAÇÃO DE TAREFAS NO CRM (D+3 e D+10) */}
+      {isModalEntregaOpen && pedidoParaEntrega && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-slate-100 flex flex-col gap-5">
+            {/* Cabeçalho */}
+            <div className="flex items-start justify-between border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                  <Truck size={22} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-800">
+                    Confirmar Entrega do Pedido
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Venda <span className="font-semibold text-slate-700">{formatarNumeroVendaExibicao(pedidoParaEntrega.numero)}</span> • {pedidoParaEntrega.cliente_nome}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => !salvandoEntrega && setIsModalEntregaOpen(false)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Formulário: Data de Entrega */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Dia da Entrega <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="date"
+                value={dataEntregaEfetiva}
+                onChange={(e) => setDataEntregaEfetiva(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm font-semibold text-slate-800 focus:border-blue-500 focus:bg-white focus:outline-none transition shadow-xs"
+              />
+              <p className="text-[11px] text-slate-400">
+                A data informada será a base para o cálculo dos contatos pós-venda.
+              </p>
+            </div>
+
+            {/* Box explicativo das tarefas do CRM */}
+            <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4 space-y-3">
+              <div className="flex items-center gap-2 text-xs font-bold text-blue-800">
+                <Clock size={15} className="text-blue-600" />
+                Tarefas automáticas geradas no CRM:
+              </div>
+
+              {/* D+3 */}
+              <div className="rounded-lg bg-white p-3 border border-blue-100/70 shadow-xs space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800">
+                    1º Contato: D+3 ({somarDias(dataEntregaEfetiva || hoje(), 3).split('-').reverse().join('/')})
+                  </span>
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                    Pós-venda Inicial
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Questionar quais os benefícios que o cliente já sentiu no uso do produto ou dos produtos.
+                </p>
+              </div>
+
+              {/* D+10 */}
+              <div className="rounded-lg bg-white p-3 border border-blue-100/70 shadow-xs space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800">
+                    2º Contato: D+10 ({somarDias(dataEntregaEfetiva || hoje(), 10).split('-').reverse().join('/')})
+                  </span>
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    Acompanhamento
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Avaliar adaptação e aprofundar os benefícios percebidos após 10 dias de uso.
+                </p>
+              </div>
+
+              {/* Produtos envolvidos */}
+              {pedidoParaEntrega.itens && pedidoParaEntrega.itens.length > 0 && (
+                <div className="pt-1 text-[11px] text-slate-500">
+                  <span className="font-semibold text-slate-600">Produtos do pedido: </span>
+                  {pedidoParaEntrega.itens.map((it) => it.produto_nome).join(', ')}
+                </div>
+              )}
+            </div>
+
+            {/* Rodapé / Ações */}
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsModalEntregaOpen(false)}
+                disabled={salvandoEntrega}
+                className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void handleConfirmarEntrega()}
+                disabled={salvandoEntrega || !dataEntregaEfetiva}
+                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-700 transition cursor-pointer shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <PackageCheck size={16} />
+                {salvandoEntrega ? 'Registrando Entrega...' : 'Confirmar Entrega e Agendar CRM'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
+
