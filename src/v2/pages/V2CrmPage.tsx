@@ -113,6 +113,7 @@ type ClientRow = {
   next_followup_note?: string | null
   client_status?: string | null
   commercial_stage?: string | null
+  company_id?: string | null
 }
 
 type CrmSubTab = 'visao-geral' | 'follow-up' | 'produtividade' | 'atividades'
@@ -193,7 +194,7 @@ export function V2CrmPage() {
         .in('status', ['ABERTO', 'FINALIZADO', 'ENTREGA PENDENTE', 'ENTREGA PARCIAL', 'ENTREGUE', 'CANCELADO']),
       supabase
         .from('bem_aviv_clients')
-        .select('id, full_name, cpf, last_contact_at, next_followup_at, next_followup_status, phone_1, phone_2, next_followup_note, client_status, commercial_stage')
+        .select('id, full_name, cpf, last_contact_at, next_followup_at, next_followup_status, phone_1, phone_2, next_followup_note, client_status, commercial_stage, company_id')
         .eq('company_id', activeCompanyId),
     ])
 
@@ -391,13 +392,15 @@ export function V2CrmPage() {
 
   const handleSaveSchedule = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!supabase || !scheduleModalClient || !activeCompanyId) return
+    if (!supabase || !scheduleModalClient) return
     if (!scheduleForm.next_followup_at) {
       alert('Informe a data do agendamento.')
       return
     }
 
     setScheduleSaving(true)
+    const companyIdFinal = activeCompanyId || scheduleModalClient.company_id || '10000000-0000-4000-8000-000000000001'
+    const userIdFinal = v2User?.id || v2User?.username || 'v2_user'
     const isoDate = dateInputToIso(scheduleForm.next_followup_at)
     const fullNote = composeFollowupNote(scheduleForm.summary, scheduleForm.notes)
     const nowIso = new Date().toISOString()
@@ -411,10 +414,9 @@ export function V2CrmPage() {
         last_contact_at: scheduleForm.contact_done ? nowIso : scheduleModalClient.last_contact_at,
       })
       .eq('id', scheduleModalClient.id)
-      .eq('company_id', activeCompanyId)
 
     if (error) {
-      alert(error.message)
+      alert(`Erro ao agendar: ${error.message}`)
       setScheduleSaving(false)
       return
     }
@@ -422,7 +424,8 @@ export function V2CrmPage() {
     // Se marcou que realizou contato prévio, salvar em bem_aviv_client_followups
     if (scheduleForm.contact_done) {
       await supabase.from('bem_aviv_client_followups').insert({
-        company_id: activeCompanyId,
+        user_id: userIdFinal,
+        company_id: companyIdFinal,
         created_by_name: userName,
         client_id: scheduleModalClient.id,
         contacted_at: nowIso,
@@ -449,14 +452,20 @@ export function V2CrmPage() {
 
   const handleSaveContact = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!supabase || !contactModalClient || !activeCompanyId) return
-    if (!contactForm.contacted_at) return
+    if (!supabase || !contactModalClient) return
+    if (!contactForm.contacted_at) {
+      alert('Por favor, informe a data do contato.')
+      return
+    }
 
     setContactSaving(true)
+    const companyIdFinal = activeCompanyId || contactModalClient.company_id || '10000000-0000-4000-8000-000000000001'
+    const userIdFinal = v2User?.id || v2User?.username || 'v2_user'
     const contactedAtIso = dateInputToIso(contactForm.contacted_at)
 
     const { error: insertError } = await supabase.from('bem_aviv_client_followups').insert({
-      company_id: activeCompanyId,
+      user_id: userIdFinal,
+      company_id: companyIdFinal,
       created_by_name: userName,
       client_id: contactModalClient.id,
       contacted_at: contactedAtIso,
@@ -466,20 +475,46 @@ export function V2CrmPage() {
     })
 
     if (insertError) {
-      alert(insertError.message)
+      console.error('Erro ao inserir follow-up:', insertError)
+      alert(`Erro ao salvar contato: ${insertError.message}`)
       setContactSaving(false)
       return
     }
 
+    // Sincronizar também com crm_contato_v2 para manter ambos os modelos alinhados
+    try {
+      const tipoCrm = (['ligacao', 'whatsapp', 'email', 'visita', 'reuniao'].includes(contactForm.channel.toLowerCase())
+        ? contactForm.channel.toLowerCase()
+        : 'outro') as any
+
+      await supabase.from('crm_contato_v2').insert({
+        cliente_id: contactModalClient.id,
+        company_id: companyIdFinal,
+        tipo: tipoCrm,
+        direcao: 'realizado',
+        assunto: contactForm.result?.trim() || 'Contato Realizado',
+        descricao: contactForm.notes?.trim() || null,
+        resultado: contactForm.result?.trim() || null,
+        ocorrido_em: contactedAtIso,
+        responsavel_id: userIdFinal,
+        criado_por: userName,
+      })
+    } catch (e) {
+      console.warn('Sync crm_contato_v2:', e)
+    }
+
     // Atualizar o cliente
-    await supabase
+    const { error: updClientErr } = await supabase
       .from('bem_aviv_clients')
       .update({
         last_contact_at: contactedAtIso,
         next_followup_status: 'CONCLUIDO',
       })
       .eq('id', contactModalClient.id)
-      .eq('company_id', activeCompanyId)
+
+    if (updClientErr) {
+      console.warn('Aviso ao atualizar status do cliente:', updClientErr.message)
+    }
 
     setContactSaving(false)
     setContactModalClient(null)
@@ -598,7 +633,7 @@ export function V2CrmPage() {
                   <button
                     type="button"
                     onClick={() => handleSelectTab('follow-up')}
-                    className="w-full rounded-xl bg-slate-900 hover:bg-slate-800 text-white py-2.5 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-xs active:scale-95"
+                    className="w-full rounded-xl bg-[#0D6BAF] hover:bg-[#095287] text-white py-2.5 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-xs active:scale-95"
                   >
                     Ver Atrasados
                   </button>
@@ -713,7 +748,7 @@ export function V2CrmPage() {
                           onClick={() => setSelectedDay(key)}
                           className={`relative flex h-11 sm:h-13 flex-col items-center justify-between p-1 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
                             isToday
-                              ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                              ? 'bg-[#0D6BAF] text-white border-[#0D6BAF] shadow-xs'
                               : n > 0 && isPast
                               ? 'bg-amber-50 text-amber-950 border-amber-200 font-bold shadow-2xs hover:border-amber-400'
                               : n > 0
@@ -752,7 +787,7 @@ export function V2CrmPage() {
                 {/* Legenda do Calendário */}
                 <div className="flex flex-wrap items-center gap-3 text-[10px] text-slate-500 pt-2 border-t border-slate-100">
                   <span className="flex items-center gap-1.5 font-medium">
-                    <span className="w-2.5 h-2.5 rounded-sm bg-slate-900" />
+                    <span className="w-2.5 h-2.5 rounded-sm bg-[#0D6BAF]" />
                     Hoje
                   </span>
                   <span className="flex items-center gap-1.5 font-medium">
@@ -834,7 +869,7 @@ export function V2CrmPage() {
                               <button
                                 type="button"
                                 onClick={() => openContactModal(client)}
-                                className="rounded-lg bg-slate-900 hover:bg-slate-800 text-white px-2.5 py-1 text-[11px] font-bold transition cursor-pointer shadow-2xs"
+                                className="rounded-lg bg-[#0D6BAF] hover:bg-[#095287] text-white px-2.5 py-1 text-[11px] font-bold transition cursor-pointer shadow-2xs"
                               >
                                 Registrar Contato
                               </button>
@@ -956,7 +991,7 @@ export function V2CrmPage() {
                             <button
                               type="button"
                               onClick={() => openContactModal(fullClient)}
-                              className="rounded-lg bg-slate-900 hover:bg-slate-800 text-white px-3 py-1.5 text-xs font-bold transition cursor-pointer shrink-0 shadow-xs active:scale-95"
+                              className="rounded-lg bg-[#0D6BAF] hover:bg-[#095287] text-white px-3 py-1.5 text-xs font-bold transition cursor-pointer shrink-0 shadow-xs active:scale-95"
                             >
                               Registrar contato
                             </button>
@@ -1169,7 +1204,7 @@ export function V2CrmPage() {
                 <button
                   type="submit"
                   disabled={contactSaving}
-                  className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-50"
+                  className="px-5 py-2 rounded-xl bg-[#0D6BAF] hover:bg-[#095287] text-white text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-50"
                 >
                   {contactSaving ? 'Gravando...' : 'Salvar Contato'}
                 </button>
@@ -1355,7 +1390,7 @@ function FollowupTabContent({
                           <button
                             type="button"
                             onClick={() => onOpenContact(client)}
-                            className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] transition shadow-2xs cursor-pointer"
+                            className="px-2.5 py-1 rounded-lg bg-[#0D6BAF] hover:bg-[#095287] text-white font-bold text-[11px] transition shadow-2xs cursor-pointer"
                           >
                             Contato
                           </button>

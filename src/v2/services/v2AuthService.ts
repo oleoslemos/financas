@@ -4,7 +4,7 @@ export type V2User = {
   id: string
   full_name: string
   username: string
-  email: string
+  email: string | null
   created_at: string
 }
 
@@ -49,14 +49,17 @@ export function setV2Session(user: V2User | null): void {
   }
 }
 
-export async function registerV2User(data: {
-  full_name: string
-  username: string
-  email: string
-  password: string
-}): Promise<{ user: V2User; error: string | null }> {
+export async function registerV2User(
+  data: {
+    full_name: string
+    username: string
+    email?: string
+    password: string
+  },
+  options: { isInvite?: boolean } = {}
+): Promise<{ user: V2User; error: string | null }> {
   const cleanUsername = data.username.trim().toLowerCase()
-  const cleanEmail = data.email.trim().toLowerCase()
+  const cleanEmail = (data.email || '').trim().toLowerCase() || null
   const cleanName = data.full_name.trim()
 
   if (!cleanName) return { user: null as any, error: 'Por favor, informe seu nome completo.' }
@@ -88,11 +91,9 @@ export async function registerV2User(data: {
         .maybeSingle()
 
       if (selErr) {
-        return { user: null as any, error: 'Erro ao verificar usuário no banco de dados.' }
-      }
-
-      if (existingSupabaseUser) {
-        return { user: null as any, error: 'Este nome de usuário já está cadastrado no banco.' }
+        console.warn('Erro ao verificar usuário no banco:', selErr)
+      } else if (existingSupabaseUser) {
+        return { user: null as any, error: 'Este nome de usuário já está cadastrado no banco de dados.' }
       }
 
       const { error: insErr } = await supabase.from('v2_users').insert({
@@ -105,25 +106,31 @@ export async function registerV2User(data: {
 
       if (insErr) {
         console.error('Erro ao salvar usuário no Supabase:', insErr)
-        return { user: null as any, error: 'Falha ao salvar os dados de acesso no banco.' }
+        return { user: null as any, error: `Falha ao salvar acesso no banco: ${insErr.message}` }
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('Erro de conexão com o Supabase:', e)
-      return { user: null as any, error: 'Erro de conexão com o banco de dados.' }
+      return { user: null as any, error: `Erro de conexão com o banco de dados: ${e?.message || e}` }
     }
-  } else {
-    return { user: null as any, error: 'Cliente do banco de dados não configurado.' }
   }
+
+  // Atualizar cache local
+  localUsers.push(newUserRecord)
+  saveLocalUsers(localUsers)
 
   const userSession: V2User = {
     id: newUserRecord.id,
     full_name: newUserRecord.full_name,
     username: newUserRecord.username,
-    email: newUserRecord.email,
+    email: newUserRecord.email || '',
     created_at: newUserRecord.created_at,
   }
 
-  setV2Session(userSession)
+  // Só altera a sessão se NÃO for um convite criado por um admin logado
+  if (!options.isInvite) {
+    setV2Session(userSession)
+  }
+
   return { user: userSession, error: null }
 }
 
@@ -186,6 +193,52 @@ export async function loginV2User(data: {
 
 export function logoutV2User(): void {
   setV2Session(null)
+}
+
+export async function fetchV2Users(): Promise<V2User[]> {
+  const localUsers = getLocalUsers()
+
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('v2_users')
+        .select('id, full_name, username, email, created_at')
+        .order('created_at', { ascending: true })
+
+      if (!error && data && data.length > 0) {
+        // Mapear e sincronizar no cache local
+        const supaUsers: V2User[] = data.map((u) => ({
+          id: u.id,
+          full_name: u.full_name,
+          username: u.username,
+          email: u.email || '',
+          created_at: u.created_at || new Date().toISOString(),
+        }))
+
+        // Sincronizar senhas locais conhecidas se houver
+        const merged = supaUsers.map((su) => {
+          const loc = localUsers.find((lu) => lu.username === su.username)
+          return {
+            ...su,
+            password_hash: loc?.password_hash || '',
+          }
+        })
+        saveLocalUsers(merged)
+
+        return supaUsers
+      }
+    } catch (e) {
+      console.warn('Falha ao carregar usuários do Supabase, usando cache local:', e)
+    }
+  }
+
+  return localUsers.map((u) => ({
+    id: u.id,
+    full_name: u.full_name,
+    username: u.username,
+    email: u.email || '',
+    created_at: u.created_at,
+  }))
 }
 
 export function listAllLocalV2Users(): (V2User & { password_hash: string })[] {

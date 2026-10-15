@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
 import {
   getCurrentV2User,
-  listAllLocalV2Users,
+  fetchV2Users,
   registerV2User,
   deleteV2UserByUsername,
   V2User,
@@ -143,7 +143,6 @@ function maskPhone(value: string): string {
 }
 
 // ─── Types ─────────────────────────────────────────────────────────────────
-type LocalUser = V2User & { password_hash: string }
 type Toast = { type: 'success' | 'error'; text: string }
 type SettingsTab = 'empresa' | 'fornecedor' | 'representante' | 'metas' | 'formas_pagamento'
 
@@ -267,9 +266,22 @@ export function V2SettingsPage() {
   }
 
   // Users state
-  const [users, setUsers] = useState<LocalUser[]>([])
-  const reloadUsers = () => setUsers(listAllLocalV2Users())
-  useEffect(reloadUsers, [])
+  const [users, setUsers] = useState<V2User[]>([])
+  const [loadingUsers, setLoadingUsers] = useState(false)
+
+  const reloadUsers = async () => {
+    setLoadingUsers(true)
+    try {
+      const data = await fetchV2Users()
+      setUsers(data)
+    } finally {
+      setLoadingUsers(false)
+    }
+  }
+
+  useEffect(() => {
+    void reloadUsers()
+  }, [])
 
   const [confirmDeleteUser, setConfirmDeleteUser] = useState<string | null>(null)
   const [deletingUser, setDeletingUser] = useState(false)
@@ -281,7 +293,7 @@ export function V2SettingsPage() {
   const handleDeleteUser = async (username: string) => {
     setDeletingUser(true)
     await deleteV2UserByUsername(username)
-    reloadUsers()
+    await reloadUsers()
     setConfirmDeleteUser(null)
     setDeletingUser(false)
     showToast({ type: 'success', text: `Usuário @${username} removido.` })
@@ -290,7 +302,7 @@ export function V2SettingsPage() {
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault()
     setInviting(true)
-    const { error } = await registerV2User(invite)
+    const { error } = await registerV2User(invite, { isInvite: true })
     setInviting(false)
     if (error) {
       showToast({ type: 'error', text: error })
@@ -298,7 +310,7 @@ export function V2SettingsPage() {
       showToast({ type: 'success', text: `Usuário @${invite.username} cadastrado com sucesso!` })
       setInvite({ full_name: '', username: '', email: '', password: '' })
       setInviteOpen(false)
-      reloadUsers()
+      await reloadUsers()
     }
   }
 
@@ -1087,7 +1099,12 @@ export function V2SettingsPage() {
               accent="green"
             >
               <div className="space-y-3 mb-5">
-                {users.map((u) => (
+                {loadingUsers ? (
+                  <div className="flex items-center justify-center py-6 text-slate-400 text-sm gap-2">
+                    <span className="animate-spin inline-block h-4 w-4 border-2 border-slate-300 border-t-[#0D6BAF] rounded-full" />
+                    Carregando usuários...
+                  </div>
+                ) : users.map((u) => (
                   <div
                     key={u.id}
                     className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl transition"

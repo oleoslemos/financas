@@ -166,18 +166,38 @@ function writeToStorage(list: PedidoVenda[]) {
 
 export async function listPedidosVenda(): Promise<PedidoVenda[]> {
   let list: PedidoVenda[] = []
+
   if (supabase) {
     try {
-      const { data, error } = await supabase.from(SUPABASE_TABLE).select('*').order('created_at', { ascending: false })
+      const { data, error } = await supabase
+        .from(SUPABASE_TABLE)
+        .select('*')
+        .order('created_at', { ascending: false })
+
       if (!error && data && data.length > 0) {
         list = data as PedidoVenda[]
+        writeToStorage(list)
+        return list
+      }
+    } catch (e) {
+      console.warn('Falha ao buscar pedidos de venda do Supabase, usando local:', e)
+    }
+  }
+
+  // Se não veio do Supabase, lê do storage local
+  const localList = readFromStorage()
+
+  // Se tem dados no storage local e Supabase está conectado, migra os dados locais para a nuvem
+  if (supabase && localList.length > 0 && list.length === 0) {
+    try {
+      const { error: insErr } = await supabase.from(SUPABASE_TABLE).upsert(localList)
+      if (!insErr) {
+        console.info('Pedidos de venda sincronizados com sucesso na nuvem Supabase.')
       }
     } catch {}
   }
-  if (list.length === 0) {
-    list = readFromStorage()
-  }
-  return list
+
+  return localList
 }
 
 export async function savePedidoVenda(
