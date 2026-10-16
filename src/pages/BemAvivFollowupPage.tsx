@@ -1,7 +1,7 @@
 import { useUser } from '@clerk/clerk-react'
 import { CalendarPlus, MessageCircle, Pencil, PhoneForwarded, PlusCircle, Search, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
 import { useSupabase } from '../hooks/useSupabase'
 import { useCompany } from '../context/CompanyContext'
@@ -17,14 +17,18 @@ import {
   type BemAvivEko7Filter,
 } from '../lib/bemAvivClientStatus'
 
+const EXCLUDED_FROM_FOLLOWUP_NAMES = new Set(['LEONARDO SILVA LEMOS', 'SUELEN JOAO ALVES'])
+const EXCLUDED_FROM_FOLLOWUP_CPFS = new Set(['22112195867', '00742215903'])
+
 type FollowupStatus = 'PENDENTE' | 'CONCLUIDO' | 'CANCELADO'
-type DateFilter = 'TODOS' | 'VENCIDOS' | 'HOJE' | 'PROXIMOS_7' | 'SEM_AGENDAMENTO'
+type DateFilter = 'TODOS' | 'VENCIDOS' | 'HOJE' | 'PROXIMOS_7' | 'SEM_AGENDAMENTO' | 'SEM_CONTATO'
 type StatusFilter = 'TODOS' | FollowupStatus | 'VISITA_AGENDADA'
 type SortKey = 'full_name' | 'phone' | 'client_status' | 'commercial_stage' | 'last_contact_at' | 'next_followup_at' | 'next_followup_status'
 
 type Cliente = {
   id: string
   full_name: string
+  cpf?: string | null
   phone_1: string | null
   phone_2: string | null
   client_status: string | null
@@ -132,6 +136,7 @@ export function BemAvivFollowupPage() {
   const followupUserId = ownerUserId ? ownerUserId.toUpperCase() : null
   const followupActorName = (user?.fullName || user?.primaryEmailAddress?.emailAddress || ownerUserId || 'USUÁRIO').trim().toUpperCase()
 
+  const [searchParams, setSearchParams] = useSearchParams()
   const [rows, setRows] = useState<Cliente[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -159,7 +164,28 @@ export function BemAvivFollowupPage() {
     notes: '',
   })
 
+  useEffect(() => {
+    const periodoParam = searchParams.get('periodo') as DateFilter | null
+    const statusParam = searchParams.get('status') as StatusFilter | null
+    const eko7Param = searchParams.get('eko7') as BemAvivEko7Filter | null
 
+    if (periodoParam && ['TODOS', 'VENCIDOS', 'HOJE', 'PROXIMOS_7', 'SEM_AGENDAMENTO', 'SEM_CONTATO'].includes(periodoParam)) {
+      setDateFilter(periodoParam)
+    }
+    if (statusParam && ['TODOS', 'PENDENTE', 'CONCLUIDO', 'CANCELADO', 'VISITA_AGENDADA'].includes(statusParam)) {
+      setStatusFilter(statusParam)
+    }
+    if (eko7Param && ['TODOS', 'APRESENTADO', 'PENDENTE'].includes(eko7Param)) {
+      setEko7Filter(eko7Param)
+    }
+  }, [searchParams, setDateFilter, setStatusFilter])
+
+  useEffect(() => {
+    const st = location.state as { dateFilter?: DateFilter; statusFilter?: StatusFilter; eko7Filter?: BemAvivEko7Filter } | null
+    if (st?.dateFilter) setDateFilter(st.dateFilter)
+    if (st?.statusFilter) setStatusFilter(st.statusFilter)
+    if (st?.eko7Filter) setEko7Filter(st.eko7Filter)
+  }, [location.state, setDateFilter, setStatusFilter])
 
   const load = useCallback(async () => {
     if (!supabase || !activeCompanyId) {
@@ -169,7 +195,7 @@ export function BemAvivFollowupPage() {
     setLoading(true)
     const { data, error } = await supabase
       .from('bem_aviv_clients')
-      .select('id, full_name, phone_1, phone_2, client_status, commercial_stage, last_contact_at, next_followup_at, next_followup_note, next_followup_status, eko7_presentation_at')
+      .select('id, full_name, cpf, phone_1, phone_2, client_status, commercial_stage, last_contact_at, next_followup_at, next_followup_note, next_followup_status, eko7_presentation_at')
       .eq('company_id', activeCompanyId)
       .order('full_name')
 
@@ -315,6 +341,10 @@ export function BemAvivFollowupPage() {
     nextSevenEnd.setHours(23, 59, 59, 999)
 
     const filtered = rows.filter((row) => {
+      if (EXCLUDED_FROM_FOLLOWUP_NAMES.has(row.full_name?.trim()?.toUpperCase())) return false
+      const cpf = (row.cpf ?? '').replace(/\D/g, '')
+      if (cpf && EXCLUDED_FROM_FOLLOWUP_CPFS.has(cpf)) return false
+
       const hasSearchMatch =
         !q ||
         row.full_name.toUpperCase().includes(q) ||
@@ -332,7 +362,11 @@ export function BemAvivFollowupPage() {
       }
 
       const nextDate = row.next_followup_at ? new Date(row.next_followup_at) : null
+      const lastContactDate = row.last_contact_at ? new Date(row.last_contact_at) : null
 
+      if (dateFilter === 'SEM_CONTATO') {
+        return !lastContactDate && !nextDate
+      }
       if (dateFilter === 'SEM_AGENDAMENTO') {
         return !nextDate
       }
@@ -341,7 +375,11 @@ export function BemAvivFollowupPage() {
       }
       if (!nextDate) return false
 
-      if (dateFilter === 'VENCIDOS') return nextDate < now
+      if (dateFilter === 'VENCIDOS') {
+        if (nextDate >= now) return false
+        if (lastContactDate && lastContactDate > nextDate) return false
+        return true
+      }
       if (dateFilter === 'HOJE') return nextDate >= todayStart && nextDate <= todayEnd
       if (dateFilter === 'PROXIMOS_7') return nextDate >= todayStart && nextDate <= nextSevenEnd
       return true
@@ -510,17 +548,42 @@ export function BemAvivFollowupPage() {
         </div>
         <div>
           <label>PERÍODO</label>
-          <select value={dateFilter} onChange={(e) => setDateFilter(e.target.value as DateFilter)}>
+          <select
+            value={dateFilter}
+            onChange={(e) => {
+              const val = e.target.value as DateFilter
+              setDateFilter(val)
+              setSearchParams((prev) => {
+                const next = new URLSearchParams(prev)
+                if (val === 'TODOS') next.delete('periodo')
+                else next.set('periodo', val)
+                return next
+              })
+            }}
+          >
             <option value="VENCIDOS">Vencidos</option>
             <option value="HOJE">Hoje</option>
             <option value="PROXIMOS_7">Próximos 7 dias</option>
             <option value="SEM_AGENDAMENTO">Sem agendamento</option>
+            <option value="SEM_CONTATO">Sem nenhum contato</option>
             <option value="TODOS">Todos</option>
           </select>
         </div>
         <div>
           <label>STATUS</label>
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}>
+          <select
+            value={statusFilter}
+            onChange={(e) => {
+              const val = e.target.value as StatusFilter
+              setStatusFilter(val)
+              setSearchParams((prev) => {
+                const next = new URLSearchParams(prev)
+                if (val === 'TODOS') next.delete('status')
+                else next.set('status', val)
+                return next
+              })
+            }}
+          >
             <option value="TODOS">Todos</option>
             <option value="PENDENTE">Pendente</option>
             <option value="CONCLUIDO">Concluído</option>
@@ -530,7 +593,19 @@ export function BemAvivFollowupPage() {
         </div>
         <div>
           <label>EKO7</label>
-          <select value={eko7Filter} onChange={(e) => setEko7Filter(e.target.value as BemAvivEko7Filter)}>
+          <select
+            value={eko7Filter}
+            onChange={(e) => {
+              const val = e.target.value as BemAvivEko7Filter
+              setEko7Filter(val)
+              setSearchParams((prev) => {
+                const next = new URLSearchParams(prev)
+                if (val === 'TODOS') next.delete('eko7')
+                else next.set('eko7', val)
+                return next
+              })
+            }}
+          >
             <option value="TODOS">Todos</option>
             <option value="APRESENTADO">EKO7 apresentado</option>
             <option value="PENDENTE">EKO7 não apresentado</option>
@@ -545,6 +620,7 @@ export function BemAvivFollowupPage() {
               setDateFilter('TODOS')
               setStatusFilter('TODOS')
               setEko7Filter('TODOS')
+              setSearchParams({})
             }}
           >
             Limpar filtros

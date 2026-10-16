@@ -1096,7 +1096,11 @@ export function BemAvivHomePage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => navigate('/bem-aviv/follow-up')}
+                  onClick={() =>
+                    navigate('/bem-aviv/follow-up?periodo=VENCIDOS&status=PENDENTE', {
+                      state: { dateFilter: 'VENCIDOS', statusFilter: 'PENDENTE' },
+                    })
+                  }
                   className="w-full rounded-lg bg-[#0F3764] hover:bg-[#0c2c50] text-white py-2 text-xs font-bold transition-colors cursor-pointer shadow-xs"
                 >
                   Ver atrasados
@@ -1120,7 +1124,11 @@ export function BemAvivHomePage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => navigate('/bem-aviv/follow-up')}
+                  onClick={() =>
+                    navigate('/bem-aviv/follow-up?periodo=SEM_CONTATO&status=TODOS', {
+                      state: { dateFilter: 'SEM_CONTATO', statusFilter: 'TODOS' },
+                    })
+                  }
                   className="w-full rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 py-2 text-xs font-bold transition-colors cursor-pointer shadow-xs"
                 >
                   Iniciar contatos
