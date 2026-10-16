@@ -567,7 +567,7 @@ export function V2ClientFollowupSheet({
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+              <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer whitespace-nowrap">
                 <input
                   type="checkbox"
                   checked={scheduleForm.contact_done}
