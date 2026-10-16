@@ -31,6 +31,7 @@ import {
   fetchContatos,
   formatarDataHora,
 } from '../services/v2CrmService'
+import { V2ClientFollowupSheet } from '../components/V2ClientFollowupSheet'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constantes e Helpers
@@ -176,6 +177,7 @@ export function V2CrmPage() {
     notes: '',
   })
   const [contactSaving, setContactSaving] = useState(false)
+  const [selectedHistoryClient, setSelectedHistoryClient] = useState<ClientRow | null>(null)
 
   // ── CARREGAMENTO DE DADOS (OLHANDO PARA AS MESMAS TABELAS DO SISTEMA) ──
   const loadData = useCallback(async () => {
@@ -1022,8 +1024,7 @@ export function V2CrmPage() {
         {currentTab === 'follow-up' && (
           <FollowupTabContent
             clients={clients}
-            onOpenSchedule={openScheduleModal}
-            onOpenContact={openContactModal}
+            onSelectClient={setSelectedHistoryClient}
           />
         )}
 
@@ -1213,6 +1214,18 @@ export function V2CrmPage() {
           </div>
         </div>
       )}
+      {/* ── MODAL FICHA DE HISTÓRICO DE FOLLOW-UP DO CLIENTE ── */}
+      {selectedHistoryClient && (
+        <V2ClientFollowupSheet
+          client={selectedHistoryClient}
+          companyId={activeCompanyId || selectedHistoryClient.company_id || '10000000-0000-4000-8000-000000000001'}
+          isModal
+          onClose={() => setSelectedHistoryClient(null)}
+          onClientUpdated={() => {
+            void loadData()
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -1223,12 +1236,10 @@ export function V2CrmPage() {
 
 function FollowupTabContent({
   clients,
-  onOpenSchedule,
-  onOpenContact,
+  onSelectClient,
 }: {
   clients: ClientRow[]
-  onOpenSchedule: (client: ClientRow) => void
-  onOpenContact: (client: ClientRow) => void
+  onSelectClient: (client: ClientRow) => void
 }) {
   const [busca, setBusca] = useState('')
   const [filtroStatus, setFiltroStatus] = useState<'TODOS' | 'VENCIDOS' | 'HOJE' | 'PROXIMOS_7' | 'SEM_AGENDAMENTO'>('TODOS')
@@ -1348,7 +1359,16 @@ function FollowupTabContent({
 
                   return (
                     <tr key={client.id} className="hover:bg-slate-50/60 transition-colors">
-                      <td className="px-4 py-3 font-bold text-slate-900">{client.full_name}</td>
+                      <td className="px-4 py-3 font-bold text-slate-900">
+                        <button
+                          type="button"
+                          onClick={() => onSelectClient(client)}
+                          className="text-left font-bold text-slate-900 hover:text-[#0D6BAF] hover:underline cursor-pointer transition-colors"
+                          title="Clique para abrir histórico e follow-up"
+                        >
+                          {client.full_name}
+                        </button>
+                      </td>
                       <td className="px-3 py-3 text-slate-500 font-medium">{formatPhone(rawPhone) || '—'}</td>
                       <td className="px-3 py-3 text-slate-600">
                         {client.last_contact_at ? formatDateOnly(client.last_contact_at) : 'Sem contato'}
@@ -1375,32 +1395,21 @@ function FollowupTabContent({
                         {parsed.summary || parsed.details || '—'}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {waUrl && (
+                        <div className="flex items-center justify-end">
+                          {waUrl ? (
                             <a
                               href={waUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="p-1.5 rounded-lg border border-emerald-400/40 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 transition shadow-2xs"
-                              title="WhatsApp"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-emerald-400/40 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 transition shadow-2xs font-bold text-xs"
+                              title="Abrir WhatsApp"
                             >
                               <MessageCircle size={14} className="text-emerald-600" />
+                              <span className="hidden sm:inline">WhatsApp</span>
                             </a>
+                          ) : (
+                            <span className="text-[11px] text-slate-300 italic">Sem WhatsApp</span>
                           )}
-                          <button
-                            type="button"
-                            onClick={() => onOpenContact(client)}
-                            className="px-2.5 py-1 rounded-lg bg-[#0D6BAF] hover:bg-[#095287] text-white font-bold text-[11px] transition shadow-2xs cursor-pointer"
-                          >
-                            Contato
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onOpenSchedule(client)}
-                            className="px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-[11px] transition shadow-2xs cursor-pointer"
-                          >
-                            Agendar
-                          </button>
                         </div>
                       </td>
                     </tr>

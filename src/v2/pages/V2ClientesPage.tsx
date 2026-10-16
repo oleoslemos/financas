@@ -19,7 +19,6 @@ import {
   Users,
   TrendingUp,
   Sparkles,
-  Lock,
   MessageCircle,
   Pencil,
   UserPlus,
@@ -51,6 +50,7 @@ import {
 } from '../services/v2ClientesService'
 import { getCurrentV2User } from '../services/v2AuthService'
 import { useCompany } from '../../context/CompanyContext'
+import { V2ClientFollowupSheet } from '../components/V2ClientFollowupSheet'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants / helpers
@@ -862,49 +862,24 @@ function ClientDrawer({ open, client, companyId, onClose, onSaved, onDeleted, on
             </div>
           )}
 
-          {/* ── Aba 4: Follow-up (READ ONLY) ── */}
+          {/* ── Aba 4: Follow-up / Histórico ── */}
           {tab === 'followup' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 14px', background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: 8 }}>
-                <Lock size={16} color="#B45309" style={{ marginTop: 2, flexShrink: 0 }} />
-                <div>
-                  <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#92400E' }}>
-                    Modo de Visualização (Leitura)
-                  </p>
-                  <p style={{ margin: '2px 0 0', fontSize: 12, color: '#B45309' }}>
-                    A edição direta nesta guia está desativada. Em breve teremos novos recursos para adicionar agendamentos, registrar interações e gerenciar follow-ups.
+              {!client?.id ? (
+                <div style={{ padding: '24px', textAlign: 'center', background: '#FAFAFA', borderRadius: 10, border: '1px dashed #E5E7EB' }}>
+                  <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>
+                    Salve o cadastro do cliente primeiro para registrar contatos e agendamentos de follow-up.
                   </p>
                 </div>
-              </div>
-
-              {client && (
-                <div style={{ padding: '12px 14px', background: '#F9FAFB', borderRadius: 8, border: '1px solid #E5E7EB' }}>
-                  <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase' }}>Status Atual</p>
-                  <div style={{ marginTop: 6 }}>{statusBadge(client.client_status)}</div>
-                  {client.last_contact_at && (
-                    <p style={{ margin: '8px 0 0', fontSize: 12, color: '#6B7280' }}>
-                      Último contato: <strong>{formatDate(client.last_contact_at)}</strong>
-                    </p>
-                  )}
-                </div>
-              )}
-
-              <div>
-                <label style={labelStyle}>Data do Próximo Follow-up</label>
-                <input style={inputClass(true)} type="date" disabled value={formatDateInput(form.next_followup_at)} readOnly />
-              </div>
-
-              <div>
-                <label style={labelStyle}>Observação do Follow-up</label>
-                <textarea
-                  rows={4}
-                  disabled
-                  readOnly
-                  style={{ ...inputClass(true), resize: 'none' }}
-                  value={form.next_followup_note ?? ''}
-                  placeholder="Nenhuma observação registrada."
+              ) : (
+                <V2ClientFollowupSheet
+                  client={client}
+                  companyId={companyId || client.company_id || '10000000-0000-4000-8000-000000000001'}
+                  onClientUpdated={() => {
+                    onSaved(client)
+                  }}
                 />
-              </div>
+              )}
             </div>
           )}
 
