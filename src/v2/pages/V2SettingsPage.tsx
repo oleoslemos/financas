@@ -55,8 +55,19 @@ import {
   Target,
   Copy,
   ArrowRight,
+  Bell,
+  ShieldCheck,
+  SlidersHorizontal,
+  FileText,
+  ChevronRight,
+  ArrowLeft,
 } from 'lucide-react'
 import { useCompany } from '../../context/CompanyContext'
+import { V2SettingsTags } from './settings/V2SettingsTags'
+import { V2SettingsNotificacoes } from './settings/V2SettingsNotificacoes'
+import { V2SettingsPapeis } from './settings/V2SettingsPapeis'
+import { V2SettingsRegrasComerciais } from './settings/V2SettingsRegrasComerciais'
+import { V2SettingsAuditoria } from './settings/V2SettingsAuditoria'
 
 // ─── Company config helpers ────────────────────────────────────────────────
 const COMPANY_KEY = 'v2_company_config'
@@ -144,7 +155,17 @@ function maskPhone(value: string): string {
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 type Toast = { type: 'success' | 'error'; text: string }
-type SettingsTab = 'empresa' | 'fornecedor' | 'representante' | 'metas' | 'formas_pagamento'
+export type SettingsTab =
+  | 'empresa'
+  | 'fornecedor'
+  | 'representante'
+  | 'metas'
+  | 'formas_pagamento'
+  | 'tags'
+  | 'notificacoes'
+  | 'papeis'
+  | 'regras'
+  | 'auditoria'
 
 // ─── Section Wrapper ────────────────────────────────────────────────────────
 function SectionCard({
@@ -205,9 +226,15 @@ export function V2SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { activeCompanyId } = useCompany()
 
-  const currentTab = (searchParams.get('tab') as SettingsTab) || 'empresa'
-  const setTab = (tab: SettingsTab) => {
-    setSearchParams({ tab })
+  const hasTabParam = Boolean(searchParams.get('tab'))
+  const rawTab = searchParams.get('tab') as SettingsTab | null
+  const currentTab: SettingsTab = rawTab || 'empresa'
+  const setTab = (tab: SettingsTab | null) => {
+    if (tab) {
+      setSearchParams({ tab })
+    } else {
+      setSearchParams({})
+    }
   }
 
   // Auth guard
@@ -288,7 +315,13 @@ export function V2SettingsPage() {
   const [inviteOpen, setInviteOpen] = useState(false)
   const [inviting, setInviting] = useState(false)
   const [showInvitePass, setShowInvitePass] = useState(false)
-  const [invite, setInvite] = useState({ full_name: '', username: '', email: '', password: '' })
+  const [invite, setInvite] = useState<{
+    full_name: string
+    username: string
+    email: string
+    password: string
+    role: 'Administrador' | 'Vendedor' | 'Financeiro' | 'Estoque'
+  }>({ full_name: '', username: '', email: '', password: '', role: 'Administrador' })
 
   const handleDeleteUser = async (username: string) => {
     setDeletingUser(true)
@@ -308,7 +341,7 @@ export function V2SettingsPage() {
       showToast({ type: 'error', text: error })
     } else {
       showToast({ type: 'success', text: `Usuário @${invite.username} cadastrado com sucesso!` })
-      setInvite({ full_name: '', username: '', email: '', password: '' })
+      setInvite({ full_name: '', username: '', email: '', password: '', role: 'Administrador' })
       setInviteOpen(false)
       await reloadUsers()
     }
@@ -832,12 +865,20 @@ export function V2SettingsPage() {
   // ──────────────────────────────────────────────────────────────────────────
   // RENDER TABS LIST
   // ──────────────────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────────────────────────────────────
+  // RENDER TABS LIST (10 ITENS COMPLETOS DA ETAPA 6)
+  // ──────────────────────────────────────────────────────────────────────────
   const tabsList = [
-    { id: 'empresa' as const, label: 'EMPRESA', icon: Building2, desc: 'Dados cadastrais & equipe' },
-    { id: 'fornecedor' as const, label: 'FORNECEDOR', icon: Truck, desc: 'Gestão de fornecedores' },
-    { id: 'representante' as const, label: 'REPRESENTANTE', icon: Briefcase, desc: 'Distribuidores & Representantes' },
-    { id: 'metas' as const, label: 'METAS MENSAIS', icon: Target, desc: 'Metas comerciais mês a mês' },
-    { id: 'formas_pagamento' as const, label: 'FORMAS DE PAGAMENTO', icon: CreditCard, desc: 'Parcelamentos & taxas' },
+    { id: 'empresa' as const, label: 'Empresa', icon: Building2, desc: 'Dados e usuários' },
+    { id: 'fornecedor' as const, label: 'Fornecedores', icon: Truck, desc: 'Quem vende para você' },
+    { id: 'representante' as const, label: 'Representantes', icon: Briefcase, desc: 'Equipe comercial' },
+    { id: 'metas' as const, label: 'Metas mensais', icon: Target, desc: 'Vendas e visitas' },
+    { id: 'formas_pagamento' as const, label: 'Formas de pagamento', icon: CreditCard, desc: 'Parcelas e taxas' },
+    { id: 'tags' as const, label: 'Tags', icon: Tag, desc: 'Contas e categorias' },
+    { id: 'notificacoes' as const, label: 'Notificações', icon: Bell, desc: 'Alertas e horários' },
+    { id: 'papeis' as const, label: 'Papéis e permissões', icon: ShieldCheck, desc: 'Quem vê e faz o quê' },
+    { id: 'regras' as const, label: 'Regras comerciais', icon: SlidersHorizontal, desc: 'Margem, desconto e padrões' },
+    { id: 'auditoria' as const, label: 'Auditoria', icon: FileText, desc: 'Histórico de alterações' },
   ]
 
   return (
@@ -857,66 +898,97 @@ export function V2SettingsPage() {
         />
       </div>
 
-      <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
         {/* Title Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-black tracking-tight" style={{ color: '#1A2E1A' }}>
-              Configurações do Sistema
-            </h1>
-            <p className="text-sm font-medium mt-1" style={{ color: '#4A6A4A' }}>
-              Gerencie cadastros fundamentais da empresa, parceiros e parâmetros comerciais.
-            </p>
-          </div>
+        <div className={`${hasTabParam ? 'hidden md:block' : 'block'} space-y-1`}>
+          <h1 className="text-2xl md:text-3xl font-black tracking-tight" style={{ color: '#1A2E1A' }}>
+            Configurações
+          </h1>
+          <p className="text-xs md:text-sm font-medium" style={{ color: '#4A6A4A' }}>
+            Cadastros da empresa, parceiros e parâmetros comerciais
+          </p>
         </div>
 
-        {/* ── TOP NAV BAR (5 OPTIONS) ── */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-          {tabsList.map((tab) => {
-            const Icon = tab.icon
-            const isActive = currentTab === tab.id
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setTab(tab.id)}
-                className="flex items-center gap-3 p-4 rounded-2xl text-left transition-all relative overflow-hidden group shadow-xs"
-                style={{
-                  background: isActive ? '#0D6BAF' : '#FFFFFF',
-                  color: isActive ? '#FFFFFF' : '#1A2E1A',
-                  border: isActive ? '2px solid #0D6BAF' : '1px solid #C1D9EE',
-                  boxShadow: isActive ? '0 10px 25px -5px rgba(13, 107, 175, 0.3)' : 'none',
-                }}
-              >
-                <div
-                  className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105"
-                  style={{
-                    background: isActive ? 'rgba(255, 255, 255, 0.2)' : '#E8F1F8',
-                    color: isActive ? '#FFFFFF' : '#0D6BAF',
-                  }}
+        {/* ── MOBILE MENU (10 CARDS) WHEN NO TAB IS SELECTED ── */}
+        {!hasTabParam && (
+          <div className="md:hidden space-y-2.5">
+            {tabsList.map((tab) => {
+              const Icon = tab.icon
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setTab(tab.id)}
+                  className="w-full flex items-center justify-between p-4 rounded-2xl bg-white border border-slate-200/80 shadow-xs hover:border-blue-300 transition text-left group"
                 >
-                  <Icon className="h-5 w-5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-black tracking-wider uppercase truncate">{tab.label}</p>
-                  <p
-                    className="text-[11px] font-medium truncate mt-0.5"
-                    style={{ color: isActive ? 'rgba(255,255,255,0.8)' : '#6B7280' }}
-                  >
-                    {tab.desc}
-                  </p>
-                </div>
-                {isActive && (
-                  <div className="h-2 w-2 rounded-full bg-emerald-400 absolute top-3 right-3 shadow-sm" />
-                )}
-              </button>
-            )
-          })}
-        </div>
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <div className="h-11 w-11 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-slate-800 leading-tight">{tab.label}</p>
+                      <p className="text-xs text-slate-500 font-medium leading-tight mt-0.5 truncate">{tab.desc}</p>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-slate-400 shrink-0 ml-2 group-hover:text-blue-600 transition" />
+                </button>
+              )
+            })}
+          </div>
+        )}
 
-        {/* ────────────────────────────────────────────────────────────────── */}
-        {/* TAB 1: EMPRESA */}
-        {/* ────────────────────────────────────────────────────────────────── */}
-        {currentTab === 'empresa' && (
+        {/* ── DESKTOP 2-COLUMN LAYOUT OR ACTIVE MOBILE SUB-PAGE ── */}
+        <div className={`${!hasTabParam ? 'hidden md:grid' : 'grid'} grid-cols-1 md:grid-cols-[280px_1fr] gap-6 items-start`}>
+          {/* Left Vertical Menu (Desktop only) */}
+          <div className="hidden md:flex flex-col bg-white rounded-2xl border border-slate-200/80 shadow-xs p-2 gap-1 sticky top-6">
+            {tabsList.map((tab) => {
+              const Icon = tab.icon
+              const isActive = currentTab === tab.id
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setTab(tab.id)}
+                  className={`flex items-center gap-3 px-3.5 py-3 rounded-xl text-left transition-all ${
+                    isActive
+                      ? 'bg-blue-50/80 text-blue-700 font-bold border border-blue-100 shadow-2xs'
+                      : 'hover:bg-slate-50 text-slate-700'
+                  }`}
+                >
+                  <div
+                    className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${
+                      isActive ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-500'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold truncate leading-tight">{tab.label}</p>
+                    <p className="text-[11px] text-slate-500 font-medium truncate mt-0.5 leading-tight">{tab.desc}</p>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Right Column: Active Content */}
+          <div className="min-w-0">
+            {/* Mobile Back Button */}
+            {hasTabParam && (
+              <div className="md:hidden mb-4">
+                <button
+                  type="button"
+                  onClick={() => setTab(null)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:text-blue-600 shadow-2xs"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Configurações
+                </button>
+              </div>
+            )}
+
+            {/* TAB 1: EMPRESA */}
+            {currentTab === 'empresa' && (
           <div className="space-y-6">
             <SectionCard
               icon={Building2}
@@ -1118,9 +1190,14 @@ export function V2SettingsPage() {
                         {u.full_name.charAt(0).toUpperCase()}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-bold truncate" style={{ color: '#1A2E1A' }}>
-                          {u.full_name}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-bold truncate" style={{ color: '#1A2E1A' }}>
+                            {u.full_name}
+                          </p>
+                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800">
+                            {u.role || 'Administrador'}
+                          </span>
+                        </div>
                         <p className="text-xs font-medium" style={{ color: '#6A8A6A' }}>
                           @{u.username} {u.email && <span>· {u.email}</span>}
                         </p>
@@ -1206,6 +1283,18 @@ export function V2SettingsPage() {
                       >
                         {showInvitePass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
+                    </div>
+                    <div>
+                      <select
+                        value={invite.role}
+                        onChange={(e) => setInvite({ ...invite, role: e.target.value as any })}
+                        className="w-full rounded-xl px-3.5 py-2.5 text-sm font-bold outline-none border border-emerald-200 bg-white text-slate-800"
+                      >
+                        <option value="Administrador">Papel: Administrador</option>
+                        <option value="Vendedor">Papel: Vendedor</option>
+                        <option value="Financeiro">Papel: Financeiro</option>
+                        <option value="Estoque">Papel: Estoque</option>
+                      </select>
                     </div>
                   </div>
 
@@ -1927,6 +2016,23 @@ export function V2SettingsPage() {
             </SectionCard>
           </div>
         )}
+
+            {/* TAB 6: TAGS */}
+            {currentTab === 'tags' && <V2SettingsTags />}
+
+            {/* TAB 7: NOTIFICAÇÕES */}
+            {currentTab === 'notificacoes' && <V2SettingsNotificacoes />}
+
+            {/* TAB 8: PAPÉIS E PERMISSÕES */}
+            {currentTab === 'papeis' && <V2SettingsPapeis />}
+
+            {/* TAB 9: REGRAS COMERCIAIS */}
+            {currentTab === 'regras' && <V2SettingsRegrasComerciais />}
+
+            {/* TAB 10: AUDITORIA */}
+            {currentTab === 'auditoria' && <V2SettingsAuditoria />}
+          </div>
+        </div>
       </div>
 
       {/* ────────────────────────────────────────────────────────────────── */}

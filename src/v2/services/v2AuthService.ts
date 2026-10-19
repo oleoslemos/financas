@@ -6,6 +6,7 @@ export type V2User = {
   username: string
   email: string | null
   created_at: string
+  role?: string
 }
 
 const LOCAL_USERS_KEY = 'v2_local_users_db'
@@ -55,12 +56,14 @@ export async function registerV2User(
     username: string
     email?: string
     password: string
+    role?: string
   },
   options: { isInvite?: boolean } = {}
 ): Promise<{ user: V2User; error: string | null }> {
   const cleanUsername = data.username.trim().toLowerCase()
   const cleanEmail = (data.email || '').trim().toLowerCase() || null
   const cleanName = data.full_name.trim()
+  const cleanRole = data.role || 'Administrador'
 
   if (!cleanName) return { user: null as any, error: 'Por favor, informe seu nome completo.' }
   if (!cleanUsername || cleanUsername.length < 3) return { user: null as any, error: 'O usuário deve ter pelo menos 3 caracteres.' }
@@ -78,6 +81,7 @@ export async function registerV2User(
     full_name: cleanName,
     username: cleanUsername,
     email: cleanEmail,
+    role: cleanRole,
     password_hash: data.password, // Store password
     created_at: new Date().toISOString(),
   }
@@ -101,6 +105,7 @@ export async function registerV2User(
         full_name: cleanName,
         username: cleanUsername,
         email: cleanEmail,
+        role: cleanRole,
         password_hash: data.password,
       })
 
@@ -202,7 +207,7 @@ export async function fetchV2Users(): Promise<V2User[]> {
     try {
       const { data, error } = await supabase
         .from('v2_users')
-        .select('id, full_name, username, email, created_at')
+        .select('id, full_name, username, email, role, created_at')
         .order('created_at', { ascending: true })
 
       if (!error && data && data.length > 0) {
@@ -212,6 +217,7 @@ export async function fetchV2Users(): Promise<V2User[]> {
           full_name: u.full_name,
           username: u.username,
           email: u.email || '',
+          role: u.role || 'Administrador',
           created_at: u.created_at || new Date().toISOString(),
         }))
 
@@ -237,6 +243,7 @@ export async function fetchV2Users(): Promise<V2User[]> {
     full_name: u.full_name,
     username: u.username,
     email: u.email || '',
+    role: u.role || 'Administrador',
     created_at: u.created_at,
   }))
 }
