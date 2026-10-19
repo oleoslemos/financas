@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   FileText,
   Search,
@@ -15,6 +16,7 @@ import {
 type FiltroTab = 'tudo' | 'vendas' | 'estoque' | 'financeiro' | 'permissoes'
 
 export function V2SettingsAuditoria() {
+  const navigate = useNavigate()
   const [registros, setRegistros] = useState<AuditoriaRegistro[]>([])
   const [tabFiltro, setTabFiltro] = useState<FiltroTab>('tudo')
   const [busca, setBusca] = useState('')
