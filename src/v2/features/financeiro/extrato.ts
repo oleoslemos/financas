@@ -96,13 +96,21 @@ export function rotuloDia(iso: string, hoje: string): { titulo: string; sub: str
   return { titulo: base, sub: dow }
 }
 
+export function rotuloDiaFormatado(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  const dow = SEMANA[date.getDay()].toUpperCase()
+  const nomeMes = MESES[m - 1].toUpperCase()
+  return `${String(d).padStart(2, '0')} DE ${nomeMes} ${dow}`
+}
+
 /* ---------- derivação ---------- */
 
 export function statusDaParcela(p: ContaPagarParcela, hoje: string): Status {
   if (p.status === 'paga') return 'paga'
+  if (p.status === 'parcial') return 'parcial'
   if (p.baixa) return 'paga'
   if (p.vencimento < hoje) return 'vencida'
-  if (p.status === 'parcial') return 'parcial'
   return 'aberta'
 }
 
@@ -113,12 +121,17 @@ export function achatar(contas: ContaPagar[], hoje: string, base: BaseData): Mov
     const tipo = c.tipo || 'pagar'
     for (const p of c.parcelas) {
       const status = statusDaParcela(p, hoje)
-      const pagoEm = p.baixa?.dataBaixa ?? null
+      const pagoEm = p.baixa?.dataBaixa ?? c.data_baixa ?? null
       const data = base === 'pagamento' ? (pagoEm || p.vencimento) : p.vencimento
       if (!data) continue
 
-      const valorPago = p.baixa ? p.baixa.valorFinalPago : 0
-      const restante = p.baixa ? 0 : p.valor
+      const valorPago = p.baixa ? p.baixa.valorFinalPago : (c.totalPago || 0)
+      const restante =
+        status === 'paga'
+          ? 0
+          : c.saldo_residual !== undefined && c.saldo_residual > 0
+          ? c.saldo_residual
+          : Math.max(0, p.valor - valorPago)
 
       out.push({
         id: `${c.id}-p${p.numero}`,
