@@ -18,6 +18,7 @@ import {
   Warehouse,
   Wallet,
   TrendingUp,
+  BarChart2,
 } from 'lucide-react'
 import { PushNotificationModal } from '../../components/PushNotificationModal'
 import { supabase } from '../../lib/supabaseClient'
@@ -107,6 +108,7 @@ function V2AppLayoutInner() {
         { to: '/v2/propostas-vendas', icon: ClipboardList, label: 'Propostas/Vendas' },
         { to: '/v2/estoque', icon: Warehouse, label: 'Estoque' },
         { to: '/v2/contas-pagar', icon: Wallet, label: 'Financeiro' },
+        { to: '/v2/relatorios', icon: BarChart2, label: 'Relatórios' },
         { to: '/v2/tags', icon: Tag, label: 'Tags' },
       ],
     },

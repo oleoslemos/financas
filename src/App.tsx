@@ -83,6 +83,7 @@ const V2ContasPagarPage = lazy(() => import('./v2/pages/V2ContasPagarPage').then
 const V2PainelVendasPage = lazy(() => import('./v2/pages/V2PainelVendasPage').then(m => ({ default: m.V2PainelVendasPage })))
 const V2CrmPage = lazy(() => import('./v2/pages/V2CrmPage').then(m => ({ default: m.V2CrmPage })))
 const V2TagsPage = lazy(() => import('./v2/pages/V2TagsPage').then(m => ({ default: m.V2TagsPage })))
+const V2RelatoriosPage = lazy(() => import('./v2/pages/V2RelatoriosPage').then(m => ({ default: m.V2RelatoriosPage })))
 
 function HomeRedirect() {
   const { user } = useUser()
@@ -128,6 +129,7 @@ export default function App() {
           <Route path="/v2/crm/follow-up" element={<V2CrmPage />} />
           <Route path="/v2/crm/produtividade" element={<V2CrmPage />} />
           <Route path="/v2/crm/atividades" element={<V2CrmPage />} />
+          <Route path="/v2/relatorios" element={<V2RelatoriosPage />} />
         </Route>
 
         <Route path="/sign-in/*" element={<SignInPage />} />

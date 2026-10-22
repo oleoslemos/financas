@@ -349,6 +349,34 @@ export async function deleteContaPagarPorPedidoId(pedidoId: string): Promise<voi
   }
 }
 
+/** Atualiza campos da conta vinculada a um pedido (sem alterar status/baixas) */
+export async function updateContaPagarPorPedidoId(
+  pedidoId: string,
+  campos: { total?: number; descricao?: string; fornecedor?: string }
+): Promise<void> {
+  const current = readFromStorage()
+  const conta = current.find((c) => c.pedido_id === pedidoId)
+  if (!conta) return
+
+  const atualizada: ContaPagar = {
+    ...conta,
+    ...(campos.descricao !== undefined ? { descricao: campos.descricao } : {}),
+    ...(campos.fornecedor !== undefined ? { fornecedor: campos.fornecedor } : {}),
+    ...(campos.total !== undefined ? { total: campos.total } : {}),
+    updated_at: new Date().toISOString(),
+  }
+
+  const updatedList = current.map((c) => (c.id === conta.id ? atualizada : c))
+  writeToStorage(updatedList)
+
+  if (supabase) {
+    try {
+      await supabase.from(SUPABASE_TABLE).upsert(atualizada)
+    } catch {}
+  }
+}
+
+
 export interface BaixarLancamentoParams {
   id: string
   valorRecebidoOuPago: number

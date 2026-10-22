@@ -1,5 +1,10 @@
 import { supabase } from '../../lib/supabaseClient'
-import { saveContaPagar, StatusConta, deleteContaPagarPorPedidoId } from './v2ContasPagarService'
+import { saveContaPagar, updateContaPagarPorPedidoId, deleteContaPagarPorPedidoId, StatusConta } from './v2ContasPagarService'
+import {
+  reservarEstoqueVenda,
+  liberarEstoqueVenda,
+  baixarFisicoEntregaVenda,
+} from './v2EstoqueService'
 
 export type CanalVenda = 'representacao' | 'distribuicao'
 
@@ -28,16 +33,21 @@ export type PedidoVenda = {
   cliente_cidade?: string
   tabela_preco_id?: string
   tabela_preco_nome?: string
-  dataEmissao: string
-  dataPrevistaEntrega?: string | null
-  dataEntrega?: string | null
+  // Datas
+  dataEmissao: string                   // Data do pedido (editável, retroativa)
+  dataPrevistaEntrega?: string | null   // Previsão de entrega (editável)
+  dataVencimento?: string | null        // Vencimento da conta a receber (único lançamento)
+  dataEntrega?: string | null           // Data efetiva da entrega
+  // Pagamento
   formaPagamento: string
-  numeroParcelas: number
+  numeroParcelas: number                // mantido por compatibilidade (sempre 1 no novo fluxo)
   contaEntradaTag?: string
+  frete?: number                        // Frete (separado dos itens, somado no total)
+  // Observações e descontos
   observacao?: string | null
-  subtotal: number
+  subtotal: number                      // soma dos itens
   descontoTotal: number
-  total: number
+  total: number                         // subtotal + frete
   desconto5xPercentual?: number
   total5x?: number
   descontoVistaPercentual?: number
@@ -51,6 +61,20 @@ export type PedidoVenda = {
 const STORAGE_KEY = 'v2_pedidos_venda'
 const SUPABASE_TABLE = 'v2_pedidos_venda'
 
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+/** Calcula data + N dias corridos */
+function adicionarDias(dataBase: string, dias: number): string {
+  const d = new Date(dataBase + 'T00:00:00')
+  d.setDate(d.getDate() + dias)
+  return d.toISOString().split('T')[0]
+}
+
+/** Data de hoje no formato YYYY-MM-DD */
+function dataHoje(): string {
+  return new Date().toISOString().split('T')[0]
+}
+
 const SEED_PEDIDOS: PedidoVenda[] = [
   {
     id: 'pv-001',
@@ -63,8 +87,9 @@ const SEED_PEDIDOS: PedidoVenda[] = [
     tabela_preco_nome: 'Tabela Padrão Distribuidor',
     dataEmissao: '2026-10-11',
     dataPrevistaEntrega: '2026-10-20',
+    dataVencimento: '2026-10-25',
     formaPagamento: 'Boleto',
-    numeroParcelas: 2,
+    numeroParcelas: 1,
     contaEntradaTag: '#Inter',
     observacao: 'Entrega pela manhã na sede principal.',
     subtotal: 3890.0,
@@ -95,6 +120,7 @@ const SEED_PEDIDOS: PedidoVenda[] = [
     tabela_preco_nome: 'Tabela Consumidor Final',
     dataEmissao: '2026-10-12',
     dataPrevistaEntrega: '2026-10-25',
+    dataVencimento: '2026-10-25',
     formaPagamento: 'Pix',
     numeroParcelas: 1,
     contaEntradaTag: '#Caixa',
@@ -127,8 +153,9 @@ const SEED_PEDIDOS: PedidoVenda[] = [
     tabela_preco_nome: 'Tabela Revenda Especial',
     dataEmissao: '2026-10-13',
     dataPrevistaEntrega: '2026-10-22',
-    formaPagamento: 'Cartão Crédito',
-    numeroParcelas: 3,
+    dataVencimento: '2026-10-30',
+    formaPagamento: 'Boleto',
+    numeroParcelas: 1,
     contaEntradaTag: '#Nubank',
     observacao: 'Pedido aprovado. Separar no estoque central.',
     subtotal: 2450.0,
@@ -150,6 +177,8 @@ const SEED_PEDIDOS: PedidoVenda[] = [
   },
 ]
 
+// ─── Storage ────────────────────────────────────────────────────────────────
+
 function readFromStorage(): PedidoVenda[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -164,6 +193,8 @@ function writeToStorage(list: PedidoVenda[]) {
   } catch {}
 }
 
+// ─── CRUD ────────────────────────────────────────────────────────────────────
+
 export async function listPedidosVenda(): Promise<PedidoVenda[]> {
   const localList = readFromStorage()
   let list: PedidoVenda[] = []
@@ -177,7 +208,6 @@ export async function listPedidosVenda(): Promise<PedidoVenda[]> {
 
       if (!error && data) {
         list = data as PedidoVenda[]
-        // Preserva pedidos locais caso algum ainda não tenha sido gravado no Supabase
         const remoteIds = new Set(list.map((r) => r.id))
         const pendingLocal = localList.filter((loc) => !remoteIds.has(loc.id))
 
@@ -198,7 +228,6 @@ export async function listPedidosVenda(): Promise<PedidoVenda[]> {
     }
   }
 
-  // Se não veio do Supabase, usa o storage local
   return localList
 }
 
@@ -207,11 +236,11 @@ export async function savePedidoVenda(
 ): Promise<PedidoVenda> {
   const current = await listPedidosVenda()
 
-  const now = new Date()
-  const yyyy = now.getFullYear()
-  const mm = String(now.getMonth() + 1).padStart(2, '0')
-  const dd = String(now.getDate()).padStart(2, '0')
-  const datePrefix = `PV-${yyyy}${mm}${dd}`
+  const dataEmissao = pedido.dataEmissao || dataHoje()
+  const ano = dataEmissao.slice(0, 4)
+  const mm = dataEmissao.slice(5, 7)
+  const dd = dataEmissao.slice(8, 10)
+  const datePrefix = `PV-${ano}${mm}${dd}`
 
   const todayOrders = current.filter((p) => String(p.numero).startsWith(datePrefix))
   let seq = 1
@@ -230,6 +259,7 @@ export async function savePedidoVenda(
     ...pedido,
     id: crypto.randomUUID(),
     numero: novoNumero,
+    numeroParcelas: 1,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   }
@@ -255,6 +285,7 @@ export async function updatePedidoVenda(pedido: PedidoVenda): Promise<PedidoVend
   const current = await listPedidosVenda()
   const updated: PedidoVenda = {
     ...pedido,
+    numeroParcelas: 1,
     updated_at: new Date().toISOString(),
   }
 
@@ -269,60 +300,95 @@ export async function updatePedidoVenda(pedido: PedidoVenda): Promise<PedidoVend
     }
   }
 
+  // Atualizar conta a receber se já faturado
+  if (updated.status === 'faturado' || updated.status === 'entregue') {
+    try {
+      await updateContaPagarPorPedidoId(pedido.id, {
+        total: updated.total,
+        descricao: _descricaoVenda(updated),
+        fornecedor: updated.cliente_nome,
+      })
+    } catch {}
+  }
+
   const list = current.map((p) => (p.id === pedido.id ? updated : p))
   writeToStorage(list)
   return updated
 }
+
+// ─── Descrição para conta a receber ─────────────────────────────────────────
+
+function _descricaoVenda(pedido: PedidoVenda): string {
+  const descItens =
+    pedido.itens && pedido.itens.length > 1
+      ? `${pedido.itens[0]?.produto_nome || 'Produto'} (+${pedido.itens.length - 1} itens)`
+      : (pedido.itens?.[0]?.produto_nome || 'Produto')
+  return `Venda ${pedido.numero} - ${descItens}`
+}
+
+// ─── Fluxo de Status ─────────────────────────────────────────────────────────
 
 export async function aprovarPedidoVenda(pedidoId: string): Promise<{ ok: true } | { ok: false; erro: string }> {
   const current = await listPedidosVenda()
   const pedido = current.find((p) => p.id === pedidoId)
   if (!pedido) return { ok: false, erro: 'Pedido não encontrado.' }
 
+  // Reservar estoque ao aprovar
+  if (pedido.itens && pedido.itens.length > 0) {
+    try {
+      await reservarEstoqueVenda({
+        venda_id: pedido.id,
+        venda_numero: pedido.numero,
+        itens: pedido.itens.map((it) => ({
+          produto_id: it.produto_id,
+          produto_nome: it.produto_nome,
+          quantidade: it.quantidade,
+        })),
+      })
+    } catch (e) {
+      console.warn('Erro ao reservar estoque:', e)
+    }
+  }
+
   pedido.status = 'aprovado'
   await updatePedidoVenda(pedido)
   return { ok: true }
 }
 
+/**
+ * Faturar pedido de venda:
+ * - Gera **uma única** conta a receber com dataVencimento do pedido
+ * - Altera status para 'faturado'
+ */
 export async function faturarPedidoVenda(pedidoId: string): Promise<{ ok: true } | { ok: false; erro: string }> {
   const current = await listPedidosVenda()
   const pedido = current.find((p) => p.id === pedidoId)
   if (!pedido) return { ok: false, erro: 'Pedido não encontrado.' }
 
-  // Integrar com o Financeiro gerando Contas a Receber
-  const parcelasArray = []
-  const valorParcela = Math.round((pedido.total / (pedido.numeroParcelas || 1)) * 100) / 100
-  const dataHojeObj = new Date()
-  let soma = 0
-  for (let i = 1; i <= (pedido.numeroParcelas || 1); i++) {
-    const vencimento = new Date(dataHojeObj)
-    vencimento.setMonth(vencimento.getMonth() + i)
-    const val = i === pedido.numeroParcelas ? Math.round((pedido.total - soma) * 100) / 100 : valorParcela
-    soma += val
-    parcelasArray.push({
-      numero: i,
-      vencimento: vencimento.toISOString().split('T')[0],
-      valor: val,
-      status: 'aberta' as StatusConta,
-    })
-  }
-
-  const descricaoItens =
-    pedido.itens && pedido.itens.length > 1
-      ? `${pedido.itens[0]?.produto_nome || 'Produto'} (+${pedido.itens.length - 1} itens)`
-      : (pedido.itens?.[0]?.produto_nome || 'Produto')
+  // Vencimento padrão: dataPrevistaEntrega ou +30 dias da emissão
+  const vencimento =
+    pedido.dataVencimento ||
+    pedido.dataPrevistaEntrega ||
+    adicionarDias(pedido.dataEmissao || dataHoje(), 30)
 
   await saveContaPagar({
     tipo: 'receber',
     pedido_id: pedido.id,
-    descricao: `Venda ${pedido.numero} - ${descricaoItens}`,
+    descricao: _descricaoVenda(pedido),
     fornecedor: pedido.cliente_nome,
     origem: 'venda',
     categoria: 'Receita de Vendas',
     total: pedido.total,
     totalPago: 0,
-    status: 'aberta',
-    parcelas: parcelasArray,
+    status: 'aberta' as StatusConta,
+    parcelas: [
+      {
+        numero: 1,
+        vencimento,
+        valor: pedido.total,
+        status: 'aberta' as StatusConta,
+      },
+    ],
   })
 
   pedido.status = 'faturado'
@@ -330,13 +396,36 @@ export async function faturarPedidoVenda(pedidoId: string): Promise<{ ok: true }
   return { ok: true }
 }
 
+/**
+ * Confirmar entrega:
+ * - Baixa físico do estoque (saída)
+ * - Altera status para 'entregue'
+ * - Salva dataEntrega
+ */
 export async function entregarPedidoVenda(
   pedidoId: string,
-  dataEntrega: string = new Date().toISOString().split('T')[0]
+  dataEntrega: string = dataHoje()
 ): Promise<{ ok: true; pedido: PedidoVenda } | { ok: false; erro: string }> {
   const current = await listPedidosVenda()
   const pedido = current.find((p) => p.id === pedidoId)
   if (!pedido) return { ok: false, erro: 'Pedido não encontrado.' }
+
+  // Baixar físico do estoque
+  if (pedido.itens && pedido.itens.length > 0) {
+    try {
+      await baixarFisicoEntregaVenda({
+        venda_id: pedido.id,
+        venda_numero: pedido.numero,
+        itens: pedido.itens.map((it) => ({
+          produto_id: it.produto_id,
+          produto_nome: it.produto_nome,
+          quantidade: it.quantidade,
+        })),
+      })
+    } catch (e) {
+      console.warn('Erro ao baixar estoque na entrega:', e)
+    }
+  }
 
   pedido.status = 'entregue'
   pedido.dataEntrega = dataEntrega
@@ -348,6 +437,29 @@ export async function cancelarPedidoVenda(pedidoId: string): Promise<{ ok: true 
   const current = await listPedidosVenda()
   const pedido = current.find((p) => p.id === pedidoId)
   if (!pedido) return { ok: false, erro: 'Pedido não encontrado.' }
+
+  // Liberar estoque reservado (se aprovado ou faturado)
+  if ((pedido.status === 'aprovado' || pedido.status === 'faturado') && pedido.itens?.length > 0) {
+    try {
+      await liberarEstoqueVenda({
+        venda_id: pedido.id,
+        venda_numero: pedido.numero,
+        motivo: 'cancelamento',
+        itens: pedido.itens.map((it) => ({
+          produto_id: it.produto_id,
+          produto_nome: it.produto_nome,
+          quantidade: it.quantidade,
+        })),
+      })
+    } catch (e) {
+      console.warn('Erro ao liberar estoque no cancelamento:', e)
+    }
+  }
+
+  // Excluir conta a receber vinculada
+  try {
+    await deleteContaPagarPorPedidoId(pedidoId)
+  } catch {}
 
   pedido.status = 'cancelado'
   await updatePedidoVenda(pedido)
@@ -378,11 +490,26 @@ export async function excluirPedidoVenda(pedidoId: string): Promise<{ ok: true }
     } catch {}
   }
 
-  // Delete associated financial record
+  // Excluir conta a receber vinculada
   await deleteContaPagarPorPedidoId(pedidoId)
+
+  // Liberar estoque se necessário
+  if ((pedido.status === 'aprovado' || pedido.status === 'faturado') && pedido.itens?.length > 0) {
+    try {
+      await liberarEstoqueVenda({
+        venda_id: pedido.id,
+        venda_numero: pedido.numero,
+        motivo: 'excluído',
+        itens: pedido.itens.map((it) => ({
+          produto_id: it.produto_id,
+          produto_nome: it.produto_nome,
+          quantidade: it.quantidade,
+        })),
+      })
+    } catch {}
+  }
 
   const list = current.filter((p) => p.id !== pedidoId)
   writeToStorage(list)
   return { ok: true }
 }
-

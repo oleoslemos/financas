@@ -297,6 +297,9 @@ export function V2PedidoVendasPage() {
   const [formDataEntrega, setFormDataEntrega] = useState(() => somarDias(dataHoje, 10))
   const [formFormaPagamento, setFormFormaPagamento] = useState('Boleto')
   const [formNumeroParcelas, setFormNumeroParcelas] = useState(1)
+  const [formDataEmissao, setFormDataEmissao] = useState(() => dataHoje)
+  const [formDataVencimento, setFormDataVencimento] = useState(() => somarDias(dataHoje, 30))
+  const [formFrete, setFormFrete] = useState<number>(0)
   const [formContaEntradaTag, setFormContaEntradaTag] = useState('')
   const [formObservacao, setFormObservacao] = useState('')
   const [formItens, setFormItens] = useState<PedidoVendaItem[]>([])
@@ -594,6 +597,9 @@ export function V2PedidoVendasPage() {
     setFormDataEntrega(somarDias(dataHoje, 10))
     setFormFormaPagamento('Boleto')
     setFormNumeroParcelas(1)
+    setFormDataEmissao(dataHoje)
+    setFormDataVencimento(somarDias(dataHoje, 30))
+    setFormFrete(0)
     setFormContaEntradaTag(contasBancarias[0]?.nome ? `#${contasBancarias[0].nome}` : '#Inter')
     setFormObservacao('')
 
@@ -633,6 +639,9 @@ export function V2PedidoVendasPage() {
     setFormDataEntrega(pedido.dataPrevistaEntrega || somarDias(dataHoje, 10))
     setFormFormaPagamento(pedido.formaPagamento)
     setFormNumeroParcelas(pedido.numeroParcelas || 1)
+    setFormDataEmissao(pedido.dataEmissao || dataHoje)
+    setFormDataVencimento(pedido.dataVencimento || somarDias(pedido.dataEmissao || dataHoje, 30))
+    setFormFrete(pedido.frete || 0)
     setFormContaEntradaTag(pedido.contaEntradaTag || '')
     setFormObservacao(pedido.observacao || '')
 
@@ -685,6 +694,9 @@ export function V2PedidoVendasPage() {
     setFormDataEntrega(somarDias(dataHoje, 10))
     setFormFormaPagamento(original.formaPagamento)
     setFormNumeroParcelas(original.numeroParcelas || 1)
+    setFormDataEmissao(dataHoje)
+    setFormDataVencimento(somarDias(dataHoje, 30))
+    setFormFrete(original.frete || 0)
     setFormContaEntradaTag(original.contaEntradaTag || '')
     setFormObservacao(
       original.observacao
@@ -1091,6 +1103,7 @@ export function V2PedidoVendasPage() {
     return formItens.reduce((acc, it) => acc + (it.quantidade || 0) * (it.preco_unitario || 0), 0)
   }, [formItens])
 
+  const formSubtotal = subtotalForm
   const totalSemDesconto = subtotalForm
 
   const totalAte5x = useMemo(() => {
@@ -1109,6 +1122,7 @@ export function V2PedidoVendasPage() {
     return formItens.reduce((acc, it) => acc + (it.total || 0), 0)
   }, [formCondicaoSelecionada, totalAte5x, totalVista, formItens])
 
+  const formTotalComFrete = totalForm + formFrete
   const descontoTotalForm = Math.max(0, subtotalForm - totalForm)
 
   // Salvar Formulário: gera número no formato #YYYYMMSEQ (Ex: #202610001)
@@ -1124,7 +1138,7 @@ export function V2PedidoVendasPage() {
       return
     }
 
-    const numeroGerado = pedidoEdicao ? pedidoEdicao.numero : gerarNumeroVenda(pedidos, dataHoje)
+    const numeroGerado = pedidoEdicao ? pedidoEdicao.numero : gerarNumeroVenda(pedidos, formDataEmissao || dataHoje)
 
     const payload: Omit<PedidoVenda, 'id' | 'created_at' | 'updated_at'> & { id?: string } = {
       id: pedidoEdicao ? pedidoEdicao.id : undefined,
@@ -1136,19 +1150,21 @@ export function V2PedidoVendasPage() {
       cliente_documento: formClienteDocumento.trim() || undefined,
       cliente_cidade: formClienteCidade.trim() || undefined,
       tabela_preco_nome: formTabelaPrecoNome,
-      dataEmissao: pedidoEdicao ? pedidoEdicao.dataEmissao : dataHoje,
+      dataEmissao: formDataEmissao,
       dataPrevistaEntrega: formDataEntrega || null,
+      dataVencimento: formDataVencimento || null,
       formaPagamento: formFormaPagamento,
-      numeroParcelas: formNumeroParcelas,
+      numeroParcelas: (formNumeroParcelas && 1) || 1,
       contaEntradaTag: formContaEntradaTag,
+      frete: formFrete,
       observacao: formObservacao.trim() || null,
-      subtotal: subtotalForm,
+      subtotal: formSubtotal,
       descontoTotal: descontoTotalForm,
-      total: totalForm,
+      total: formTotalComFrete,
       desconto5xPercentual: formDesconto5xPercentual,
-      total5x: totalAte5x,
+      total5x: totalAte5x + formFrete,
       descontoVistaPercentual: formDescontoVistaPercentual,
-      totalVista: totalVista,
+      totalVista: totalVista + formFrete,
       condicaoSelecionada: formCondicaoSelecionada,
       itens: itensValidos,
     }
@@ -1600,6 +1616,16 @@ export function V2PedidoVendasPage() {
               </div>
 
               <div className="space-y-3">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#475569' }}>Data do Pedido</label>
+                  <input
+                    type="date"
+                    value={formDataEmissao}
+                    onChange={(e) => setFormDataEmissao(e.target.value)}
+                    style={{ padding: '8px 12px', borderRadius: 8, border: '1.5px solid #E2E8F0', fontSize: 14, color: '#0F172A', outline: 'none' }}
+                  />
+                </div>
+
                 <div className="space-y-1">
                   <label className="text-xs font-bold uppercase text-slate-500">Forma de Pagamento</label>
                   <select
@@ -1615,21 +1641,27 @@ export function V2PedidoVendasPage() {
                   </select>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-bold uppercase text-slate-500">Nº de Parcelas</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#475569' }}>Frete (R$)</label>
                   <input
                     type="number"
-                    min="1"
-                    max="36"
-                    value={formNumeroParcelas}
-                    onChange={(e) => setFormNumeroParcelas(Math.max(1, Number(e.target.value)))}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm font-bold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white"
+                    min={0}
+                    step={0.01}
+                    value={formFrete}
+                    onChange={(e) => setFormFrete(Number(e.target.value) || 0)}
+                    style={{ padding: '8px 12px', borderRadius: 8, border: '1.5px solid #E2E8F0', fontSize: 14, color: '#0F172A', outline: 'none' }}
+                    placeholder="0,00"
                   />
-                  {formNumeroParcelas > 1 && totalForm > 0 && (
-                    <span className="text-[11px] text-slate-500 font-semibold block mt-1">
-                      {formNumeroParcelas}x de {formatarMoeda(totalForm / formNumeroParcelas)}
-                    </span>
-                  )}
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#475569' }}>Data de Vencimento</label>
+                  <input
+                    type="date"
+                    value={formDataVencimento}
+                    onChange={(e) => setFormDataVencimento(e.target.value)}
+                    style={{ padding: '8px 12px', borderRadius: 8, border: '1.5px solid #E2E8F0', fontSize: 14, color: '#0F172A', outline: 'none' }}
+                  />
                 </div>
 
                 <div className="space-y-1">
@@ -1755,10 +1787,24 @@ export function V2PedidoVendasPage() {
 
               {/* Total Oficial Selecionado */}
               <div className="pt-3 border-t border-slate-100 space-y-2">
-                <div className="flex justify-between items-center text-sm font-bold text-slate-900">
+                <div className="flex justify-between items-center text-xs font-medium text-slate-600">
+                  <span>Subtotal (Itens):</span>
+                  <span className="font-bold text-slate-800 tabular-nums">{formatarMoeda(subtotalForm)}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs font-medium text-slate-600">
+                  <span>Frete:</span>
+                  <span className="font-bold text-slate-800 tabular-nums">{formatarMoeda(formFrete)}</span>
+                </div>
+                {descontoTotalForm > 0 && (
+                  <div className="flex justify-between items-center text-xs font-medium text-emerald-600">
+                    <span>Desconto Aplicado:</span>
+                    <span className="font-bold tabular-nums">-{formatarMoeda(descontoTotalForm)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center text-sm font-bold text-slate-900 pt-1 border-t border-slate-100">
                   <span className="uppercase tracking-wider">TOTAL DO PEDIDO:</span>
                   <span className="text-2xl font-black text-slate-950 tabular-nums">
-                    {formatarMoeda(totalForm)}
+                    {formatarMoeda(formTotalComFrete)}
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-500 font-medium text-right">
@@ -2367,6 +2413,16 @@ export function V2PedidoVendasPage() {
                           ? formatarData(visualizandoPedido.dataPrevistaEntrega)
                           : 'Não definida'}
                     </span>
+                    {visualizandoPedido.dataVencimento && (
+                      <div className="mt-1">
+                        <span className="text-slate-400 text-[10px] uppercase font-bold block">
+                          Vencimento
+                        </span>
+                        <span className="font-bold text-slate-800 text-xs">
+                          {formatarData(visualizandoPedido.dataVencimento)}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2399,6 +2455,26 @@ export function V2PedidoVendasPage() {
                       ))}
                     </tbody>
                     <tfoot className="bg-slate-50 border-t border-slate-200 font-bold text-slate-900">
+                      {visualizandoPedido.frete !== undefined && visualizandoPedido.frete > 0 && (
+                        <>
+                          <tr>
+                            <td colSpan={3} className="px-3.5 py-1.5 text-right uppercase text-[11px] text-slate-500">
+                              Subtotal Itens:
+                            </td>
+                            <td className="px-3.5 py-1.5 text-right tabular-nums font-semibold text-slate-800">
+                              {formatarMoeda(visualizandoPedido.subtotal)}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td colSpan={3} className="px-3.5 py-1.5 text-right uppercase text-[11px] text-slate-500">
+                              Frete:
+                            </td>
+                            <td className="px-3.5 py-1.5 text-right tabular-nums font-semibold text-slate-800">
+                              {formatarMoeda(visualizandoPedido.frete)}
+                            </td>
+                          </tr>
+                        </>
+                      )}
                       <tr>
                         <td colSpan={3} className="px-3.5 py-2.5 text-right uppercase text-xs">
                           Total da Venda:
