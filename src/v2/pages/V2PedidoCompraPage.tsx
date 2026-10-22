@@ -8,6 +8,9 @@ import {
   CheckCircle,
   ArrowRight,
   Tag,
+  Package,
+  X,
+  Clock,
 } from 'lucide-react'
 import { formatarMoeda } from '../../modules/lib/money'
 import { formatarData, hoje, somarDias } from '../../modules/lib/datas'
@@ -16,12 +19,14 @@ import {
   savePedidoCompra,
   updatePedidoCompra,
   emitirPedidoCompra,
-  receberPedidoCompra,
+  receberPedidoCompraPorItem,
+  ajustarQuantidadeItem,
   desfazerRecebimentoPedidoCompra,
   voltarPedidoParaAberto,
   PedidoCompra,
   PedidoCompraItem,
   StatusPedido,
+  type RecebimentoCompra,
 } from '../services/v2PedidoCompraService'
 import { listV2Products, V2Product } from '../services/v2ProdutosService'
 import { listFornecedores, Fornecedor } from '../services/v2SettingsService'
@@ -86,8 +91,21 @@ export function V2PedidoCompraPage() {
   const [formParcelas, setFormParcelas] = useState(1)
   const [formFormaPagamento, setFormFormaPagamento] = useState('Boleto')
   const [formContaSaidaTag, setFormContaSaidaTag] = useState('')
-  const [formDataEntrega, setFormDataEntrega] = useState(() => somarDias(dataHoje, 11))
+  const [formDataPedido, setFormDataPedido] = useState(() => dataHoje)
+  const [formDataVencimento, setFormDataVencimento] = useState(() => somarDias(dataHoje, 30))
+  const [formFrete, setFormFrete] = useState<number>(0)
+  const [formDataRecebimentoPrevista, setFormDataRecebimentoPrevista] = useState(() => somarDias(dataHoje, 20))
+  const [formJustificativaDataRecebimento, setFormJustificativaDataRecebimento] = useState('')
   const [formObservacao, setFormObservacao] = useState('')
+
+  // State: Recebimento por Item Modal
+  const [showRecebimentoModal, setShowRecebimentoModal] = useState(false)
+  const [pedidoRecebimento, setPedidoRecebimento] = useState<PedidoCompra | null>(null)
+  const [recebimentoItens, setRecebimentoItens] = useState<{ produto_id: string; quantidade_recebida: number }[]>([])
+  const [recebimentoJustificativa, setRecebimentoJustificativa] = useState('')
+
+  // State: Drawer de Detalhes / Visualização Lateral
+  const [pedidoVisualizando, setPedidoVisualizando] = useState<PedidoCompra | null>(null)
 
   const loadData = async () => {
     const p = await listPedidosCompra()
@@ -121,7 +139,11 @@ export function V2PedidoCompraPage() {
     setFormParcelas(1)
     setFormFormaPagamento('Boleto')
     setFormContaSaidaTag('')
-    setFormDataEntrega(somarDias(dataHoje, 11))
+    setFormDataPedido(dataHoje)
+    setFormDataVencimento(somarDias(dataHoje, 30))
+    setFormFrete(0)
+    setFormDataRecebimentoPrevista(somarDias(dataHoje, 20))
+    setFormJustificativaDataRecebimento('')
     setFormObservacao('')
     setViewMode('novo')
   }
@@ -132,12 +154,16 @@ export function V2PedidoCompraPage() {
     setIsVisualizacao(true)
     setFormFornecedor(p.fornecedor || '')
     setFormItens(p.itens || [])
-    setFormParcelas(p.numeroParcelas || 1)
+    setFormParcelas(1)
     setFormFormaPagamento(p.formaPagamento || 'Boleto')
     setFormContaSaidaTag(p.contaSaidaTag || '')
-    setFormDataEntrega(p.dataPrevistaEntrega || somarDias(dataHoje, 11))
+    setFormDataPedido(p.dataPedido || p.dataEmissao || dataHoje)
+    setFormDataVencimento(p.dataVencimento || '')
+    setFormFrete(p.frete || 0)
+    setFormDataRecebimentoPrevista(p.dataRecebimentoPrevista || p.dataPrevistaEntrega || somarDias(p.dataPedido || dataHoje, 20))
+    setFormJustificativaDataRecebimento(p.justificativaDataRecebimento || '')
     setFormObservacao(p.observacao || '')
-    setViewMode('novo')
+    setPedidoVisualizando(p)
   }
 
   const handleEditarPedido = (p: PedidoCompra) => {
@@ -154,10 +180,14 @@ export function V2PedidoCompraPage() {
         ? p.itens
         : [{ produto_id: '', produto_nome: '', quantidade: 1, preco_unitario: 0, total: 0 }]
     )
-    setFormParcelas(p.numeroParcelas || 1)
+    setFormParcelas(1)
     setFormFormaPagamento(p.formaPagamento || 'Boleto')
     setFormContaSaidaTag(p.contaSaidaTag || '')
-    setFormDataEntrega(p.dataPrevistaEntrega || somarDias(dataHoje, 11))
+    setFormDataPedido(p.dataPedido || p.dataEmissao || dataHoje)
+    setFormDataVencimento(p.dataVencimento || somarDias(p.dataPedido || dataHoje, 30))
+    setFormFrete(p.frete || 0)
+    setFormDataRecebimentoPrevista(p.dataRecebimentoPrevista || p.dataPrevistaEntrega || somarDias(p.dataPedido || dataHoje, 20))
+    setFormJustificativaDataRecebimento(p.justificativaDataRecebimento || '')
     setFormObservacao(p.observacao || '')
     setViewMode('novo')
   }
@@ -251,7 +281,12 @@ export function V2PedidoCompraPage() {
         await updatePedidoCompra({
           ...pedidoEdicao,
           fornecedor: formFornecedor,
-          dataPrevistaEntrega: formDataEntrega || null,
+          dataPedido: formDataPedido || dataHoje,
+          dataVencimento: formDataVencimento || null,
+          frete: Number(formFrete) || 0,
+          dataRecebimentoPrevista: formDataRecebimentoPrevista || null,
+          justificativaDataRecebimento: formJustificativaDataRecebimento || undefined,
+          dataPrevistaEntrega: formDataRecebimentoPrevista || null,
           observacao: formObservacao || null,
           total: totalCalculado,
           numeroParcelas: formParcelas,
@@ -263,8 +298,13 @@ export function V2PedidoCompraPage() {
         const novo = await savePedidoCompra({
           fornecedor: formFornecedor,
           status: 'rascunho', // Novo pedido nasce sempre como rascunho (Criado)
-          dataEmissao: dataHoje,
-          dataPrevistaEntrega: formDataEntrega || null,
+          dataPedido: formDataPedido || dataHoje,
+          dataEmissao: formDataPedido || dataHoje,
+          dataVencimento: formDataVencimento || null,
+          frete: Number(formFrete) || 0,
+          dataRecebimentoPrevista: formDataRecebimentoPrevista || null,
+          justificativaDataRecebimento: formJustificativaDataRecebimento || undefined,
+          dataPrevistaEntrega: formDataRecebimentoPrevista || null,
           observacao: formObservacao || null,
           total: totalCalculado,
           numeroParcelas: formParcelas,
@@ -293,17 +333,83 @@ export function V2PedidoCompraPage() {
         return
       }
       await loadData()
+      const atualizados = await listPedidosCompra()
+      const pAtualizado = atualizados.find((x) => x.id === pedido.id)
+      if (pAtualizado && pedidoVisualizando?.id === pAtualizado.id) {
+        setPedidoVisualizando(pAtualizado)
+      }
     }
   }
 
-  const handleAvançarParaRecebido = async (pedido: PedidoCompra) => {
-    if (window.confirm(`Confirma o recebimento físico do Pedido #${pedido.numero}? Os itens entrarão no estoque.`)) {
-      const res = await receberPedidoCompra(pedido.id)
+
+
+  const handleAbrirRecebimento = (p: PedidoCompra) => {
+    setPedidoRecebimento(p)
+    const itens = (p.itens || []).map((it) => {
+      const jaRecebido = it.quantidade_recebida ?? 0
+      const pendente = Math.max(0, it.quantidade - jaRecebido)
+      return {
+        produto_id: it.produto_id,
+        quantidade_recebida: pendente,
+      }
+    })
+    setRecebimentoItens(itens)
+    setRecebimentoJustificativa('')
+    setShowRecebimentoModal(true)
+  }
+
+  const handleConfirmarRecebimento = async () => {
+    if (!pedidoRecebimento) return
+    const totalRecebendo = recebimentoItens.reduce((acc, i) => acc + (Number(i.quantidade_recebida) || 0), 0)
+    if (totalRecebendo <= 0) {
+      alert('Informe ao menos 1 unidade recebida em pelo menos um item.')
+      return
+    }
+
+    const res = await receberPedidoCompraPorItem(
+      pedidoRecebimento.id,
+      recebimentoItens.map((i) => ({
+        produto_id: i.produto_id,
+        quantidade_recebida: Number(i.quantidade_recebida) || 0,
+      })),
+      recebimentoJustificativa.trim() || undefined
+    )
+
+    if (!res.ok) {
+      alert(res.erro)
+      return
+    }
+
+    setShowRecebimentoModal(false)
+    await loadData()
+
+    const atualizados = await listPedidosCompra()
+    const pAtualizado = atualizados.find((x) => x.id === pedidoRecebimento.id)
+    if (pAtualizado && pedidoVisualizando?.id === pAtualizado.id) {
+      setPedidoVisualizando(pAtualizado)
+    }
+  }
+
+  const handleAjustarQuantidade = async (pedidoId: string, produtoId: string, novaQtd: number) => {
+    const p = pedidos.find((item) => item.id === pedidoId)
+    const it = p?.itens.find((i) => i.produto_id === produtoId)
+    const nome = it?.produto_nome || 'o item'
+    if (
+      window.confirm(
+        `Confirma ajustar a quantidade de "${nome}" para ${novaQtd}? O valor do pedido e da Conta a Pagar serão recalculados com abatimento e o restante será considerado cancelado/não entregue.`
+      )
+    ) {
+      const res = await ajustarQuantidadeItem(pedidoId, produtoId, novaQtd)
       if (!res.ok) {
         alert(res.erro)
         return
       }
       await loadData()
+      const atualizados = await listPedidosCompra()
+      const pAtualizado = atualizados.find((x) => x.id === pedidoId)
+      if (pAtualizado && pedidoVisualizando?.id === pAtualizado.id) {
+        setPedidoVisualizando(pAtualizado)
+      }
     }
   }
 
@@ -315,6 +421,11 @@ export function V2PedidoCompraPage() {
         return
       }
       await loadData()
+      const atualizados = await listPedidosCompra()
+      const pAtualizado = atualizados.find((x) => x.id === pedido.id)
+      if (pAtualizado && pedidoVisualizando?.id === pAtualizado.id) {
+        setPedidoVisualizando(pAtualizado)
+      }
     }
   }
 
@@ -326,6 +437,11 @@ export function V2PedidoCompraPage() {
         return
       }
       await loadData()
+      const atualizados = await listPedidosCompra()
+      const pAtualizado = atualizados.find((x) => x.id === pedido.id)
+      if (pAtualizado && pedidoVisualizando?.id === pAtualizado.id) {
+        setPedidoVisualizando(pAtualizado)
+      }
     }
   }
 
@@ -333,8 +449,9 @@ export function V2PedidoCompraPage() {
   const mesFiltroStr = `${filtroAno}-${filtroMesNum}`
   const pedidosNoMes = useMemo(() => {
     return pedidos.filter((p) => {
-      if (!p.dataEmissao) return false
-      return p.dataEmissao.startsWith(mesFiltroStr)
+      const dataRef = p.dataPedido || p.dataEmissao
+      if (!dataRef) return false
+      return dataRef.startsWith(mesFiltroStr)
     })
   }, [pedidos, mesFiltroStr])
 
@@ -354,7 +471,7 @@ export function V2PedidoCompraPage() {
 
   // Métricas do Card Superior da Imagem 02
   const totalCompradoNoMes = useMemo(() => {
-    return pedidosNoMes.reduce((acc, p) => acc + (p.total || 0), 0)
+    return pedidosNoMes.reduce((acc, p) => acc + (p.total || 0) + (p.frete || 0), 0)
   }, [pedidosNoMes])
 
   const aguardandoEntrega = useMemo(() => {
@@ -382,12 +499,12 @@ export function V2PedidoCompraPage() {
     return pedidos.find((p) => p.fornecedor.toLowerCase() === formFornecedor.toLowerCase())
   }, [pedidos, formFornecedor])
 
-  // Dias até entrega calculados
-  const diasAteEntrega = useMemo(() => {
-    if (!formDataEntrega) return 0
-    const diffMs = new Date(formDataEntrega).getTime() - new Date(dataHoje).getTime()
+  // Dias até recebimento calculados
+  const diasAteRecebimento = useMemo(() => {
+    if (!formDataRecebimentoPrevista) return 0
+    const diffMs = new Date(formDataRecebimentoPrevista).getTime() - new Date(formDataPedido || dataHoje).getTime()
     return Math.max(0, Math.round(diffMs / (1000 * 60 * 60 * 24)))
-  }, [formDataEntrega, dataHoje])
+  }, [formDataRecebimentoPrevista, formDataPedido, dataHoje])
 
   // ──────────────────────────────────────────────────────────────────────────
   // TELA 1: NOVO PEDIDO DE COMPRA (IMAGEM 01)
@@ -762,11 +879,11 @@ export function V2PedidoCompraPage() {
                   3
                 </div>
                 <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0F2A43' }}>
-                  3. Como você paga e de qual conta sai?
+                  3. Pagamento, frete e previsão de recebimento
                 </h2>
               </div>
 
-              {/* Linha 1: Forma de Pagamento e Condição / Parcelas */}
+              {/* Linha 1: Forma de Pagamento e Frete (R$) */}
               <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 16, marginBottom: 16 }}>
                 <div>
                   <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
@@ -800,12 +917,16 @@ export function V2PedidoCompraPage() {
 
                 <div>
                   <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
-                    Condição / Parcelas
+                    Frete (R$) <span style={{ color: '#64748B', fontWeight: 400 }}>(opcional)</span>
                   </label>
-                  <select
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
                     disabled={isVisualizacao}
-                    value={formParcelas}
-                    onChange={(e) => setFormParcelas(Number(e.target.value))}
+                    placeholder="0,00"
+                    value={formFrete || ''}
+                    onChange={(e) => setFormFrete(Math.max(0, Number(e.target.value)))}
                     style={{
                       width: '100%',
                       padding: '12px 14px',
@@ -816,21 +937,73 @@ export function V2PedidoCompraPage() {
                       background: isVisualizacao ? '#F8FAFC' : '#FFFFFF',
                       outline: 'none',
                       boxSizing: 'border-box',
-                      cursor: isVisualizacao ? 'default' : 'pointer',
                     }}
-                  >
-                    <option value={1}>À vista (1x)</option>
-                    <option value={2}>2x Parcelado</option>
-                    <option value={3}>3x Parcelado</option>
-                    <option value={4}>4x Parcelado</option>
-                    <option value={6}>6x Parcelado</option>
-                    <option value={10}>10x Parcelado</option>
-                    <option value={12}>12x Parcelado</option>
-                  </select>
+                  />
                 </div>
               </div>
 
-              {/* Linha 2: Conta de Saída (Tag) e Previsão de Entrega */}
+              {/* Linha 2: Data do Pedido e Data de Vencimento */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 16, marginBottom: 16 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                    Data do Pedido
+                  </label>
+                  <input
+                    type="date"
+                    disabled={isVisualizacao}
+                    value={formDataPedido}
+                    onChange={(e) => {
+                      const nova = e.target.value
+                      setFormDataPedido(nova)
+                      if (!formJustificativaDataRecebimento) {
+                        setFormDataRecebimentoPrevista(somarDias(nova, 20))
+                      }
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: 10,
+                      border: '1px solid #CBD5E1',
+                      fontSize: 14,
+                      color: '#0F2A43',
+                      background: isVisualizacao ? '#F8FAFC' : '#FFFFFF',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  <span style={{ display: 'block', fontSize: 12, color: '#475569', marginTop: 4 }}>
+                    Pode ser retroativa
+                  </span>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                    Data de Vencimento
+                  </label>
+                  <input
+                    type="date"
+                    disabled={isVisualizacao}
+                    value={formDataVencimento}
+                    onChange={(e) => setFormDataVencimento(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: 10,
+                      border: '1px solid #CBD5E1',
+                      fontSize: 14,
+                      color: '#0F2A43',
+                      background: isVisualizacao ? '#F8FAFC' : '#FFFFFF',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  <span style={{ display: 'block', fontSize: 12, color: '#475569', marginTop: 4 }}>
+                    Vencimento do pagamento (lançamento único)
+                  </span>
+                </div>
+              </div>
+
+              {/* Linha 3: Conta de Saída (Tag) e Previsão de Recebimento */}
               <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 16, marginBottom: 16 }}>
                 <div>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
@@ -892,13 +1065,13 @@ export function V2PedidoCompraPage() {
 
                 <div>
                   <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
-                    Previsão de entrega
+                    Previsão de recebimento
                   </label>
                   <input
                     type="date"
                     disabled={isVisualizacao}
-                    value={formDataEntrega}
-                    onChange={(e) => setFormDataEntrega(e.target.value)}
+                    value={formDataRecebimentoPrevista}
+                    onChange={(e) => setFormDataRecebimentoPrevista(e.target.value)}
                     style={{
                       width: '100%',
                       padding: '12px 14px',
@@ -912,9 +1085,34 @@ export function V2PedidoCompraPage() {
                     }}
                   />
                   <span style={{ display: 'block', fontSize: 12, color: '#475569', marginTop: 4 }}>
-                    Daqui a {diasAteEntrega} dias
+                    Padrão: 20 dias corridos a partir do pedido ({diasAteRecebimento} dias)
                   </span>
                 </div>
+              </div>
+
+              {/* Justificativa caso data de recebimento seja alterada */}
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                  Justificativa da data de recebimento <span style={{ color: '#64748B', fontWeight: 400 }}>(opcional)</span>
+                </label>
+                <input
+                  type="text"
+                  disabled={isVisualizacao}
+                  placeholder="Ex: Fornecedor solicitou prazo adicional de fabricação..."
+                  value={formJustificativaDataRecebimento}
+                  onChange={(e) => setFormJustificativaDataRecebimento(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '11px 14px',
+                    borderRadius: 10,
+                    border: '1px solid #CBD5E1',
+                    fontSize: 14,
+                    color: '#0F2A43',
+                    background: isVisualizacao ? '#F8FAFC' : '#FFFFFF',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
               </div>
 
               <div>
@@ -962,8 +1160,8 @@ export function V2PedidoCompraPage() {
 
             <p style={{ margin: '0 0 16px', fontSize: 14, color: '#1E293B', lineHeight: 1.5 }}>
               Você está pedindo <strong>{formItens.filter((i) => i.produto_id).length} item(ns)</strong> à{' '}
-              <strong>{formFornecedor ? formFornecedor.split(' ')[0] : '...'}</strong>, pagando{' '}
-              <strong>{formFormaPagamento} ({formParcelas === 1 ? 'à vista' : `${formParcelas}x`})</strong>.
+              <strong>{formFornecedor ? formFornecedor.split(' ')[0] : '...'}</strong>, pagando com{' '}
+              <strong>{formFormaPagamento}</strong>.
             </p>
 
             <div style={{ borderTop: '1px solid #D7E4DA', borderBottom: '1px solid #D7E4DA', padding: '14px 0', margin: '14px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -975,11 +1173,25 @@ export function V2PedidoCompraPage() {
                   <span style={{ color: '#0F2A43', fontWeight: 600 }}>{formatarMoeda(it.total)}</span>
                 </div>
               ))}
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginTop: 4 }}>
-                <span style={{ color: '#475569' }}>Pagamento</span>
-                <span style={{ color: '#0F2A43', fontWeight: 600 }}>
-                  {formFormaPagamento} · {formParcelas === 1 ? '1x à vista' : `${formParcelas}x`}
-                </span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginTop: 4, paddingTop: 6, borderTop: '1px dashed #E2E8F0' }}>
+                <span style={{ color: '#475569' }}>Subtotal Itens</span>
+                <span style={{ color: '#0F2A43', fontWeight: 600 }}>{formatarMoeda(totalCalculado)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <span style={{ color: '#475569' }}>Frete</span>
+                <span style={{ color: '#0F2A43', fontWeight: 600 }}>{formatarMoeda(formFrete || 0)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <span style={{ color: '#475569' }}>Data do Pedido</span>
+                <span style={{ color: '#0F2A43', fontWeight: 600 }}>{formatarData(formDataPedido)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <span style={{ color: '#475569' }}>Vencimento</span>
+                <span style={{ color: '#0F2A43', fontWeight: 600 }}>{formDataVencimento ? formatarData(formDataVencimento) : 'À vista'}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <span style={{ color: '#475569' }}>Previsão de Recebimento</span>
+                <span style={{ color: '#0F2A43', fontWeight: 600 }}>{formatarData(formDataRecebimentoPrevista)}</span>
               </div>
               {formContaSaidaTag && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
@@ -987,15 +1199,16 @@ export function V2PedidoCompraPage() {
                   <span style={{ color: '#0D5BA3', fontWeight: 700 }}>{formContaSaidaTag}</span>
                 </div>
               )}
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                <span style={{ color: '#475569' }}>Entrega prevista</span>
-                <span style={{ color: '#0F2A43', fontWeight: 600 }}>{formatarData(formDataEntrega)}</span>
-              </div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', margin: '18px 0' }}>
-              <span style={{ fontSize: 14, fontWeight: 700, color: '#334155' }}>Total estimado</span>
-              <span style={{ fontSize: 24, fontWeight: 800, color: '#0D5BA3' }}>{formatarMoeda(totalCalculado)}</span>
+              <div>
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#334155', display: 'block' }}>Total do pedido</span>
+                <span style={{ fontSize: 11, color: '#64748B' }}>(Itens + Frete)</span>
+              </div>
+              <span style={{ fontSize: 24, fontWeight: 800, color: '#0D5BA3' }}>
+                {formatarMoeda(totalCalculado + (Number(formFrete) || 0))}
+              </span>
             </div>
 
             {isVisualizacao ? (
@@ -1367,7 +1580,12 @@ export function V2PedidoCompraPage() {
               {(() => {
                 const isCriado = pedido.status !== 'cancelado'
                 const isEmitido = pedido.status === 'emitido' || pedido.status === 'recebido' || pedido.status === 'recebido_parcial'
+                const isRecebidoParcial = pedido.status === 'recebido_parcial'
                 const isRecebido = pedido.status === 'recebido'
+
+                const totalItensSolicitados = pedido.itens ? pedido.itens.reduce((acc, it) => acc + (it.quantidade || 0), 0) : 0
+                const totalItensRecebidos = pedido.itens ? pedido.itens.reduce((acc, it) => acc + (it.quantidade_recebida || 0), 0) : 0
+                const pctRecebido = totalItensSolicitados > 0 ? Math.min(100, Math.round((totalItensRecebidos / totalItensSolicitados) * 100)) : 0
 
                 return (
                   <>
@@ -1390,24 +1608,33 @@ export function V2PedidoCompraPage() {
                             style={{
                               fontSize: 11,
                               fontWeight: 700,
-                              padding: '1px 6px',
+                              padding: '2px 8px',
                               borderRadius: 6,
                               background:
                                 pedido.status === 'recebido'
                                   ? '#DCFCE7'
+                                  : pedido.status === 'recebido_parcial'
+                                  ? '#FEF3C7'
                                   : pedido.status === 'emitido'
                                   ? '#E3EEFA'
                                   : '#F1F5F9',
                               color:
                                 pedido.status === 'recebido'
                                   ? '#15803D'
+                                  : pedido.status === 'recebido_parcial'
+                                  ? '#B45309'
                                   : pedido.status === 'emitido'
                                   ? '#0D5BA3'
                                   : '#475569',
                               textTransform: 'uppercase',
+                              letterSpacing: '0.03em',
                             }}
                           >
-                            {pedido.status === 'rascunho' ? 'RASCUNHO' : pedido.status}
+                            {pedido.status === 'rascunho'
+                              ? 'RASCUNHO'
+                              : pedido.status === 'recebido_parcial'
+                              ? 'PARCIAL'
+                              : pedido.status}
                           </span>
                         </div>
 
@@ -1455,41 +1682,80 @@ export function V2PedidoCompraPage() {
                             </span>
                           )}
                         </div>
+
+                        {/* Barra de Progresso de Itens Recebidos */}
+                        {(pedido.status === 'emitido' || pedido.status === 'recebido_parcial' || pedido.status === 'recebido') && totalItensSolicitados > 0 && (
+                          <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, maxWidth: 320 }}>
+                            <div style={{ flex: 1, height: 6, background: '#E2E8F0', borderRadius: 3, overflow: 'hidden' }}>
+                              <div
+                                style={{
+                                  width: `${pctRecebido}%`,
+                                  height: '100%',
+                                  background:
+                                    pedido.status === 'recebido'
+                                      ? '#15803D'
+                                      : pedido.status === 'recebido_parcial'
+                                      ? '#F59E0B'
+                                      : '#0D5BA3',
+                                  borderRadius: 3,
+                                  transition: 'width 0.3s ease',
+                                }}
+                              />
+                            </div>
+                            <span
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: pedido.status === 'recebido_parcial' ? '#B45309' : '#475569',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {totalItensRecebidos}/{totalItensSolicitados} un ({pctRecebido}%)
+                            </span>
+                          </div>
+                        )}
                       </div>
 
-                      {/* 2. Emissão */}
+                      {/* 2. Emissão / Pedido */}
                       <div>
-                        <span style={{ fontSize: 13, color: '#475569', display: 'block' }}>Emissão</span>
+                        <span style={{ fontSize: 13, color: '#475569', display: 'block' }}>Data Pedido</span>
                         <strong style={{ fontSize: 14, color: '#0F2A43', display: 'block', marginTop: 2 }}>
-                          {formatarData(pedido.dataEmissao)}
+                          {formatarData(pedido.dataPedido || pedido.dataEmissao)}
                         </strong>
                       </div>
 
-                      {/* 3. Previsão de Entrega */}
+                      {/* 3. Previsão de Recebimento */}
                       <div>
-                        <span style={{ fontSize: 13, color: '#475569', display: 'block' }}>Previsão entrega</span>
+                        <span style={{ fontSize: 13, color: '#475569', display: 'block' }}>Prev. Recebimento</span>
                         <strong style={{ fontSize: 14, color: '#0F2A43', display: 'block', marginTop: 2 }}>
-                          {formatarData(pedido.dataPrevistaEntrega)}
+                          {formatarData(pedido.dataRecebimentoPrevista || pedido.dataPrevistaEntrega)}
                         </strong>
+                        {pedido.dataVencimento && (
+                          <span style={{ fontSize: 11, color: '#64748B', display: 'block', marginTop: 2 }}>
+                            Venc: {formatarData(pedido.dataVencimento)}
+                          </span>
+                        )}
                       </div>
 
                       {/* 4. Total */}
                       <div>
                         <span style={{ fontSize: 13, color: '#475569', display: 'block' }}>Total</span>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginTop: 2 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', marginTop: 2 }}>
                           <strong style={{ fontSize: 17, color: '#0F2A43' }}>
-                            {formatarMoeda(pedido.total)}
+                            {formatarMoeda((pedido.total || 0) + (pedido.frete || 0))}
                           </strong>
-                          <span style={{ fontSize: 13, color: '#475569', fontWeight: 700 }}>
-                            {pedido.numeroParcelas || 1}x
-                          </span>
+                          {Boolean(pedido.frete && pedido.frete > 0) && (
+                            <span style={{ fontSize: 11, color: '#64748B' }}>
+                              (+ {formatarMoeda(pedido.frete ?? 0)} frete)
+                            </span>
+                          )}
                         </div>
                       </div>
 
                       {/* 5. Pipeline de Status Visual (Criado -> Emitido -> Recebido) */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
                         {/* Etapa 1: Criado */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                           <div
                             style={{
                               width: 22,
@@ -1520,7 +1786,7 @@ export function V2PedidoCompraPage() {
                         />
 
                         {/* Etapa 2: Emitido */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                           <div
                             style={{
                               width: 22,
@@ -1546,19 +1812,19 @@ export function V2PedidoCompraPage() {
                           style={{
                             width: 14,
                             height: 2,
-                            background: isRecebido ? '#15803D' : '#CBD5E1',
+                            background: isRecebido ? '#15803D' : isRecebidoParcial ? '#F59E0B' : '#CBD5E1',
                           }}
                         />
 
-                        {/* Etapa 3: Recebido */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        {/* Etapa 3: Recebido / Parcial */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                           <div
                             style={{
                               width: 22,
                               height: 22,
                               borderRadius: 11,
-                              background: isRecebido ? '#15803D' : '#E2E8F0',
-                              color: isRecebido ? '#fff' : '#64748B',
+                              background: isRecebido ? '#15803D' : isRecebidoParcial ? '#F59E0B' : '#E2E8F0',
+                              color: isRecebido || isRecebidoParcial ? '#fff' : '#64748B',
                               fontSize: 11,
                               fontWeight: 700,
                               display: 'flex',
@@ -1566,17 +1832,45 @@ export function V2PedidoCompraPage() {
                               justifyContent: 'center',
                             }}
                           >
-                            {isRecebido ? '✓' : '3'}
+                            {isRecebido ? '✓' : isRecebidoParcial ? '½' : '3'}
                           </div>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: isRecebido ? '#15803D' : '#64748B' }}>
-                            Recebido
+                          <span
+                            style={{
+                              fontSize: 12,
+                              fontWeight: 700,
+                              color: isRecebido ? '#15803D' : isRecebidoParcial ? '#B45309' : '#64748B',
+                            }}
+                          >
+                            {isRecebidoParcial ? 'Parcial' : 'Recebido'}
                           </span>
                         </div>
                       </div>
                     </div>
 
                     {/* Ações da Linha: Botões de transição e edição/visualização */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, paddingBottom: 16, borderBottom: '1px solid #EDF2F7' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, paddingBottom: 16, borderBottom: '1px solid #EDF2F7', flexWrap: 'wrap' }}>
+                      {/* Botão Detalhes (Drawer) */}
+                      <button
+                        onClick={() => setPedidoVisualizando(pedido)}
+                        title="Abrir painel lateral de detalhes"
+                        style={{
+                          padding: '7px 13px',
+                          borderRadius: 8,
+                          border: '1.5px solid #0D5BA3',
+                          background: '#EFF6FF',
+                          color: '#0D5BA3',
+                          fontSize: 13,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 5,
+                        }}
+                      >
+                        <Eye size={14} />
+                        <span>Detalhes</span>
+                      </button>
+
                       {/* Se Rascunho (Criado) */}
                       {pedido.status === 'rascunho' && (
                         <>
@@ -1627,7 +1921,7 @@ export function V2PedidoCompraPage() {
                       {pedido.status === 'emitido' && (
                         <>
                           <button
-                            onClick={() => handleAvançarParaRecebido(pedido)}
+                            onClick={() => handleAbrirRecebimento(pedido)}
                             style={{
                               padding: '7px 14px',
                               borderRadius: 8,
@@ -1642,8 +1936,8 @@ export function V2PedidoCompraPage() {
                               gap: 6,
                             }}
                           >
-                            <CheckCircle size={14} />
-                            <span>Receber Pedido (Dar Entrada Estoque)</span>
+                            <Package size={14} />
+                            <span>Receber Itens</span>
                           </button>
 
                           <button
@@ -1690,7 +1984,53 @@ export function V2PedidoCompraPage() {
                         </>
                       )}
 
-                      {/* Se Recebido */}
+                      {/* Se Recebido Parcial */}
+                      {pedido.status === 'recebido_parcial' && (
+                        <>
+                          <button
+                            onClick={() => handleAbrirRecebimento(pedido)}
+                            style={{
+                              padding: '7px 14px',
+                              borderRadius: 8,
+                              border: 'none',
+                              background: '#D97706',
+                              color: '#FFFFFF',
+                              fontSize: 13,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
+                            }}
+                          >
+                            <Package size={14} />
+                            <span>Receber Mais</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleDesfazerRecebimento(pedido)}
+                            title="Desfazer recebimentos e estornar entradas no estoque"
+                            style={{
+                              padding: '7px 12px',
+                              borderRadius: 8,
+                              border: '1px solid #CBD5E1',
+                              background: '#FFFFFF',
+                              color: '#B45309',
+                              fontSize: 12,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            <RotateCcw size={13} />
+                            <span>Desfazer Recebimentos</span>
+                          </button>
+                        </>
+                      )}
+
+                      {/* Se Recebido Total */}
                       {pedido.status === 'recebido' && (
                         <>
                           <span
@@ -1709,28 +2049,6 @@ export function V2PedidoCompraPage() {
                             <CheckCircle size={15} />
                             Recebido no Estoque
                           </span>
-
-                          {/* Visualizar: obrigatório, não pode editar quando recebido */}
-                          <button
-                            onClick={() => handleVisualizarPedido(pedido)}
-                            title="Visualizar detalhes do pedido (somente leitura)"
-                            style={{
-                              padding: '7px 14px',
-                              borderRadius: 8,
-                              border: '1.5px solid #0D5BA3',
-                              background: '#EFF6FF',
-                              color: '#0D5BA3',
-                              fontSize: 13,
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 6,
-                            }}
-                          >
-                            <Eye size={15} />
-                            <span>Visualizar Pedido</span>
-                          </button>
 
                           {/* Desfazer recebimento: estorna estoque e volta para emitido */}
                           <button
@@ -1786,6 +2104,632 @@ export function V2PedidoCompraPage() {
           </button>
         </div>
       </div>
+
+      {/* ── MODAL: RECEBER ITENS DO PEDIDO ── */}
+      {showRecebimentoModal && pedidoRecebimento && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.55)',
+            backdropFilter: 'blur(3px)',
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 20,
+          }}
+        >
+          <div
+            style={{
+              background: '#FFFFFF',
+              borderRadius: 16,
+              maxWidth: 680,
+              width: '100%',
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+              overflow: 'hidden',
+            }}
+          >
+            {/* Header */}
+            <div
+              style={{
+                padding: '20px 24px',
+                borderBottom: '1px solid #E2E8F0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: '#F8FAFC',
+              }}
+            >
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Package size={20} color="#0D5BA3" />
+                  <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0F2A43' }}>
+                    Recebimento de Itens — Pedido #{pedidoRecebimento.numero}
+                  </h3>
+                </div>
+                <span style={{ fontSize: 13, color: '#64748B', display: 'block', marginTop: 4 }}>
+                  Fornecedor: <strong>{pedidoRecebimento.fornecedor}</strong>
+                </span>
+              </div>
+              <button
+                onClick={() => setShowRecebimentoModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 6,
+                  borderRadius: 8,
+                  color: '#64748B',
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1 }}>
+              <p style={{ margin: '0 0 16px', fontSize: 13, color: '#475569', lineHeight: 1.5 }}>
+                Informe a quantidade entregue fisicamente para cada item. Se o fornecedor não for mais entregar a quantidade restante de algum item, você pode ajustar a quantidade final do pedido para encerrá-lo com abatimento do valor a pagar.
+              </p>
+
+              {/* Tabela de Itens */}
+              <div style={{ border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'hidden', marginBottom: 20 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: '#F1F5F9', borderBottom: '1px solid #CBD5E1', textAlign: 'left' }}>
+                      <th style={{ padding: '10px 14px', fontWeight: 700, color: '#334155' }}>Produto</th>
+                      <th style={{ padding: '10px 10px', fontWeight: 700, color: '#334155', textAlign: 'center' }}>Pedido</th>
+                      <th style={{ padding: '10px 10px', fontWeight: 700, color: '#334155', textAlign: 'center' }}>Já Recebido</th>
+                      <th style={{ padding: '10px 10px', fontWeight: 700, color: '#334155', textAlign: 'center' }}>Pendente</th>
+                      <th style={{ padding: '10px 14px', fontWeight: 700, color: '#0D5BA3', textAlign: 'center' }}>Receber Agora</th>
+                      <th style={{ padding: '10px 10px', fontWeight: 700, color: '#334155', textAlign: 'right' }}>Ajustar</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pedidoRecebimento.itens.map((it) => {
+                      const jaRecebido = it.quantidade_recebida ?? 0
+                      const pendente = Math.max(0, it.quantidade - jaRecebido)
+                      const itemRecebendo = recebimentoItens.find((x) => x.produto_id === it.produto_id)
+                      const valorRecebendo = itemRecebendo ? itemRecebendo.quantidade_recebida : 0
+
+                      return (
+                        <tr key={it.produto_id} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                          <td style={{ padding: '12px 14px' }}>
+                            <strong style={{ display: 'block', color: '#0F2A43' }}>{it.produto_nome}</strong>
+                            <span style={{ fontSize: 11, color: '#64748B' }}>{formatarMoeda(it.preco_unitario)} / un</span>
+                          </td>
+                          <td style={{ padding: '12px 10px', textAlign: 'center', fontWeight: 600 }}>{it.quantidade}</td>
+                          <td style={{ padding: '12px 10px', textAlign: 'center', color: jaRecebido > 0 ? '#15803D' : '#64748B', fontWeight: 600 }}>
+                            {jaRecebido}
+                          </td>
+                          <td style={{ padding: '12px 10px', textAlign: 'center', color: pendente > 0 ? '#D97706' : '#64748B', fontWeight: 700 }}>
+                            {pendente}
+                          </td>
+                          <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                            <input
+                              type="number"
+                              min="0"
+                              max={pendente}
+                              disabled={pendente === 0}
+                              value={valorRecebendo}
+                              onChange={(e) => {
+                                const val = Math.min(pendente, Math.max(0, Number(e.target.value)))
+                                setRecebimentoItens((prev) =>
+                                  prev.map((ri) => (ri.produto_id === it.produto_id ? { ...ri, quantidade_recebida: val } : ri))
+                                )
+                              }}
+                              style={{
+                                width: 75,
+                                padding: '6px 8px',
+                                borderRadius: 8,
+                                border: '1.5px solid #0D5BA3',
+                                textAlign: 'center',
+                                fontWeight: 700,
+                                fontSize: 14,
+                                color: '#0F2A43',
+                                background: pendente === 0 ? '#F1F5F9' : '#FFFFFF',
+                              }}
+                            />
+                          </td>
+                          <td style={{ padding: '12px 10px', textAlign: 'right' }}>
+                            {pendente > 0 && jaRecebido > 0 && (
+                              <button
+                                type="button"
+                                title="Encerrar item com a quantidade já recebida e abater o restante"
+                                onClick={() => handleAjustarQuantidade(pedidoRecebimento.id, it.produto_id, jaRecebido)}
+                                style={{
+                                  padding: '4px 8px',
+                                  borderRadius: 6,
+                                  border: '1px solid #CBD5E1',
+                                  background: '#F8FAFC',
+                                  color: '#B45309',
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                Encerrar em {jaRecebido}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Justificativa / Observação do Recebimento */}
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                  Observação / Justificativa deste recebimento <span style={{ color: '#64748B', fontWeight: 400 }}>(opcional)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: Entregue via transportadora XPTO, NF 123456..."
+                  value={recebimentoJustificativa}
+                  onChange={(e) => setRecebimentoJustificativa(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: 10,
+                    border: '1px solid #CBD5E1',
+                    fontSize: 13,
+                    color: '#0F2A43',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div
+              style={{
+                padding: '16px 24px',
+                borderTop: '1px solid #E2E8F0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                gap: 12,
+                background: '#F8FAFC',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setShowRecebimentoModal(false)}
+                style={{
+                  padding: '10px 18px',
+                  borderRadius: 10,
+                  border: '1px solid #CBD5E1',
+                  background: '#FFFFFF',
+                  color: '#475569',
+                  fontWeight: 600,
+                  fontSize: 14,
+                  cursor: 'pointer',
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmarRecebimento}
+                style={{
+                  padding: '10px 22px',
+                  borderRadius: 10,
+                  border: 'none',
+                  background: '#15803D',
+                  color: '#FFFFFF',
+                  fontWeight: 700,
+                  fontSize: 14,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  boxShadow: '0 2px 6px rgba(21, 128, 61, 0.25)',
+                }}
+              >
+                <CheckCircle size={16} />
+                <span>Confirmar Entrada no Estoque</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── DRAWER DE DETALHES DO PEDIDO (LATERAL) ── */}
+      {pedidoVisualizando && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.4)',
+            backdropFilter: 'blur(2px)',
+            zIndex: 998,
+            display: 'flex',
+            justifyContent: 'flex-end',
+          }}
+          onClick={() => setPedidoVisualizando(null)}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: 540,
+              height: '100%',
+              background: '#FFFFFF',
+              boxShadow: '-4px 0 30px rgba(0,0,0,0.15)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header Drawer */}
+            <div
+              style={{
+                padding: '20px 24px',
+                borderBottom: '1px solid #E2E8F0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: '#F8FAFC',
+              }}
+            >
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#0F2A43' }}>
+                    Pedido #{pedidoVisualizando.numero}
+                  </h3>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      padding: '2px 8px',
+                      borderRadius: 6,
+                      background:
+                        pedidoVisualizando.status === 'recebido'
+                          ? '#DCFCE7'
+                          : pedidoVisualizando.status === 'recebido_parcial'
+                          ? '#FEF3C7'
+                          : pedidoVisualizando.status === 'emitido'
+                          ? '#E3EEFA'
+                          : '#F1F5F9',
+                      color:
+                        pedidoVisualizando.status === 'recebido'
+                          ? '#15803D'
+                          : pedidoVisualizando.status === 'recebido_parcial'
+                          ? '#B45309'
+                          : pedidoVisualizando.status === 'emitido'
+                          ? '#0D5BA3'
+                          : '#475569',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    {pedidoVisualizando.status === 'rascunho'
+                      ? 'RASCUNHO'
+                      : pedidoVisualizando.status === 'recebido_parcial'
+                      ? 'PARCIAL'
+                      : pedidoVisualizando.status}
+                  </span>
+                </div>
+                <strong style={{ fontSize: 15, color: '#334155', display: 'block', marginTop: 4 }}>
+                  {pedidoVisualizando.fornecedor}
+                </strong>
+              </div>
+
+              <button
+                onClick={() => setPedidoVisualizando(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 6,
+                  borderRadius: 8,
+                  color: '#64748B',
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Conteúdo com Scroll */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+              {/* Card Resumo Financeiro & Prazos */}
+              <div
+                style={{
+                  background: '#F8FAFC',
+                  borderRadius: 12,
+                  border: '1px solid #E2E8F0',
+                  padding: '16px',
+                  marginBottom: 20,
+                }}
+              >
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <span style={{ fontSize: 11, color: '#64748B', display: 'block' }}>Data do Pedido</span>
+                    <strong style={{ fontSize: 13, color: '#0F2A43' }}>
+                      {formatarData(pedidoVisualizando.dataPedido || pedidoVisualizando.dataEmissao)}
+                    </strong>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: 11, color: '#64748B', display: 'block' }}>Vencimento</span>
+                    <strong style={{ fontSize: 13, color: '#0F2A43' }}>
+                      {pedidoVisualizando.dataVencimento ? formatarData(pedidoVisualizando.dataVencimento) : 'À vista'}
+                    </strong>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: 11, color: '#64748B', display: 'block' }}>Previsão de Recebimento</span>
+                    <strong style={{ fontSize: 13, color: '#0F2A43' }}>
+                      {formatarData(pedidoVisualizando.dataRecebimentoPrevista || pedidoVisualizando.dataPrevistaEntrega)}
+                    </strong>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: 11, color: '#64748B', display: 'block' }}>Forma de Pagamento</span>
+                    <strong style={{ fontSize: 13, color: '#0F2A43' }}>
+                      {pedidoVisualizando.formaPagamento || 'Boleto'}
+                    </strong>
+                  </div>
+                </div>
+
+                {pedidoVisualizando.justificativaDataRecebimento && (
+                  <div style={{ borderTop: '1px dashed #CBD5E1', paddingTop: 8, marginTop: 8 }}>
+                    <span style={{ fontSize: 11, color: '#64748B', display: 'block' }}>Justificativa do Prazo:</span>
+                    <span style={{ fontSize: 12, color: '#334155', fontStyle: 'italic' }}>
+                      "{pedidoVisualizando.justificativaDataRecebimento}"
+                    </span>
+                  </div>
+                )}
+
+                {pedidoVisualizando.contaSaidaTag && (
+                  <div style={{ borderTop: '1px dashed #CBD5E1', paddingTop: 8, marginTop: 8 }}>
+                    <span style={{ fontSize: 11, color: '#64748B', display: 'block' }}>Conta Saída:</span>
+                    <strong style={{ fontSize: 12, color: '#0D5BA3' }}>{pedidoVisualizando.contaSaidaTag}</strong>
+                  </div>
+                )}
+
+                <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: 10, marginTop: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#475569', marginBottom: 4 }}>
+                    <span>Subtotal dos itens:</span>
+                    <span>{formatarMoeda(pedidoVisualizando.total || 0)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#475569', marginBottom: 4 }}>
+                    <span>Frete:</span>
+                    <span>{formatarMoeda(pedidoVisualizando.frete || 0)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, fontWeight: 800, color: '#0D5BA3', marginTop: 6, paddingTop: 6, borderTop: '1px dashed #CBD5E1' }}>
+                    <span>Total do Pedido:</span>
+                    <span>{formatarMoeda((pedidoVisualizando.total || 0) + (pedidoVisualizando.frete || 0))}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Seção Itens com Barra de Progresso */}
+              <div style={{ marginBottom: 24 }}>
+                <h4 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700, color: '#0F2A43', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Package size={16} color="#0D5BA3" />
+                  <span>Itens do Pedido & Status de Entrega</span>
+                </h4>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {pedidoVisualizando.itens.map((it) => {
+                    const jaRecebido = it.quantidade_recebida ?? 0
+                    const pendente = Math.max(0, it.quantidade - jaRecebido)
+                    const pct = it.quantidade > 0 ? Math.min(100, Math.round((jaRecebido / it.quantidade) * 100)) : 0
+                    const isCompleto = jaRecebido >= it.quantidade
+
+                    return (
+                      <div
+                        key={it.produto_id}
+                        style={{
+                          border: '1px solid #E2E8F0',
+                          borderRadius: 10,
+                          padding: '12px 14px',
+                          background: isCompleto ? '#F0FDF4' : '#FFFFFF',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                          <div>
+                            <strong style={{ fontSize: 14, color: '#0F2A43', display: 'block' }}>{it.produto_nome}</strong>
+                            <span style={{ fontSize: 12, color: '#64748B' }}>
+                              {it.quantidade} un × {formatarMoeda(it.preco_unitario)} = {formatarMoeda(it.total)}
+                            </span>
+                          </div>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              padding: '2px 7px',
+                              borderRadius: 6,
+                              background: isCompleto ? '#DCFCE7' : jaRecebido > 0 ? '#FEF3C7' : '#F1F5F9',
+                              color: isCompleto ? '#15803D' : jaRecebido > 0 ? '#B45309' : '#64748B',
+                            }}
+                          >
+                            {isCompleto ? 'Completo' : jaRecebido > 0 ? 'Parcial' : 'Pendente'}
+                          </span>
+                        </div>
+
+                        {/* Barra de Progresso */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                          <div style={{ flex: 1, height: 6, background: '#E2E8F0', borderRadius: 3, overflow: 'hidden' }}>
+                            <div
+                              style={{
+                                width: `${pct}%`,
+                                height: '100%',
+                                background: isCompleto ? '#15803D' : '#F59E0B',
+                                borderRadius: 3,
+                              }}
+                            />
+                          </div>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>
+                            {jaRecebido} / {it.quantidade} un ({pct}%)
+                          </span>
+                        </div>
+
+                        {/* Botão para ajustar item se ainda pendente */}
+                        {pendente > 0 && jaRecebido > 0 && (
+                          <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleAjustarQuantidade(pedidoVisualizando.id, it.produto_id, jaRecebido)}
+                              style={{
+                                padding: '3px 8px',
+                                borderRadius: 6,
+                                border: '1px solid #CBD5E1',
+                                background: '#FFFFFF',
+                                color: '#B45309',
+                                fontSize: 11,
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Encerrar item em {jaRecebido} un
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Seção Histórico de Recebimentos */}
+              <div>
+                <h4 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700, color: '#0F2A43', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Clock size={16} color="#0D5BA3" />
+                  <span>Histórico de Recebimentos</span>
+                </h4>
+
+                {pedidoVisualizando.recebimentos && pedidoVisualizando.recebimentos.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {pedidoVisualizando.recebimentos.map((rec: RecebimentoCompra, rIdx: number) => (
+                      <div
+                        key={rIdx}
+                        style={{
+                          borderLeft: '3px solid #15803D',
+                          background: '#F8FAFC',
+                          borderRadius: '0 8px 8px 0',
+                          padding: '10px 14px',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#0F2A43' }}>
+                            {formatarData(rec.data)}
+                          </span>
+                          <span style={{ fontSize: 11, color: '#64748B' }}>Lote #{rIdx + 1}</span>
+                        </div>
+
+                        {rec.itens.map((rit, itIdx) => {
+                          const prod = pedidoVisualizando.itens.find((x) => x.produto_id === rit.produto_id)
+                          return (
+                            <div key={itIdx} style={{ fontSize: 12, color: '#334155', display: 'flex', justifyContent: 'space-between' }}>
+                              <span>• {prod?.produto_nome || 'Item'}</span>
+                              <strong>+{rit.quantidade_recebida} un</strong>
+                            </div>
+                          )
+                        })}
+
+                        {rec.justificativa && (
+                          <div style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic', marginTop: 4 }}>
+                            Obs: {rec.justificativa}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ padding: '16px', background: '#F8FAFC', borderRadius: 10, textAlign: 'center', color: '#64748B', fontSize: 13 }}>
+                    Nenhum recebimento registrado ainda.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer Ações do Drawer */}
+            <div
+              style={{
+                padding: '16px 24px',
+                borderTop: '1px solid #E2E8F0',
+                display: 'flex',
+                gap: 10,
+                background: '#F8FAFC',
+                flexWrap: 'wrap',
+              }}
+            >
+              {(pedidoVisualizando.status === 'emitido' || pedidoVisualizando.status === 'recebido_parcial') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleAbrirRecebimento(pedidoVisualizando)
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '10px 14px',
+                    borderRadius: 10,
+                    border: 'none',
+                    background: '#15803D',
+                    color: '#FFFFFF',
+                    fontWeight: 700,
+                    fontSize: 13,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <Package size={15} />
+                  <span>{pedidoVisualizando.status === 'recebido_parcial' ? 'Receber Mais Itens' : 'Receber Itens'}</span>
+                </button>
+              )}
+
+              {(pedidoVisualizando.status === 'recebido' || pedidoVisualizando.status === 'recebido_parcial') && (
+                <button
+                  type="button"
+                  onClick={() => handleDesfazerRecebimento(pedidoVisualizando)}
+                  style={{
+                    padding: '10px 14px',
+                    borderRadius: 10,
+                    border: '1px solid #CBD5E1',
+                    background: '#FFFFFF',
+                    color: '#B45309',
+                    fontWeight: 700,
+                    fontSize: 13,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <RotateCcw size={14} />
+                  <span>Desfazer</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setPedidoVisualizando(null)}
+                style={{
+                  padding: '10px 16px',
+                  borderRadius: 10,
+                  border: '1px solid #CBD5E1',
+                  background: '#FFFFFF',
+                  color: '#475569',
+                  fontWeight: 600,
+                  fontSize: 13,
+                  cursor: 'pointer',
+                }}
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
