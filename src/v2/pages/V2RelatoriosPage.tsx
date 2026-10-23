@@ -11,7 +11,7 @@ import { formatarData, hoje } from '../../modules/lib/datas'
 // ─── Utilitário de exportação XLSX ──────────────────────────────────────────
 
 function exportarParaExcel(
-  linhas: Record<string, string | number>[],
+  linhas: Record<string, string | number | undefined | null>[],
   nomeAba: string,
   nomeArquivo: string
 ) {
@@ -22,7 +22,7 @@ function exportarParaExcel(
 }
 
 function exportarParaCSV(
-  linhas: Record<string, string | number>[],
+  linhas: Record<string, string | number | undefined | null>[],
   nomeArquivo: string
 ) {
   if (linhas.length === 0) return
@@ -30,7 +30,10 @@ function exportarParaCSV(
   const corpo = linhas
     .map((row) =>
       Object.values(row)
-        .map((v) => (typeof v === 'string' && v.includes(';') ? `"${v}"` : v))
+        .map((v) => {
+          if (v === null || v === undefined) return ''
+          return typeof v === 'string' && v.includes(';') ? `"${v}"` : String(v)
+        })
         .join(';')
     )
     .join('\n')
@@ -561,7 +564,7 @@ export function V2RelatoriosPage() {
       'Data Pedido': getDataRefCompra(c),
       'Data Vencimento': (c as unknown as Record<string, unknown>)['dataVencimento'] as string || '',
       'Fornecedor': c.fornecedor,
-      'Forma Pagamento': c.formaPagamento,
+      'Forma Pagamento': c.formaPagamento || '',
       'Qtd Itens': c.itens.length,
       'Frete (R$)': c.frete || 0,
       'Total (R$)': c.total,
@@ -577,7 +580,7 @@ export function V2RelatoriosPage() {
       'Data Pedido': getDataRefCompra(c),
       'Data Vencimento': (c as unknown as Record<string, unknown>)['dataVencimento'] as string || '',
       'Fornecedor': c.fornecedor,
-      'Forma Pagamento': c.formaPagamento,
+      'Forma Pagamento': c.formaPagamento || '',
       'Qtd Itens': c.itens.length,
       'Frete (R$)': c.frete || 0,
       'Total (R$)': c.total,
