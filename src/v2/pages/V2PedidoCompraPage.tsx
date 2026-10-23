@@ -68,6 +68,17 @@ const MESES_LISTA = [
 export function V2PedidoCompraPage() {
   const dataHoje = hoje()
 
+  const [windowWidth, setWindowWidth] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth : 1200
+  )
+  useEffect(() => {
+    const handler = () => setWindowWidth(window.innerWidth)
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+  }, [])
+  const isMobile = windowWidth < 640
+  const isTablet = windowWidth >= 640 && windowWidth < 1024
+
   // State: View Mode ('lista' | 'novo')
   const [viewMode, setViewMode] = useState<'lista' | 'novo'>('lista')
 
@@ -565,7 +576,7 @@ export function V2PedidoCompraPage() {
         </div>
 
         {/* Grid Principal: 3 Passos à Esquerda + Resumo à Direita */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 360px', gap: 24, alignItems: 'flex-start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile || isTablet ? '1fr' : 'minmax(0, 1fr) 360px', gap: 24, alignItems: 'flex-start' }}>
           {/* Coluna da Esquerda: Passos 1, 2 e 3 */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             {/* ── PASSO 1: DE QUEM VOCÊ VAI COMPRAR? ── */}
@@ -716,7 +727,7 @@ export function V2PedidoCompraPage() {
                       background: '#FFFFFF',
                     }}
                   >
-                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.8fr) 85px 130px', gap: 12 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1.8fr) 85px 130px', gap: 12 }}>
                       <div>
                         <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
                           Produto
@@ -884,7 +895,7 @@ export function V2PedidoCompraPage() {
               </div>
 
               {/* Linha 1: Forma de Pagamento e Frete (R$) */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 16, marginBottom: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.2fr 1fr', gap: 16, marginBottom: 16 }}>
                 <div>
                   <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
                     Forma de Pagamento
@@ -943,7 +954,7 @@ export function V2PedidoCompraPage() {
               </div>
 
               {/* Linha 2: Data do Pedido e Data de Vencimento */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 16, marginBottom: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.2fr 1fr', gap: 16, marginBottom: 16 }}>
                 <div>
                   <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
                     Data do Pedido
@@ -1004,7 +1015,7 @@ export function V2PedidoCompraPage() {
               </div>
 
               {/* Linha 3: Conta de Saída (Tag) e Previsão de Recebimento */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 16, marginBottom: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.2fr 1fr', gap: 16, marginBottom: 16 }}>
                 <div>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
                     <Tag size={14} color="#0D5BA3" />
@@ -1150,7 +1161,7 @@ export function V2PedidoCompraPage() {
               border: '1px solid #D7E4DA',
               padding: '24px',
               boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
-              position: 'sticky',
+              position: isMobile || isTablet ? 'static' : 'sticky',
               top: 24,
             }}
           >
@@ -1312,7 +1323,7 @@ export function V2PedidoCompraPage() {
   return (
     <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 font-sans">
       {/* ── HEADER SUPERIOR ── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 14 : 0, marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div
             style={{
@@ -1327,7 +1338,7 @@ export function V2PedidoCompraPage() {
           >
             <ShoppingCart size={22} color="#0D5BA3" />
           </div>
-          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700, color: '#0F2A43' }}>
+          <h1 style={{ margin: 0, fontSize: isMobile ? 22 : 28, fontWeight: 700, color: '#0F2A43' }}>
             Pedidos de compra
           </h1>
         </div>
@@ -1337,6 +1348,7 @@ export function V2PedidoCompraPage() {
           style={{
             display: 'flex',
             alignItems: 'center',
+            justifyContent: 'center',
             gap: 8,
             padding: '12px 22px',
             borderRadius: 12,
@@ -1347,6 +1359,7 @@ export function V2PedidoCompraPage() {
             fontWeight: 700,
             cursor: 'pointer',
             boxShadow: '0 4px 12px rgba(13, 91, 163, 0.25)',
+            width: isMobile ? '100%' : 'auto',
           }}
         >
           + NOVO PEDIDO
@@ -1359,7 +1372,7 @@ export function V2PedidoCompraPage() {
           background: '#FFFFFF',
           borderRadius: 16,
           border: '1px solid #D7E4DA',
-          padding: '24px 28px',
+          padding: isMobile ? '16px 18px' : '24px 28px',
           marginBottom: 20,
           display: 'flex',
           justifyContent: 'space-between',
@@ -1592,9 +1605,13 @@ export function V2PedidoCompraPage() {
                     <div
                       style={{
                         display: 'grid',
-                        gridTemplateColumns: 'minmax(280px, 1.8fr) 110px 140px 140px auto',
-                        gap: 16,
-                        alignItems: 'center',
+                        gridTemplateColumns: isMobile
+                          ? '1fr'
+                          : isTablet
+                          ? 'minmax(200px, 1.4fr) 100px 120px 110px'
+                          : 'minmax(280px, 1.8fr) 110px 140px 140px auto',
+                        gap: isMobile ? 12 : 16,
+                        alignItems: isMobile ? 'flex-start' : 'center',
                         paddingBottom: 14,
                       }}
                     >
@@ -1753,7 +1770,7 @@ export function V2PedidoCompraPage() {
                       </div>
 
                       {/* 5. Pipeline de Status Visual (Criado -> Emitido -> Recebido) */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: isMobile ? 'flex-start' : 'flex-end', flexWrap: 'wrap' }}>
                         {/* Etapa 1: Criado */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                           <div
