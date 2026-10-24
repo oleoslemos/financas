@@ -107,7 +107,7 @@ function V2AppLayoutInner() {
     { to: '/v2/clientes', icon: Users, label: 'Clientes' },
     { to: '/v2/produtos', icon: Package, label: 'Produtos' },
     { to: '/v2/tabela-preco', icon: Tag, label: 'Tabela de preço' },
-    { to: '/v2/pedido-compra', icon: ShoppingCart, label: 'Ped. de compra' },
+    { to: '/v2/pedido-compra', icon: ShoppingCart, label: 'Compras' },
     { to: '/v2/propostas-vendas', icon: ClipboardList, label: 'Propostas' },
     { to: '/v2/estoque', icon: Warehouse, label: 'Estoque' },
     { to: '/v2/contas-pagar', icon: Wallet, label: 'Financeiro' },
