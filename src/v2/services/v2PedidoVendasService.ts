@@ -306,13 +306,17 @@ export async function savePedidoVenda(
   const ano = dataEmissao.slice(0, 4)
   const mm = dataEmissao.slice(5, 7)
   const dd = dataEmissao.slice(8, 10)
-  const datePrefix = `PV-${ano}${mm}${dd}`
-
-  const todayOrders = current.filter((p) => String(p.numero).startsWith(datePrefix))
+  const datePrefix = `${ano}${mm}${dd}`
+  
+  const todayOrders = current.filter((p) => {
+    const n = String(p.numero).replace(/^#/, '').replace(/^PV-/, '')
+    return n.startsWith(datePrefix)
+  })
   let seq = 1
   if (todayOrders.length > 0) {
     const seqs = todayOrders.map((p) => {
-      const numStr = String(p.numero).substring(datePrefix.length)
+      const n = String(p.numero).replace(/^#/, '').replace(/^PV-/, '')
+      const numStr = n.substring(datePrefix.length)
       return parseInt(numStr, 10) || 0
     })
     seq = Math.max(...seqs) + 1

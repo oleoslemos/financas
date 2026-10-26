@@ -89,19 +89,20 @@ const MESES_LISTA = [
 ]
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HELPERS PARA FORMATAÇÃO DO NÚMERO DA VENDA: #YYYYMMSEQ (Ex: #202610001)
+// HELPERS PARA FORMATAÇÃO DO NÚMERO DA VENDA: #YYYYMMDDSEQ (Ex: #20261021001)
 // ─────────────────────────────────────────────────────────────────────────────
 export function gerarNumeroVenda(pedidosExistentes: PedidoVenda[], dataEmissao: string = hoje()): string {
   const ano = dataEmissao.slice(0, 4) || '2026'
   const mes = dataEmissao.slice(5, 7) || '10'
-  const prefixo = `#${ano}${mes}`
+  const dia = dataEmissao.slice(8, 10) || '01'
+  const prefixo = `#${ano}${mes}${dia}`
 
   let maiorSeq = 0
   for (const p of pedidosExistentes) {
     if (!p.numero) continue
     const limpo = p.numero.replace(/^#/, '').replace(/^PV-/, '')
-    if (limpo.startsWith(`${ano}${mes}`)) {
-      const seqParte = limpo.slice(6)
+    if (limpo.startsWith(`${ano}${mes}${dia}`)) {
+      const seqParte = limpo.slice(8) // pula os 8 dígitos de YYYYMMDD
       const num = parseInt(seqParte, 10)
       if (!isNaN(num) && num > maiorSeq) {
         maiorSeq = num
@@ -115,12 +116,9 @@ export function gerarNumeroVenda(pedidosExistentes: PedidoVenda[], dataEmissao: 
 
 export function formatarNumeroVendaExibicao(numero: string): string {
   if (!numero) return '#202610001'
-  if (numero.startsWith('#')) return numero
-  if (numero.startsWith('PV-')) {
-    const semPv = numero.replace(/^PV-/, '')
-    return `#${semPv}`
-  }
-  return `#${numero}`
+  // Remove # e PV- para normalizar; depois exibe com # apenas
+  const limpo = numero.replace(/^#/, '').replace(/^PV-/, '')
+  return `#${limpo}`
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
