@@ -177,25 +177,31 @@ const FIELDS = [
 // paginar, o excedente some da lista e dos KPIs sem nenhum erro.
 const PAGE_SIZE = 1000
 
+// ID da empresa padrão (Bem Aviv). Usado como fallback quando o contexto
+// de empresa ainda não hidratou (usuários V2 não têm sessão Clerk).
+const DEFAULT_COMPANY_ID = '10000000-0000-4000-8000-000000000001'
+
 export async function fetchClients(companyId: string | null): Promise<{
   data: BemAvivClient[]
   error: string | null
 }> {
   if (!supabase) return { data: [], error: 'Supabase não configurado.' }
 
+  // Garante que sempre filtramos por empresa — sem isso, quando companyId
+  // chega null (hidrataçao pendente em usuários V2), todos os clientes de
+  // todas as empresas seriam retornados, causando contagem inconsistente.
+  const effectiveCompanyId = companyId ?? DEFAULT_COMPANY_ID
+
   const all: BemAvivClient[] = []
 
   for (let from = 0; ; from += PAGE_SIZE) {
-    let query = supabase
+    const query = supabase
       .from('bem_aviv_clients')
       .select(FIELDS)
+      .eq('company_id', effectiveCompanyId)
       .order('full_name', { ascending: true })
       .order('id', { ascending: true }) // desempate para paginação estável
       .range(from, from + PAGE_SIZE - 1)
-
-    if (companyId) {
-      query = query.eq('company_id', companyId)
-    }
 
     const { data, error } = await query
 
