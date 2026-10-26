@@ -83,23 +83,63 @@ function adicionarDias(dataBase: string, dias: number): string {
 
 // ─── CRUD ───────────────────────────────────────────────────────────────
 
+export function cleanPedidoCompraForSupabase(p: PedidoCompra): Record<string, any> {
+  return {
+    id: p.id,
+    numero: p.numero,
+    fornecedor: p.fornecedor || '',
+    status: p.status || 'rascunho',
+    dataEmissao: p.dataEmissao || null,
+    dataPrevistaEntrega: p.dataPrevistaEntrega || null,
+    observacao: p.observacao || null,
+    total: Number(p.total) || 0,
+    numeroParcelas: Number(p.numeroParcelas) || 1,
+    formaPagamento: p.formaPagamento || null,
+    contaSaidaTag: p.contaSaidaTag || null,
+    frete: Number(p.frete) || 0,
+    dataPedido: p.dataPedido || null,
+    dataVencimento: p.dataVencimento || null,
+    dataRecebimentoPrevista: p.dataRecebimentoPrevista || null,
+    justificativaDataRecebimento: p.justificativaDataRecebimento || null,
+    recebimentos: p.recebimentos || [],
+    itens: p.itens || [],
+    created_at: p.created_at || new Date().toISOString(),
+    updated_at: p.updated_at || new Date().toISOString(),
+  }
+}
+
 export async function listPedidosCompra(): Promise<PedidoCompra[]> {
+  let localList: PedidoCompra[] = []
+  try {
+    const raw = localStorage.getItem(KEY)
+    if (raw) localList = JSON.parse(raw)
+  } catch {}
+
   let list: PedidoCompra[] = []
   if (supabase) {
     try {
       const { data, error } = await supabase.from(SUPABASE_TABLE).select('*').order('created_at', { ascending: false })
       if (!error && data) {
         list = data as PedidoCompra[]
+        const remoteIds = new Set(list.map((r) => r.id))
+        const pendingLocal = localList.filter((loc) => !remoteIds.has(loc.id))
+
+        if (pendingLocal.length > 0) {
+          try {
+            const cleanPending = pendingLocal.map(cleanPedidoCompraForSupabase)
+            await supabase.from(SUPABASE_TABLE).upsert(cleanPending)
+          } catch {}
+          list = [...pendingLocal, ...list]
+        }
+
+        try {
+          localStorage.setItem(KEY, JSON.stringify(list))
+        } catch {}
+        return list
       }
     } catch {}
   }
-  if (list.length === 0) {
-    try {
-      const raw = localStorage.getItem(KEY)
-      if (raw) list = JSON.parse(raw)
-    } catch {}
-  }
-  return list
+  return localList
 }
 
 export async function savePedidoCompra(pedido: Omit<PedidoCompra, 'id' | 'numero' | 'created_at' | 'updated_at'>): Promise<PedidoCompra> {
@@ -141,7 +181,7 @@ export async function savePedidoCompra(pedido: Omit<PedidoCompra, 'id' | 'numero
 
   if (supabase) {
     try {
-      await supabase.from(SUPABASE_TABLE).insert([newPedido])
+      await supabase.from(SUPABASE_TABLE).insert([cleanPedidoCompraForSupabase(newPedido)])
     } catch {}
   }
 
@@ -160,7 +200,7 @@ export async function updatePedidoCompra(pedido: PedidoCompra): Promise<PedidoCo
 
   if (supabase) {
     try {
-      await supabase.from(SUPABASE_TABLE).upsert(updated)
+      await supabase.from(SUPABASE_TABLE).upsert(cleanPedidoCompraForSupabase(updated))
     } catch {}
   }
 

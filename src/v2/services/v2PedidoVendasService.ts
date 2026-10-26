@@ -193,6 +193,42 @@ function writeToStorage(list: PedidoVenda[]) {
   } catch {}
 }
 
+// ─── Sanitização para Supabase ──────────────────────────────────────────────
+export function cleanPedidoForSupabase(p: PedidoVenda): Record<string, any> {
+  return {
+    id: p.id,
+    numero: p.numero,
+    canal: p.canal || 'distribuicao',
+    status: p.status || 'proposta',
+    cliente_id: p.cliente_id || null,
+    cliente_nome: p.cliente_nome || '',
+    cliente_documento: p.cliente_documento || null,
+    cliente_cidade: p.cliente_cidade || null,
+    tabela_preco_id: p.tabela_preco_id || null,
+    tabela_preco_nome: p.tabela_preco_nome || null,
+    dataEmissao: p.dataEmissao || null,
+    dataPrevistaEntrega: p.dataPrevistaEntrega || null,
+    dataVencimento: p.dataVencimento || null,
+    dataEntrega: p.dataEntrega || null,
+    formaPagamento: p.formaPagamento || 'Boleto',
+    numeroParcelas: Number(p.numeroParcelas) || 1,
+    contaEntradaTag: p.contaEntradaTag || null,
+    frete: Number(p.frete) || 0,
+    observacao: p.observacao || null,
+    subtotal: Number(p.subtotal) || 0,
+    descontoTotal: Number(p.descontoTotal) || 0,
+    total: Number(p.total) || 0,
+    desconto5xPercentual: Number(p.desconto5xPercentual) || 5,
+    total5x: Number(p.total5x) || 0,
+    descontoVistaPercentual: Number(p.descontoVistaPercentual) || 10,
+    totalVista: Number(p.totalVista) || 0,
+    condicaoSelecionada: p.condicaoSelecionada || 'sem_desconto',
+    itens: p.itens || [],
+    created_at: p.created_at || new Date().toISOString(),
+    updated_at: p.updated_at || new Date().toISOString(),
+  }
+}
+
 // ─── CRUD ────────────────────────────────────────────────────────────────────
 
 export async function listPedidosVenda(): Promise<PedidoVenda[]> {
@@ -209,11 +245,17 @@ export async function listPedidosVenda(): Promise<PedidoVenda[]> {
       if (!error && data) {
         list = data as PedidoVenda[]
         const remoteIds = new Set(list.map((r) => r.id))
-        const pendingLocal = localList.filter((loc) => !remoteIds.has(loc.id))
+        const pendingLocal = localList.filter((loc) => !remoteIds.has(loc.id) && !loc.id.startsWith('pv-00'))
 
         if (pendingLocal.length > 0) {
           try {
-            await supabase.from(SUPABASE_TABLE).upsert(pendingLocal)
+            const cleanPending = pendingLocal.map(cleanPedidoForSupabase)
+            const { error: upsertErr } = await supabase.from(SUPABASE_TABLE).upsert(cleanPending)
+            if (upsertErr) {
+              console.error('Erro ao sincronizar pedidos locais pendentes:', upsertErr)
+            } else {
+              console.log('Pedidos locais pendentes sincronizados com sucesso no Supabase:', cleanPending.length)
+            }
           } catch (syncErr) {
             console.warn('Erro ao sincronizar pedidos locais pendentes:', syncErr)
           }
@@ -229,6 +271,30 @@ export async function listPedidosVenda(): Promise<PedidoVenda[]> {
   }
 
   return localList
+}
+
+export async function syncPedidosVendaComSupabase(): Promise<{ ok: boolean; count: number; error?: string }> {
+  if (!supabase) return { ok: false, count: 0, error: 'Supabase não inicializado' }
+  try {
+    const localList = readFromStorage()
+    const { data, error } = await supabase.from(SUPABASE_TABLE).select('*').order('created_at', { ascending: false })
+    if (error) return { ok: false, count: 0, error: error.message }
+    const remoteList = (data as PedidoVenda[]) || []
+    const remoteIds = new Set(remoteList.map((r) => r.id))
+    const pendingLocal = localList.filter((loc) => !remoteIds.has(loc.id) && !loc.id.startsWith('pv-00'))
+
+    if (pendingLocal.length > 0) {
+      const cleanPending = pendingLocal.map(cleanPedidoForSupabase)
+      const { error: upErr } = await supabase.from(SUPABASE_TABLE).upsert(cleanPending)
+      if (upErr) return { ok: false, count: 0, error: upErr.message }
+    }
+
+    const merged = [...pendingLocal, ...remoteList]
+    writeToStorage(merged)
+    return { ok: true, count: merged.length }
+  } catch (err: any) {
+    return { ok: false, count: 0, error: err?.message || String(err) }
+  }
 }
 
 export async function savePedidoVenda(
@@ -266,7 +332,7 @@ export async function savePedidoVenda(
 
   if (supabase) {
     try {
-      const { error: insError } = await supabase.from(SUPABASE_TABLE).insert([novo])
+      const { error: insError } = await supabase.from(SUPABASE_TABLE).insert([cleanPedidoForSupabase(novo)])
       if (insError) {
         console.error('Erro ao salvar pedido de venda no Supabase:', insError)
       }
@@ -291,7 +357,7 @@ export async function updatePedidoVenda(pedido: PedidoVenda): Promise<PedidoVend
 
   if (supabase) {
     try {
-      const { error: upErr } = await supabase.from(SUPABASE_TABLE).upsert(updated)
+      const { error: upErr } = await supabase.from(SUPABASE_TABLE).upsert(cleanPedidoForSupabase(updated))
       if (upErr) {
         console.error('Erro ao atualizar pedido de venda no Supabase:', upErr)
       }

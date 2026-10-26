@@ -42,6 +42,7 @@ import {
   cancelarPedidoVenda,
   voltarPedidoVendaStatus,
   excluirPedidoVenda,
+  syncPedidosVendaComSupabase,
   PedidoVenda,
   PedidoVendaItem,
   StatusVenda,
@@ -344,6 +345,26 @@ export function V2PedidoVendasPage() {
       }
     } finally {
       setLoading(false)
+    }
+  }
+
+  const [isSyncing, setIsSyncing] = useState(false)
+  const handleSincronizarNuvem = async () => {
+    setIsSyncing(true)
+    try {
+      const res = await syncPedidosVendaComSupabase()
+      await loadData()
+      if (res.ok) {
+        if (res.count > 0) {
+          alert(`${res.count} pedido(s) sincronizados com a nuvem com sucesso!`)
+        } else {
+          alert('Todos os pedidos já estão sincronizados com a nuvem!')
+        }
+      } else if (res.error) {
+        alert('Erro ao sincronizar: ' + res.error)
+      }
+    } finally {
+      setIsSyncing(false)
     }
   }
 
@@ -2124,15 +2145,28 @@ export function V2PedidoVendasPage() {
             </div>
           </div>
 
-          <div className="relative w-full lg:max-w-xs">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
-            <input
-              type="text"
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              placeholder="Buscar por cliente, documento ou nº..."
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 pl-10 pr-4 py-2 text-xs font-medium text-slate-800 outline-none focus:border-sky-500 focus:bg-white focus:ring-2 focus:ring-sky-100 transition-all"
-            />
+          <div className="flex items-center gap-2 w-full lg:max-w-sm">
+            <div className="relative flex-1">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+              <input
+                type="text"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Buscar por cliente, documento ou nº..."
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/50 pl-10 pr-4 py-2 text-xs font-medium text-slate-800 outline-none focus:border-sky-500 focus:bg-white focus:ring-2 focus:ring-sky-100 transition-all"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleSincronizarNuvem}
+              disabled={isSyncing || loading}
+              title="Sincronizar pedidos com a nuvem (Supabase)"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:bg-slate-50 active:scale-95 transition shrink-0 cursor-pointer shadow-2xs disabled:opacity-50"
+            >
+              <RotateCcw size={14} className={isSyncing || loading ? 'animate-spin text-sky-600' : 'text-slate-500'} />
+              <span className="hidden sm:inline">Sincronizar</span>
+            </button>
           </div>
         </div>
       </div>
