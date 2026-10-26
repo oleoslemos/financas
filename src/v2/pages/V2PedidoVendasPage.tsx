@@ -1201,6 +1201,44 @@ export function V2PedidoVendasPage() {
       await savePedidoVenda(payload)
     }
 
+    // Sincronizar com CRM (atualizar last_contact_at e criar registro em bem_aviv_client_followups)
+    try {
+      const nowIso = new Date().toISOString()
+      const v2User = getCurrentV2User()
+      const companyIdFinal = activeCompanyId || '10000000-0000-4000-8000-000000000001'
+      const userIdFinal = v2User?.id || v2User?.username || 'v2_user'
+      const userName = v2User?.full_name || v2User?.username || 'V2 Usuário'
+
+      let targetClientId = formClienteId
+      if (!targetClientId && formClienteNome.trim()) {
+        const found = clientes.find(
+          (c) => c.full_name?.toLowerCase().trim() === formClienteNome.toLowerCase().trim()
+        )
+        if (found) targetClientId = found.id
+      }
+
+      if (targetClientId && supabase) {
+        await supabase
+          .from('bem_aviv_clients')
+          .update({ last_contact_at: nowIso })
+          .eq('id', targetClientId)
+
+        const tipoDesc = statusFinal === 'proposta' ? 'Orçamento / Proposta' : 'Pedido de Venda'
+        await supabase.from('bem_aviv_client_followups').insert({
+          user_id: userIdFinal,
+          company_id: companyIdFinal,
+          created_by_name: userName,
+          client_id: targetClientId,
+          contacted_at: nowIso,
+          channel: statusFinal === 'proposta' ? 'PROPOSTA' : 'VENDA',
+          result: `${tipoDesc} ${numeroGerado} - ${formatarMoeda(formTotalComFrete)} (${statusFinal.toUpperCase()})`,
+          notes: formObservacao.trim() || null,
+        })
+      }
+    } catch (crmErr) {
+      console.warn('Erro ao sincronizar venda com CRM:', crmErr)
+    }
+
     await loadData()
     setViewMode('lista')
   }

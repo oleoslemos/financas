@@ -14,6 +14,7 @@ import {
   Search,
   UserCheck,
   Loader2,
+  RotateCcw,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
 import { useCompany } from '../../context/CompanyContext'
@@ -181,28 +182,48 @@ export function V2CrmPage() {
 
   // ── CARREGAMENTO DE DADOS (OLHANDO PARA AS MESMAS TABELAS DO SISTEMA) ──
   const loadData = useCallback(async () => {
-    if (!supabase || !activeCompanyId) {
+    if (!supabase) {
       setLoading(false)
       return
     }
+    const companyIdFinal = activeCompanyId || '10000000-0000-4000-8000-000000000001'
     setLoading(true)
 
-    const [ordersRes, clientsRes] = await Promise.all([
+    const [ordersRes, v2OrdersRes, clientsRes] = await Promise.all([
       supabase
         .from('bem_aviv_sales_orders')
         .select('order_date, total_amount, document_type, status')
-        .eq('company_id', activeCompanyId)
+        .eq('company_id', companyIdFinal)
         .in('document_type', ['ORCAMENTO', 'PEDIDO'])
         .in('status', ['ABERTO', 'FINALIZADO', 'ENTREGA PENDENTE', 'ENTREGA PARCIAL', 'ENTREGUE', 'CANCELADO']),
       supabase
+        .from('v2_pedidos_venda')
+        .select('id, status, total'),
+      supabase
         .from('bem_aviv_clients')
         .select('id, full_name, cpf, last_contact_at, next_followup_at, next_followup_status, phone_1, phone_2, next_followup_note, client_status, commercial_stage, company_id')
-        .eq('company_id', activeCompanyId),
+        .eq('company_id', companyIdFinal),
     ])
 
-    // Calcular pedidos em aberto
+    // Calcular pedidos em aberto (V2 + legado V1)
     let openCount = 0
     let openAmount = 0
+
+    // V2 Pedidos de Venda
+    const v2Orders = (v2OrdersRes.data ?? []) as Array<{
+      id: string
+      status: string
+      total: number
+    }>
+    for (const vo of v2Orders) {
+      const st = (vo.status ?? '').toLowerCase()
+      if (st !== 'entregue' && st !== 'cancelado') {
+        openCount += 1
+        openAmount += Number(vo.total || 0)
+      }
+    }
+
+    // Legado V1 (apenas pedidos em aberto)
     const orders = (ordersRes.data ?? []) as Array<{
       total_amount: number
       document_type: string
@@ -231,11 +252,12 @@ export function V2CrmPage() {
 
   // Buscar últimos follow-ups dos clientes
   useEffect(() => {
-    if (!supabase || !activeCompanyId) {
+    if (!supabase) {
       setLatestContactByClient({})
       setLatestFollowupsReady(true)
       return
     }
+    const companyIdFinal = activeCompanyId || '10000000-0000-4000-8000-000000000001'
     const ids = Array.from(new Set(clients.map((r) => r.id)))
     if (ids.length === 0) {
       setLatestContactByClient({})
@@ -246,7 +268,7 @@ export function V2CrmPage() {
     setLatestFollowupsReady(false)
     void (async () => {
       try {
-        const { latestContact } = await fetchLatestFollowupsByClientIds(supabase, activeCompanyId, ids)
+        const { latestContact } = await fetchLatestFollowupsByClientIds(supabase, companyIdFinal, ids)
         if (cancelled) return
         setLatestContactByClient(latestContact)
       } catch {
@@ -423,7 +445,19 @@ export function V2CrmPage() {
       return
     }
 
-    // Se marcou que realizou contato prévio, salvar em bem_aviv_client_followups
+    // Registrar o agendamento no histórico de follow-ups
+    await supabase.from('bem_aviv_client_followups').insert({
+      user_id: userIdFinal,
+      company_id: companyIdFinal,
+      created_by_name: userName,
+      client_id: scheduleModalClient.id,
+      contacted_at: isoDate,
+      channel: 'AGENDAMENTO',
+      result: scheduleForm.summary ? `STATUS:PENDENTE | ${scheduleForm.summary}` : 'STATUS:PENDENTE',
+      notes: scheduleForm.notes || null,
+    })
+
+    // Se marcou que realizou contato prévio, salvar também em bem_aviv_client_followups
     if (scheduleForm.contact_done) {
       await supabase.from('bem_aviv_client_followups').insert({
         user_id: userIdFinal,
@@ -553,6 +587,16 @@ export function V2CrmPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void loadData()}
+              disabled={loading}
+              title="Recarregar e sincronizar dados do CRM"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 active:bg-slate-100 transition shadow-2xs cursor-pointer disabled:opacity-50"
+            >
+              <RotateCcw size={13} className={loading ? 'animate-spin text-[#0D6BAF]' : 'text-slate-500'} />
+              <span>Sincronizar</span>
+            </button>
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider hidden sm:inline">
               Ambiente V2
             </span>
