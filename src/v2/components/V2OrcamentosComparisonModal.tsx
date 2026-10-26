@@ -96,8 +96,8 @@ export function V2OrcamentosComparisonModal({
   initialBId,
   onAprovarProposta,
 }: Props) {
-  // Controle de visibilidade dos preços unitários (invisível por padrão conforme solicitação)
-  const [mostrarValoresUnitarios, setMostrarValoresUnitarios] = useState(false)
+  // Controle de visibilidade dos valores dos itens (por padrão false = ocultar todos os valores unitários e totais dos itens, mantendo somente o valor total do orçamento)
+  const [mostrarValoresDosItens, setMostrarValoresDosItens] = useState(false)
   const [copiedNotification, setCopiedNotification] = useState(false)
   const [opcaoAtivaMobile, setOpcaoAtivaMobile] = useState<'todas' | string>('todas')
 
@@ -195,10 +195,10 @@ export function V2OrcamentosComparisonModal({
 
         const linhasItens = (prop.itens || [])
           .map((it) => {
-            if (mostrarValoresUnitarios) {
+            if (mostrarValoresDosItens) {
               return `  • ${it.quantidade}x ${it.produto_nome} (${formatarMoeda(it.preco_unitario)}/un) = ${formatarMoeda(it.total)}`
             }
-            return `  • ${it.quantidade}x ${it.produto_nome} - ${formatarMoeda(it.total)}`
+            return `  • ${it.quantidade}x ${it.produto_nome}`
           })
           .join('\n')
 
@@ -295,27 +295,27 @@ Estamos à disposição para aprovar sua opção de preferência!`
           </div>
 
           <div className="flex items-center gap-2 justify-between sm:justify-end">
-            {/* Botão de Alternância de Visibilidade dos Preços Unitários (Invisível por Padrão) */}
+            {/* Botão de Alternância de Visibilidade dos Valores dos Itens (Oculto por Padrão) */}
             <button
               type="button"
-              onClick={() => setMostrarValoresUnitarios(!mostrarValoresUnitarios)}
+              onClick={() => setMostrarValoresDosItens(!mostrarValoresDosItens)}
               title={
-                mostrarValoresUnitarios
-                  ? 'Preços unitários visíveis. Clique para ocultar.'
-                  : 'Preços unitários ocultos. Clique para exibir.'
+                mostrarValoresDosItens
+                  ? 'Valores dos itens visíveis. Clique para ocultar e exibir apenas o total do orçamento.'
+                  : 'Valores dos itens ocultos (apenas total visível). Clique para exibir valores detalhados.'
               }
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer shadow-2xs ${
-                mostrarValoresUnitarios
+                mostrarValoresDosItens
                   ? 'border-indigo-300 bg-indigo-50 text-indigo-700'
                   : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
               }`}
             >
-              {mostrarValoresUnitarios ? <Eye size={15} /> : <EyeOff size={15} className="text-slate-400" />}
+              {mostrarValoresDosItens ? <Eye size={15} /> : <EyeOff size={15} className="text-slate-400" />}
               <span className="hidden sm:inline">
-                {mostrarValoresUnitarios ? 'Preços Unit.: Visíveis' : 'Preços Unit.: Ocultos'}
+                {mostrarValoresDosItens ? 'Preços dos Itens: Visíveis' : 'Preços dos Itens: Ocultos'}
               </span>
               <span className="inline sm:hidden">
-                {mostrarValoresUnitarios ? 'Unitários: Visíveis' : 'Unitários: Ocultos'}
+                {mostrarValoresDosItens ? 'Itens: Visíveis' : 'Itens: Ocultos'}
               </span>
             </button>
 
@@ -579,7 +579,7 @@ Estamos à disposição para aprovar sua opção de preferência!`
                                 <p className="font-semibold text-slate-800 truncate">{it.produto_nome}</p>
                                 <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5">
                                   <span>Qtd: <strong className="text-slate-700">{it.quantidade} un</strong></span>
-                                  {mostrarValoresUnitarios && (
+                                  {mostrarValoresDosItens && (
                                     <>
                                       <span>·</span>
                                       <span>Unit: <strong className="text-slate-700">{formatarMoeda(it.preco_unitario)}</strong></span>
@@ -587,11 +587,13 @@ Estamos à disposição para aprovar sua opção de preferência!`
                                   )}
                                 </div>
                               </div>
-                              <div className="text-right shrink-0">
-                                <span className="font-black text-slate-900 tabular-nums">
-                                  {formatarMoeda(it.total)}
-                                </span>
-                              </div>
+                              {mostrarValoresDosItens && (
+                                <div className="text-right shrink-0">
+                                  <span className="font-black text-slate-900 tabular-nums">
+                                    {formatarMoeda(it.total)}
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           ))
                         ) : (
@@ -633,7 +635,7 @@ Estamos à disposição para aprovar sua opção de preferência!`
                           return (
                             <th
                               key={prop.id}
-                              colSpan={mostrarValoresUnitarios ? 3 : 2}
+                              colSpan={mostrarValoresDosItens ? 3 : 1}
                               className={`px-3 py-2.5 text-center font-bold uppercase ${tema.columnBg} border-l border-slate-200/60`}
                             >
                               <span className={`px-2 py-0.5 rounded ${tema.badgeBg} text-[11px]`}>
@@ -643,16 +645,18 @@ Estamos à disposição para aprovar sua opção de preferência!`
                           )
                         })}
                       </tr>
-                      {/* Sub-header de colunas: Qtd | (Preço Unit se visível) | Total */}
+                      {/* Sub-header de colunas: Qtd | (Preço Unit e Total se visíveis) */}
                       <tr className="border-b border-slate-100 bg-slate-50/30 text-[10px] uppercase text-slate-400">
                         <th className="px-4 py-2 text-left">Produto</th>
                         {propostasComparadas.map((prop) => (
                           <React.Fragment key={prop.id}>
                             <th className="px-2 py-2 text-center border-l border-slate-200/40">Qtd</th>
-                            {mostrarValoresUnitarios && (
-                              <th className="px-2 py-2 text-right">Unitário</th>
+                            {mostrarValoresDosItens && (
+                              <>
+                                <th className="px-2 py-2 text-right">Unitário</th>
+                                <th className="px-3 py-2 text-right">Total</th>
+                              </>
                             )}
-                            <th className="px-3 py-2 text-right">Total</th>
                           </React.Fragment>
                         ))}
                       </tr>
@@ -677,16 +681,18 @@ Estamos à disposição para aprovar sua opção de preferência!`
                                 >
                                   {it ? `${it.quantidade} un` : <span className="text-slate-300">—</span>}
                                 </td>
-                                {mostrarValoresUnitarios && (
-                                  <td className={`px-2 py-3 text-right tabular-nums text-slate-600 ${tema.columnBg}`}>
-                                    {it ? formatarMoeda(it.preco_unitario) : <span className="text-slate-300">—</span>}
-                                  </td>
+                                {mostrarValoresDosItens && (
+                                  <>
+                                    <td className={`px-2 py-3 text-right tabular-nums text-slate-600 ${tema.columnBg}`}>
+                                      {it ? formatarMoeda(it.preco_unitario) : <span className="text-slate-300">—</span>}
+                                    </td>
+                                    <td
+                                      className={`px-3 py-3 text-right tabular-nums font-black text-slate-900 ${tema.columnBg}`}
+                                    >
+                                      {it ? formatarMoeda(it.total) : <span className="text-slate-300">—</span>}
+                                    </td>
+                                  </>
                                 )}
-                                <td
-                                  className={`px-3 py-3 text-right tabular-nums font-black text-slate-900 ${tema.columnBg}`}
-                                >
-                                  {it ? formatarMoeda(it.total) : <span className="text-slate-300">—</span>}
-                                </td>
                               </React.Fragment>
                             )
                           })}
@@ -704,19 +710,30 @@ Estamos à disposição para aprovar sua opção de preferência!`
 
                           return (
                             <React.Fragment key={prop.id}>
-                              <td
-                                className={`px-2 py-3 text-center tabular-nums font-black ${tema.columnBg} border-l border-slate-200`}
-                              >
-                                {totalPecas} un
-                              </td>
-                              {mostrarValoresUnitarios && (
-                                <td className={`px-2 py-3 ${tema.columnBg}`} />
+                              {!mostrarValoresDosItens ? (
+                                <td
+                                  className={`px-3 py-3 text-center tabular-nums ${tema.columnBg} border-l border-slate-200`}
+                                >
+                                  <div className="text-[11px] text-slate-500 font-bold">{totalPecas} un</div>
+                                  <div className={`text-sm font-black ${tema.textColor}`}>
+                                    {formatarMoeda(prop.total)}
+                                  </div>
+                                </td>
+                              ) : (
+                                <>
+                                  <td
+                                    className={`px-2 py-3 text-center tabular-nums font-black ${tema.columnBg} border-l border-slate-200`}
+                                  >
+                                    {totalPecas} un
+                                  </td>
+                                  <td className={`px-2 py-3 ${tema.columnBg}`} />
+                                  <td
+                                    className={`px-3 py-3 text-right tabular-nums text-sm font-black ${tema.textColor} ${tema.columnBg}`}
+                                  >
+                                    {formatarMoeda(prop.total)}
+                                  </td>
+                                </>
                               )}
-                              <td
-                                className={`px-3 py-3 text-right tabular-nums text-sm font-black ${tema.textColor} ${tema.columnBg}`}
-                              >
-                                {formatarMoeda(prop.total)}
-                              </td>
                             </React.Fragment>
                           )
                         })}
