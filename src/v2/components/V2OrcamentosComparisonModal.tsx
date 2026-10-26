@@ -26,7 +26,7 @@ type Props = {
   selectedIds?: string[]
   initialAId?: string | null
   initialBId?: string | null
-  onAprovarProposta?: (id: string) => Promise<void>
+  onAprovarProposta?: (id: string, cancelIds?: string[]) => Promise<void>
 }
 
 function normalizeKey(str: string) {
@@ -259,6 +259,14 @@ Estamos à disposição para aprovar sua opção de preferência!`
     window.print()
   }
 
+  const handleAprovarOpcao = async (prop: PedidoVenda) => {
+    if (!onAprovarProposta) return
+    const cancelIds = propostasComparadas
+      .filter((p) => p.id !== prop.id && p.status === 'proposta')
+      .map((p) => p.id)
+    await onAprovarProposta(prop.id, cancelIds)
+  }
+
   if (!isOpen) return null
 
   // Filtro de exibição para celulares quando o usuário escolhe uma aba específica
@@ -470,7 +478,7 @@ Estamos à disposição para aprovar sua opção de preferência!`
                         <div className="pt-2 print:hidden">
                           <button
                             type="button"
-                            onClick={() => void onAprovarProposta(prop.id)}
+                            onClick={() => void handleAprovarOpcao(prop)}
                             disabled={prop.status !== 'proposta'}
                             className={`w-full inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white shadow-xs transition-all active:scale-95 disabled:opacity-40 cursor-pointer ${tema.btnBg}`}
                           >

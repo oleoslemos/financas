@@ -736,10 +736,38 @@ export function V2PedidoVendasPage() {
   }
 
   // Ações de fluxo de status
-  const handleAprovar = async (id: string) => {
-    if (!confirm('Deseja aprovar esta proposta e torná-la um Pedido de Venda oficial?')) return
+  const handleAprovar = async (id: string, cancelIds?: string[]) => {
+    const pedidoAprovado = pedidos.find((p) => p.id === id)
+    const numFormatado = pedidoAprovado ? formatarNumeroVendaExibicao(pedidoAprovado.numero) : ''
+
+    const temOutros = cancelIds && cancelIds.length > 0
+    let confirmMsg = 'Deseja aprovar esta proposta e torná-la um Pedido de Venda oficial?'
+
+    if (temOutros) {
+      const outrosNumeros = cancelIds
+        .map((cId) => {
+          const p = pedidos.find((item) => item.id === cId)
+          return p ? formatarNumeroVendaExibicao(p.numero) : cId
+        })
+        .join(', ')
+
+      confirmMsg = `Deseja aprovar o orçamento ${numFormatado}?\n\nOs demais orçamentos comparados (${outrosNumeros}) serão automaticamente cancelados e arquivados para consulta na guia "Cancelados".`
+    }
+
+    if (!confirm(confirmMsg)) return
+
     const res = await aprovarPedidoVenda(id)
     if (res.ok) {
+      if (temOutros) {
+        for (const cancelId of cancelIds) {
+          try {
+            await cancelarPedidoVenda(cancelId)
+          } catch (err) {
+            console.error(`Erro ao cancelar proposta comparada ${cancelId}:`, err)
+          }
+        }
+      }
+
       await loadData()
       setIsCompareModalOpen(false)
       if (visualizandoPedido && visualizandoPedido.id === id) {
@@ -2193,7 +2221,7 @@ export function V2PedidoVendasPage() {
                 }`}
               >
                 <span>{aba.label}</span>
-                {aba.value !== 'cancelado' && (
+                {count > 0 && (
                   <span
                     className={`rounded-full px-2 py-0.5 text-[10px] font-black ${
                       isSelected ? 'bg-sky-100 text-sky-800' : 'bg-slate-100 text-slate-500'
