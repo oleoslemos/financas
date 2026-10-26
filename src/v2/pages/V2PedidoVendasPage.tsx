@@ -299,6 +299,7 @@ export function V2PedidoVendasPage() {
   const [formFormaPagamento, setFormFormaPagamento] = useState('Boleto')
   const [formNumeroParcelas, setFormNumeroParcelas] = useState(1)
   const [formDataEmissao, setFormDataEmissao] = useState(() => dataHoje)
+  const [formNumeroManual, setFormNumeroManual] = useState('')
   const [formDataVencimento, setFormDataVencimento] = useState(() => somarDias(dataHoje, 30))
   const [formFrete, setFormFrete] = useState<number>(0)
   const [formContaEntradaTag, setFormContaEntradaTag] = useState('')
@@ -619,6 +620,7 @@ export function V2PedidoVendasPage() {
     setFormFormaPagamento('Boleto')
     setFormNumeroParcelas(1)
     setFormDataEmissao(dataHoje)
+    setFormNumeroManual('')
     setFormDataVencimento(somarDias(dataHoje, 30))
     setFormFrete(0)
     setFormContaEntradaTag(contasBancarias[0]?.nome ? `#${contasBancarias[0].nome}` : '#Inter')
@@ -661,6 +663,7 @@ export function V2PedidoVendasPage() {
     setFormFormaPagamento(pedido.formaPagamento)
     setFormNumeroParcelas(pedido.numeroParcelas || 1)
     setFormDataEmissao(pedido.dataEmissao || dataHoje)
+    setFormNumeroManual(pedido.numero || '')
     setFormDataVencimento(pedido.dataVencimento || somarDias(pedido.dataEmissao || dataHoje, 30))
     setFormFrete(pedido.frete || 0)
     setFormContaEntradaTag(pedido.contaEntradaTag || '')
@@ -716,6 +719,7 @@ export function V2PedidoVendasPage() {
     setFormFormaPagamento(original.formaPagamento)
     setFormNumeroParcelas(original.numeroParcelas || 1)
     setFormDataEmissao(dataHoje)
+    setFormNumeroManual('')
     setFormDataVencimento(somarDias(dataHoje, 30))
     setFormFrete(original.frete || 0)
     setFormContaEntradaTag(original.contaEntradaTag || '')
@@ -1159,7 +1163,9 @@ export function V2PedidoVendasPage() {
       return
     }
 
-    const numeroGerado = pedidoEdicao ? pedidoEdicao.numero : gerarNumeroVenda(pedidos, formDataEmissao || dataHoje)
+    const numeroGerado = formNumeroManual.trim()
+      ? (formNumeroManual.trim().startsWith('#') ? formNumeroManual.trim() : `#${formNumeroManual.trim()}`)
+      : (pedidoEdicao ? pedidoEdicao.numero : gerarNumeroVenda(pedidos, formDataEmissao || dataHoje))
 
     const payload: Omit<PedidoVenda, 'id' | 'created_at' | 'updated_at'> & { id?: string } = {
       id: pedidoEdicao ? pedidoEdicao.id : undefined,
@@ -1229,7 +1235,7 @@ export function V2PedidoVendasPage() {
           company_id: companyIdFinal,
           created_by_name: userName,
           client_id: targetClientId,
-          contacted_at: nowIso,
+          contacted_at: formDataEmissao ? `${formDataEmissao}T12:00:00.000Z` : nowIso,
           channel: statusFinal === 'proposta' ? 'PROPOSTA' : 'VENDA',
           result: `${tipoDesc} ${numeroGerado} - ${formatarMoeda(formTotalComFrete)} (${statusFinal.toUpperCase()})`,
           notes: formObservacao.trim() || null,
@@ -1341,7 +1347,7 @@ export function V2PedidoVendasPage() {
                 <div className="flex items-center gap-2">
                   <User size={18} className="text-sky-600" />
                   <h3 className="text-xs sm:text-sm font-bold text-slate-900 uppercase">
-                    1. Dados do Cliente e Canal Comercial
+                    1. Dados da Proposta, Data e Cliente
                   </h3>
                 </div>
 
@@ -1355,6 +1361,61 @@ export function V2PedidoVendasPage() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {/* Data da Proposta / Emissão (Retroativo para pedidos antigos) */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold uppercase text-slate-500 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-sky-800 font-extrabold">
+                      <Calendar size={13} className="text-sky-600" />
+                      Data da Proposta *
+                    </span>
+                    <span className="text-[10px] text-sky-700 font-semibold bg-sky-50 px-1.5 py-0.5 rounded">
+                      Permite retroativa
+                    </span>
+                  </label>
+                  <input
+                    type="date"
+                    value={formDataEmissao}
+                    onChange={(e) => {
+                      const newDate = e.target.value
+                      setFormDataEmissao(newDate)
+                      if (newDate) {
+                        setFormDataVencimento(somarDias(newDate, 30))
+                      }
+                    }}
+                    className="w-full rounded-xl border-2 border-sky-300 bg-white px-3.5 py-2.5 text-sm font-bold text-slate-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 cursor-pointer shadow-2xs"
+                  />
+                </div>
+
+                {/* Número do Pedido / Legado (Opcional) */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold uppercase text-slate-500 flex items-center justify-between">
+                    <span>Nº da Proposta / Pedido</span>
+                    <span className="text-[10px] text-slate-400 font-normal">
+                      (Vazio = auto)
+                    </span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formNumeroManual}
+                    onChange={(e) => setFormNumeroManual(e.target.value)}
+                    placeholder={pedidoEdicao ? pedidoEdicao.numero : `Ex: ${gerarNumeroVenda(pedidos, formDataEmissao || dataHoje)}`}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none focus:border-sky-500 focus:bg-white focus:ring-2 focus:ring-sky-100"
+                  />
+                </div>
+
+                {/* Canal de Venda */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold uppercase text-slate-500">Canal de Venda</label>
+                  <select
+                    value={formCanal}
+                    onChange={(e) => setFormCanal(e.target.value as CanalVenda)}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 cursor-pointer"
+                  >
+                    <option value="distribuicao">Distribuição</option>
+                    <option value="representacao">Representação</option>
+                  </select>
+                </div>
+
                 {/* Autocomplete de Cliente */}
                 <div className="sm:col-span-2 space-y-1 relative" ref={clienteDropdownRef}>
                   <label className="text-xs font-bold uppercase text-slate-500 flex items-center justify-between">
@@ -1426,19 +1487,6 @@ export function V2PedidoVendasPage() {
                       )}
                     </div>
                   )}
-                </div>
-
-                {/* Canal de Venda */}
-                <div className="space-y-1">
-                  <label className="text-xs font-bold uppercase text-slate-500">Canal de Venda</label>
-                  <select
-                    value={formCanal}
-                    onChange={(e) => setFormCanal(e.target.value as CanalVenda)}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 cursor-pointer"
-                  >
-                    <option value="distribuicao">Distribuição</option>
-                    <option value="representacao">Representação</option>
-                  </select>
                 </div>
 
                 {/* CPF / CNPJ */}
@@ -1675,13 +1723,27 @@ export function V2PedidoVendasPage() {
               </div>
 
               <div className="space-y-3">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#475569' }}>Data do Pedido</label>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold uppercase text-slate-500 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-emerald-800 font-extrabold">
+                      <Calendar size={13} className="text-emerald-600" />
+                      Data da Proposta / Emissão
+                    </span>
+                    <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded">
+                      Retroativo
+                    </span>
+                  </label>
                   <input
                     type="date"
                     value={formDataEmissao}
-                    onChange={(e) => setFormDataEmissao(e.target.value)}
-                    style={{ padding: '8px 12px', borderRadius: 8, border: '1.5px solid #E2E8F0', fontSize: 14, color: '#0F172A', outline: 'none' }}
+                    onChange={(e) => {
+                      const newDate = e.target.value
+                      setFormDataEmissao(newDate)
+                      if (newDate) {
+                        setFormDataVencimento(somarDias(newDate, 30))
+                      }
+                    }}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none focus:border-emerald-500 cursor-pointer"
                   />
                 </div>
 
@@ -1700,26 +1762,26 @@ export function V2PedidoVendasPage() {
                   </select>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#475569' }}>Frete (R$)</label>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold uppercase text-slate-500">Frete (R$)</label>
                   <input
                     type="number"
                     min={0}
                     step={0.01}
                     value={formFrete}
                     onChange={(e) => setFormFrete(Number(e.target.value) || 0)}
-                    style={{ padding: '8px 12px', borderRadius: 8, border: '1.5px solid #E2E8F0', fontSize: 14, color: '#0F172A', outline: 'none' }}
                     placeholder="0,00"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none focus:border-emerald-500"
                   />
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#475569' }}>Data de Vencimento</label>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold uppercase text-slate-500">Data de Vencimento</label>
                   <input
                     type="date"
                     value={formDataVencimento}
                     onChange={(e) => setFormDataVencimento(e.target.value)}
-                    style={{ padding: '8px 12px', borderRadius: 8, border: '1.5px solid #E2E8F0', fontSize: 14, color: '#0F172A', outline: 'none' }}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none focus:border-emerald-500 cursor-pointer"
                   />
                 </div>
 
