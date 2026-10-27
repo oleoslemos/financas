@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import { V2ClientDrawer } from '../components/V2ClientDrawer'
+import { fetchClient, BemAvivClient } from '../services/v2ClientesService'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   Calendar,
+  User,
   Clock,
   Users,
   ShoppingBag,
@@ -179,6 +182,47 @@ export function V2CrmPage() {
   })
   const [contactSaving, setContactSaving] = useState(false)
   const [selectedHistoryClient, setSelectedHistoryClient] = useState<ClientRow | null>(null)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [drawerClient, setDrawerClient] = useState<BemAvivClient | null>(null)
+  const [loadingClientDrawer, setLoadingClientDrawer] = useState(false)
+
+  const handleOpenClientDrawer = async (clientId: string) => {
+    setLoadingClientDrawer(true)
+    try {
+      const res = await fetchClient(clientId)
+      if (res.data) {
+        setDrawerClient(res.data)
+        setDrawerOpen(true)
+      } else {
+        alert('Não foi possível carregar os dados completos do cliente.')
+      }
+    } catch (err) {
+      console.error('Erro ao abrir cadastro de cliente:', err)
+    } finally {
+      setLoadingClientDrawer(false)
+    }
+  }
+
+  const handleClientDrawerSaved = (updated: BemAvivClient) => {
+    setDrawerClient(updated)
+    setClients((prev) =>
+      prev.map((c) =>
+        c.id === updated.id
+          ? {
+              ...c,
+              full_name: updated.full_name,
+              phone_1: updated.phone_1,
+              phone_2: updated.phone_2,
+              next_followup_at: updated.next_followup_at,
+              next_followup_note: updated.next_followup_note,
+              client_status: updated.client_status,
+              commercial_stage: updated.commercial_stage,
+            }
+          : c
+      )
+    )
+    void loadData()
+  }
 
   // ── CARREGAMENTO DE DADOS (OLHANDO PARA AS MESMAS TABELAS DO SISTEMA) ──
   const loadData = useCallback(async () => {
@@ -737,101 +781,103 @@ export function V2CrmPage() {
               </div>
             </div>
 
-            {/* ── SEÇÃO INFERIOR: AGENDA DO MÊS (ESQUERDA) + QUEM CONTATAR PRIMEIRO (DIREITA) ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-              {/* ── COLUNA DA ESQUERDA: AGENDA DE OUTUBRO / MÊS ── */}
-              <div className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs space-y-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900">
-                      Agenda de {selectedMonthName.toLowerCase()}
-                    </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">Follow-ups marcados no mês</p>
+            {/* ── SEÇÃO DA AGENDA: CALENDÁRIO (ESQUERDA) + REGISTROS DO DIA (DIREITA) EM TELAS MAIORES ── */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+              {/* ── CARD 1: AGENDA DE {selectedMonthName.toUpperCase()} (CALENDÁRIO) ── */}
+              <div className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs space-y-4 flex flex-col justify-between">
+                <div className="space-y-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900">
+                        Agenda de {selectedMonthName.toLowerCase()}
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-0.5">Follow-ups marcados no mês</p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => shiftCalendarMonth(-1)}
+                        className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition-colors cursor-pointer"
+                        title="Mês anterior"
+                      >
+                        <ChevronLeft size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => shiftCalendarMonth(1)}
+                        className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition-colors cursor-pointer"
+                        title="Próximo mês"
+                      >
+                        <ChevronRight size={15} />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => shiftCalendarMonth(-1)}
-                      className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition-colors cursor-pointer"
-                      title="Mês anterior"
-                    >
-                      <ChevronLeft size={15} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => shiftCalendarMonth(1)}
-                      className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition-colors cursor-pointer"
-                      title="Próximo mês"
-                    >
-                      <ChevronRight size={15} />
-                    </button>
-                  </div>
-                </div>
 
-                {/* Grade do Calendário Mensal */}
-                <div className="w-full">
-                  <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-slate-400 pb-1">
-                    {WEEKDAYS_SHORT.map((w) => (
-                      <div key={w}>{w}</div>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-7 gap-1 pt-1">
-                    {cells.map((cell, idx) => {
-                      if (!cell.date) {
-                        return <div key={`empty-${idx}`} className="h-11 sm:h-12" />
-                      }
-                      const key = formatYmd(cell.date)
-                      const n = countByDayInViewMonth.get(key) ?? 0
-                      const todayKey = formatYmd(now)
-                      const isToday = todayKey === key
-                      const isPast = key < todayKey
-                      const isSelected = selectedDay === key
+                  {/* Grade do Calendário Mensal */}
+                  <div className="w-full">
+                    <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-slate-400 pb-1">
+                      {WEEKDAYS_SHORT.map((w) => (
+                        <div key={w}>{w}</div>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-7 gap-1 pt-1">
+                      {cells.map((cell, idx) => {
+                        if (!cell.date) {
+                          return <div key={`empty-${idx}`} className="h-11 sm:h-12" />
+                        }
+                        const key = formatYmd(cell.date)
+                        const n = countByDayInViewMonth.get(key) ?? 0
+                        const todayKey = formatYmd(now)
+                        const isToday = todayKey === key
+                        const isPast = key < todayKey
+                        const isSelected = selectedDay === key
 
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => setSelectedDay(key)}
-                          className={`relative flex h-11 sm:h-13 flex-col items-center justify-between p-1 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
-                            isToday
-                              ? 'bg-[#0D6BAF] text-white border-[#0D6BAF] shadow-xs'
-                              : n > 0 && isPast
-                              ? 'bg-amber-50 text-amber-950 border-amber-200 font-bold shadow-2xs hover:border-amber-400'
-                              : n > 0
-                              ? 'bg-sky-50 text-[#0D6BAF] border-sky-200 font-bold shadow-2xs hover:border-sky-400'
-                              : 'border-slate-100 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50/50'
-                          } ${isSelected && !isToday ? 'ring-2 ring-[#0D6BAF] ring-offset-1' : ''} ${
-                            isSelected && isToday ? 'ring-2 ring-sky-400 ring-offset-1' : ''
-                          }`}
-                        >
-                          <span
-                            className={`text-[11px] self-center ${
-                              isToday ? 'text-white font-bold' : 'text-slate-800'
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => setSelectedDay(key)}
+                            className={`relative flex h-11 sm:h-13 flex-col items-center justify-between p-1 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                              isToday
+                                ? 'bg-[#0D6BAF] text-white border-[#0D6BAF] shadow-xs'
+                                : n > 0 && isPast
+                                ? 'bg-amber-50 text-amber-950 border-amber-200 font-bold shadow-2xs hover:border-amber-400'
+                                : n > 0
+                                ? 'bg-sky-50 text-[#0D6BAF] border-sky-200 font-bold shadow-2xs hover:border-sky-400'
+                                : 'border-slate-100 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50/50'
+                            } ${isSelected && !isToday ? 'ring-2 ring-[#0D6BAF] ring-offset-1' : ''} ${
+                              isSelected && isToday ? 'ring-2 ring-sky-400 ring-offset-1' : ''
                             }`}
                           >
-                            {cell.date.getDate()}
-                          </span>
-                          {isToday ? (
-                            <span className="rounded bg-white/20 px-1 py-0.5 text-[8px] font-extrabold uppercase tracking-tight text-white">
-                              Hoje
-                            </span>
-                          ) : n > 0 ? (
                             <span
-                              className={`rounded px-1 py-0.5 text-[8px] leading-none text-center font-extrabold uppercase tracking-tight ${
-                                isPast ? 'text-amber-900 bg-amber-200/60' : 'text-[#0D6BAF] bg-sky-200/60'
+                              className={`text-[11px] self-center ${
+                                isToday ? 'text-white font-bold' : 'text-slate-800'
                               }`}
                             >
-                              {n} {isPast ? 'pend.' : 'follow-up'}
+                              {cell.date.getDate()}
                             </span>
-                          ) : null}
-                        </button>
-                      )
-                    })}
+                            {isToday ? (
+                              <span className="rounded bg-white/20 px-1 py-0.5 text-[8px] font-extrabold uppercase tracking-tight text-white">
+                                Hoje
+                              </span>
+                            ) : n > 0 ? (
+                              <span
+                                className={`rounded px-1 py-0.5 text-[8px] leading-none text-center font-extrabold uppercase tracking-tight ${
+                                  isPast ? 'text-amber-900 bg-amber-200/60' : 'text-[#0D6BAF] bg-sky-200/60'
+                                }`}
+                              >
+                                {n} {isPast ? 'pend.' : 'follow-up'}
+                              </span>
+                            ) : null}
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
                 </div>
 
                 {/* Legenda do Calendário */}
-                <div className="flex flex-wrap items-center gap-3 text-[10px] text-slate-500 pt-2 border-t border-slate-100">
+                <div className="flex flex-wrap items-center gap-3 text-[10px] text-slate-500 pt-3 border-t border-slate-100">
                   <span className="flex items-center gap-1.5 font-medium">
                     <span className="w-2.5 h-2.5 rounded-sm bg-[#0D6BAF]" />
                     Hoje
@@ -845,17 +891,19 @@ export function V2CrmPage() {
                     Passou sem registro
                   </span>
                 </div>
+              </div>
 
-                {/* ── RELAÇÃO DE CONTATOS DO DIA SELECIONADO (SEMPRE MOSTRAR O DIA SELECIONADO CONFORME PEDIDO) ── */}
-                <div className="rounded-xl border border-slate-200/90 bg-slate-50/70 p-4 space-y-3">
-                  <div className="flex items-center justify-between gap-2 border-b border-slate-200/70 pb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[#0D6BAF] text-white">
-                        <Calendar size={13} />
+              {/* ── CARD 2: RELAÇÃO DE CONTATOS DO DIA SELECIONADO (AO LADO DO CALENDÁRIO EM TELAS MAIORES) ── */}
+              <div className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs space-y-4 flex flex-col justify-between">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-2.5">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#0D6BAF] text-white shadow-2xs">
+                        <Calendar size={16} />
                       </span>
                       <div>
-                        <h4 className="text-xs font-bold text-slate-900">{selectedDayFormatted}</h4>
-                        <p className="text-[10px] text-slate-500 font-medium">
+                        <h4 className="text-sm font-bold text-slate-900">{selectedDayFormatted}</h4>
+                        <p className="text-xs text-slate-500 font-medium">
                           {selectedDayClients.length === 0
                             ? 'Nenhum agendamento para este dia'
                             : `${selectedDayClients.length} ${
@@ -867,11 +915,11 @@ export function V2CrmPage() {
                   </div>
 
                   {selectedDayClients.length === 0 ? (
-                    <div className="py-3 text-center text-xs text-slate-400 font-medium">
+                    <div className="py-12 text-center text-xs text-slate-400 font-medium">
                       Nenhum contato marcado para esta data.
                     </div>
                   ) : (
-                    <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+                    <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
                       {selectedDayClients.map((client) => {
                         const parsed = splitFollowupNote(client.next_followup_note)
                         const phone = client.phone_1 || client.phone_2
@@ -880,14 +928,19 @@ export function V2CrmPage() {
                         return (
                           <div
                             key={client.id}
-                            className="p-3 rounded-xl border border-slate-200 bg-white shadow-2xs space-y-2"
+                            className="p-3.5 rounded-xl border border-slate-200 bg-white shadow-2xs space-y-2 hover:border-slate-300 transition-colors"
                           >
                             <div className="flex items-center justify-between gap-2">
-                              <h5 className="text-xs font-bold text-slate-900 truncate">
+                              <button
+                                type="button"
+                                onClick={() => void handleOpenClientDrawer(client.id)}
+                                className="text-left text-xs font-bold text-slate-900 hover:text-[#0D6BAF] hover:underline truncate cursor-pointer transition"
+                                title="Visualizar e editar cadastro do cliente"
+                              >
                                 {client.full_name}
-                              </h5>
+                              </button>
                               {phone && (
-                                <span className="text-[10px] font-semibold text-slate-400">
+                                <span className="text-[10px] font-semibold text-slate-400 shrink-0">
                                   {formatPhone(phone)}
                                 </span>
                               )}
@@ -900,7 +953,7 @@ export function V2CrmPage() {
                             )}
 
                             {/* Ações */}
-                            <div className="flex items-center gap-1.5 pt-1">
+                            <div className="flex flex-wrap items-center gap-1.5 pt-1">
                               {waUrl && (
                                 <a
                                   href={waUrl}
@@ -926,6 +979,15 @@ export function V2CrmPage() {
                               >
                                 Agendar
                               </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleOpenClientDrawer(client.id)}
+                                className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-2 py-1 text-[11px] font-bold transition cursor-pointer shadow-2xs"
+                                title="Visualizar e editar cadastro completo"
+                              >
+                                <User size={12} className="text-slate-500" />
+                                <span>Cadastro</span>
+                              </button>
                             </div>
                           </div>
                         )
@@ -938,126 +1000,138 @@ export function V2CrmPage() {
                 <button
                   type="button"
                   onClick={() => handleSelectTab('follow-up')}
-                  className="w-full rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 py-2.5 text-xs font-bold uppercase tracking-wider transition cursor-pointer shadow-xs active:scale-95"
+                  className="w-full rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 py-2.5 text-xs font-bold uppercase tracking-wider transition cursor-pointer shadow-xs active:scale-95 mt-3"
                 >
                   Abrir Agenda Completa
                 </button>
               </div>
+            </div>
 
-              {/* ── COLUNA DA DIREITA: QUEM CONTATAR PRIMEIRO ── */}
-              {/* REQUISITO: "na lista quem contatar primeiro, manter a lista excluindo a lista do dia que aparece debaixo da agenda" */}
-              <div className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs space-y-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900">Quem contatar primeiro</h3>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Os mais atrasados no topo. Mostrando {topCriticalClients.length} de{' '}
-                      {criticalTimelineStats.total}.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleSelectTab('follow-up')}
-                    className="rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-3 py-1.5 text-xs font-bold transition-all cursor-pointer shadow-xs shrink-0"
-                  >
-                    Ver todos os {criticalTimelineStats.total}
-                  </button>
-                </div>
-
-                {/* Lista dos mais atrasados (sem os que já estão sob a agenda) */}
-                {topCriticalClients.length === 0 ? (
-                  <p className="py-8 text-center text-xs text-slate-400 font-medium">
-                    Nenhum outro contato atrasado pendente no momento.
+            {/* ── SEÇÃO QUEM CONTATAR PRIMEIRO (LOGO ABAIXO DO CALENDÁRIO) ── */}
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs space-y-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Quem contatar primeiro</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Os mais atrasados no topo. Mostrando {topCriticalClients.length} de{' '}
+                    {criticalTimelineStats.total}.
                   </p>
-                ) : (
-                  <div className="space-y-3">
-                    {topCriticalClients.map(({ client, isOverdue, lastTouchIso }) => {
-                      const fullClient = clients.find((c) => c.id === client.id) || (client as ClientRow)
-                      const rawPhone = fullClient.phone_1 || fullClient.phone_2
-                      const waUrl = buildWhatsappUrl(rawPhone)
-                      const diffDays = fullClient.next_followup_at
-                        ? Math.floor((Date.now() - new Date(fullClient.next_followup_at).getTime()) / 86_400_000)
-                        : 0
-
-                      return (
-                        <div
-                          key={client.id}
-                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="text-sm font-bold text-slate-900 truncate">
-                                {fullClient.full_name}
-                              </p>
-                              {isOverdue && diffDays > 0 && (
-                                <span className="rounded-md bg-amber-100/70 border border-amber-200/80 px-1.5 py-0.5 text-[10px] font-bold text-amber-900">
-                                  Atrasado há {diffDays} dias
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-[11px] text-slate-500 mt-0.5">
-                              {lastTouchIso
-                                ? `Último contato ${formatDateOnly(lastTouchIso)}`
-                                : 'Sem contato prévio'}
-                              {fullClient.next_followup_at
-                                ? ` · Próximo previsto ${formatDateOnly(fullClient.next_followup_at)}`
-                                : ''}
-                            </p>
-                            {rawPhone && (
-                              <p className="text-[10px] text-slate-400 mt-0.5">
-                                Tel: {formatPhone(rawPhone)}
-                              </p>
-                            )}
-                          </div>
-
-                          {/* Botões de Ação */}
-                          <div className="flex flex-wrap items-center gap-1.5 shrink-0 self-start sm:self-center">
-                            {waUrl ? (
-                              <a
-                                href={waUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/40 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-2.5 py-1.5 text-xs font-bold transition shadow-2xs"
-                                title="Abrir no WhatsApp"
-                              >
-                                <MessageCircle size={13} className="text-emerald-600" />
-                                <span className="hidden sm:inline">WhatsApp</span>
-                              </a>
-                            ) : (
-                              <button
-                                type="button"
-                                disabled
-                                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 text-slate-400 px-2 py-1.5 text-xs font-medium cursor-not-allowed opacity-60"
-                              >
-                                <MessageCircle size={13} />
-                                <span className="hidden sm:inline">WhatsApp</span>
-                              </button>
-                            )}
-
-                            <button
-                              type="button"
-                              onClick={() => openContactModal(fullClient)}
-                              className="rounded-lg bg-[#0D6BAF] hover:bg-[#095287] text-white px-3 py-1.5 text-xs font-bold transition cursor-pointer shrink-0 shadow-xs active:scale-95"
-                            >
-                              Registrar contato
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => openScheduleModal(fullClient)}
-                              className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-2.5 py-1.5 text-xs font-bold transition cursor-pointer shrink-0 shadow-xs active:scale-95"
-                              title="Agendar retorno"
-                            >
-                              <CalendarPlus size={13} className="text-slate-600" />
-                              <span className="hidden sm:inline">Agendar</span>
-                            </button>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleSelectTab('follow-up')}
+                  className="rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-3 py-1.5 text-xs font-bold transition-all cursor-pointer shadow-xs shrink-0"
+                >
+                  Ver todos os {criticalTimelineStats.total}
+                </button>
               </div>
+
+              {/* Lista dos mais atrasados */}
+              {topCriticalClients.length === 0 ? (
+                <p className="py-8 text-center text-xs text-slate-400 font-medium">
+                  Nenhum outro contato atrasado pendente no momento.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {topCriticalClients.map(({ client, isOverdue, lastTouchIso }) => {
+                    const fullClient = clients.find((c) => c.id === client.id) || (client as ClientRow)
+                    const rawPhone = fullClient.phone_1 || fullClient.phone_2
+                    const waUrl = buildWhatsappUrl(rawPhone)
+                    const diffDays = fullClient.next_followup_at
+                      ? Math.floor((Date.now() - new Date(fullClient.next_followup_at).getTime()) / 86_400_000)
+                      : 0
+
+                    return (
+                      <div
+                        key={client.id}
+                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void handleOpenClientDrawer(client.id)}
+                              className="text-left text-sm font-bold text-slate-900 hover:text-[#0D6BAF] hover:underline truncate cursor-pointer transition"
+                              title="Visualizar e editar cadastro completo"
+                            >
+                              {fullClient.full_name}
+                            </button>
+                            {isOverdue && diffDays > 0 && (
+                              <span className="rounded-md bg-amber-100/70 border border-amber-200/80 px-1.5 py-0.5 text-[10px] font-bold text-amber-900">
+                                Atrasado há {diffDays} dias
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-0.5">
+                            {lastTouchIso
+                              ? `Último contato ${formatDateOnly(lastTouchIso)}`
+                              : 'Sem contato prévio'}{' '}
+                            · Próximo previsto {formatDateOnly(fullClient.next_followup_at)}
+                          </p>
+                          {rawPhone && (
+                            <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                              Tel: {formatPhone(rawPhone)}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Ações */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          {waUrl ? (
+                            <a
+                              href={waUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/40 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-2.5 py-1.5 text-xs font-bold transition shadow-2xs"
+                              title="Abrir no WhatsApp"
+                            >
+                              <MessageCircle size={13} className="text-emerald-600" />
+                              <span className="hidden sm:inline">WhatsApp</span>
+                            </a>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled
+                              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 text-slate-400 px-2 py-1.5 text-xs font-medium cursor-not-allowed opacity-60"
+                            >
+                              <MessageCircle size={13} />
+                              <span className="hidden sm:inline">WhatsApp</span>
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => openContactModal(fullClient)}
+                            className="rounded-lg bg-[#0D6BAF] hover:bg-[#095287] text-white px-3 py-1.5 text-xs font-bold transition cursor-pointer shrink-0 shadow-xs active:scale-95"
+                          >
+                            Registrar contato
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => openScheduleModal(fullClient)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-2.5 py-1.5 text-xs font-bold transition cursor-pointer shrink-0 shadow-xs active:scale-95"
+                            title="Agendar retorno"
+                          >
+                            <CalendarPlus size={13} className="text-slate-600" />
+                            <span className="hidden sm:inline">Agendar</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => void handleOpenClientDrawer(client.id)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-2.5 py-1.5 text-xs font-bold transition cursor-pointer shrink-0 shadow-xs active:scale-95"
+                            title="Visualizar e editar cadastro completo do cliente"
+                          >
+                            <User size={13} className="text-slate-500" />
+                            <span className="hidden sm:inline">Cadastro</span>
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1069,6 +1143,7 @@ export function V2CrmPage() {
           <FollowupTabContent
             clients={clients}
             onSelectClient={setSelectedHistoryClient}
+            onOpenClientDrawer={(id) => void handleOpenClientDrawer(id)}
           />
         )}
 
@@ -1258,7 +1333,26 @@ export function V2CrmPage() {
           </div>
         </div>
       )}
-      {/* ── MODAL FICHA DE HISTÓRICO DE FOLLOW-UP DO CLIENTE ── */}
+            {/* Indicador de carregamento dos dados do cliente */}
+      {loadingClientDrawer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-xs">
+          <div className="flex items-center gap-3 rounded-2xl bg-white px-5 py-3 shadow-xl border border-slate-200">
+            <Loader2 className="animate-spin text-[#0D6BAF]" size={20} />
+            <span className="text-xs font-bold text-slate-700">Carregando dados do cliente...</span>
+          </div>
+        </div>
+      )}
+
+      {/* ── GAVETA DE VISUALIZAÇÃO E EDIÇÃO DO CLIENTE NO CRM ── */}
+      <V2ClientDrawer
+        open={drawerOpen}
+        client={drawerClient}
+        companyId={activeCompanyId}
+        onClose={() => setDrawerOpen(false)}
+        onSaved={handleClientDrawerSaved}
+        onOpenClient={(newId) => void handleOpenClientDrawer(newId)}
+      />
+{/* ── MODAL FICHA DE HISTÓRICO DE FOLLOW-UP DO CLIENTE ── */}
       {selectedHistoryClient && (
         <V2ClientFollowupSheet
           client={selectedHistoryClient}
@@ -1281,9 +1375,11 @@ export function V2CrmPage() {
 function FollowupTabContent({
   clients,
   onSelectClient,
+  onOpenClientDrawer,
 }: {
   clients: ClientRow[]
   onSelectClient: (client: ClientRow) => void
+  onOpenClientDrawer?: (clientId: string) => void
 }) {
   const [busca, setBusca] = useState('')
   const [filtroStatus, setFiltroStatus] = useState<'TODOS' | 'VENCIDOS' | 'HOJE' | 'PROXIMOS_7' | 'SEM_AGENDAMENTO'>('TODOS')
@@ -1439,7 +1535,18 @@ function FollowupTabContent({
                         {parsed.summary || parsed.details || '—'}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <div className="flex items-center justify-end">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {onOpenClientDrawer && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenClientDrawer(client.id)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-2.5 py-1.5 text-xs font-bold transition shadow-2xs cursor-pointer active:scale-95"
+                              title="Visualizar e editar cadastro completo"
+                            >
+                              <User size={13} className="text-slate-500" />
+                              <span className="hidden sm:inline">Cadastro</span>
+                            </button>
+                          )}
                           {waUrl ? (
                             <a
                               href={waUrl}
