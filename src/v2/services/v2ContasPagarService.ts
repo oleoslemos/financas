@@ -598,10 +598,58 @@ export async function excluirLancamentoAberto(id: string, usuarioNome?: string):
   return true
 }
 
+export async function cancelarLancamento(
+  id: string,
+  motivo?: string,
+  usuarioNome?: string
+): Promise<ContaPagar | null> {
+  const current = readFromStorage()
+  const conta = current.find((c) => c.id === id)
+  if (!conta) return null
+
+  if (conta.status === 'paga') {
+    return null
+  }
+
+  const contaCancelada: ContaPagar = {
+    ...conta,
+    status: 'cancelada',
+    updated_at: new Date().toISOString(),
+  }
+
+  const updatedList = current.map((c) => (c.id === id ? contaCancelada : c))
+  writeToStorage(updatedList)
+
+  if (supabase) {
+    try {
+      await supabase.from(SUPABASE_TABLE).upsert(contaCancelada)
+    } catch {}
+  }
+
+  void registrarAuditoria({
+    usuario_nome: usuarioNome || 'Usuário',
+    area: 'Financeiro',
+    objeto: conta.descricao,
+    o_que_mudou: 'Lançamento financeiro cancelado',
+    detalhe: {
+      acao_titulo: 'Lançamento cancelado',
+      subtitulo: `${conta.descricao} · ${conta.fornecedor || ''}`,
+      mudancas: [
+        { campo: 'Status', antes: conta.status, depois: 'cancelada' },
+        ...(motivo ? [{ campo: 'Motivo', antes: '—', depois: motivo }] : []),
+      ],
+      link_objeto: '/v2/contas-pagar',
+    },
+  })
+
+  return contaCancelada
+}
+
 export async function estornarBaixaParcela(
   contaId: string,
   _numeroParcela: number
 ): Promise<ContaPagar | null> {
   return estornarLancamento(contaId)
 }
+
 

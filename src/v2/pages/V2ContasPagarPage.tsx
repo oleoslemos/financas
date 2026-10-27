@@ -37,6 +37,7 @@ import {
   updateContaPagar,
   baixarLancamento,
   estornarLancamento,
+  cancelarLancamento,
   excluirLancamentoAberto,
   ContaPagar,
   BaixarLancamentoParams,
@@ -84,7 +85,7 @@ export function V2ContasPagarPage() {
   const [baixaModal, setBaixaModal] = useState<ContaPagar | null>(null)
   const [detalheModal, setDetalheModal] = useState<{
     conta: ContaPagar
-    modo: 'detalhe_pago' | 'estorno' | 'excluir'
+    modo: 'detalhe' | 'detalhe_pago' | 'estorno' | 'excluir'
   } | null>(null)
 
   // Carga inicial
@@ -161,7 +162,7 @@ export function V2ContasPagarPage() {
     })
   }
 
-  // Ações de criação, edição, baixa, estorno e exclusão
+  // Ações de criação, edição, baixa, estorno, cancelamento e exclusão
   const handleNovoLancamento = async (dados: Omit<ContaPagar, 'id' | 'created_at' | 'updated_at'>) => {
     await saveContaPagar(dados)
     await recarregar()
@@ -182,9 +183,18 @@ export function V2ContasPagarPage() {
     await recarregar()
   }
 
+  const handleConfirmarCancelamento = async (contaId: string) => {
+    await cancelarLancamento(contaId)
+    await recarregar()
+  }
+
   const handleConfirmarExclusao = async (contaId: string) => {
     await excluirLancamentoAberto(contaId)
     await recarregar()
+  }
+
+  const handleAbrirDetalheTitulo = (conta: ContaPagar) => {
+    setDetalheModal({ conta, modo: 'detalhe' })
   }
 
   const handleCriarContaBancaria = async (nome: string) => {
@@ -267,7 +277,6 @@ export function V2ContasPagarPage() {
         <>
           {/* ── BANNER AZUL PRINCIPAL ── */}
           <div className="bg-[#0F3D6E] text-white rounded-2xl p-6 sm:p-7 shadow-sm">
-            {/* Desktop Banner Layout */}
             <div className="hidden sm:flex items-center justify-between">
               <div>
                 <span className="text-xs font-bold uppercase tracking-wider text-blue-200 block">
@@ -297,7 +306,6 @@ export function V2ContasPagarPage() {
               </div>
             </div>
 
-            {/* Mobile Banner Layout */}
             <div className="sm:hidden space-y-4">
               <div>
                 <span className="text-[11px] font-bold uppercase tracking-wider text-blue-200 block">
@@ -454,7 +462,7 @@ export function V2ContasPagarPage() {
                 <button
                   type="button"
                   onClick={() => setModoVisualizacao('tabela')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                     modoVisualizacao === 'tabela'
                       ? 'bg-white text-slate-900 shadow-2xs'
                       : 'text-slate-500 hover:text-slate-800'
@@ -466,7 +474,7 @@ export function V2ContasPagarPage() {
                 <button
                   type="button"
                   onClick={() => setModoVisualizacao('extrato')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                     modoVisualizacao === 'extrato'
                       ? 'bg-white text-slate-900 shadow-2xs'
                       : 'text-slate-500 hover:text-slate-800'
@@ -484,7 +492,7 @@ export function V2ContasPagarPage() {
                 <button
                   type="button"
                   onClick={() => setBase('vencimento')}
-                  className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
+                  className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
                     base === 'vencimento'
                       ? 'bg-[#0F3D6E] text-white shadow-xs'
                       : 'text-slate-600 hover:text-slate-900'
@@ -495,7 +503,7 @@ export function V2ContasPagarPage() {
                 <button
                   type="button"
                   onClick={() => setBase('pagamento')}
-                  className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
+                  className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
                     base === 'pagamento'
                       ? 'bg-[#0F3D6E] text-white shadow-xs'
                       : 'text-slate-600 hover:text-slate-900'
@@ -552,194 +560,212 @@ export function V2ContasPagarPage() {
               </p>
             </div>
           ) : modoVisualizacao === 'tabela' ? (
-            /* ──── MODO TABELA COMPLETA (DESIGN V2) ──── */
+            /* ──── MODO TABELA COMPLETA (DESIGN OTIMIZADO PARA CABER TUDO) ──── */
             <div className="bg-white border border-slate-200 rounded-2xl shadow-2xs overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-slate-700 min-w-[850px]">
-                  <thead>
-                    <tr className="border-b border-slate-100 bg-slate-50/80 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                      <th className="px-4 py-3.5 text-center w-24">Tipo</th>
-                      <th className="px-4 py-3.5 text-left">Vencimento</th>
-                      <th className="px-4 py-3.5 text-left">Descrição</th>
-                      <th className="px-4 py-3.5 text-left">Contraparte</th>
-                      <th className="px-4 py-3.5 text-left">Categoria</th>
-                      <th className="px-4 py-3.5 text-left">Forma / Tag</th>
-                      <th className="px-4 py-3.5 text-right">Valor</th>
-                      <th className="px-4 py-3.5 text-center">Status</th>
-                      <th className="px-4 py-3.5 text-center w-32">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {filtrados.map((m: Movimento) => {
-                      const isPagar = m.tipo === 'pagar'
-                      const isPago = m.status === 'paga'
+              <table className="w-full text-xs text-slate-700">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50/80 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                    <th className="px-3 py-3 text-center w-20">Tipo</th>
+                    <th className="px-3 py-3 text-left w-24">Vencimento</th>
+                    <th className="px-3 py-3 text-left min-w-[200px]">Descrição & Categoria</th>
+                    <th className="px-3 py-3 text-left w-36">Contraparte</th>
+                    <th className="px-3 py-3 text-left w-28">Forma / Tag</th>
+                    <th className="px-3 py-3 text-right w-28">Valor</th>
+                    <th className="px-3 py-3 text-center w-24">Status</th>
+                    <th className="px-3 py-3 text-center w-28">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filtrados.map((m: Movimento) => {
+                    const isPagar = m.tipo === 'pagar'
+                    const isPago = m.status === 'paga'
+                    const isCancelado = m.status === 'cancelada'
 
-                      return (
-                        <tr key={m.id} className="hover:bg-slate-50/80 transition-colors">
-                          {/* Tipo */}
-                          <td className="px-4 py-3.5 text-center">
-                            <span
-                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase ${
-                                isPagar
-                                  ? 'bg-red-50 text-red-700 border border-red-200'
-                                  : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              }`}
-                            >
-                              {isPagar ? (
-                                <>
-                                  <ArrowUpRight size={13} className="text-red-600" /> A Pagar
-                                </>
-                              ) : (
-                                <>
-                                  <ArrowDownLeft size={13} className="text-emerald-600" /> A Receber
-                                </>
-                              )}
-                            </span>
-                          </td>
-
-                          {/* Vencimento / Data */}
-                          <td className="px-4 py-3.5">
-                            <span className="font-bold text-slate-800 block">
-                              {fmtData(m.vencimento)}
-                            </span>
-                            {isPago && m.pagoEm && (
-                              <span className="text-[10px] text-emerald-700 font-semibold block">
-                                Pago em {fmtData(m.pagoEm)}
-                              </span>
+                    return (
+                      <tr
+                        key={m.id}
+                        onClick={() => handleAbrirDetalheTitulo(m.contaOriginal)}
+                        className="hover:bg-blue-50/40 transition-colors cursor-pointer group"
+                        title="Clique para abrir detalhes do título"
+                      >
+                        {/* Tipo */}
+                        <td className="px-3 py-2.5 text-center">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold ${
+                              isPagar
+                                ? 'bg-red-50 text-red-700 border border-red-200'
+                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            }`}
+                          >
+                            {isPagar ? (
+                              <>
+                                <ArrowUpRight size={12} className="text-red-600 shrink-0" />
+                                <span>Pagar</span>
+                              </>
+                            ) : (
+                              <>
+                                <ArrowDownLeft size={12} className="text-emerald-600 shrink-0" />
+                                <span>Receber</span>
+                              </>
                             )}
-                          </td>
+                          </span>
+                        </td>
 
-                          {/* Descrição */}
-                          <td className="px-4 py-3.5">
-                            <span className="font-bold text-slate-900 block truncate max-w-[220px]" title={m.descricao}>
-                              {m.descricao}
+                        {/* Vencimento / Data */}
+                        <td className="px-3 py-2.5 whitespace-nowrap">
+                          <span className="font-extrabold text-slate-800 block">
+                            {fmtData(m.vencimento)}
+                          </span>
+                          {isPago && m.pagoEm && (
+                            <span className="text-[10px] text-emerald-700 font-semibold block leading-tight">
+                              {fmtData(m.pagoEm)}
                             </span>
-                            {m.contaOriginal?.pedido_id && (
-                              <span className="text-[10px] text-sky-700 font-semibold block">
-                                Pedido #{m.contaOriginal.pedido_id.slice(0, 12)}
-                              </span>
-                            )}
-                          </td>
+                          )}
+                        </td>
 
-                          {/* Contraparte */}
-                          <td className="px-4 py-3.5">
-                            <span className="font-medium text-slate-800 block truncate max-w-[160px]">
-                              {m.contraparte || '—'}
-                            </span>
-                          </td>
-
-                          {/* Categoria */}
-                          <td className="px-4 py-3.5">
-                            <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-700 inline-block">
+                        {/* Descrição & Categoria */}
+                        <td className="px-3 py-2.5 min-w-0">
+                          <span
+                            className="font-bold text-slate-900 block truncate group-hover:text-blue-700 transition-colors"
+                            title={m.descricao}
+                          >
+                            {m.descricao}
+                          </span>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[10px] text-slate-500 font-medium truncate">
                               {m.contaOriginal?.categoria || 'Geral'}
                             </span>
-                          </td>
-
-                          {/* Forma / Tag */}
-                          <td className="px-4 py-3.5 text-slate-600">
-                            <span className="block font-medium truncate max-w-[130px]">
-                              {m.contaOriginal?.forma_pagamento || '—'}
-                            </span>
-                            {m.contaOriginal?.conta_bancaria_tag && (
-                              <span className="text-[10px] text-blue-600 font-bold block">
-                                {m.contaOriginal.conta_bancaria_tag}
+                            {m.contaOriginal?.pedido_id && (
+                              <span className="text-[9px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1 shrink-0">
+                                Pedido
                               </span>
                             )}
-                          </td>
+                          </div>
+                        </td>
 
-                          {/* Valor */}
-                          <td className="px-4 py-3.5 text-right font-black tabular-nums">
-                            <span className={isPagar ? 'text-[#C92A2A]' : 'text-[#2D6A4F]'}>
-                              {isPagar
-                                ? `- ${formatBRL(isPago ? m.valorPago : m.valor)}`
-                                : `+ ${formatBRL(isPago ? m.valorPago : m.valor)}`}
+                        {/* Contraparte */}
+                        <td className="px-3 py-2.5">
+                          <span
+                            className="font-medium text-slate-800 block truncate max-w-[150px]"
+                            title={m.contraparte || ''}
+                          >
+                            {m.contraparte || '—'}
+                          </span>
+                        </td>
+
+                        {/* Forma / Tag */}
+                        <td className="px-3 py-2.5 text-slate-600">
+                          <span
+                            className="block font-medium truncate max-w-[120px]"
+                            title={m.contaOriginal?.forma_pagamento || ''}
+                          >
+                            {m.contaOriginal?.forma_pagamento || '—'}
+                          </span>
+                          {m.contaOriginal?.conta_bancaria_tag && (
+                            <span className="text-[10px] text-blue-600 font-bold block truncate">
+                              {m.contaOriginal.conta_bancaria_tag}
                             </span>
-                          </td>
+                          )}
+                        </td>
 
-                          {/* Status */}
-                          <td className="px-4 py-3.5 text-center">
-                            <span
-                              className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 ${
-                                m.status === 'paga'
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                  : m.status === 'vencida'
-                                  ? 'bg-red-50 text-red-700 border border-red-200'
-                                  : m.status === 'parcial'
-                                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                  : 'bg-blue-50 text-blue-700 border border-blue-200'
-                              }`}
+                        {/* Valor */}
+                        <td className="px-3 py-2.5 text-right font-black tabular-nums whitespace-nowrap">
+                          <span className={isPagar ? 'text-[#C92A2A]' : 'text-[#2D6A4F]'}>
+                            {isPagar
+                              ? `- ${formatBRL(isPago ? m.valorPago : m.valor)}`
+                              : `+ ${formatBRL(isPago ? m.valorPago : m.valor)}`}
+                          </span>
+                        </td>
+
+                        {/* Status */}
+                        <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${
+                              m.status === 'paga'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : m.status === 'vencida'
+                                ? 'bg-red-50 text-red-700 border border-red-200'
+                                : isCancelado
+                                ? 'bg-slate-100 text-slate-600 border border-slate-300'
+                                : m.status === 'parcial'
+                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                : 'bg-blue-50 text-blue-700 border border-blue-200'
+                            }`}
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                            {m.status.charAt(0).toUpperCase() + m.status.slice(1)}
+                          </span>
+                        </td>
+
+                        {/* Ações */}
+                        <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                          <div
+                            className="flex items-center justify-center gap-1"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {/* Editar */}
+                            <button
+                              type="button"
+                              onClick={() => setContaParaEditar(m.contaOriginal)}
+                              className="p-1.5 text-slate-500 hover:text-blue-700 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 rounded-lg transition-colors cursor-pointer"
+                              title="Editar título"
                             >
-                              <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                              {m.status.charAt(0).toUpperCase() + m.status.slice(1)}
-                            </span>
-                          </td>
+                              <Edit3 size={13} />
+                            </button>
 
-                          {/* Ações */}
-                          <td className="px-4 py-3.5 text-center">
-                            <div className="flex items-center justify-center gap-1.5">
-                              {/* Botão Editar Lançamento */}
+                            {/* Baixar ou Estornar */}
+                            {!isPago && !isCancelado ? (
                               <button
                                 type="button"
-                                onClick={() => setContaParaEditar(m.contaOriginal)}
-                                className="p-1.5 text-slate-500 hover:text-blue-700 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 rounded-lg transition-colors cursor-pointer"
-                                title="Editar título"
+                                onClick={() => setBaixaModal(m.contaOriginal)}
+                                className="p-1.5 text-emerald-700 hover:text-white hover:bg-emerald-700 border border-emerald-300 rounded-lg transition-colors cursor-pointer"
+                                title="Baixar título"
                               >
-                                <Edit3 size={14} />
+                                <Check size={13} className="stroke-[2.5]" />
                               </button>
+                            ) : isPago ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setDetalheModal({ conta: m.contaOriginal, modo: 'estorno' })
+                                }
+                                className="p-1.5 text-amber-800 hover:bg-amber-100 border border-amber-200 bg-amber-50 rounded-lg transition-colors cursor-pointer"
+                                title="Estornar baixa"
+                              >
+                                <RotateCcw size={13} />
+                              </button>
+                            ) : null}
 
-                              {!isPago ? (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() => setBaixaModal(m.contaOriginal)}
-                                    className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 border border-blue-200 rounded-lg transition-colors cursor-pointer"
-                                    title="Baixar título"
-                                  >
-                                    <Check size={14} className="stroke-[2.5]" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setDetalheModal({ conta: m.contaOriginal, modo: 'excluir' })
-                                    }
-                                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 border border-slate-200 hover:border-red-200 rounded-lg transition-colors cursor-pointer"
-                                    title="Excluir lançamento"
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
-                                </>
-                              ) : (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setDetalheModal({ conta: m.contaOriginal, modo: 'estorno' })
-                                    }
-                                    className="p-1.5 text-amber-800 hover:bg-amber-100 border border-amber-200 bg-amber-50 rounded-lg transition-colors cursor-pointer"
-                                    title="Estornar baixa"
-                                  >
-                                    <RotateCcw size={13} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setDetalheModal({ conta: m.contaOriginal, modo: 'detalhe_pago' })
-                                    }
-                                    className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors cursor-pointer"
-                                    title="Ver detalhes"
-                                  >
-                                    <Eye size={14} />
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                            {/* Cancelar ou Excluir */}
+                            {!isPago && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setDetalheModal({ conta: m.contaOriginal, modo: 'excluir' })
+                                }
+                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 border border-slate-200 hover:border-red-200 rounded-lg transition-colors cursor-pointer"
+                                title="Excluir ou cancelar"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+
+                            {/* Ver Detalhes */}
+                            <button
+                              type="button"
+                              onClick={() => handleAbrirDetalheTitulo(m.contaOriginal)}
+                              className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors cursor-pointer"
+                              title="Ver detalhes completos"
+                            >
+                              <Eye size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
           ) : (
             /* ──── MODO EXTRATO AGRUPADO POR DIA (TIMELINE) ──── */
@@ -758,7 +784,8 @@ export function V2ContasPagarPage() {
                       return (
                         <div
                           key={m.id}
-                          className="p-4 sm:p-4.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/50 transition-colors"
+                          onClick={() => handleAbrirDetalheTitulo(m.contaOriginal)}
+                          className="p-4 sm:p-4.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/50 transition-colors cursor-pointer"
                         >
                           <div className="flex items-start sm:items-center gap-3 min-w-0">
                             <div
@@ -782,7 +809,10 @@ export function V2ContasPagarPage() {
                             </div>
                           </div>
 
-                          <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                          <div
+                            className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <div className="flex items-center gap-2.5">
                               <span
                                 className={`text-sm sm:text-base font-extrabold ${
@@ -854,9 +884,7 @@ export function V2ContasPagarPage() {
                                   </button>
                                   <button
                                     type="button"
-                                    onClick={() =>
-                                      setDetalheModal({ conta: m.contaOriginal, modo: 'detalhe_pago' })
-                                    }
+                                    onClick={() => handleAbrirDetalheTitulo(m.contaOriginal)}
                                     className="px-3 py-1.5 border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
                                   >
                                     <Eye size={14} /> Ver
@@ -909,10 +937,12 @@ export function V2ContasPagarPage() {
         isOpen={detalheModal !== null}
         onClose={() => setDetalheModal(null)}
         conta={detalheModal?.conta || null}
-        modo={detalheModal?.modo || 'detalhe_pago'}
+        modo={detalheModal?.modo || 'detalhe'}
         onConfirmarEstorno={handleConfirmarEstorno}
+        onConfirmarCancelamento={handleConfirmarCancelamento}
         onConfirmarExclusao={handleConfirmarExclusao}
         onAbrirBaixa={(c) => setBaixaModal(c)}
+        onAbrirEdicao={(c) => setContaParaEditar(c)}
       />
     </div>
   )
