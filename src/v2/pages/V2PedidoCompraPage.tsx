@@ -11,6 +11,15 @@ import {
   Package,
   X,
   Clock,
+  FileSpreadsheet,
+  FileText,
+  CreditCard,
+  Plus,
+  Trash2,
+  XCircle,
+  Truck,
+  PackageCheck,
+  Calendar,
 } from 'lucide-react'
 import { formatarMoeda } from '../../modules/lib/money'
 import { formatarData, hoje, somarDias } from '../../modules/lib/datas'
@@ -21,8 +30,10 @@ import {
   emitirPedidoCompra,
   receberPedidoCompraPorItem,
   ajustarQuantidadeItem,
-  desfazerRecebimentoPedidoCompra,
-  voltarPedidoParaAberto,
+  cancelarPedidoCompra,
+  deletePedidoCompra,
+  salvarNfFornecedor,
+  gerarParcelasCompra,
   PedidoCompra,
   PedidoCompraItem,
   StatusPedido,
@@ -41,14 +52,6 @@ const FORMAS_PAGAMENTO: string[] = [
   'Crediário',
 ]
 
-const ABAS_STATUS: { value: 'todos' | StatusPedido; label: string }[] = [
-  { value: 'todos', label: 'TODOS' },
-  { value: 'rascunho', label: 'ABERTOS' },
-  { value: 'emitido', label: 'EMITIDOS' },
-  { value: 'recebido_parcial', label: 'REC. PARCIAL' },
-  { value: 'recebido', label: 'RECEBIDOS' },
-  { value: 'cancelado', label: 'CANCELADOS' },
-]
 
 const MESES_LISTA = [
   { num: '01', short: 'JAN', full: 'Janeiro' },
@@ -117,6 +120,22 @@ export function V2PedidoCompraPage() {
 
   // State: Drawer de Detalhes / Visualização Lateral
   const [pedidoVisualizando, setPedidoVisualizando] = useState<PedidoCompra | null>(null)
+
+  // State: Modal NF Fornecedor
+  const [showNfModal, setShowNfModal] = useState(false)
+  const [nfNumero, setNfNumero] = useState('')
+  const [nfData, setNfData] = useState(() => dataHoje)
+  const [nfChave, setNfChave] = useState('')
+  const [salvandoNf, setSalvandoNf] = useState(false)
+
+  // State: Modal Gerar Parcelas
+  const [showParcelasModal, setShowParcelasModal] = useState(false)
+  const [parcelasForma, setParcelasForma] = useState('Boleto')
+  const [parcelasTag, setParcelasTag] = useState('')
+  const [parcelasQtd, setParcelasQtd] = useState(1)
+  const [parcelasPrimeiroVenc, setParcelasPrimeiroVenc] = useState(() => somarDias(dataHoje, 30))
+  const [parcelasLista, setParcelasLista] = useState<{ numero: number; vencimento: string; valor: number }[]>([])
+  const [salvandoParcelas, setSalvandoParcelas] = useState(false)
 
   const loadData = async () => {
     const p = await listPedidosCompra()
@@ -335,24 +354,6 @@ export function V2PedidoCompraPage() {
     }
   }
 
-  // Ações de transição de etapas pelo usuário
-  const handleAvançarParaEmitido = async (pedido: PedidoCompra) => {
-    if (window.confirm(`Confirma emitir o Pedido #${pedido.numero}? Ele será integrado ao Contas a Pagar.`)) {
-      const res = await emitirPedidoCompra(pedido.id)
-      if (!res.ok) {
-        alert(res.erro)
-        return
-      }
-      await loadData()
-      const atualizados = await listPedidosCompra()
-      const pAtualizado = atualizados.find((x) => x.id === pedido.id)
-      if (pAtualizado && pedidoVisualizando?.id === pAtualizado.id) {
-        setPedidoVisualizando(pAtualizado)
-      }
-    }
-  }
-
-
 
   const handleAbrirRecebimento = (p: PedidoCompra) => {
     setPedidoRecebimento(p)
@@ -424,35 +425,194 @@ export function V2PedidoCompraPage() {
     }
   }
 
-  const handleDesfazerRecebimento = async (pedido: PedidoCompra) => {
-    if (window.confirm(`Deseja desfazer o recebimento do Pedido #${pedido.numero}? O estoque lançado será estornado e o pedido voltará para Emitido.`)) {
-      const res = await desfazerRecebimentoPedidoCompra(pedido.id)
+  // ── Handlers do Modal NF Fornecedor ──
+  const handleAbrirNfModal = (p: PedidoCompra) => {
+    setNfNumero(p.numeroNf || '')
+    setNfData(p.dataNf || dataHoje)
+    setNfChave(p.chaveNf || '')
+    setShowNfModal(true)
+  }
+
+  const handleSalvarNf = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!pedidoVisualizando) return
+    if (!nfNumero.trim()) {
+      alert('Informe o número da Nota Fiscal.')
+      return
+    }
+    setSalvandoNf(true)
+    try {
+      const res = await salvarNfFornecedor(pedidoVisualizando.id, {
+        numeroNf: nfNumero.trim(),
+        dataNf: nfData || dataHoje,
+        chaveNf: nfChave.trim() || undefined,
+      })
       if (!res.ok) {
         alert(res.erro)
         return
       }
       await loadData()
       const atualizados = await listPedidosCompra()
-      const pAtualizado = atualizados.find((x) => x.id === pedido.id)
-      if (pAtualizado && pedidoVisualizando?.id === pAtualizado.id) {
+      const pAtualizado = atualizados.find((x) => x.id === pedidoVisualizando.id)
+      if (pAtualizado) {
         setPedidoVisualizando(pAtualizado)
       }
+      setShowNfModal(false)
+    } catch (err: any) {
+      alert('Erro ao salvar NF: ' + (err?.message || err))
+    } finally {
+      setSalvandoNf(false)
     }
   }
 
-  const handleVoltarParaAberto = async (pedido: PedidoCompra) => {
-    if (window.confirm(`Confirma retornar o Pedido #${pedido.numero} para Aberto / Rascunho?`)) {
-      const res = await voltarPedidoParaAberto(pedido.id)
+  // ── Handlers do Modal Gerar Parcelas ──
+  const recalcularParcelasLista = (total: number, qtd: number, primeiroVenc: string) => {
+    const n = Math.max(1, qtd)
+    const valorBase = Math.floor((total / n) * 100) / 100
+    const diferencaCentavos = Math.round((total - valorBase * n) * 100) / 100
+
+    const lista: { numero: number; vencimento: string; valor: number }[] = []
+    for (let i = 0; i < n; i++) {
+      const venc = i === 0 ? primeiroVenc : somarDias(primeiroVenc, i * 30)
+      const val = i === 0 ? Number((valorBase + diferencaCentavos).toFixed(2)) : valorBase
+      lista.push({ numero: i + 1, vencimento: venc, valor: val })
+    }
+    return lista
+  }
+
+  const handleAbrirParcelasModal = (p: PedidoCompra) => {
+    const totalComFrete = (p.total || 0) + (p.frete || 0)
+    const forma = p.formaPagamento || 'Boleto'
+    const tag = p.contaSaidaTag || ''
+    const qtd = p.numeroParcelas || 1
+    const primeiroVenc = p.dataVencimento || somarDias(dataHoje, 30)
+
+    setParcelasForma(forma)
+    setParcelasTag(tag)
+    setParcelasQtd(qtd)
+    setParcelasPrimeiroVenc(primeiroVenc)
+    setParcelasLista(recalcularParcelasLista(totalComFrete, qtd, primeiroVenc))
+    setShowParcelasModal(true)
+  }
+
+  const handleAlterarQtdParcelas = (novaQtd: number) => {
+    setParcelasQtd(novaQtd)
+    if (pedidoVisualizando) {
+      const totalComFrete = (pedidoVisualizando.total || 0) + (pedidoVisualizando.frete || 0)
+      setParcelasLista(recalcularParcelasLista(totalComFrete, novaQtd, parcelasPrimeiroVenc))
+    }
+  }
+
+  const handleAlterarPrimeiroVenc = (novoVenc: string) => {
+    setParcelasPrimeiroVenc(novoVenc)
+    if (pedidoVisualizando) {
+      const totalComFrete = (pedidoVisualizando.total || 0) + (pedidoVisualizando.frete || 0)
+      setParcelasLista(recalcularParcelasLista(totalComFrete, parcelasQtd, novoVenc))
+    }
+  }
+
+  const handleEditarParcelaLinha = (idx: number, campo: 'vencimento' | 'valor', valor: any) => {
+    setParcelasLista((prev) =>
+      prev.map((item, i) => (i === idx ? { ...item, [campo]: valor } : item))
+    )
+  }
+
+  const handleConfirmarSalvarParcelas = async () => {
+    if (!pedidoVisualizando) return
+    setSalvandoParcelas(true)
+    try {
+      const res = await gerarParcelasCompra(pedidoVisualizando.id, {
+        formaPagamento: parcelasForma,
+        contaSaidaTag: parcelasTag.trim() || undefined,
+        parcelas: parcelasLista,
+      })
       if (!res.ok) {
         alert(res.erro)
         return
       }
       await loadData()
       const atualizados = await listPedidosCompra()
-      const pAtualizado = atualizados.find((x) => x.id === pedido.id)
-      if (pAtualizado && pedidoVisualizando?.id === pAtualizado.id) {
+      const pAtualizado = atualizados.find((x) => x.id === pedidoVisualizando.id)
+      if (pAtualizado) {
         setPedidoVisualizando(pAtualizado)
       }
+      setShowParcelasModal(false)
+    } catch (err: any) {
+      alert('Erro ao gerar parcelas: ' + (err?.message || err))
+    } finally {
+      setSalvandoParcelas(false)
+    }
+  }
+
+  // ── Handler Cancelar Pedido ──
+  const handleCancelarPedido = async (id: string) => {
+    if (!window.confirm('Deseja realmente cancelar este pedido de compra?')) return
+    const res = await cancelarPedidoCompra(id)
+    if (!res.ok) {
+      alert(res.erro)
+      return
+    }
+    await loadData()
+    const atualizados = await listPedidosCompra()
+    const pAtualizado = atualizados.find((x) => x.id === id)
+    if (pAtualizado && pedidoVisualizando?.id === id) {
+      setPedidoVisualizando(pAtualizado)
+    }
+  }
+
+  // ── Handler Excluir Pedido ──
+  const handleExcluirPedido = async (id: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir definitivamente este pedido de compra? Esta ação não pode ser desfeita.')) return
+    const res = await deletePedidoCompra(id)
+    if (!res.ok) {
+      alert(res.erro)
+      return
+    }
+    await loadData()
+    if (pedidoVisualizando?.id === id) {
+      setPedidoVisualizando(null)
+    }
+  }
+
+  // Helper para abrir visualização do pedido
+  const handleAbrirVisualizacao = (p: PedidoCompra) => {
+    setPedidoVisualizando(p)
+  }
+
+  // Helper de Status / Etapa
+  const getStatusBadgeInfo = (p: PedidoCompra) => {
+    if (p.status === 'cancelado') {
+      return {
+        label: 'CANCELADO',
+        className: 'bg-rose-50 text-rose-700 border-rose-200',
+        dotClass: 'bg-rose-500',
+      }
+    }
+    if (p.status === 'recebido') {
+      return {
+        label: 'RECEBIDO',
+        className: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        dotClass: 'bg-emerald-500',
+      }
+    }
+    if (p.status === 'recebido_parcial') {
+      return {
+        label: 'REC. PARCIAL',
+        className: 'bg-amber-50 text-amber-700 border-amber-200',
+        dotClass: 'bg-amber-500',
+      }
+    }
+    if (p.status === 'emitido' || p.numeroNf) {
+      return {
+        label: 'NF FÁBRICA',
+        className: 'bg-sky-50 text-[#0D6BAF] border-sky-200 font-extrabold',
+        dotClass: 'bg-[#0D6BAF]',
+      }
+    }
+    return {
+      label: 'CRIADO',
+      className: 'bg-slate-100 text-slate-700 border-slate-200',
+      dotClass: 'bg-slate-400',
     }
   }
 
@@ -480,29 +640,58 @@ export function V2PedidoCompraPage() {
     })
   }, [pedidosNoMes, busca, filtroStatus])
 
-  // Métricas do Card Superior da Imagem 02
-  const totalCompradoNoMes = useMemo(() => {
-    return pedidosNoMes.reduce((acc, p) => acc + (p.total || 0) + (p.frete || 0), 0)
+  // Métricas dos 4 Cards de KPIs estilo Vendas
+  const kpis = useMemo(() => {
+    let orcadoValor = 0
+    let orcadoCount = 0
+    let nfFabricaValor = 0
+    let nfFabricaCount = 0
+    let recebidoValor = 0
+    let recebidoCount = 0
+    let totalMesValor = 0
+    let totalMesCount = 0
+
+    for (const p of pedidosNoMes) {
+      const val = (p.total || 0) + (p.frete || 0)
+      if (p.status !== 'cancelado') {
+        totalMesValor += val
+        totalMesCount++
+      }
+
+      if (p.status === 'rascunho') {
+        orcadoValor += val
+        orcadoCount++
+      } else if (p.status === 'emitido') {
+        nfFabricaValor += val
+        nfFabricaCount++
+      } else if (p.status === 'recebido' || p.status === 'recebido_parcial') {
+        recebidoValor += val
+        recebidoCount++
+      }
+    }
+
+    return {
+      orcadoValor,
+      orcadoCount,
+      nfFabricaValor,
+      nfFabricaCount,
+      recebidoValor,
+      recebidoCount,
+      totalMesValor,
+      totalMesCount,
+    }
   }, [pedidosNoMes])
 
-  const aguardandoEntrega = useMemo(() => {
-    return pedidosNoMes.filter((p) => p.status === 'emitido' || p.status === 'rascunho' || p.status === 'recebido_parcial').length
-  }, [pedidosNoMes])
-
-  // Contagem para as abas
+  // Contagem para as abas de status
   const contagemAbas = useMemo(() => {
     return {
       todos: pedidosNoMes.length,
       rascunho: pedidosNoMes.filter((p) => p.status === 'rascunho').length,
       emitido: pedidosNoMes.filter((p) => p.status === 'emitido').length,
-      recebido_parcial: pedidosNoMes.filter((p) => p.status === 'recebido_parcial').length,
-      recebido: pedidosNoMes.filter((p) => p.status === 'recebido').length,
+      recebido: pedidosNoMes.filter((p) => p.status === 'recebido' || p.status === 'recebido_parcial').length,
       cancelado: pedidosNoMes.filter((p) => p.status === 'cancelado').length,
     }
   }, [pedidosNoMes])
-
-  // Nome do mês atual por extenso para a frase
-  const nomeMesExtenso = MESES_LISTA.find((m) => m.num === filtroMesNum)?.full.toLowerCase() || 'outubro'
 
   // Último pedido do fornecedor selecionado (para banner informativo inteligente)
   const ultimoPedidoDoFornecedor = useMemo(() => {
@@ -1318,231 +1507,193 @@ export function V2PedidoCompraPage() {
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // TELA 2: LISTAGEM DE PEDIDOS DE COMPRA (IMAGEM 02)
+  // TELA 2: LISTAGEM DE PEDIDOS DE COMPRA ESTILO PEDIDO DE VENDAS
   // ──────────────────────────────────────────────────────────────────────────
+  const somaParcelas = parcelasLista.reduce((acc, it) => acc + (Number(it.valor) || 0), 0)
+
   return (
-    <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 font-sans">
-      {/* ── HEADER SUPERIOR ── */}
-      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 14 : 0, marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 12,
-              background: '#E3EEFA',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <ShoppingCart size={22} color="#0D5BA3" />
+    <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-6 font-sans relative">
+      {/* ── CABEÇALHO PRINCIPAL DA PÁGINA (ESTILO VENDAS) ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-50 text-sky-600 border border-sky-100 shadow-xs">
+              <ShoppingCart size={22} />
+            </span>
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
+              PEDIDOS DE COMPRA
+            </h1>
           </div>
-          <h1 style={{ margin: 0, fontSize: isMobile ? 22 : 28, fontWeight: 700, color: '#0F2A43' }}>
-            Pedidos de compra
-          </h1>
-        </div>
-
-        <button
-          onClick={handleIniciarNovoPedido}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-            padding: '12px 22px',
-            borderRadius: 12,
-            background: '#0D5BA3',
-            color: '#FFFFFF',
-            border: 'none',
-            fontSize: 14,
-            fontWeight: 700,
-            cursor: 'pointer',
-            boxShadow: '0 4px 12px rgba(13, 91, 163, 0.25)',
-            width: isMobile ? '100%' : 'auto',
-          }}
-        >
-          + NOVO PEDIDO
-        </button>
-      </div>
-
-      {/* ── CARD RESUMO DO MÊS (BANNER) ── */}
-      <div
-        style={{
-          background: '#FFFFFF',
-          borderRadius: 16,
-          border: '1px solid #D7E4DA',
-          padding: isMobile ? '16px 18px' : '24px 28px',
-          marginBottom: 20,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 20,
-        }}
-      >
-        <div style={{ flex: 1, minWidth: 280 }}>
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              background: '#DCFCE7',
-              color: '#15803D',
-              padding: '4px 12px',
-              borderRadius: 20,
-              fontSize: 12,
-              fontWeight: 700,
-              marginBottom: 12,
-            }}
-          >
-            ✓ Tudo em dia · nada pendente de entrega
-          </div>
-
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#0F2A43', lineHeight: 1.35 }}>
-            Em {nomeMesExtenso} você fez {pedidosNoMes.length} pedido{pedidosNoMes.length === 1 ? '' : 's'} de compra, somando {formatarMoeda(totalCompradoNoMes)}, e já recebeu tudo.
-          </h2>
-
-          <p style={{ margin: '8px 0 0', fontSize: 14, color: '#475569' }}>
-            Quando precisar repor algo, é só criar um novo pedido.
+          <p className="mt-1 text-xs sm:text-sm text-slate-500 leading-relaxed">
+            Gerencie pedidos de compras junto aos fornecedores e fábricas por etapas.
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: 12 }}>
-          <div
-            style={{
-              background: '#F1F7F2',
-              borderRadius: 12,
-              padding: '16px 20px',
-              minWidth: 160,
-            }}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleIniciarNovoPedido}
+            className="inline-flex items-center gap-2 rounded-xl bg-[#0D6BAF] hover:bg-[#095287] text-white px-4 py-2.5 text-xs font-bold transition shadow-xs cursor-pointer active:scale-95"
           >
-            <span style={{ fontSize: 13, color: '#475569', display: 'block', marginBottom: 6 }}>
-              Comprado no mês
-            </span>
-            <span style={{ fontSize: 22, fontWeight: 700, color: '#0F2A43' }}>
-              {formatarMoeda(totalCompradoNoMes)}
-            </span>
-          </div>
-
-          <div
-            style={{
-              background: '#F1F7F2',
-              borderRadius: 12,
-              padding: '16px 20px',
-              minWidth: 160,
-            }}
-          >
-            <span style={{ fontSize: 13, color: '#475569', display: 'block', marginBottom: 6 }}>
-              Aguardando entrega
-            </span>
-            <span style={{ fontSize: 22, fontWeight: 700, color: '#15803D' }}>
-              {aguardandoEntrega}
-            </span>
-          </div>
+            <Plus size={16} />
+            <span>Novo Pedido</span>
+          </button>
         </div>
       </div>
 
-      {/* ── CARD COM ABAS, SELETOR DE ANO/MÊS E BUSCA ── */}
-      <div
-        style={{
-          background: '#FFFFFF',
-          borderRadius: 16,
-          border: '1px solid #D7E4DA',
-          padding: '16px 20px',
-          marginBottom: 20,
-        }}
-      >
-        {/* Abas Superiores */}
-        <div style={{ display: 'flex', gap: 20, borderBottom: '1px solid #D7E4DA', paddingBottom: 12, overflowX: 'auto' }}>
-          {ABAS_STATUS.map((aba) => {
-            const isSelected = filtroStatus === aba.value
-            const count = contagemAbas[aba.value]
+      {/* ── CARDS DE KPIS RESPONSIVOS (ESTILO VENDAS) ── */}
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+        {/* KPI 1: Criados / Em Aberto */}
+        <div className="relative overflow-hidden rounded-2xl border border-slate-100 bg-white p-5 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Em Aberto (Criados)
+            </span>
+            <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+              <FileSpreadsheet size={16} />
+            </div>
+          </div>
+          <div className="mt-3">
+            <h3 className="text-2xl font-black tabular-nums text-slate-900">
+              {formatarMoeda(kpis.orcadoValor)}
+            </h3>
+            <p className="mt-1 text-xs text-slate-500 font-medium">
+              {kpis.orcadoCount} {kpis.orcadoCount === 1 ? 'pedido em rascunho' : 'pedidos em rascunho'}
+            </p>
+          </div>
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-amber-400" />
+        </div>
 
+        {/* KPI 2: NF Fábrica */}
+        <div className="relative overflow-hidden rounded-2xl border border-slate-100 bg-white p-5 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              NF Fábrica
+            </span>
+            <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-sky-50 text-sky-600">
+              <CheckCircle size={16} />
+            </div>
+          </div>
+          <div className="mt-3">
+            <h3 className="text-2xl font-black tabular-nums text-slate-900">
+              {formatarMoeda(kpis.nfFabricaValor)}
+            </h3>
+            <p className="mt-1 text-xs text-slate-500 font-medium">
+              {kpis.nfFabricaCount} {kpis.nfFabricaCount === 1 ? 'aguardando entrega' : 'aguardando entrega'}
+            </p>
+          </div>
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-sky-500" />
+        </div>
+
+        {/* KPI 3: Recebidos no Estoque */}
+        <div className="relative overflow-hidden rounded-2xl border border-slate-100 bg-white p-5 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Recebidos no Estoque
+            </span>
+            <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+              <PackageCheck size={16} />
+            </div>
+          </div>
+          <div className="mt-3">
+            <h3 className="text-2xl font-black tabular-nums text-slate-900">
+              {formatarMoeda(kpis.recebidoValor)}
+            </h3>
+            <p className="mt-1 text-xs text-slate-500 font-medium">
+              Entrada no estoque confirmada
+            </p>
+          </div>
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-emerald-500" />
+        </div>
+
+        {/* KPI 4: Total Comprado no Mês */}
+        <div className="relative overflow-hidden rounded-2xl border border-slate-100 bg-white p-5 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Total Comprado no Mês
+            </span>
+            <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-purple-50 text-purple-600">
+              <Truck size={16} />
+            </div>
+          </div>
+          <div className="mt-3">
+            <h3 className="text-2xl font-black tabular-nums text-slate-900">
+              {formatarMoeda(kpis.totalMesValor)}
+            </h3>
+            <p className="mt-1 text-xs text-slate-500 font-medium">
+              {kpis.totalMesCount} {kpis.totalMesCount === 1 ? 'pedido no período' : 'pedidos no período'}
+            </p>
+          </div>
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-purple-500" />
+        </div>
+      </div>
+
+      {/* ── CARD COM ABAS, SELEÇÃO DE ANO/MÊS, BUSCA E TABELA (ESTILO VENDAS) ── */}
+      <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs space-y-4">
+        {/* Abas de Status */}
+        <div className="flex gap-4 border-b border-slate-100 pb-3 overflow-x-auto">
+          {[
+            { value: 'todos', label: 'TODOS', count: contagemAbas.todos },
+            { value: 'rascunho', label: 'CRIADOS / PROPOSTAS', count: contagemAbas.rascunho },
+            { value: 'emitido', label: 'NF FÁBRICA', count: contagemAbas.emitido },
+            { value: 'recebido', label: 'RECEBIDOS', count: contagemAbas.recebido },
+            { value: 'cancelado', label: 'CANCELADOS', count: contagemAbas.cancelado },
+          ].map((aba) => {
+            const isSelected = filtroStatus === aba.value
             return (
               <button
                 key={aba.value}
-                onClick={() => setFiltroStatus(aba.value)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  padding: '4px 0',
-                  fontSize: 12,
-                  fontWeight: 700,
-                  color: isSelected ? '#0D5BA3' : '#475569',
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  borderBottom: isSelected ? '2px solid #0D5BA3' : '2px solid transparent',
-                  marginBottom: -13,
-                  whiteSpace: 'nowrap',
-                }}
+                type="button"
+                onClick={() => setFiltroStatus(aba.value as any)}
+                className={`inline-flex items-center gap-2 pb-2 text-xs font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap cursor-pointer ${
+                  isSelected
+                    ? 'border-sky-600 text-sky-700'
+                    : 'border-transparent text-slate-400 hover:text-slate-700'
+                }`}
               >
                 <span>{aba.label}</span>
-                <span
-                  style={{
-                    background: isSelected ? '#E3EEFA' : '#E4EEE6',
-                    color: isSelected ? '#0D5BA3' : '#475569',
-                    fontSize: 11,
-                    fontWeight: 700,
-                    padding: '2px 7px',
-                    borderRadius: 10,
-                  }}
-                >
-                  {count}
-                </span>
+                {aba.count > 0 && (
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-black ${
+                      isSelected ? 'bg-sky-100 text-sky-800' : 'bg-slate-100 text-slate-500'
+                    }`}
+                  >
+                    {aba.count}
+                  </span>
+                )}
               </button>
             )
           })}
         </div>
 
-        {/* Linha de Filtros: Ano + Pílulas de Meses + Input de Busca */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, gap: 12, flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            {/* Seletor de Ano com Dropdown */}
+        {/* Filtros de Ano, Mês e Busca */}
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 pt-1">
+          <div className="flex flex-wrap items-center gap-2">
             <select
               value={filtroAno}
               onChange={(e) => setFiltroAno(Number(e.target.value))}
-              style={{
-                padding: '8px 14px',
-                borderRadius: 22,
-                border: '1px solid #CBD5E1',
-                fontSize: 13,
-                fontWeight: 700,
-                color: '#0F2A43',
-                background: '#FFFFFF',
-                cursor: 'pointer',
-                outline: 'none',
-              }}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-sky-500 shadow-2xs cursor-pointer"
             >
               {[2024, 2025, 2026, 2027].map((ano) => (
                 <option key={ano} value={ano}>
-                  {ano} ▾
+                  {ano}
                 </option>
               ))}
             </select>
 
-            {/* Pílulas de Meses (JAN a DEZ) */}
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3, flexWrap: 'wrap' }}>
+            <div className="inline-flex items-center gap-1 overflow-x-auto max-w-full pb-1 sm:pb-0">
               {MESES_LISTA.map((m) => {
                 const isSelected = filtroMesNum === m.num
-
                 return (
                   <button
                     key={m.num}
+                    type="button"
                     onClick={() => setFiltroMesNum(m.num)}
-                    style={{
-                      padding: '7px 12px',
-                      borderRadius: 20,
-                      border: 'none',
-                      background: isSelected ? '#0D5BA3' : 'transparent',
-                      color: isSelected ? '#FFFFFF' : '#334155',
-                      fontSize: 12,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                    }}
+                    className={`rounded-lg px-2.5 py-1 text-[11px] font-bold uppercase transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-sky-600 text-white shadow-xs font-extrabold'
+                        : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+                    }`}
                   >
                     {m.short}
                   </button>
@@ -1551,1197 +1702,924 @@ export function V2PedidoCompraPage() {
             </div>
           </div>
 
-          {/* Campo de Busca */}
-          <div style={{ position: 'relative', width: 280 }}>
-            <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
-            <input
-              type="text"
-              placeholder="Buscar no extrato/pedidos..."
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '9px 12px 9px 34px',
-                borderRadius: 10,
-                border: '1px solid #CBD5E1',
-                fontSize: 13,
-                outline: 'none',
-                boxSizing: 'border-box',
-              }}
-            />
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1 sm:w-80">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="BUSCAR POR FORNECEDOR, NF OU Nº..."
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 py-2 text-xs text-slate-700 uppercase font-medium outline-none focus:border-sky-500 shadow-2xs"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={loadData}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700 transition cursor-pointer shadow-2xs"
+              title="Recarregar dados"
+            >
+              <RotateCcw size={13} className="text-slate-500" />
+              <span className="hidden sm:inline">Sincronizar</span>
+            </button>
           </div>
         </div>
-      </div>
 
-      {/* ── CARD DO PEDIDO COM STATUS PIPELINE (CONFORME IMAGEM 02) ── */}
-      <div
-        style={{
-          background: '#FFFFFF',
-          borderRadius: 16,
-          border: '1px solid #D7E4DA',
-          padding: '20px 24px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
-        }}
-      >
-        {pedidosFiltrados.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '36px 0', color: '#64748B' }}>
-            Nenhum pedido de compra encontrado para este filtro.
-          </div>
-        ) : (
-          pedidosFiltrados.map((pedido) => (
-            <div key={pedido.id} style={{ marginBottom: 16 }}>
-              {(() => {
-                const isCriado = pedido.status !== 'cancelado'
-                const isEmitido = pedido.status === 'emitido' || pedido.status === 'recebido' || pedido.status === 'recebido_parcial'
-                const isRecebidoParcial = pedido.status === 'recebido_parcial'
-                const isRecebido = pedido.status === 'recebido'
+        {/* Tabela de Pedidos de Compra (Semelhante à Tabela de Vendas) */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs text-slate-700 min-w-[780px]">
+            <thead>
+              <tr className="border-b border-slate-100 bg-slate-50/60">
+                <th className="px-4 py-3.5 text-left font-bold tracking-wider text-slate-400 uppercase">
+                  Nº Compra
+                </th>
+                <th className="px-4 py-3.5 text-left font-bold tracking-wider text-slate-400 uppercase">
+                  Data
+                </th>
+                <th className="px-4 py-3.5 text-left font-bold tracking-wider text-slate-400 uppercase">
+                  Fornecedor
+                </th>
+                <th className="px-4 py-3.5 text-left font-bold tracking-wider text-slate-400 uppercase">
+                  Status
+                </th>
+                <th className="px-4 py-3.5 text-left font-bold tracking-wider text-slate-400 uppercase">
+                  NF Fornecedor
+                </th>
+                <th className="px-4 py-3.5 text-left font-bold tracking-wider text-slate-400 uppercase">
+                  Pagamento
+                </th>
+                <th className="px-4 py-3.5 text-right font-bold tracking-wider text-slate-400 uppercase">
+                  Total
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {pedidosFiltrados.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="text-center py-12 text-slate-400 font-medium">
+                    Nenhum pedido de compra encontrado neste filtro.
+                  </td>
+                </tr>
+              ) : (
+                pedidosFiltrados.map((p) => {
+                  const statusBadge = getStatusBadgeInfo(p)
+                  const dataFormatada = p.dataPedido ? formatarData(p.dataPedido) : p.dataEmissao ? formatarData(p.dataEmissao) : '—'
+                  const totalComFrete = (p.total || 0) + (p.frete || 0)
 
-                const totalItensSolicitados = pedido.itens ? pedido.itens.reduce((acc, it) => acc + (it.quantidade || 0), 0) : 0
-                const totalItensRecebidos = pedido.itens ? pedido.itens.reduce((acc, it) => acc + (it.quantidade_recebida || 0), 0) : 0
-                const pctRecebido = totalItensSolicitados > 0 ? Math.min(100, Math.round((totalItensRecebidos / totalItensSolicitados) * 100)) : 0
-
-                return (
-                  <>
-                    <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: isMobile
-                          ? '1fr'
-                          : isTablet
-                          ? 'minmax(200px, 1.4fr) 100px 120px 110px'
-                          : 'minmax(280px, 1.8fr) 110px 140px 140px auto',
-                        gap: isMobile ? 12 : 16,
-                        alignItems: isMobile ? 'flex-start' : 'center',
-                        paddingBottom: 14,
-                      }}
+                  return (
+                    <tr
+                      key={p.id}
+                      onClick={() => handleAbrirVisualizacao(p)}
+                      className="hover:bg-slate-50/80 transition-colors cursor-pointer"
                     >
-                      {/* 1. Número, Fornecedor e Badges de Pagamento / Conta */}
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                          <span style={{ fontSize: 12, fontFamily: 'monospace', color: '#475569' }}>
-                            #{pedido.numero}
-                          </span>
-                          <span
-                            style={{
-                              fontSize: 11,
-                              fontWeight: 700,
-                              padding: '2px 8px',
-                              borderRadius: 6,
-                              background:
-                                pedido.status === 'recebido'
-                                  ? '#DCFCE7'
-                                  : pedido.status === 'recebido_parcial'
-                                  ? '#FEF3C7'
-                                  : pedido.status === 'emitido'
-                                  ? '#E3EEFA'
-                                  : '#F1F5F9',
-                              color:
-                                pedido.status === 'recebido'
-                                  ? '#15803D'
-                                  : pedido.status === 'recebido_parcial'
-                                  ? '#B45309'
-                                  : pedido.status === 'emitido'
-                                  ? '#0D5BA3'
-                                  : '#475569',
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.03em',
-                            }}
-                          >
-                            {pedido.status === 'rascunho'
-                              ? 'RASCUNHO'
-                              : pedido.status === 'recebido_parcial'
-                              ? 'PARCIAL'
-                              : pedido.status}
-                          </span>
-                        </div>
-
-                        <strong style={{ fontSize: 15, color: '#0F2A43', display: 'block', lineHeight: 1.3 }}>
-                          {pedido.fornecedor}
-                        </strong>
-
-                        {pedido.observacao && (
-                          <span style={{ fontSize: 13, color: '#475569', display: 'block', marginTop: 3 }}>
-                            {pedido.observacao}
-                          </span>
-                        )}
-
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5, flexWrap: 'wrap' }}>
-                          <span
-                            style={{
-                              fontSize: 11,
-                              fontWeight: 700,
-                              padding: '2px 8px',
-                              borderRadius: 8,
-                              background: '#E3EEFA',
-                              color: '#0D5BA3',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 4,
-                            }}
-                          >
-                            💳 {pedido.formaPagamento || 'Boleto'}
-                          </span>
-                          {pedido.contaSaidaTag && (
-                            <span
-                              style={{
-                                fontSize: 11,
-                                fontWeight: 700,
-                                padding: '2px 8px',
-                                borderRadius: 8,
-                                background: '#FEF3C7',
-                                color: '#92400E',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 4,
-                              }}
-                            >
-                              🏷️ {pedido.contaSaidaTag}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Barra de Progresso de Itens Recebidos */}
-                        {(pedido.status === 'emitido' || pedido.status === 'recebido_parcial' || pedido.status === 'recebido') && totalItensSolicitados > 0 && (
-                          <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, maxWidth: 320 }}>
-                            <div style={{ flex: 1, height: 6, background: '#E2E8F0', borderRadius: 3, overflow: 'hidden' }}>
-                              <div
-                                style={{
-                                  width: `${pctRecebido}%`,
-                                  height: '100%',
-                                  background:
-                                    pedido.status === 'recebido'
-                                      ? '#15803D'
-                                      : pedido.status === 'recebido_parcial'
-                                      ? '#F59E0B'
-                                      : '#0D5BA3',
-                                  borderRadius: 3,
-                                  transition: 'width 0.3s ease',
-                                }}
-                              />
-                            </div>
-                            <span
-                              style={{
-                                fontSize: 11,
-                                fontWeight: 700,
-                                color: pedido.status === 'recebido_parcial' ? '#B45309' : '#475569',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {totalItensRecebidos}/{totalItensSolicitados} un ({pctRecebido}%)
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* 2. Emissão / Pedido */}
-                      <div>
-                        <span style={{ fontSize: 13, color: '#475569', display: 'block' }}>Data Pedido</span>
-                        <strong style={{ fontSize: 14, color: '#0F2A43', display: 'block', marginTop: 2 }}>
-                          {formatarData(pedido.dataPedido || pedido.dataEmissao)}
-                        </strong>
-                      </div>
-
-                      {/* 3. Previsão de Recebimento */}
-                      <div>
-                        <span style={{ fontSize: 13, color: '#475569', display: 'block' }}>Prev. Recebimento</span>
-                        <strong style={{ fontSize: 14, color: '#0F2A43', display: 'block', marginTop: 2 }}>
-                          {formatarData(pedido.dataRecebimentoPrevista || pedido.dataPrevistaEntrega)}
-                        </strong>
-                        {pedido.dataVencimento && (
-                          <span style={{ fontSize: 11, color: '#64748B', display: 'block', marginTop: 2 }}>
-                            Venc: {formatarData(pedido.dataVencimento)}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* 4. Total */}
-                      <div>
-                        <span style={{ fontSize: 13, color: '#475569', display: 'block' }}>Total</span>
-                        <div style={{ display: 'flex', flexDirection: 'column', marginTop: 2 }}>
-                          <strong style={{ fontSize: 17, color: '#0F2A43' }}>
-                            {formatarMoeda((pedido.total || 0) + (pedido.frete || 0))}
-                          </strong>
-                          {Boolean(pedido.frete && pedido.frete > 0) && (
-                            <span style={{ fontSize: 11, color: '#64748B' }}>
-                              (+ {formatarMoeda(pedido.frete ?? 0)} frete)
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* 5. Pipeline de Status Visual (Criado -> Emitido -> Recebido) */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: isMobile ? 'flex-start' : 'flex-end', flexWrap: 'wrap' }}>
-                        {/* Etapa 1: Criado */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <div
-                            style={{
-                              width: 22,
-                              height: 22,
-                              borderRadius: 11,
-                              background: isCriado ? '#15803D' : '#CBD5E1',
-                              color: '#fff',
-                              fontSize: 11,
-                              fontWeight: 700,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                            }}
-                          >
-                            ✓
-                          </div>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: isCriado ? '#15803D' : '#64748B' }}>
-                            Criado
-                          </span>
-                        </div>
-
-                        <div
-                          style={{
-                            width: 14,
-                            height: 2,
-                            background: isEmitido ? '#15803D' : '#CBD5E1',
+                      {/* Nº Compra Clicável para abrir o Drawer */}
+                      <td className="px-4 py-4 tabular-nums">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleAbrirVisualizacao(p)
                           }}
-                        />
+                          className="inline-flex items-center gap-1.5 text-sky-700 hover:text-sky-950 font-black hover:underline group cursor-pointer text-left text-xs"
+                          title="Clique para abrir detalhes e ações deste pedido"
+                        >
+                          <Eye size={13} className="text-sky-500 group-hover:scale-110 transition-transform shrink-0" />
+                          <span>#{p.numero}</span>
+                        </button>
+                      </td>
 
-                        {/* Etapa 2: Emitido */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <div
-                            style={{
-                              width: 22,
-                              height: 22,
-                              borderRadius: 11,
-                              background: isEmitido ? '#15803D' : '#E2E8F0',
-                              color: isEmitido ? '#fff' : '#64748B',
-                              fontSize: 11,
-                              fontWeight: 700,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                            }}
-                          >
-                            {isEmitido ? '✓' : '2'}
-                          </div>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: isEmitido ? '#15803D' : '#64748B' }}>
-                            Emitido
-                          </span>
+                      {/* Data */}
+                      <td className="px-4 py-4 text-slate-600 font-medium whitespace-nowrap">
+                        {dataFormatada}
+                      </td>
+
+                      {/* Fornecedor */}
+                      <td className="px-4 py-4 font-bold text-slate-900">
+                        <div className="max-w-[260px] truncate" title={p.fornecedor}>
+                          {p.fornecedor}
                         </div>
-
-                        <div
-                          style={{
-                            width: 14,
-                            height: 2,
-                            background: isRecebido ? '#15803D' : isRecebidoParcial ? '#F59E0B' : '#CBD5E1',
-                          }}
-                        />
-
-                        {/* Etapa 3: Recebido / Parcial */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <div
-                            style={{
-                              width: 22,
-                              height: 22,
-                              borderRadius: 11,
-                              background: isRecebido ? '#15803D' : isRecebidoParcial ? '#F59E0B' : '#E2E8F0',
-                              color: isRecebido || isRecebidoParcial ? '#fff' : '#64748B',
-                              fontSize: 11,
-                              fontWeight: 700,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                            }}
-                          >
-                            {isRecebido ? '✓' : isRecebidoParcial ? '½' : '3'}
+                        {p.observacao && (
+                          <div className="text-[10px] font-normal text-slate-400 truncate max-w-[260px]">
+                            {p.observacao}
                           </div>
-                          <span
-                            style={{
-                              fontSize: 12,
-                              fontWeight: 700,
-                              color: isRecebido ? '#15803D' : isRecebidoParcial ? '#B45309' : '#64748B',
-                            }}
-                          >
-                            {isRecebidoParcial ? 'Parcial' : 'Recebido'}
+                        )}
+                      </td>
+
+                      {/* Status / Etapa (Criado / NF Fábrica / Recebido / Cancelado) */}
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold border ${statusBadge.className}`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${statusBadge.dotClass}`} />
+                          {statusBadge.label}
+                        </span>
+                      </td>
+
+                      {/* NF Fornecedor */}
+                      <td className="px-4 py-4 text-slate-600 font-medium whitespace-nowrap">
+                        {p.numeroNf ? (
+                          <span className="inline-flex items-center gap-1 text-slate-800 font-bold bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
+                            <FileText size={12} className="text-slate-500" />
+                            NF {p.numeroNf}
                           </span>
-                        </div>
-                      </div>
-                    </div>
+                        ) : (
+                          <span className="text-slate-400 text-xs italic">Não informada</span>
+                        )}
+                      </td>
 
-                    {/* Ações da Linha: Botões de transição e edição/visualização */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, paddingBottom: 16, borderBottom: '1px solid #EDF2F7', flexWrap: 'wrap' }}>
-                      {/* Botão Detalhes (Drawer) */}
-                      <button
-                        onClick={() => setPedidoVisualizando(pedido)}
-                        title="Abrir painel lateral de detalhes"
-                        style={{
-                          padding: '7px 13px',
-                          borderRadius: 8,
-                          border: '1.5px solid #0D5BA3',
-                          background: '#EFF6FF',
-                          color: '#0D5BA3',
-                          fontSize: 13,
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 5,
-                        }}
-                      >
-                        <Eye size={14} />
-                        <span>Detalhes</span>
-                      </button>
+                      {/* Pagamento */}
+                      <td className="px-4 py-4 text-slate-600 font-medium whitespace-nowrap">
+                        <span className="block font-bold text-slate-800 uppercase text-xs">
+                          {p.formaPagamento || 'A DEFINIR'}
+                        </span>
+                        <span className="text-[11px] text-slate-400">
+                          {p.numeroParcelas && p.numeroParcelas > 1 ? `${p.numeroParcelas}x parcelado` : 'À vista / Parcela única'}
+                        </span>
+                      </td>
 
-                      {/* Se Rascunho (Criado) */}
-                      {pedido.status === 'rascunho' && (
-                        <>
-                          <button
-                            onClick={() => handleAvançarParaEmitido(pedido)}
-                            style={{
-                              padding: '7px 14px',
-                              borderRadius: 8,
-                              border: 'none',
-                              background: '#0D5BA3',
-                              color: '#FFFFFF',
-                              fontSize: 13,
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 6,
-                            }}
-                          >
-                            <span>Emitir Pedido</span>
-                            <ArrowRight size={14} />
-                          </button>
-
-                          <button
-                            onClick={() => handleEditarPedido(pedido)}
-                            title="Editar pedido"
-                            style={{
-                              padding: '7px 12px',
-                              borderRadius: 8,
-                              border: '1px solid #CBD5E1',
-                              background: '#FFFFFF',
-                              color: '#0D5BA3',
-                              fontSize: 13,
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 4,
-                            }}
-                          >
-                            <Edit3 size={14} />
-                            <span>Editar</span>
-                          </button>
-                        </>
-                      )}
-
-                      {/* Se Emitido */}
-                      {pedido.status === 'emitido' && (
-                        <>
-                          <button
-                            onClick={() => handleAbrirRecebimento(pedido)}
-                            style={{
-                              padding: '7px 14px',
-                              borderRadius: 8,
-                              border: 'none',
-                              background: '#15803D',
-                              color: '#FFFFFF',
-                              fontSize: 13,
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 6,
-                            }}
-                          >
-                            <Package size={14} />
-                            <span>Receber Itens</span>
-                          </button>
-
-                          <button
-                            onClick={() => handleEditarPedido(pedido)}
-                            title="Editar pedido emitido"
-                            style={{
-                              padding: '7px 12px',
-                              borderRadius: 8,
-                              border: '1px solid #CBD5E1',
-                              background: '#FFFFFF',
-                              color: '#0D5BA3',
-                              fontSize: 13,
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 4,
-                            }}
-                          >
-                            <Edit3 size={14} />
-                            <span>Editar</span>
-                          </button>
-
-                          <button
-                            onClick={() => handleVoltarParaAberto(pedido)}
-                            title="Retornar para rascunho"
-                            style={{
-                              padding: '7px 12px',
-                              borderRadius: 8,
-                              border: '1px solid #F0B45C',
-                              background: '#FFF4E0',
-                              color: '#B45309',
-                              fontSize: 13,
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 4,
-                            }}
-                          >
-                            <RotateCcw size={14} />
-                            <span>Voltar p/ Aberto</span>
-                          </button>
-                        </>
-                      )}
-
-                      {/* Se Recebido Parcial */}
-                      {pedido.status === 'recebido_parcial' && (
-                        <>
-                          <button
-                            onClick={() => handleAbrirRecebimento(pedido)}
-                            style={{
-                              padding: '7px 14px',
-                              borderRadius: 8,
-                              border: 'none',
-                              background: '#D97706',
-                              color: '#FFFFFF',
-                              fontSize: 13,
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 6,
-                            }}
-                          >
-                            <Package size={14} />
-                            <span>Receber Mais</span>
-                          </button>
-
-                          <button
-                            onClick={() => handleDesfazerRecebimento(pedido)}
-                            title="Desfazer recebimentos e estornar entradas no estoque"
-                            style={{
-                              padding: '7px 12px',
-                              borderRadius: 8,
-                              border: '1px solid #CBD5E1',
-                              background: '#FFFFFF',
-                              color: '#B45309',
-                              fontSize: 12,
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 4,
-                            }}
-                          >
-                            <RotateCcw size={13} />
-                            <span>Desfazer Recebimentos</span>
-                          </button>
-                        </>
-                      )}
-
-                      {/* Se Recebido Total */}
-                      {pedido.status === 'recebido' && (
-                        <>
-                          <span
-                            style={{
-                              background: '#DCFCE7',
-                              color: '#15803D',
-                              padding: '6px 12px',
-                              borderRadius: 8,
-                              fontSize: 13,
-                              fontWeight: 800,
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 5,
-                            }}
-                          >
-                            <CheckCircle size={15} />
-                            Recebido no Estoque
-                          </span>
-
-                          {/* Desfazer recebimento: estorna estoque e volta para emitido */}
-                          <button
-                            onClick={() => handleDesfazerRecebimento(pedido)}
-                            title="Desfazer recebimento e estornar entrada no estoque"
-                            style={{
-                              padding: '7px 12px',
-                              borderRadius: 8,
-                              border: '1px solid #CBD5E1',
-                              background: '#FFFFFF',
-                              color: '#B45309',
-                              fontSize: 12,
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 4,
-                            }}
-                          >
-                            <RotateCcw size={13} />
-                            <span>Desfazer Recebimento</span>
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </>
-                )
-              })()}
-            </div>
-          ))
-        )}
-
-        {/* Rodapé do Card */}
-        <div style={{ borderTop: '1px solid #D7E4DA', paddingTop: 16, marginTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 14, color: '#475569' }}>
-            Não há outros pedidos em {nomeMesExtenso}.
-          </span>
-
-          <button
-            onClick={handleIniciarNovoPedido}
-            style={{
-              padding: '10px 18px',
-              borderRadius: 10,
-              border: '1px dashed #0D5BA3',
-              background: '#FFFFFF',
-              color: '#0D5BA3',
-              fontSize: 14,
-              fontWeight: 700,
-              cursor: 'pointer',
-            }}
-          >
-            + Criar novo pedido
-          </button>
+                      {/* Total */}
+                      <td className="px-4 py-4 text-right font-black text-slate-900 tabular-nums whitespace-nowrap text-sm">
+                        {formatarMoeda(totalComFrete)}
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
-      {/* ── MODAL: RECEBER ITENS DO PEDIDO ── */}
-      {showRecebimentoModal && pedidoRecebimento && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(15, 23, 42, 0.55)',
-            backdropFilter: 'blur(3px)',
-            zIndex: 1000,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 20,
-          }}
-        >
-          <div
-            style={{
-              background: '#FFFFFF',
-              borderRadius: 16,
-              maxWidth: 680,
-              width: '100%',
-              maxHeight: '90vh',
-              display: 'flex',
-              flexDirection: 'column',
-              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
-              overflow: 'hidden',
-            }}
-          >
-            {/* Header */}
-            <div
-              style={{
-                padding: '20px 24px',
-                borderBottom: '1px solid #E2E8F0',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                background: '#F8FAFC',
-              }}
-            >
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Package size={20} color="#0D5BA3" />
-                  <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0F2A43' }}>
-                    Recebimento de Itens — Pedido #{pedidoRecebimento.numero}
-                  </h3>
-                </div>
-                <span style={{ fontSize: 13, color: '#64748B', display: 'block', marginTop: 4 }}>
-                  Fornecedor: <strong>{pedidoRecebimento.fornecedor}</strong>
-                </span>
-              </div>
-              <button
-                onClick={() => setShowRecebimentoModal(false)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: 6,
-                  borderRadius: 8,
-                  color: '#64748B',
-                }}
-              >
-                <X size={20} />
-              </button>
-            </div>
+      {/* ── BOTÃO FLUTUANTE ADICIONAR (ESTILO VENDAS) ── */}
+      <button
+        type="button"
+        onClick={handleIniciarNovoPedido}
+        className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#0D6BAF] text-white shadow-xl hover:bg-[#095287] active:scale-95 transition-all cursor-pointer"
+        title="Criar novo pedido de compra"
+      >
+        <Plus size={26} strokeWidth={2.5} />
+      </button>
 
-            {/* Body */}
-            <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1 }}>
-              <p style={{ margin: '0 0 16px', fontSize: 13, color: '#475569', lineHeight: 1.5 }}>
-                Informe a quantidade entregue fisicamente para cada item. Se o fornecedor não for mais entregar a quantidade restante de algum item, você pode ajustar a quantidade final do pedido para encerrá-lo com abatimento do valor a pagar.
-              </p>
-
-              {/* Tabela de Itens */}
-              <div style={{ border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'hidden', marginBottom: 20 }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                  <thead>
-                    <tr style={{ background: '#F1F5F9', borderBottom: '1px solid #CBD5E1', textAlign: 'left' }}>
-                      <th style={{ padding: '10px 14px', fontWeight: 700, color: '#334155' }}>Produto</th>
-                      <th style={{ padding: '10px 10px', fontWeight: 700, color: '#334155', textAlign: 'center' }}>Pedido</th>
-                      <th style={{ padding: '10px 10px', fontWeight: 700, color: '#334155', textAlign: 'center' }}>Já Recebido</th>
-                      <th style={{ padding: '10px 10px', fontWeight: 700, color: '#334155', textAlign: 'center' }}>Pendente</th>
-                      <th style={{ padding: '10px 14px', fontWeight: 700, color: '#0D5BA3', textAlign: 'center' }}>Receber Agora</th>
-                      <th style={{ padding: '10px 10px', fontWeight: 700, color: '#334155', textAlign: 'right' }}>Ajustar</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pedidoRecebimento.itens.map((it) => {
-                      const jaRecebido = it.quantidade_recebida ?? 0
-                      const pendente = Math.max(0, it.quantidade - jaRecebido)
-                      const itemRecebendo = recebimentoItens.find((x) => x.produto_id === it.produto_id)
-                      const valorRecebendo = itemRecebendo ? itemRecebendo.quantidade_recebida : 0
-
-                      return (
-                        <tr key={it.produto_id} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                          <td style={{ padding: '12px 14px' }}>
-                            <strong style={{ display: 'block', color: '#0F2A43' }}>{it.produto_nome}</strong>
-                            <span style={{ fontSize: 11, color: '#64748B' }}>{formatarMoeda(it.preco_unitario)} / un</span>
-                          </td>
-                          <td style={{ padding: '12px 10px', textAlign: 'center', fontWeight: 600 }}>{it.quantidade}</td>
-                          <td style={{ padding: '12px 10px', textAlign: 'center', color: jaRecebido > 0 ? '#15803D' : '#64748B', fontWeight: 600 }}>
-                            {jaRecebido}
-                          </td>
-                          <td style={{ padding: '12px 10px', textAlign: 'center', color: pendente > 0 ? '#D97706' : '#64748B', fontWeight: 700 }}>
-                            {pendente}
-                          </td>
-                          <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                            <input
-                              type="number"
-                              min="0"
-                              max={pendente}
-                              disabled={pendente === 0}
-                              value={valorRecebendo}
-                              onChange={(e) => {
-                                const val = Math.min(pendente, Math.max(0, Number(e.target.value)))
-                                setRecebimentoItens((prev) =>
-                                  prev.map((ri) => (ri.produto_id === it.produto_id ? { ...ri, quantidade_recebida: val } : ri))
-                                )
-                              }}
-                              style={{
-                                width: 75,
-                                padding: '6px 8px',
-                                borderRadius: 8,
-                                border: '1.5px solid #0D5BA3',
-                                textAlign: 'center',
-                                fontWeight: 700,
-                                fontSize: 14,
-                                color: '#0F2A43',
-                                background: pendente === 0 ? '#F1F5F9' : '#FFFFFF',
-                              }}
-                            />
-                          </td>
-                          <td style={{ padding: '12px 10px', textAlign: 'right' }}>
-                            {pendente > 0 && jaRecebido > 0 && (
-                              <button
-                                type="button"
-                                title="Encerrar item com a quantidade já recebida e abater o restante"
-                                onClick={() => handleAjustarQuantidade(pedidoRecebimento.id, it.produto_id, jaRecebido)}
-                                style={{
-                                  padding: '4px 8px',
-                                  borderRadius: 6,
-                                  border: '1px solid #CBD5E1',
-                                  background: '#F8FAFC',
-                                  color: '#B45309',
-                                  fontSize: 11,
-                                  fontWeight: 600,
-                                  cursor: 'pointer',
-                                  whiteSpace: 'nowrap',
-                                }}
-                              >
-                                Encerrar em {jaRecebido}
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Justificativa / Observação do Recebimento */}
-              <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
-                  Observação / Justificativa deste recebimento <span style={{ color: '#64748B', fontWeight: 400 }}>(opcional)</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ex: Entregue via transportadora XPTO, NF 123456..."
-                  value={recebimentoJustificativa}
-                  onChange={(e) => setRecebimentoJustificativa(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '10px 14px',
-                    borderRadius: 10,
-                    border: '1px solid #CBD5E1',
-                    fontSize: 13,
-                    color: '#0F2A43',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div
-              style={{
-                padding: '16px 24px',
-                borderTop: '1px solid #E2E8F0',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'flex-end',
-                gap: 12,
-                background: '#F8FAFC',
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => setShowRecebimentoModal(false)}
-                style={{
-                  padding: '10px 18px',
-                  borderRadius: 10,
-                  border: '1px solid #CBD5E1',
-                  background: '#FFFFFF',
-                  color: '#475569',
-                  fontWeight: 600,
-                  fontSize: 14,
-                  cursor: 'pointer',
-                }}
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmarRecebimento}
-                style={{
-                  padding: '10px 22px',
-                  borderRadius: 10,
-                  border: 'none',
-                  background: '#15803D',
-                  color: '#FFFFFF',
-                  fontWeight: 700,
-                  fontSize: 14,
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  boxShadow: '0 2px 6px rgba(21, 128, 61, 0.25)',
-                }}
-              >
-                <CheckCircle size={16} />
-                <span>Confirmar Entrada no Estoque</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── DRAWER DE DETALHES DO PEDIDO (LATERAL) ── */}
+      {/* ── DRAWER DE DETALHES E VISUALIZAÇÃO DO PEDIDO (ESTILO VENDAS) ── */}
       {pedidoVisualizando && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(15, 23, 42, 0.4)',
-            backdropFilter: 'blur(2px)',
-            zIndex: 998,
-            display: 'flex',
-            justifyContent: 'flex-end',
-          }}
-          onClick={() => setPedidoVisualizando(null)}
-        >
+        <>
+          {/* Backdrop escuro com clique para fechar */}
           <div
-            style={{
-              width: '100%',
-              maxWidth: 540,
-              height: '100%',
-              background: '#FFFFFF',
-              boxShadow: '-4px 0 30px rgba(0,0,0,0.15)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-            onClick={(e) => e.stopPropagation()}
+            onClick={() => setPedidoVisualizando(null)}
+            className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs z-50 transition-opacity duration-300"
+          />
+
+          {/* Drawer Lateral Deslizante */}
+          <div
+            className="fixed top-0 right-0 bottom-0 w-full max-w-xl bg-white shadow-2xl z-50 flex flex-col transform transition-transform duration-300 ease-out font-sans animate-in slide-in-from-right duration-300"
+            role="dialog"
+            aria-modal="true"
           >
-            {/* Header Drawer */}
-            <div
-              style={{
-                padding: '20px 24px',
-                borderBottom: '1px solid #E2E8F0',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                background: '#F8FAFC',
-              }}
-            >
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#0F2A43' }}>
-                    Pedido #{pedidoVisualizando.numero}
-                  </h3>
-                  <span
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 700,
-                      padding: '2px 8px',
-                      borderRadius: 6,
-                      background:
-                        pedidoVisualizando.status === 'recebido'
-                          ? '#DCFCE7'
-                          : pedidoVisualizando.status === 'recebido_parcial'
-                          ? '#FEF3C7'
-                          : pedidoVisualizando.status === 'emitido'
-                          ? '#E3EEFA'
-                          : '#F1F5F9',
-                      color:
-                        pedidoVisualizando.status === 'recebido'
-                          ? '#15803D'
-                          : pedidoVisualizando.status === 'recebido_parcial'
-                          ? '#B45309'
-                          : pedidoVisualizando.status === 'emitido'
-                          ? '#0D5BA3'
-                          : '#475569',
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    {pedidoVisualizando.status === 'rascunho'
-                      ? 'RASCUNHO'
-                      : pedidoVisualizando.status === 'recebido_parcial'
-                      ? 'PARCIAL'
-                      : pedidoVisualizando.status}
-                  </span>
+            {/* Header do Drawer */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-[#0D6BAF] text-white">
+              <div className="flex items-center gap-2.5">
+                <div className="h-9 w-9 rounded-xl bg-white/15 flex items-center justify-center">
+                  <ShoppingCart size={20} className="text-white" />
                 </div>
-                <strong style={{ fontSize: 15, color: '#334155', display: 'block', marginTop: 4 }}>
-                  {pedidoVisualizando.fornecedor}
-                </strong>
+                <div>
+                  <h2 className="text-base font-black tracking-tight leading-tight">
+                    Pedido de Compra #{pedidoVisualizando.numero}
+                  </h2>
+                  <p className="text-xs text-sky-100/90 font-medium">
+                    {pedidoVisualizando.fornecedor}
+                  </p>
+                </div>
               </div>
 
               <button
+                type="button"
                 onClick={() => setPedidoVisualizando(null)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: 6,
-                  borderRadius: 8,
-                  color: '#64748B',
-                }}
+                className="p-1.5 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                title="Fechar visualização"
               >
                 <X size={20} />
               </button>
             </div>
 
             {/* Conteúdo com Scroll */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
-              {/* Card Resumo Financeiro & Prazos */}
-              <div
-                style={{
-                  background: '#F8FAFC',
-                  borderRadius: 12,
-                  border: '1px solid #E2E8F0',
-                  padding: '16px',
-                  marginBottom: 20,
-                }}
-              >
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-                  <div>
-                    <span style={{ fontSize: 11, color: '#64748B', display: 'block' }}>Data do Pedido</span>
-                    <strong style={{ fontSize: 13, color: '#0F2A43' }}>
-                      {formatarData(pedidoVisualizando.dataPedido || pedidoVisualizando.dataEmissao)}
-                    </strong>
-                  </div>
-                  <div>
-                    <span style={{ fontSize: 11, color: '#64748B', display: 'block' }}>Vencimento</span>
-                    <strong style={{ fontSize: 13, color: '#0F2A43' }}>
-                      {pedidoVisualizando.dataVencimento ? formatarData(pedidoVisualizando.dataVencimento) : 'À vista'}
-                    </strong>
-                  </div>
-                  <div>
-                    <span style={{ fontSize: 11, color: '#64748B', display: 'block' }}>Previsão de Recebimento</span>
-                    <strong style={{ fontSize: 13, color: '#0F2A43' }}>
-                      {formatarData(pedidoVisualizando.dataRecebimentoPrevista || pedidoVisualizando.dataPrevistaEntrega)}
-                    </strong>
-                  </div>
-                  <div>
-                    <span style={{ fontSize: 11, color: '#64748B', display: 'block' }}>Forma de Pagamento</span>
-                    <strong style={{ fontSize: 13, color: '#0F2A43' }}>
-                      {pedidoVisualizando.formaPagamento || 'Boleto'}
-                    </strong>
-                  </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Etapa e Status */}
+              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                    Etapa Atual
+                  </span>
+                  {(() => {
+                    const badge = getStatusBadgeInfo(pedidoVisualizando)
+                    return (
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold border ${badge.className}`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${badge.dotClass}`} />
+                        {badge.label}
+                      </span>
+                    )
+                  })()}
                 </div>
 
-                {pedidoVisualizando.justificativaDataRecebimento && (
-                  <div style={{ borderTop: '1px dashed #CBD5E1', paddingTop: 8, marginTop: 8 }}>
-                    <span style={{ fontSize: 11, color: '#64748B', display: 'block' }}>Justificativa do Prazo:</span>
-                    <span style={{ fontSize: 12, color: '#334155', fontStyle: 'italic' }}>
-                      "{pedidoVisualizando.justificativaDataRecebimento}"
+                <div className="text-right">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
+                    Total do Pedido
+                  </span>
+                  <span className="text-xl font-black text-[#0D6BAF] tabular-nums">
+                    {formatarMoeda((pedidoVisualizando.total || 0) + (pedidoVisualizando.frete || 0))}
+                  </span>
+                </div>
+              </div>
+
+              {/* Informações Principais (Datas e NF) */}
+              <div className="grid grid-cols-2 gap-3">
+                {/* Data do Pedido */}
+                <div className="p-3.5 bg-white rounded-xl border border-slate-200 space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Data do Pedido</span>
+                  <p className="text-xs font-bold text-slate-800">
+                    {pedidoVisualizando.dataPedido
+                      ? formatarData(pedidoVisualizando.dataPedido)
+                      : pedidoVisualizando.dataEmissao
+                      ? formatarData(pedidoVisualizando.dataEmissao)
+                      : '—'}
+                  </p>
+                </div>
+
+                {/* Previsão de Recebimento */}
+                <div className="p-3.5 bg-white rounded-xl border border-slate-200 space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Previsão Recebimento</span>
+                  <p className="text-xs font-bold text-slate-800">
+                    {pedidoVisualizando.dataRecebimentoPrevista
+                      ? formatarData(pedidoVisualizando.dataRecebimentoPrevista)
+                      : pedidoVisualizando.dataPrevistaEntrega
+                      ? formatarData(pedidoVisualizando.dataPrevistaEntrega)
+                      : '—'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Bloco NF Fornecedor */}
+              <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FileText size={16} className="text-[#0D6BAF]" />
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                      NF do Fornecedor / Fábrica
+                    </h4>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleAbrirNfModal(pedidoVisualizando)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-[#0D6BAF] bg-sky-50 hover:bg-sky-100 rounded-lg transition-colors cursor-pointer border border-sky-200"
+                  >
+                    <span>{pedidoVisualizando.numeroNf ? 'Alterar NF' : '+ Informar NF'}</span>
+                  </button>
+                </div>
+
+                {pedidoVisualizando.numeroNf ? (
+                  <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div>
+                      <span className="font-bold text-slate-800 text-sm">NF nº {pedidoVisualizando.numeroNf}</span>
+                      {pedidoVisualizando.dataNf && (
+                        <span className="text-slate-500 text-xs block">
+                          Emitida em {formatarData(pedidoVisualizando.dataNf)}
+                        </span>
+                      )}
+                    </div>
+                    {pedidoVisualizando.chaveNf && (
+                      <span className="text-[10px] font-mono text-slate-400 max-w-[200px] truncate" title={pedidoVisualizando.chaveNf}>
+                        Chave: {pedidoVisualizando.chaveNf}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <p className="pt-1 text-xs text-slate-400 font-medium">
+                    Ainda não foi informada a nota fiscal emitida pela fábrica para este pedido.
+                  </p>
+                )}
+              </div>
+
+              {/* Bloco Condições de Pagamento e Parcelas */}
+              <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CreditCard size={16} className="text-[#0D6BAF]" />
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                      Condição de Pagamento & Parcelas
+                    </h4>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleAbrirParcelasModal(pedidoVisualizando)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-[#0D6BAF] bg-sky-50 hover:bg-sky-100 rounded-lg transition-colors cursor-pointer border border-sky-200"
+                  >
+                    <span>Gerar / Alterar Parcelas</span>
+                  </button>
+                </div>
+
+                <div className="pt-2 border-t border-slate-100 grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Forma / Condição</span>
+                    <strong className="text-slate-800 block">{pedidoVisualizando.formaPagamento || 'Boleto'}</strong>
+                    <span className="text-slate-500 text-[11px]">
+                      {pedidoVisualizando.numeroParcelas && pedidoVisualizando.numeroParcelas > 1
+                        ? `${pedidoVisualizando.numeroParcelas} parcelas`
+                        : '1x (À vista / Parcela única)'}
                     </span>
                   </div>
-                )}
 
-                {pedidoVisualizando.contaSaidaTag && (
-                  <div style={{ borderTop: '1px dashed #CBD5E1', paddingTop: 8, marginTop: 8 }}>
-                    <span style={{ fontSize: 11, color: '#64748B', display: 'block' }}>Conta Saída:</span>
-                    <strong style={{ fontSize: 12, color: '#0D5BA3' }}>{pedidoVisualizando.contaSaidaTag}</strong>
-                  </div>
-                )}
-
-                <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: 10, marginTop: 10 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#475569', marginBottom: 4 }}>
-                    <span>Subtotal dos itens:</span>
-                    <span>{formatarMoeda(pedidoVisualizando.total || 0)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#475569', marginBottom: 4 }}>
-                    <span>Frete:</span>
-                    <span>{formatarMoeda(pedidoVisualizando.frete || 0)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, fontWeight: 800, color: '#0D5BA3', marginTop: 6, paddingTop: 6, borderTop: '1px dashed #CBD5E1' }}>
-                    <span>Total do Pedido:</span>
-                    <span>{formatarMoeda((pedidoVisualizando.total || 0) + (pedidoVisualizando.frete || 0))}</span>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Vencimento</span>
+                    <strong className="text-slate-800 block">
+                      {pedidoVisualizando.dataVencimento ? formatarData(pedidoVisualizando.dataVencimento) : '—'}
+                    </strong>
+                    {pedidoVisualizando.contaSaidaTag && (
+                      <span className="text-[#0D6BAF] font-bold text-[11px] block">
+                        {pedidoVisualizando.contaSaidaTag}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Seção Itens com Barra de Progresso */}
-              <div style={{ marginBottom: 24 }}>
-                <h4 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700, color: '#0F2A43', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Package size={16} color="#0D5BA3" />
-                  <span>Itens do Pedido & Status de Entrega</span>
-                </h4>
+              {/* Detalhamento Financeiro */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 text-xs">
+                <div className="flex justify-between items-center text-slate-600">
+                  <span>Subtotal dos Itens:</span>
+                  <span className="font-bold text-slate-800 tabular-nums">{formatarMoeda(pedidoVisualizando.total || 0)}</span>
+                </div>
+                <div className="flex justify-between items-center text-slate-600">
+                  <span>Frete:</span>
+                  <span className="font-bold text-slate-800 tabular-nums">{formatarMoeda(pedidoVisualizando.frete || 0)}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm font-black text-[#0D6BAF] pt-2 border-t border-slate-200">
+                  <span>TOTAL DO PEDIDO:</span>
+                  <span className="tabular-nums text-base">
+                    {formatarMoeda((pedidoVisualizando.total || 0) + (pedidoVisualizando.frete || 0))}
+                  </span>
+                </div>
+              </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {pedidoVisualizando.itens.map((it) => {
+              {/* Itens do Pedido com Barra de Progresso */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Package size={16} className="text-[#0D6BAF]" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                    Itens do Pedido & Entrega ({pedidoVisualizando.itens?.length || 0})
+                  </h4>
+                </div>
+
+                <div className="space-y-2.5">
+                  {pedidoVisualizando.itens?.map((it) => {
                     const jaRecebido = it.quantidade_recebida ?? 0
-                    const pendente = Math.max(0, it.quantidade - jaRecebido)
                     const pct = it.quantidade > 0 ? Math.min(100, Math.round((jaRecebido / it.quantidade) * 100)) : 0
                     const isCompleto = jaRecebido >= it.quantidade
 
                     return (
                       <div
                         key={it.produto_id}
-                        style={{
-                          border: '1px solid #E2E8F0',
-                          borderRadius: 10,
-                          padding: '12px 14px',
-                          background: isCompleto ? '#F0FDF4' : '#FFFFFF',
-                        }}
+                        className={`p-3.5 rounded-xl border ${
+                          isCompleto ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-white'
+                        }`}
                       >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-                          <div>
-                            <strong style={{ fontSize: 14, color: '#0F2A43', display: 'block' }}>{it.produto_nome}</strong>
-                            <span style={{ fontSize: 12, color: '#64748B' }}>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <strong className="text-xs font-bold text-slate-900 block truncate">
+                              {it.produto_nome}
+                            </strong>
+                            <span className="text-[11px] text-slate-500">
                               {it.quantidade} un × {formatarMoeda(it.preco_unitario)} = {formatarMoeda(it.total)}
                             </span>
                           </div>
+
                           <span
-                            style={{
-                              fontSize: 11,
-                              fontWeight: 700,
-                              padding: '2px 7px',
-                              borderRadius: 6,
-                              background: isCompleto ? '#DCFCE7' : jaRecebido > 0 ? '#FEF3C7' : '#F1F5F9',
-                              color: isCompleto ? '#15803D' : jaRecebido > 0 ? '#B45309' : '#64748B',
-                            }}
+                            className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase shrink-0 ${
+                              isCompleto
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : jaRecebido > 0
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-slate-100 text-slate-600'
+                            }`}
                           >
-                            {isCompleto ? 'Completo' : jaRecebido > 0 ? 'Parcial' : 'Pendente'}
+                            {isCompleto ? 'Recebido' : jaRecebido > 0 ? 'Parcial' : 'Pendente'}
                           </span>
                         </div>
 
                         {/* Barra de Progresso */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-                          <div style={{ flex: 1, height: 6, background: '#E2E8F0', borderRadius: 3, overflow: 'hidden' }}>
+                        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-100">
+                          <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                             <div
-                              style={{
-                                width: `${pct}%`,
-                                height: '100%',
-                                background: isCompleto ? '#15803D' : '#F59E0B',
-                                borderRadius: 3,
-                              }}
+                              style={{ width: `${pct}%` }}
+                              className={`h-full rounded-full transition-all ${
+                                isCompleto ? 'bg-emerald-600' : 'bg-amber-500'
+                              }`}
                             />
                           </div>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>
+                          <span className="text-[10px] font-bold text-slate-600 tabular-nums shrink-0">
                             {jaRecebido} / {it.quantidade} un ({pct}%)
                           </span>
                         </div>
-
-                        {/* Botão para ajustar item se ainda pendente */}
-                        {pendente > 0 && jaRecebido > 0 && (
-                          <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
-                            <button
-                              type="button"
-                              onClick={() => handleAjustarQuantidade(pedidoVisualizando.id, it.produto_id, jaRecebido)}
-                              style={{
-                                padding: '3px 8px',
-                                borderRadius: 6,
-                                border: '1px solid #CBD5E1',
-                                background: '#FFFFFF',
-                                color: '#B45309',
-                                fontSize: 11,
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                              }}
-                            >
-                              Encerrar item em {jaRecebido} un
-                            </button>
-                          </div>
-                        )}
                       </div>
                     )
                   })}
                 </div>
               </div>
 
-              {/* Seção Histórico de Recebimentos */}
-              <div>
-                <h4 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700, color: '#0F2A43', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Clock size={16} color="#0D5BA3" />
-                  <span>Histórico de Recebimentos</span>
-                </h4>
-
-                {pedidoVisualizando.recebimentos && pedidoVisualizando.recebimentos.length > 0 ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {/* Histórico de Recebimentos Parciais */}
+              {pedidoVisualizando.recebimentos && pedidoVisualizando.recebimentos.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Clock size={15} className="text-[#0D6BAF]" />
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                      Histórico de Recebimentos ({pedidoVisualizando.recebimentos.length})
+                    </h4>
+                  </div>
+                  <div className="space-y-2">
                     {pedidoVisualizando.recebimentos.map((rec: RecebimentoCompra, rIdx: number) => (
-                      <div
-                        key={rIdx}
-                        style={{
-                          borderLeft: '3px solid #15803D',
-                          background: '#F8FAFC',
-                          borderRadius: '0 8px 8px 0',
-                          padding: '10px 14px',
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: '#0F2A43' }}>
-                            {formatarData(rec.data)}
-                          </span>
-                          <span style={{ fontSize: 11, color: '#64748B' }}>Lote #{rIdx + 1}</span>
+                      <div key={rIdx} className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1">
+                        <div className="flex justify-between font-bold text-slate-800">
+                          <span>Lote #{rIdx + 1}</span>
+                          <span>{formatarData(rec.data)}</span>
                         </div>
-
-                        {rec.itens.map((rit, itIdx) => {
-                          const prod = pedidoVisualizando.itens.find((x) => x.produto_id === rit.produto_id)
-                          return (
-                            <div key={itIdx} style={{ fontSize: 12, color: '#334155', display: 'flex', justifyContent: 'space-between' }}>
-                              <span>• {prod?.produto_nome || 'Item'}</span>
-                              <strong>+{rit.quantidade_recebida} un</strong>
-                            </div>
-                          )
-                        })}
-
-                        {rec.justificativa && (
-                          <div style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic', marginTop: 4 }}>
-                            Obs: {rec.justificativa}
+                        {rec.itens.map((rit, itIdx) => (
+                          <div key={itIdx} className="flex justify-between text-slate-600 text-[11px]">
+                            <span>• {rit.produto_nome || 'Item'}</span>
+                            <span className="font-bold text-emerald-700">+{rit.quantidade_recebida} un</span>
                           </div>
+                        ))}
+                        {rec.justificativa && (
+                          <p className="text-[10px] text-slate-400 italic pt-1">
+                            Obs: {rec.justificativa}
+                          </p>
                         )}
                       </div>
                     ))}
                   </div>
-                ) : (
-                  <div style={{ padding: '16px', background: '#F8FAFC', borderRadius: 10, textAlign: 'center', color: '#64748B', fontSize: 13 }}>
-                    Nenhum recebimento registrado ainda.
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
 
-            {/* Footer Ações do Drawer */}
-            <div
-              style={{
-                padding: '16px 24px',
-                borderTop: '1px solid #E2E8F0',
-                display: 'flex',
-                gap: 10,
-                background: '#F8FAFC',
-                flexWrap: 'wrap',
-              }}
-            >
-              {(pedidoVisualizando.status === 'emitido' || pedidoVisualizando.status === 'recebido_parcial') && (
+            {/* ── FOOTER DO DRAWER COM AS 5 FUNÇÕES SOLICITADAS ── */}
+            <div className="p-4 border-t border-slate-200 bg-slate-50 flex flex-wrap items-center gap-2 justify-between">
+              <div className="flex flex-wrap items-center gap-2">
+                {/* 1. Editar */}
                 <button
                   type="button"
                   onClick={() => {
-                    handleAbrirRecebimento(pedidoVisualizando)
+                    handleEditarPedido(pedidoVisualizando)
+                    setPedidoVisualizando(null)
                   }}
-                  style={{
-                    flex: 1,
-                    padding: '10px 14px',
-                    borderRadius: 10,
-                    border: 'none',
-                    background: '#15803D',
-                    color: '#FFFFFF',
-                    fontWeight: 700,
-                    fontSize: 13,
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 6,
-                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 text-xs font-bold transition-all shadow-2xs cursor-pointer"
+                  title="Editar dados e itens do pedido"
                 >
-                  <Package size={15} />
-                  <span>{pedidoVisualizando.status === 'recebido_parcial' ? 'Receber Mais Itens' : 'Receber Itens'}</span>
+                  <Edit3 size={14} className="text-slate-600" />
+                  <span>Editar</span>
                 </button>
-              )}
 
-              {(pedidoVisualizando.status === 'recebido' || pedidoVisualizando.status === 'recebido_parcial') && (
+                {/* 2. NF Fornecedor */}
                 <button
                   type="button"
-                  onClick={() => handleDesfazerRecebimento(pedidoVisualizando)}
-                  style={{
-                    padding: '10px 14px',
-                    borderRadius: 10,
-                    border: '1px solid #CBD5E1',
-                    background: '#FFFFFF',
-                    color: '#B45309',
-                    fontWeight: 700,
-                    fontSize: 13,
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6,
-                  }}
+                  onClick={() => handleAbrirNfModal(pedidoVisualizando)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 text-xs font-bold transition-all shadow-2xs cursor-pointer"
+                  title="Informar ou editar número da Nota Fiscal emitida"
                 >
-                  <RotateCcw size={14} />
-                  <span>Desfazer</span>
+                  <FileText size={14} className="text-[#0D6BAF]" />
+                  <span>NF Fornecedor</span>
                 </button>
-              )}
 
+                {/* 3. Gerar Parcelas */}
+                <button
+                  type="button"
+                  onClick={() => handleAbrirParcelasModal(pedidoVisualizando)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 text-xs font-bold transition-all shadow-2xs cursor-pointer"
+                  title="Confirmar parcelamento e vencimentos no contas a pagar"
+                >
+                  <CreditCard size={14} className="text-[#0D6BAF]" />
+                  <span>Gerar Parcelas</span>
+                </button>
+
+                {/* Ação de Receber no Estoque (quando emitido ou parcial) */}
+                {(pedidoVisualizando.status === 'emitido' || pedidoVisualizando.status === 'recebido_parcial') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleAbrirRecebimento(pedidoVisualizando)
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-2xs cursor-pointer"
+                    title="Dar entrada física dos itens no estoque"
+                  >
+                    <Package size={14} />
+                    <span>Receber Itens</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* 4. Cancelar */}
+                {pedidoVisualizando.status !== 'cancelado' && (
+                  <button
+                    type="button"
+                    onClick={() => handleCancelarPedido(pedidoVisualizando.id)}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-rose-200 text-rose-700 bg-rose-50 hover:bg-rose-100 text-xs font-bold transition-all cursor-pointer"
+                    title="Cancelar pedido de compra"
+                  >
+                    <XCircle size={14} />
+                    <span>Cancelar</span>
+                  </button>
+                )}
+
+                {/* 5. Excluir */}
+                <button
+                  type="button"
+                  onClick={() => handleExcluirPedido(pedidoVisualizando.id)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-rose-200 text-rose-700 hover:bg-rose-50 text-xs font-bold transition-all cursor-pointer"
+                  title="Excluir pedido definitivamente"
+                >
+                  <Trash2 size={14} />
+                  <span>Excluir</span>
+                </button>
+
+                {/* Fechar */}
+                <button
+                  type="button"
+                  onClick={() => setPedidoVisualizando(null)}
+                  className="px-3.5 py-2 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 text-xs font-bold transition-all cursor-pointer"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── MODAL NF FORNECEDOR (INFORMAR NOTA FISCAL EMITIDA PELA FÁBRICA) ── */}
+      {showNfModal && pedidoVisualizando && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <FileText size={20} className="text-[#0D6BAF]" />
+                <h3 className="text-base font-bold text-slate-900">
+                  Nota Fiscal do Fornecedor
+                </h3>
+              </div>
               <button
                 type="button"
-                onClick={() => setPedidoVisualizando(null)}
-                style={{
-                  padding: '10px 16px',
-                  borderRadius: 10,
-                  border: '1px solid #CBD5E1',
-                  background: '#FFFFFF',
-                  color: '#475569',
-                  fontWeight: 600,
-                  fontSize: 13,
-                  cursor: 'pointer',
-                }}
+                onClick={() => setShowNfModal(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
               >
-                Fechar
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-500">
+              Informe a nota fiscal emitida pelo fornecedor para o Pedido #{pedidoVisualizando.numero}.
+              Ao informar a nota, o pedido avança para a etapa <strong>NF Fábrica</strong>.
+            </p>
+
+            <form onSubmit={handleSalvarNf} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-bold uppercase text-slate-600">
+                  Número da Nota Fiscal (NF-e) *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: 00123456"
+                  value={nfNumero}
+                  onChange={(e) => setNfNumero(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm font-bold text-slate-900 outline-none focus:border-[#0D6BAF]"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold uppercase text-slate-600 flex items-center gap-1.5">
+                  <Calendar size={14} className="text-[#0D6BAF]" />
+                  Data de Emissão da NF
+                </label>
+                <input
+                  type="date"
+                  value={nfData}
+                  onChange={(e) => setNfData(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-[#0D6BAF] cursor-pointer"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold uppercase text-slate-600">
+                  Chave de Acesso / Observação da NF (Opcional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Chave de 44 dígitos ou observações"
+                  value={nfChave}
+                  onChange={(e) => setNfChave(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-xs font-mono text-slate-700 outline-none focus:border-[#0D6BAF]"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowNfModal(false)}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={salvandoNf}
+                  className="rounded-xl bg-[#0D6BAF] hover:bg-[#095287] text-white px-5 py-2 text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  {salvandoNf ? 'Salvando...' : 'Salvar NF Fornecedor'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL GERAR PARCELAS (CONFIRMAR FORMA, VENCIMENTO E Nº PARCELAS) ── */}
+      {showParcelasModal && pedidoVisualizando && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <CreditCard size={20} className="text-[#0D6BAF]" />
+                <h3 className="text-base font-bold text-slate-900">
+                  Gerar e Confirmar Parcelas
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowParcelasModal(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Resumo do Valor */}
+            <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase text-slate-400">Total a Parcelar</span>
+                <p className="text-lg font-black text-[#0D6BAF] tabular-nums">
+                  {formatarMoeda((pedidoVisualizando.total || 0) + (pedidoVisualizando.frete || 0))}
+                </p>
+              </div>
+              <div className="text-right text-xs text-slate-500">
+                <span>Itens: {formatarMoeda(pedidoVisualizando.total || 0)}</span>
+                {pedidoVisualizando.frete ? <span className="block">+ Frete: {formatarMoeda(pedidoVisualizando.frete)}</span> : null}
+              </div>
+            </div>
+
+            {/* Configuração */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-bold uppercase text-slate-600">
+                  Forma de Pagamento
+                </label>
+                <select
+                  value={parcelasForma}
+                  onChange={(e) => setParcelasForma(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-[#0D6BAF] bg-white cursor-pointer"
+                >
+                  {FORMAS_PAGAMENTO.map((f) => (
+                    <option key={f} value={f}>{f}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold uppercase text-slate-600">
+                  Conta Saída (Tag)
+                </label>
+                <input
+                  type="text"
+                  placeholder="#Inter, #Caixa..."
+                  value={parcelasTag}
+                  onChange={(e) => setParcelasTag(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-800 outline-none focus:border-[#0D6BAF]"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-bold uppercase text-slate-600">
+                  Número de Parcelas
+                </label>
+                <select
+                  value={parcelasQtd}
+                  onChange={(e) => handleAlterarQtdParcelas(Number(e.target.value))}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-[#0D6BAF] bg-white cursor-pointer"
+                >
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 18, 24].map((n) => (
+                    <option key={n} value={n}>
+                      {n}x {n === 1 ? '(À vista / Parcela única)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold uppercase text-slate-600">
+                  1º Vencimento
+                </label>
+                <input
+                  type="date"
+                  value={parcelasPrimeiroVenc}
+                  onChange={(e) => handleAlterarPrimeiroVenc(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-800 outline-none focus:border-[#0D6BAF] cursor-pointer"
+                />
+              </div>
+            </div>
+
+            {/* Lista das Parcelas */}
+            <div className="space-y-2 pt-2 border-t border-slate-100">
+              <label className="text-xs font-bold uppercase text-slate-600 block">
+                Detalhamento das Parcelas
+              </label>
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                {parcelasLista.map((parc, idx) => (
+                  <div key={idx} className="flex items-center gap-2 p-2 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+                    <span className="w-14 font-bold text-slate-600 shrink-0">
+                      {idx + 1}ª ({idx + 1}/{parcelasLista.length})
+                    </span>
+                    <input
+                      type="date"
+                      value={parc.vencimento}
+                      onChange={(e) => handleEditarParcelaLinha(idx, 'vencimento', e.target.value)}
+                      className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800 outline-none focus:border-[#0D6BAF] cursor-pointer"
+                    />
+                    <div className="flex items-center gap-1 flex-1">
+                      <span className="text-slate-400 font-bold">R$</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={parc.valor}
+                        onChange={(e) => handleEditarParcelaLinha(idx, 'valor', Number(e.target.value))}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-slate-900 outline-none focus:border-[#0D6BAF]"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-between items-center text-xs font-bold pt-2 border-t border-slate-100 text-slate-700">
+                <span>Soma das parcelas:</span>
+                <span className={Math.abs(somaParcelas - ((pedidoVisualizando.total || 0) + (pedidoVisualizando.frete || 0))) < 0.05 ? 'text-emerald-700 font-black' : 'text-amber-600 font-black'}>
+                  {formatarMoeda(somaParcelas)}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowParcelasModal(false)}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={salvandoParcelas}
+                onClick={handleConfirmarSalvarParcelas}
+                className="rounded-xl bg-[#0D6BAF] hover:bg-[#095287] text-white px-5 py-2 text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-50"
+              >
+                {salvandoParcelas ? 'Salvando...' : 'Confirmar e Gerar Parcelas'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL RECEBIMENTO POR ITEM (DAR ENTRADA FÍSICA NO ESTOQUE) ── */}
+      {showRecebimentoModal && pedidoRecebimento && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="w-full max-w-3xl rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Package size={20} className="text-emerald-600" />
+                <h3 className="text-base font-bold text-slate-900">
+                  Recebimento de Itens no Estoque · Pedido #{pedidoRecebimento.numero}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowRecebimentoModal(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-500">
+              Informe a quantidade recebida de cada item para registrar a entrada física no estoque.
+            </p>
+
+            <div className="border border-slate-200 rounded-xl overflow-hidden">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-left text-slate-500 font-bold uppercase text-[10px]">
+                    <th className="p-3">Produto</th>
+                    <th className="p-3 text-center">Pedido</th>
+                    <th className="p-3 text-center">Já Recebido</th>
+                    <th className="p-3 text-center">Pendente</th>
+                    <th className="p-3 text-center">Receber Agora</th>
+                    <th className="p-3 text-right">Ação</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {pedidoRecebimento.itens.map((it) => {
+                    const jaRecebido = it.quantidade_recebida ?? 0
+                    const pendente = Math.max(0, it.quantidade - jaRecebido)
+                    const itemRecebendo = recebimentoItens.find((x) => x.produto_id === it.produto_id)
+                    const valorRecebendo = itemRecebendo ? itemRecebendo.quantidade_recebida : 0
+
+                    return (
+                      <tr key={it.produto_id} className="hover:bg-slate-50/50">
+                        <td className="p-3">
+                          <strong className="block text-slate-900">{it.produto_nome}</strong>
+                          <span className="text-[11px] text-slate-400">{formatarMoeda(it.preco_unitario)} / un</span>
+                        </td>
+                        <td className="p-3 text-center font-bold text-slate-700">{it.quantidade}</td>
+                        <td className="p-3 text-center font-bold text-emerald-700">{jaRecebido}</td>
+                        <td className="p-3 text-center font-bold text-amber-700">{pendente}</td>
+                        <td className="p-3 text-center">
+                          <input
+                            type="number"
+                            min="0"
+                            max={pendente}
+                            disabled={pendente === 0}
+                            value={valorRecebendo}
+                            onChange={(e) => {
+                              const val = Math.min(pendente, Math.max(0, Number(e.target.value)))
+                              setRecebimentoItens((prev) =>
+                                prev.map((ri) => (ri.produto_id === it.produto_id ? { ...ri, quantidade_recebida: val } : ri))
+                              )
+                            }}
+                            className="w-20 rounded-lg border border-[#0D6BAF] px-2 py-1 text-center text-xs font-bold text-slate-900 outline-none focus:ring-1 focus:ring-[#0D6BAF] disabled:bg-slate-100"
+                          />
+                        </td>
+                        <td className="p-3 text-right">
+                          {pendente > 0 && jaRecebido > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => handleAjustarQuantidade(pedidoRecebimento.id, it.produto_id, jaRecebido)}
+                              className="px-2 py-1 rounded-md border border-amber-300 bg-amber-50 text-amber-800 text-[10px] font-bold hover:bg-amber-100 cursor-pointer"
+                              title="Encerrar item na quantidade já recebida"
+                            >
+                              Encerrar em {jaRecebido}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold uppercase text-slate-600">
+                Observação do Recebimento (Opcional)
+              </label>
+              <input
+                type="text"
+                placeholder="Ex: Entregue via transportadora XPTO, NF informada..."
+                value={recebimentoJustificativa}
+                onChange={(e) => setRecebimentoJustificativa(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-xs text-slate-700 outline-none focus:border-[#0D6BAF]"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowRecebimentoModal(false)}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmarRecebimento}
+                className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 text-xs font-bold transition shadow-xs cursor-pointer inline-flex items-center gap-1.5"
+              >
+                <CheckCircle size={15} />
+                <span>Confirmar Entrada no Estoque</span>
               </button>
             </div>
           </div>

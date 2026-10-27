@@ -64,6 +64,12 @@ export type PedidoCompra = {
   justificativaDataRecebimento?: string
   /** Histórico de recebimentos parciais */
   recebimentos?: RecebimentoCompra[]
+  /** Número da Nota Fiscal emitida pelo fornecedor/fábrica */
+  numeroNf?: string | null
+  /** Data de emissão da NF do fornecedor */
+  dataNf?: string | null
+  /** Chave de acesso ou observações da NF */
+  chaveNf?: string | null
 }
 
 // ─── Constantes ─────────────────────────────────────────────────────────
@@ -101,6 +107,9 @@ export function cleanPedidoCompraForSupabase(p: PedidoCompra): Record<string, an
     dataVencimento: p.dataVencimento || null,
     dataRecebimentoPrevista: p.dataRecebimentoPrevista || null,
     justificativaDataRecebimento: p.justificativaDataRecebimento || null,
+    numeroNf: p.numeroNf || null,
+    dataNf: p.dataNf || null,
+    chaveNf: p.chaveNf || null,
     recebimentos: p.recebimentos || [],
     itens: p.itens || [],
     created_at: p.created_at || new Date().toISOString(),
@@ -207,7 +216,7 @@ export async function updatePedidoCompra(pedido: PedidoCompra): Promise<PedidoCo
   const updatedList = current.map((p) => (p.id === pedido.id ? updated : p))
   localStorage.setItem(KEY, JSON.stringify(updatedList))
 
-  // Atualizar Contas a Pagar associada (parcela única)
+  // Atualizar Contas a Pagar associada (preservando parcelas se já geradas)
   const contaExistente = await getContaPagarPorPedidoId(pedido.id)
   if (contaExistente) {
     const itemNome = pedido.itens.length > 1
@@ -217,23 +226,145 @@ export async function updatePedidoCompra(pedido: PedidoCompra): Promise<PedidoCo
     const totalComFrete = (pedido.total ?? 0) + (pedido.frete ?? 0)
     const vencimento = pedido.dataVencimento || contaExistente.parcelas?.[0]?.vencimento || new Date().toISOString().split('T')[0]
 
-    await updateContaPagar({
-      ...contaExistente,
-      fornecedor: pedido.fornecedor,
-      descricao: `Pedido de Compra #${pedido.numero} - ${itemNome}`,
-      total: totalComFrete,
-      parcelas: [
+    let parcelasAtualizadas = contaExistente.parcelas
+    if (!parcelasAtualizadas || parcelasAtualizadas.length <= 1) {
+      parcelasAtualizadas = [
         {
           numero: 1,
           vencimento,
           valor: totalComFrete,
           status: (contaExistente.parcelas?.[0]?.status || 'aberta') as StatusConta,
         },
-      ],
+      ]
+    }
+
+    await updateContaPagar({
+      ...contaExistente,
+      fornecedor: pedido.fornecedor,
+      descricao: `Pedido de Compra #${pedido.numero} - ${itemNome}`,
+      total: totalComFrete,
+      forma_pagamento: pedido.formaPagamento || contaExistente.forma_pagamento,
+      conta_bancaria_tag: pedido.contaSaidaTag || contaExistente.conta_bancaria_tag,
+      parcelas: parcelasAtualizadas,
     })
   }
 
   return updated
+}
+
+/**
+ * Salva a Nota Fiscal emitida pelo fornecedor/fábrica.
+ * Se o pedido estiver como 'rascunho', avança a etapa para 'emitido' (NF Fábrica).
+ */
+export async function salvarNfFornecedor(
+  pedidoId: string,
+  dados: {
+    numeroNf: string
+    dataNf?: string
+    chaveNf?: string
+  }
+): Promise<{ ok: true; pedido: PedidoCompra } | { ok: false; erro: string }> {
+  const current = await listPedidosCompra()
+  const pedido = current.find((p) => p.id === pedidoId)
+  if (!pedido) return { ok: false, erro: 'Pedido não encontrado.' }
+
+  pedido.numeroNf = dados.numeroNf.trim()
+  pedido.dataNf = dados.dataNf || new Date().toISOString().split('T')[0]
+  if (dados.chaveNf) pedido.chaveNf = dados.chaveNf.trim()
+
+  // Se o pedido ainda estava em rascunho/criado, avança para emitido (NF Fábrica)
+  if (pedido.status === 'rascunho') {
+    pedido.status = 'emitido'
+    if (!pedido.dataEmissao) {
+      pedido.dataEmissao = pedido.dataNf
+    }
+  }
+
+  const updated = await updatePedidoCompra(pedido)
+  return { ok: true, pedido: updated }
+}
+
+/**
+ * Gera / confirma o parcelamento do pedido de compra no Contas a Pagar.
+ * Atualiza o pedido com formaPagamento, contaSaidaTag, numeroParcelas e dataVencimento.
+ */
+export async function gerarParcelasCompra(
+  pedidoId: string,
+  dados: {
+    formaPagamento: string
+    contaSaidaTag?: string
+    parcelas: {
+      numero: number
+      vencimento: string
+      valor: number
+    }[]
+  }
+): Promise<{ ok: true; pedido: PedidoCompra } | { ok: false; erro: string }> {
+  const current = await listPedidosCompra()
+  const pedido = current.find((p) => p.id === pedidoId)
+  if (!pedido) return { ok: false, erro: 'Pedido não encontrado.' }
+
+  if (!dados.parcelas || dados.parcelas.length === 0) {
+    return { ok: false, erro: 'Pelo menos 1 parcela deve ser informada.' }
+  }
+
+  pedido.formaPagamento = dados.formaPagamento
+  pedido.contaSaidaTag = dados.contaSaidaTag || undefined
+  pedido.numeroParcelas = dados.parcelas.length
+  pedido.dataVencimento = dados.parcelas[0].vencimento
+
+  // Se estava em rascunho, avança para emitido
+  if (pedido.status === 'rascunho') {
+    pedido.status = 'emitido'
+    if (!pedido.dataEmissao) {
+      pedido.dataEmissao = new Date().toISOString().split('T')[0]
+    }
+  }
+
+  const totalComFrete = (pedido.total ?? 0) + (pedido.frete ?? 0)
+  const contaExistente = await getContaPagarPorPedidoId(pedido.id)
+
+  const descricaoItens =
+    pedido.itens && pedido.itens.length > 1
+      ? `${pedido.itens[0]?.produto_nome || 'Item'} (+${pedido.itens.length - 1} itens)`
+      : (pedido.itens?.[0]?.produto_nome || 'Item')
+
+  const novasParcelas = dados.parcelas.map((p, idx) => ({
+    numero: p.numero || idx + 1,
+    vencimento: p.vencimento,
+    valor: p.valor,
+    status: (contaExistente?.parcelas?.[idx]?.status || 'aberta') as StatusConta,
+    baixa: contaExistente?.parcelas?.[idx]?.baixa,
+  }))
+
+  if (contaExistente) {
+    await updateContaPagar({
+      ...contaExistente,
+      fornecedor: pedido.fornecedor,
+      descricao: `Pedido de Compra #${pedido.numero} - ${descricaoItens}`,
+      total: totalComFrete,
+      forma_pagamento: dados.formaPagamento,
+      conta_bancaria_tag: dados.contaSaidaTag || undefined,
+      parcelas: novasParcelas,
+    })
+  } else {
+    await saveContaPagar({
+      pedido_id: pedido.id,
+      descricao: `Pedido de Compra #${pedido.numero} - ${descricaoItens}`,
+      fornecedor: pedido.fornecedor,
+      origem: 'compra',
+      categoria: 'Mercadoria',
+      total: totalComFrete,
+      totalPago: 0,
+      status: 'aberta',
+      forma_pagamento: dados.formaPagamento,
+      conta_bancaria_tag: dados.contaSaidaTag || undefined,
+      parcelas: novasParcelas,
+    })
+  }
+
+  const updated = await updatePedidoCompra(pedido)
+  return { ok: true, pedido: updated }
 }
 
 // ─── Emissão ────────────────────────────────────────────────────────────
