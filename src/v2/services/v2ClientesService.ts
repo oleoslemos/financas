@@ -560,23 +560,57 @@ export async function deleteRelative(
 }
 
 /**
+ * Remove qualquer sufixo entre colchetes pré-existente e espaços extras,
+ * retornando o nome limpo em maiúsculas (ex: "JAIR MELO [ELVIRA MELO]" -> "JAIR MELO").
+ */
+export function extractBaseClientName(fullName?: string | null): string {
+  if (!fullName) return ''
+  return fullName
+    .replace(/\[.*?\]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase()
+}
+
+/**
+ * Retorna o nome formatado com o nome do cônjuge entre colchetes.
+ * Ex: titular "JAIR MELO", cônjuge "ELVIRA MELO" -> "JAIR MELO [ELVIRA MELO]".
+ */
+export function formatClientWithSpouseName(
+  clientName?: string | null,
+  spouseName?: string | null,
+): string {
+  const baseClient = extractBaseClientName(clientName)
+  const baseSpouse = extractBaseClientName(spouseName)
+  if (!baseSpouse) return baseClient
+  if (!baseClient) return `[${baseSpouse}]`
+  return `${baseClient} [${baseSpouse}]`
+}
+
+/**
  * Cria um novo cliente com os dados do familiar (ex: cônjuge),
  * copia o endereço do cliente titular e faz o vínculo recíproco.
+ * Aplica formatação invertida: cônjuge fica "ELVIRA MELO [JAIR MELO]"
+ * e titular fica "JAIR MELO [ELVIRA MELO]".
  */
 export async function createClientFromRelative(
   relative: Familiar,
   titularClient: BemAvivClient,
   companyId?: string | null,
-): Promise<{ client: BemAvivClient | null; error: string | null }> {
-  if (!supabase) return { client: null, error: 'Supabase não configurado.' }
+): Promise<{ client: BemAvivClient | null; updatedTitular: BemAvivClient | null; error: string | null }> {
+  if (!supabase) return { client: null, updatedTitular: null, error: 'Supabase não configurado.' }
 
-  const cleanName = relative.name.trim().toUpperCase()
-  if (!cleanName) return { client: null, error: 'Nome do familiar é obrigatório.' }
+  const baseSpouseName = extractBaseClientName(relative.name)
+  if (!baseSpouseName) return { client: null, updatedTitular: null, error: 'Nome do familiar é obrigatório.' }
+
+  const baseTitularName = extractBaseClientName(titularClient.full_name)
+  const spouseFullName = formatClientWithSpouseName(baseSpouseName, baseTitularName) // ex: ELVIRA MELO [JAIR MELO]
+  const titularFullName = formatClientWithSpouseName(baseTitularName, baseSpouseName) // ex: JAIR MELO [ELVIRA MELO]
 
   const company = companyId ?? titularClient.company_id ?? null
 
-  // 1. Verifica se já existe um cliente com este nome exato para vincular diretamente
-  let checkQuery = supabase.from('bem_aviv_clients').select(FIELDS).eq('full_name', cleanName)
+  // 1. Verifica se já existe um cliente com este nome exato ou nome base para vincular diretamente
+  let checkQuery = supabase.from('bem_aviv_clients').select(FIELDS).in('full_name', [spouseFullName, baseSpouseName])
   if (company) checkQuery = checkQuery.eq('company_id', company)
   const { data: existingClient } = await checkQuery.maybeSingle()
 
@@ -586,7 +620,7 @@ export async function createClientFromRelative(
   if (!targetClient) {
     const newClientPayload: BemAvivClientInput = {
       company_id: company,
-      full_name: cleanName,
+      full_name: spouseFullName,
       cpf: relative.cpf?.trim() || '',
       birth_date: relative.birth_date || null,
       phone_1: relative.phone?.trim() || '',
@@ -604,15 +638,20 @@ export async function createClientFromRelative(
       next_followup_note: '',
       next_followup_status: null,
       eko7_presentation_at: titularClient.eko7_presentation_at || null,
-      group_reference: titularClient.group_reference || `CÔNJUGE: ${titularClient.full_name}`,
+      group_reference: titularClient.group_reference || `CÔNJUGE: ${baseTitularName}`,
       last_contact_at: null,
     }
 
     const { data: created, error: createErr } = await createClient(newClientPayload, titularClient.user_id)
     if (createErr || !created) {
-      return { client: null, error: createErr || 'Não foi possível criar o cadastro do cônjuge.' }
+      return { client: null, updatedTitular: null, error: createErr || 'Não foi possível criar o cadastro do cônjuge.' }
     }
     targetClient = created
+  } else if (targetClient.full_name !== spouseFullName) {
+    const { data: updatedTarget } = await updateClient(targetClient.id, { full_name: spouseFullName }, company)
+    if (updatedTarget) {
+      targetClient = updatedTarget
+    }
   }
 
   // 3. Atualiza o registro original do familiar do titular com linked_client_id
@@ -627,13 +666,13 @@ export async function createClientFromRelative(
       .from('bem_aviv_client_relatives')
       .select('id')
       .eq('client_id', targetClient.id)
-      .eq('name', titularClient.full_name.trim().toUpperCase())
+      .in('name', [baseTitularName, titularFullName])
     
     if (!reciprocalList || reciprocalList.length === 0) {
       await createRelative({
         client_id: targetClient.id,
         company_id: company,
-        name: titularClient.full_name.trim().toUpperCase(),
+        name: baseTitularName,
         relationship: 'CÔNJUGE',
         birth_date: titularClient.birth_date || null,
         phone: titularClient.phone_1 || titularClient.phone_2 || null,
@@ -643,7 +682,20 @@ export async function createClientFromRelative(
     }
   }
 
-  return { client: targetClient, error: null }
+  // 5. Atualiza o cliente titular no banco para refletir o cônjuge ao lado
+  let updatedTitular: BemAvivClient | null = null
+  if (titularClient.id && titularClient.full_name !== titularFullName) {
+    const { data: updTitular } = await updateClient(titularClient.id, { full_name: titularFullName }, company)
+    if (updTitular) {
+      updatedTitular = updTitular
+    } else {
+      updatedTitular = { ...titularClient, full_name: titularFullName }
+    }
+  } else if (titularClient.id) {
+    updatedTitular = titularClient
+  }
+
+  return { client: targetClient, updatedTitular, error: null }
 }
 
 export async function fetchClientOrdersResult(

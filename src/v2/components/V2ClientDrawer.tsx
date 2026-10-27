@@ -22,8 +22,10 @@ import {
   createRelative,
   deleteClient,
   deleteRelative,
+  extractBaseClientName,
   fetchClientOrdersResult,
   fetchRelativesResult,
+  formatClientWithSpouseName,
   formatPhone,
   toClientPayload,
   updateClient,
@@ -127,21 +129,36 @@ export function V2ClientDrawer({
   const [loadingOrders, setLoadingOrders] = useState(false)
 
   const overlayRef = useRef<HTMLDivElement>(null)
+  const prevClientIdRef = useRef<string | null>(null)
 
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      prevClientIdRef.current = null
+      return
+    }
 
-    setForm(client ? { ...client } : emptyForm(companyId))
+    const isDifferentClient = client?.id !== prevClientIdRef.current
+    prevClientIdRef.current = client?.id || null
+
+    if (isDifferentClient) {
+      setForm(client ? { ...client } : emptyForm(companyId))
+      setTab('dados')
+      setEditingRelativeId(null)
+      setNewRelative({ name: '', relationship: 'CÔNJUGE', cpf: '', birth_date: '', phone: '' })
+    } else if (client) {
+      setForm((prev) => ({ ...prev, ...client }))
+    }
+
     setError(null)
     setSuccessMsg(null)
-    setTab('dados')
-    setEditingRelativeId(null)
-    setNewRelative({ name: '', relationship: 'CÔNJUGE', cpf: '', birth_date: '', phone: '' })
 
     let cancelled = false
 
     if (client?.id) {
-      setLoadingRelatives(true)
+      if (isDifferentClient) {
+        setLoadingRelatives(true)
+        setLoadingOrders(true)
+      }
       fetchRelativesResult(client.id, companyId).then(({ data, error: err }) => {
         if (cancelled) return
         setRelatives(data)
@@ -149,7 +166,6 @@ export function V2ClientDrawer({
         if (err) setError(`Não foi possível carregar os familiares: ${err}`)
       })
 
-      setLoadingOrders(true)
       fetchClientOrdersResult(client.id, companyId).then(({ data, error: err }) => {
         if (cancelled) return
         setOrders(data)
@@ -246,10 +262,14 @@ export function V2ClientDrawer({
     setError(null)
     setSuccessMsg(null)
     try {
-      const { client: created, error: cErr } = await createClientFromRelative(rel, client, companyId)
+      const { client: created, updatedTitular, error: cErr } = await createClientFromRelative(rel, client, companyId)
       if (cErr || !created) {
         setError(cErr || 'Não foi possível criar o cliente para o cônjuge.')
         return
+      }
+      if (updatedTitular) {
+        setForm((prev) => ({ ...prev, full_name: updatedTitular.full_name }))
+        onSaved(updatedTitular)
       }
       setSuccessMsg(`Cadastro de cliente criado e vinculado com sucesso para "${created.full_name}"!`)
       if (onClientCreated) onClientCreated(created)
@@ -278,9 +298,13 @@ export function V2ClientDrawer({
     setError(null)
     setSuccessMsg(null)
 
+    const cleanRelName = extractBaseClientName(newRelative.name)
+    const relRelationship = (newRelative.relationship || 'OUTRO').trim().toUpperCase()
+    const isSpouse = ['CÔNJUGE', 'CONJUGE', 'ESPOSO', 'ESPOSA'].includes(relRelationship)
+
     const payload = {
-      name: newRelative.name.trim().toUpperCase(),
-      relationship: (newRelative.relationship || 'OUTRO').trim().toUpperCase(),
+      name: cleanRelName,
+      relationship: relRelationship,
       cpf: newRelative.cpf.trim() || null,
       birth_date: newRelative.birth_date || null,
       phone: newRelative.phone.trim() || null,
@@ -297,6 +321,26 @@ export function V2ClientDrawer({
         setRelatives((prev) => prev.map((r) => (r.id === editingRelativeId ? data : r)))
         handleCancelEditRelative()
         setSuccessMsg('Familiar atualizado com sucesso!')
+
+        // Se for cônjuge, sincroniza os nomes
+        if (isSpouse) {
+          const baseTitular = extractBaseClientName(client.full_name)
+          const titularFullName = formatClientWithSpouseName(baseTitular, cleanRelName)
+          if (client.full_name !== titularFullName) {
+            const { data: updatedTitular } = await updateClient(client.id, { full_name: titularFullName }, companyId)
+            if (updatedTitular) {
+              setForm((prev) => ({ ...prev, full_name: updatedTitular.full_name }))
+              onSaved(updatedTitular)
+            }
+          }
+          if (data.linked_client_id) {
+            const spouseFullName = formatClientWithSpouseName(cleanRelName, baseTitular)
+            const { data: updatedSpouse } = await updateClient(data.linked_client_id, { full_name: spouseFullName }, companyId)
+            if (updatedSpouse && onClientCreated) {
+              onClientCreated(updatedSpouse)
+            }
+          }
+        }
       }
     } else {
       const { data, error: relErr } = await createRelative({
@@ -310,16 +354,31 @@ export function V2ClientDrawer({
         return
       }
       if (data) {
-        const isSpouse = ['CÔNJUGE', 'CONJUGE', 'ESPOSO', 'ESPOSA'].includes(data.relationship.toUpperCase())
         if (isSpouse && autoCreateClient) {
-          const { client: createdClient, error: cErr } = await createClientFromRelative(data, client, companyId)
+          const { client: createdClient, updatedTitular, error: cErr } = await createClientFromRelative(data, client, companyId)
           if (createdClient) {
+            if (updatedTitular) {
+              setForm((prev) => ({ ...prev, full_name: updatedTitular.full_name }))
+              onSaved(updatedTitular)
+            }
             if (onClientCreated) onClientCreated(createdClient)
             else onSaved(createdClient)
             setSuccessMsg(`Familiar adicionado e novo cliente "${createdClient.full_name}" vinculado com sucesso!`)
           } else if (cErr) {
             console.warn('Familiar criado, mas aviso ao vincular cliente:', cErr)
           }
+        } else if (isSpouse) {
+          // Flag não marcada, mas cônjuge vinculado: titular fica NOME [CONJUGE]
+          const baseTitular = extractBaseClientName(client.full_name)
+          const titularFullName = formatClientWithSpouseName(baseTitular, cleanRelName)
+          if (client.full_name !== titularFullName) {
+            const { data: updatedTitular } = await updateClient(client.id, { full_name: titularFullName }, companyId)
+            if (updatedTitular) {
+              setForm((prev) => ({ ...prev, full_name: updatedTitular.full_name }))
+              onSaved(updatedTitular)
+            }
+          }
+          setSuccessMsg('Familiar cadastrado com sucesso!')
         } else {
           setSuccessMsg('Familiar cadastrado com sucesso!')
         }
@@ -337,16 +396,37 @@ export function V2ClientDrawer({
   const handleDeleteRelative = async (relId: string, relName: string) => {
     if (!confirm(`Excluir familiar "${relName}"?`)) return
     setError(null)
+    const targetRel = relatives.find((r) => r.id === relId)
+    const isSpouse = targetRel && ['CÔNJUGE', 'CONJUGE', 'ESPOSO', 'ESPOSA'].includes((targetRel.relationship || '').toUpperCase())
+
     const { error: delErr } = await deleteRelative(relId, companyId)
     if (delErr) {
       setError(delErr)
       return
     }
-    setRelatives((prev) => prev.filter((r) => r.id !== relId))
+    const remainingRelatives = relatives.filter((r) => r.id !== relId)
+    setRelatives(remainingRelatives)
     if (editingRelativeId === relId) {
       handleCancelEditRelative()
     }
     setSuccessMsg('Familiar removido com sucesso!')
+
+    // Se o familiar excluído era cônjuge e não sobrou nenhum outro cônjuge, reverte o nome do titular para o base
+    if (isSpouse && client) {
+      const remainingSpouses = remainingRelatives.filter((r) =>
+        ['CÔNJUGE', 'CONJUGE', 'ESPOSO', 'ESPOSA'].includes((r.relationship || '').toUpperCase())
+      )
+      if (remainingSpouses.length === 0) {
+        const baseTitular = extractBaseClientName(client.full_name)
+        if (client.full_name !== baseTitular) {
+          const { data: updatedTitular } = await updateClient(client.id, { full_name: baseTitular }, companyId)
+          if (updatedTitular) {
+            setForm((prev) => ({ ...prev, full_name: updatedTitular.full_name }))
+            onSaved(updatedTitular)
+          }
+        }
+      }
+    }
   }
 
   const orderStats = useMemo(() => {
