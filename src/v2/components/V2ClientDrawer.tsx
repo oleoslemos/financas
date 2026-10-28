@@ -164,6 +164,21 @@ export function V2ClientDrawer({
         setRelatives(data)
         setLoadingRelatives(false)
         if (err) setError(`Não foi possível carregar os familiares: ${err}`)
+
+        const sp = data.find((r) =>
+          ['CÔNJUGE', 'CONJUGE', 'ESPOSO', 'ESPOSA'].includes((r.relationship || '').toUpperCase())
+        )
+        if (sp && client?.full_name) {
+          const expected = formatClientWithSpouseName(client.full_name, sp.name)
+          if (expected && expected !== client.full_name) {
+            updateClient(client.id, { full_name: expected }, companyId).then(({ data: updated }) => {
+              if (updated && !cancelled) {
+                setForm((prev) => ({ ...prev, full_name: updated.full_name }))
+                onSaved(updated)
+              }
+            })
+          }
+        }
       })
 
       fetchClientOrdersResult(client.id, companyId).then(({ data, error: err }) => {
@@ -197,6 +212,15 @@ export function V2ClientDrawer({
 
     // Só campos editáveis; '' vira null; client_status e follow-up ficam de fora.
     const payload = toClientPayload(form, companyId)
+
+    const spouseRel = relatives.find((r) =>
+      ['CÔNJUGE', 'CONJUGE', 'ESPOSO', 'ESPOSA'].includes((r.relationship || '').toUpperCase())
+    )
+    if (spouseRel && payload.full_name) {
+      const formatted = formatClientWithSpouseName(payload.full_name, spouseRel.name)
+      payload.full_name = formatted
+      form.full_name = formatted
+    }
 
     if (client?.id) {
       const { data, error: err } = await updateClient(client.id, payload, companyId)
