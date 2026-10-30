@@ -7,6 +7,7 @@ import {
   Inbox,
   Plus,
   RotateCcw,
+  RotateCw,
   Search,
   Trash2,
   Check,
@@ -90,7 +91,7 @@ export function V2ContasPagarPage() {
     modo: 'detalhe' | 'detalhe_pago' | 'estorno' | 'excluir'
   } | null>(null)
 
-  // Carga inicial
+  // Carga inicial e sincronização entre dispositivos
   const recarregar = async () => {
     setCarregando(true)
     try {
@@ -107,6 +108,21 @@ export function V2ContasPagarPage() {
 
   useEffect(() => {
     void recarregar()
+
+    const onFocus = () => {
+      void recarregar()
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void recarregar()
+      }
+    }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
   }, [])
 
   // Cálculos do extrato
@@ -222,7 +238,19 @@ export function V2ContasPagarPage() {
         </div>
 
         {/* Botões do Topo */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          {/* Botão Sincronizar / Atualizar */}
+          <button
+            type="button"
+            onClick={() => void recarregar()}
+            disabled={carregando}
+            className="inline-flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-3 py-1.5 rounded-lg font-bold text-xs shadow-2xs transition-all cursor-pointer disabled:opacity-50"
+            title="Atualizar títulos e sincronizar dados com o servidor"
+          >
+            <RotateCw size={13} className={`text-slate-500 ${carregando ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Atualizar</span>
+          </button>
+
           {/* Botão Gerar Comissões */}
           <button
             type="button"

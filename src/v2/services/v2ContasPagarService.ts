@@ -211,21 +211,117 @@ function writeToStorage(list: ContaPagar[]): void {
   } catch {}
 }
 
-export async function listContasPagar(): Promise<ContaPagar[]> {
-  const list = readFromStorage()
+/**
+ * Sanitiza o registro de Conta a Pagar/Receber para persistência segura no Supabase
+ */
+export function cleanContaPagarForSupabase(c: ContaPagar): Record<string, any> {
+  return {
+    id: c.id,
+    pedido_id: c.pedido_id || null,
+    descricao: c.descricao || '',
+    fornecedor: c.fornecedor || null,
+    origem: c.origem || 'avulsa',
+    categoria: c.categoria || null,
+    total: Number(c.total) || 0,
+    totalPago: Number(c.totalPago ?? (c as any).total_pago ?? 0),
+    status: c.status || 'aberta',
+    parcelas: Array.isArray(c.parcelas) ? c.parcelas : [],
+    tipo: c.tipo || 'pagar',
+    vencimento: c.vencimento || null,
+    forma_pagamento: c.forma_pagamento || null,
+    taxa_administradora: c.taxa_administradora != null ? Number(c.taxa_administradora) : null,
+    saldo_residual: c.saldo_residual != null ? Number(c.saldo_residual) : null,
+    diferenca_destino: c.diferenca_destino || null,
+    conta_bancaria_id: c.conta_bancaria_id || null,
+    conta_bancaria_tag: c.conta_bancaria_tag || null,
+    data_baixa: c.data_baixa || null,
+    created_at: c.created_at || new Date().toISOString(),
+    updated_at: c.updated_at || new Date().toISOString(),
+  }
+}
 
-  if (list === SEED_CONTAS && supabase) {
+/**
+ * Sincronização explícita com Supabase (bidirecional entre dispositivos)
+ */
+export async function syncContasPagarComSupabase(): Promise<{ ok: boolean; count: number; error?: string }> {
+  if (!supabase) return { ok: false, count: 0, error: 'Supabase não inicializado' }
+  try {
+    const localList = readFromStorage()
+    const { data, error } = await supabase
+      .from(SUPABASE_TABLE)
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    if (error) return { ok: false, count: 0, error: error.message }
+    const remoteList = ((data as ContaPagar[]) || []).map((c) => ({
+      ...c,
+      tipo: c.tipo || 'pagar',
+      totalPago: Number(c.totalPago ?? (c as any).total_pago ?? 0),
+    }))
+    const remoteIds = new Set(remoteList.map((r) => r.id))
+    const pendingLocal = localList.filter((loc) => !remoteIds.has(loc.id) && !loc.id.startsWith('fin-00'))
+
+    if (pendingLocal.length > 0) {
+      const cleanPending = pendingLocal.map(cleanContaPagarForSupabase)
+      const { error: upErr } = await supabase.from(SUPABASE_TABLE).upsert(cleanPending)
+      if (upErr) return { ok: false, count: 0, error: upErr.message }
+    }
+
+    const merged = [...pendingLocal, ...remoteList]
+    writeToStorage(merged)
+    return { ok: true, count: merged.length }
+  } catch (e: any) {
+    return { ok: false, count: 0, error: e?.message || 'Erro desconhecido ao sincronizar' }
+  }
+}
+
+export async function listContasPagar(): Promise<ContaPagar[]> {
+  const localList = readFromStorage()
+  let list: ContaPagar[] = []
+
+  if (supabase) {
     try {
-      const { data, error } = await supabase.from(SUPABASE_TABLE).select('*').order('created_at', { ascending: false })
-      if (!error && data && data.length > 0) {
-        const remoteList = data as ContaPagar[]
-        writeToStorage(remoteList)
-        return remoteList.map((c) => ({ ...c, tipo: c.tipo || 'pagar' }))
+      const { data, error } = await supabase
+        .from(SUPABASE_TABLE)
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (!error && data) {
+        list = (data as ContaPagar[]).map((c) => ({
+          ...c,
+          tipo: c.tipo || 'pagar',
+          totalPago: Number(c.totalPago ?? (c as any).total_pago ?? 0),
+        }))
+        const remoteIds = new Set(list.map((r) => r.id))
+        const pendingLocal = localList.filter((loc) => !remoteIds.has(loc.id) && !loc.id.startsWith('fin-00'))
+
+        if (pendingLocal.length > 0) {
+          try {
+            const cleanPending = pendingLocal.map(cleanContaPagarForSupabase)
+            const { error: upsertErr } = await supabase.from(SUPABASE_TABLE).upsert(cleanPending)
+            if (upsertErr) {
+              console.error('Erro ao sincronizar contas financeiras locais pendentes:', upsertErr)
+            } else {
+              console.log('Contas financeiras locais sincronizadas com sucesso no Supabase:', cleanPending.length)
+            }
+          } catch (syncErr) {
+            console.warn('Erro ao sincronizar contas locais pendentes:', syncErr)
+          }
+          list = [...pendingLocal, ...list]
+        }
+
+        // Se o Supabase retornou registros ou se havia pendentes sincronizados, atualiza o storage local
+        if (list.length > 0) {
+          writeToStorage(list)
+          return list
+        }
       }
-    } catch {}
+    } catch (e) {
+      console.warn('Falha ao buscar contas a pagar do Supabase, usando local:', e)
+    }
   }
 
-  return list.map((c) => ({ ...c, tipo: c.tipo || 'pagar' }))
+  return localList.map((c) => ({ ...c, tipo: c.tipo || 'pagar' }))
 }
 
 export async function getContaPagarPorPedidoId(pedidoId: string): Promise<ContaPagar | undefined> {
@@ -275,7 +371,8 @@ export async function saveContaPagar(
 
   if (supabase) {
     try {
-      await supabase.from(SUPABASE_TABLE).insert([newConta])
+      const clean = cleanContaPagarForSupabase(newConta)
+      await supabase.from(SUPABASE_TABLE).upsert(clean)
     } catch {}
   }
 
@@ -315,7 +412,8 @@ export async function updateContaPagar(conta: ContaPagar): Promise<ContaPagar> {
 
   if (supabase) {
     try {
-      await supabase.from(SUPABASE_TABLE).upsert(updatedConta)
+      const clean = cleanContaPagarForSupabase(updatedConta)
+      await supabase.from(SUPABASE_TABLE).upsert(clean)
     } catch {}
   }
 
@@ -371,7 +469,8 @@ export async function updateContaPagarPorPedidoId(
 
   if (supabase) {
     try {
-      await supabase.from(SUPABASE_TABLE).upsert(atualizada)
+      const clean = cleanContaPagarForSupabase(atualizada)
+      await supabase.from(SUPABASE_TABLE).upsert(clean)
     } catch {}
   }
 }
@@ -466,7 +565,8 @@ export async function baixarLancamento(params: BaixarLancamentoParams): Promise<
 
   if (supabase) {
     try {
-      await supabase.from(SUPABASE_TABLE).upsert(contaAtualizada)
+      const clean = cleanContaPagarForSupabase(contaAtualizada)
+      await supabase.from(SUPABASE_TABLE).upsert(clean)
     } catch {}
   }
 
@@ -541,7 +641,8 @@ export async function estornarLancamento(id: string, usuarioNome?: string): Prom
 
   if (supabase) {
     try {
-      await supabase.from(SUPABASE_TABLE).upsert(contaAtualizada)
+      const clean = cleanContaPagarForSupabase(contaAtualizada)
+      await supabase.from(SUPABASE_TABLE).upsert(clean)
     } catch {}
   }
 
@@ -622,7 +723,8 @@ export async function cancelarLancamento(
 
   if (supabase) {
     try {
-      await supabase.from(SUPABASE_TABLE).upsert(contaCancelada)
+      const clean = cleanContaPagarForSupabase(contaCancelada)
+      await supabase.from(SUPABASE_TABLE).upsert(clean)
     } catch {}
   }
 
