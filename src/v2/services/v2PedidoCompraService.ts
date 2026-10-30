@@ -46,6 +46,15 @@ export type NotaFiscalCompra = {
   created_at?: string
 }
 
+export type PedidoVendaVinculado = {
+  id: string
+  numero: string
+  cliente_nome: string
+  total?: number
+  dataEmissao?: string | null
+  status?: string
+}
+
 export type PedidoCompra = {
   id: string
   numero: number | string
@@ -81,6 +90,8 @@ export type PedidoCompra = {
   chaveNf?: string | null
   /** Lista de múltiplas notas fiscais vinculadas ao pedido */
   notasFiscais?: NotaFiscalCompra[]
+  /** Lista de pedidos de venda atendidos por esta compra */
+  pedidosVendaVinculados?: PedidoVendaVinculado[]
 }
 
 // ─── Constantes ─────────────────────────────────────────────────────────
@@ -122,6 +133,7 @@ export function cleanPedidoCompraForSupabase(p: PedidoCompra): Record<string, an
     dataNf: p.dataNf || null,
     chaveNf: p.chaveNf || null,
     notasFiscais: p.notasFiscais || [],
+    pedidosVendaVinculados: p.pedidosVendaVinculados || [],
     recebimentos: p.recebimentos || [],
     itens: p.itens || [],
     created_at: p.created_at || new Date().toISOString(),
@@ -862,4 +874,39 @@ export async function deletePedidoCompra(pedidoId: string): Promise<{ ok: true }
   localStorage.setItem(KEY, JSON.stringify(filtered))
 
   return { ok: true }
+}
+
+// ─── Vínculo de Pedidos de Venda ───────────────────────────────────────────
+
+export async function vincularPedidosVendaACompra(
+  compraId: string,
+  novosVinculos: PedidoVendaVinculado[]
+): Promise<{ ok: true; pedido: PedidoCompra } | { ok: false; erro: string }> {
+  const current = await listPedidosCompra()
+  const pedido = current.find((p) => p.id === compraId)
+  if (!pedido) return { ok: false, erro: 'Pedido de compra não encontrado.' }
+
+  const existentes = pedido.pedidosVendaVinculados || []
+  const mapa = new Map<string, PedidoVendaVinculado>()
+  for (const v of existentes) mapa.set(v.id, v)
+  for (const v of novosVinculos) mapa.set(v.id, v)
+
+  pedido.pedidosVendaVinculados = Array.from(mapa.values())
+  const atualizado = await updatePedidoCompra(pedido)
+  return { ok: true, pedido: atualizado }
+}
+
+export async function desvincularPedidoVendaDeCompra(
+  compraId: string,
+  vendaId: string
+): Promise<{ ok: true; pedido: PedidoCompra } | { ok: false; erro: string }> {
+  const current = await listPedidosCompra()
+  const pedido = current.find((p) => p.id === compraId)
+  if (!pedido) return { ok: false, erro: 'Pedido de compra não encontrado.' }
+
+  pedido.pedidosVendaVinculados = (pedido.pedidosVendaVinculados || []).filter(
+    (v) => v.id !== vendaId
+  )
+  const atualizado = await updatePedidoCompra(pedido)
+  return { ok: true, pedido: atualizado }
 }

@@ -20,6 +20,7 @@ import {
   Truck,
   PackageCheck,
   Calendar,
+  Check,
 } from 'lucide-react'
 import { formatarMoeda } from '../../modules/lib/money'
 import { formatarData, hoje, somarDias } from '../../modules/lib/datas'
@@ -35,12 +36,16 @@ import {
   salvarNfFornecedor,
   excluirNfFornecedor,
   gerarParcelasCompra,
+  vincularPedidosVendaACompra,
+  desvincularPedidoVendaDeCompra,
   PedidoCompra,
   NotaFiscalCompra,
+  PedidoVendaVinculado,
   PedidoCompraItem,
   StatusPedido,
   type RecebimentoCompra,
 } from '../services/v2PedidoCompraService'
+import { listPedidosVenda, PedidoVenda } from '../services/v2PedidoVendasService'
 import { listV2Products, V2Product } from '../services/v2ProdutosService'
 import { listFornecedores, Fornecedor } from '../services/v2SettingsService'
 import { listContasBancarias, ContaBancaria } from '../services/v2ContasBancariasService'
@@ -98,6 +103,7 @@ export function V2PedidoCompraPage() {
   const [produtosDisponiveis, setProdutosDisponiveis] = useState<V2Product[]>([])
   const [fornecedoresCadastrados, setFornecedoresCadastrados] = useState<Fornecedor[]>([])
   const [contasBancarias, setContasBancarias] = useState<ContaBancaria[]>([])
+  const [vendasDisponiveis, setVendasDisponiveis] = useState<PedidoVenda[]>([])
 
   // State: Formulario Novo / Edição
   const [pedidoEdicao, setPedidoEdicao] = useState<PedidoCompra | null>(null)
@@ -113,6 +119,18 @@ export function V2PedidoCompraPage() {
   const [formDataRecebimentoPrevista, setFormDataRecebimentoPrevista] = useState(() => somarDias(dataHoje, 20))
   const [formJustificativaDataRecebimento, setFormJustificativaDataRecebimento] = useState('')
   const [formObservacao, setFormObservacao] = useState('')
+  const [formPedidosVendaVinculados, setFormPedidosVendaVinculados] = useState<PedidoVendaVinculado[]>([])
+
+  // State: Dropdown Pesquisável de Tag / Conta
+  const [buscaTagConta, setBuscaTagConta] = useState('')
+  const [dropdownTagAberto, setDropdownTagAberto] = useState(false)
+
+  // State: Modal Vincular Pedidos de Venda
+  const [showVincularVendasModal, setShowVincularVendasModal] = useState(false)
+  const [origemVincularVendas, setOrigemVincularVendas] = useState<'formulario' | 'drawer'>('formulario')
+  const [buscaVendaModal, setBuscaVendaModal] = useState('')
+  const [vendasSelecionadasModal, setVendasSelecionadasModal] = useState<string[]>([])
+  const [salvandoVinculoVenda, setSalvandoVinculoVenda] = useState(false)
 
   // State: Recebimento por Item Modal
   const [showRecebimentoModal, setShowRecebimentoModal] = useState(false)
@@ -145,10 +163,12 @@ export function V2PedidoCompraPage() {
     const prods = await listV2Products()
     const forns = await listFornecedores()
     const ctas = await listContasBancarias()
+    const vendas = await listPedidosVenda()
     setPedidos(p)
     setProdutosDisponiveis(prods)
     setFornecedoresCadastrados(forns)
     setContasBancarias(ctas.filter((c) => c.ativo))
+    setVendasDisponiveis(vendas)
   }
 
   useEffect(() => {
@@ -178,6 +198,9 @@ export function V2PedidoCompraPage() {
     setFormDataRecebimentoPrevista(somarDias(dataHoje, 20))
     setFormJustificativaDataRecebimento('')
     setFormObservacao('')
+    setFormPedidosVendaVinculados([])
+    setBuscaTagConta('')
+    setDropdownTagAberto(false)
     setViewMode('novo')
   }
 
@@ -196,6 +219,9 @@ export function V2PedidoCompraPage() {
     setFormDataRecebimentoPrevista(p.dataRecebimentoPrevista || p.dataPrevistaEntrega || somarDias(p.dataPedido || dataHoje, 20))
     setFormJustificativaDataRecebimento(p.justificativaDataRecebimento || '')
     setFormObservacao(p.observacao || '')
+    setFormPedidosVendaVinculados(p.pedidosVendaVinculados || [])
+    setBuscaTagConta('')
+    setDropdownTagAberto(false)
     setPedidoVisualizando(p)
   }
 
@@ -222,6 +248,9 @@ export function V2PedidoCompraPage() {
     setFormDataRecebimentoPrevista(p.dataRecebimentoPrevista || p.dataPrevistaEntrega || somarDias(p.dataPedido || dataHoje, 20))
     setFormJustificativaDataRecebimento(p.justificativaDataRecebimento || '')
     setFormObservacao(p.observacao || '')
+    setFormPedidosVendaVinculados(p.pedidosVendaVinculados || [])
+    setBuscaTagConta('')
+    setDropdownTagAberto(false)
     setViewMode('novo')
   }
 
@@ -325,6 +354,7 @@ export function V2PedidoCompraPage() {
           numeroParcelas: formParcelas,
           formaPagamento: formFormaPagamento,
           contaSaidaTag: formContaSaidaTag,
+          pedidosVendaVinculados: formPedidosVendaVinculados,
           itens: itensValidos,
         })
       } else {
@@ -343,6 +373,7 @@ export function V2PedidoCompraPage() {
           numeroParcelas: formParcelas,
           formaPagamento: formFormaPagamento,
           contaSaidaTag: formContaSaidaTag,
+          pedidosVendaVinculados: formPedidosVendaVinculados,
           itens: itensValidos,
         })
 
@@ -354,6 +385,72 @@ export function V2PedidoCompraPage() {
       setViewMode('lista')
     } catch {
       alert('Erro ao salvar o pedido.')
+    }
+  }
+
+  // ── Handlers de Vínculo de Vendas (Permite vincular a qualquer momento) ──
+  const handleAbrirModalVincularVendas = (origem: 'formulario' | 'drawer') => {
+    setOrigemVincularVendas(origem)
+    setBuscaVendaModal('')
+    const idsJaVinculados =
+      origem === 'formulario'
+        ? formPedidosVendaVinculados.map((v) => v.id)
+        : (pedidoVisualizando?.pedidosVendaVinculados || []).map((v) => v.id)
+    setVendasSelecionadasModal(idsJaVinculados)
+    setShowVincularVendasModal(true)
+  }
+
+  const handleToggleVendaSelecionada = (vendaId: string) => {
+    setVendasSelecionadasModal((prev) =>
+      prev.includes(vendaId) ? prev.filter((id) => id !== vendaId) : [...prev, vendaId]
+    )
+  }
+
+  const handleConfirmarVinculoVendas = async () => {
+    const selecionados: PedidoVendaVinculado[] = vendasDisponiveis
+      .filter((v) => vendasSelecionadasModal.includes(v.id))
+      .map((v) => ({
+        id: v.id,
+        numero: v.numero,
+        cliente_nome: v.cliente_nome,
+        total: v.total,
+        dataEmissao: v.dataEmissao,
+        status: v.status,
+      }))
+
+    if (origemVincularVendas === 'formulario') {
+      setFormPedidosVendaVinculados(selecionados)
+      setShowVincularVendasModal(false)
+    } else if (pedidoVisualizando) {
+      setSalvandoVinculoVenda(true)
+      try {
+        const res = await vincularPedidosVendaACompra(pedidoVisualizando.id, selecionados)
+        if (res.ok) {
+          setPedidoVisualizando(res.pedido)
+          await loadData()
+          setShowVincularVendasModal(false)
+        } else {
+          alert(res.erro)
+        }
+      } finally {
+        setSalvandoVinculoVenda(false)
+      }
+    }
+  }
+
+  const handleRemoverVinculoFormulario = (vendaId: string) => {
+    setFormPedidosVendaVinculados((prev) => prev.filter((v) => v.id !== vendaId))
+  }
+
+  const handleDesvincularVendaDireto = async (vendaId: string) => {
+    if (!pedidoVisualizando) return
+    if (!confirm('Deseja desvincular este pedido de venda desta compra?')) return
+    const res = await desvincularPedidoVendaDeCompra(pedidoVisualizando.id, vendaId)
+    if (res.ok) {
+      setPedidoVisualizando(res.pedido)
+      await loadData()
+    } else {
+      alert(res.erro)
     }
   }
 
@@ -1272,63 +1369,216 @@ export function V2PedidoCompraPage() {
 
               {/* Linha 3: Conta de Saída (Tag) e Previsão de Recebimento */}
               <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.2fr 1fr', gap: 12, marginBottom: 12 }}>
-                <div>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 600, color: '#475569', marginBottom: 4, textTransform: 'none' }}>
-                    <Tag size={13} color="#0D5BA3" />
-                    Conta de Saída (Tag / Origem do recurso)
+                <div style={{ position: 'relative' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11.5, fontWeight: 600, color: '#475569', marginBottom: 4, textTransform: 'none' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <Tag size={13} color="#0D5BA3" />
+                      Conta de Saída (Tag / Origem do recurso)
+                    </span>
+                    {!isVisualizacao && (
+                      <span style={{ fontSize: 10, color: '#0D6BAF', fontWeight: 600 }}>
+                        Pesquisar tags
+                      </span>
+                    )}
                   </label>
-                  <input
-                    type="text"
-                    disabled={isVisualizacao}
-                    placeholder="Ex: #Inter, #Caixa, #BB, #Nubank"
-                    value={formContaSaidaTag}
-                    onChange={(e) => setFormContaSaidaTag(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '8px 10px',
-                      borderRadius: 8,
-                      border: '1px solid #CBD5E1',
-                      fontSize: 12,
-                      color: '#0F2A43',
-                      background: isVisualizacao ? '#F8FAFC' : '#FFFFFF',
-                      outline: 'none',
-                      boxSizing: 'border-box',
-                      textTransform: 'none',
-                    }}
-                  />
-                  {/* Tags Rápidas das Contas Cadastradas */}
-                  {!isVisualizacao && contasBancarias.length > 0 && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 6 }}>
-                      <span style={{ fontSize: 10.5, color: '#64748B', alignSelf: 'center', textTransform: 'none' }}>Atalhos:</span>
-                      {contasBancarias.map((cb) => {
-                        const tagNome = `#${cb.nome.replace(/\s+/g, '')}`
-                        const isSelecionado = formContaSaidaTag.toLowerCase().includes(cb.nome.toLowerCase()) || formContaSaidaTag === tagNome
-                        return (
-                          <button
-                            key={cb.id}
-                            type="button"
-                            onClick={() => setFormContaSaidaTag(tagNome)}
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      disabled={isVisualizacao}
+                      placeholder="Pesquisar conta/tag ou digite livremente..."
+                      value={formContaSaidaTag}
+                      onChange={(e) => {
+                        setFormContaSaidaTag(e.target.value)
+                        setBuscaTagConta(e.target.value)
+                      }}
+                      onFocus={() => {
+                        if (!isVisualizacao) setDropdownTagAberto(true)
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '8px 32px 8px 10px',
+                        borderRadius: 8,
+                        border: dropdownTagAberto ? '1.5px solid #0D6BAF' : '1px solid #CBD5E1',
+                        fontSize: 12,
+                        color: '#0F2A43',
+                        background: isVisualizacao ? '#F8FAFC' : '#FFFFFF',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                        textTransform: 'none',
+                      }}
+                    />
+                    <div style={{ position: 'absolute', right: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      {formContaSaidaTag && !isVisualizacao && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormContaSaidaTag('')
+                            setBuscaTagConta('')
+                          }}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#94A3B8',
+                            cursor: 'pointer',
+                            padding: 2,
+                            display: 'flex',
+                          }}
+                          title="Limpar tag"
+                        >
+                          <X size={13} />
+                        </button>
+                      )}
+                      {!isVisualizacao && (
+                        <button
+                          type="button"
+                          onClick={() => setDropdownTagAberto((prev) => !prev)}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#0D6BAF',
+                            cursor: 'pointer',
+                            padding: 2,
+                            display: 'flex',
+                          }}
+                          title="Pesquisar contas cadastradas"
+                        >
+                          <Search size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Dropdown Pesquisável de Tags/Contas Cadastradas */}
+                  {dropdownTagAberto && !isVisualizacao && (
+                    <>
+                      <div
+                        onClick={() => setDropdownTagAberto(false)}
+                        style={{ position: 'fixed', inset: 0, zIndex: 30 }}
+                      />
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: '100%',
+                          left: 0,
+                          right: 0,
+                          marginTop: 4,
+                          background: '#FFFFFF',
+                          borderRadius: 10,
+                          border: '1px solid #CBD5E1',
+                          boxShadow: '0 8px 24px rgba(15, 42, 67, 0.12)',
+                          zIndex: 40,
+                          maxHeight: 220,
+                          overflowY: 'auto',
+                          padding: 6,
+                        }}
+                      >
+                        <div style={{ padding: '4px 6px 6px', borderBottom: '1px solid #F1F5F9', marginBottom: 4 }}>
+                          <input
+                            type="text"
+                            autoFocus
+                            placeholder="Buscar por nome ou tag..."
+                            value={buscaTagConta}
+                            onChange={(e) => setBuscaTagConta(e.target.value)}
                             style={{
-                              padding: '2px 7px',
-                              borderRadius: 10,
-                              fontSize: 10.5,
-                              fontWeight: 600,
-                              border: isSelecionado ? '1px solid #0D5BA3' : '1px solid #CBD5E1',
-                              background: isSelecionado ? '#E3EEFA' : '#F8FAFC',
-                              color: isSelecionado ? '#0D5BA3' : '#475569',
-                              cursor: 'pointer',
-                              display: 'inline-flex',
+                              width: '100%',
+                              padding: '5px 8px',
+                              borderRadius: 6,
+                              border: '1px solid #E2E8F0',
+                              fontSize: 11,
+                              outline: 'none',
+                              boxSizing: 'border-box',
+                            }}
+                          />
+                        </div>
+
+                        {contasBancarias
+                          .filter((cb) => {
+                            if (!buscaTagConta.trim()) return true
+                            const termo = buscaTagConta.toLowerCase().replace(/^#/, '')
+                            return (
+                              cb.nome.toLowerCase().includes(termo) ||
+                              `#${cb.nome.replace(/\s+/g, '')}`.toLowerCase().includes(termo)
+                            )
+                          })
+                          .map((cb) => {
+                            const tagNome = `#${cb.nome.replace(/\s+/g, '')}`
+                            const isSelecionado = formContaSaidaTag === tagNome
+                            return (
+                              <button
+                                key={cb.id}
+                                type="button"
+                                onClick={() => {
+                                  setFormContaSaidaTag(tagNome)
+                                  setDropdownTagAberto(false)
+                                  setBuscaTagConta('')
+                                }}
+                                style={{
+                                  width: '100%',
+                                  padding: '6px 8px',
+                                  borderRadius: 6,
+                                  border: 'none',
+                                  background: isSelecionado ? '#E3EEFA' : 'transparent',
+                                  color: '#0F2A43',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  cursor: 'pointer',
+                                  textAlign: 'left',
+                                  fontSize: 11.5,
+                                  marginBottom: 2,
+                                  transition: 'background 0.15s',
+                                }}
+                                onMouseEnter={(e) => {
+                                  if (!isSelecionado) e.currentTarget.style.background = '#F8FAFC'
+                                }}
+                                onMouseLeave={(e) => {
+                                  if (!isSelecionado) e.currentTarget.style.background = 'transparent'
+                                }}
+                              >
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <strong style={{ color: '#0D6BAF' }}>{tagNome}</strong>
+                                  <span style={{ color: '#64748B', fontSize: 11 }}>{cb.nome}</span>
+                                </span>
+                                <span style={{ fontSize: 10.5, fontWeight: 600, color: cb.saldoAtual >= 0 ? '#059669' : '#DC2626' }}>
+                                  {formatarMoeda(cb.saldoAtual)}
+                                </span>
+                              </button>
+                            )
+                          })}
+
+                        {buscaTagConta.trim() && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const formatada = buscaTagConta.startsWith('#')
+                                ? buscaTagConta
+                                : `#${buscaTagConta.replace(/\s+/g, '')}`
+                              setFormContaSaidaTag(formatada)
+                              setDropdownTagAberto(false)
+                              setBuscaTagConta('')
+                            }}
+                            style={{
+                              width: '100%',
+                              padding: '6px 8px',
+                              borderRadius: 6,
+                              border: '1px dashed #0D6BAF',
+                              background: '#F0F9FF',
+                              color: '#0D6BAF',
+                              display: 'flex',
                               alignItems: 'center',
-                              gap: 3,
-                              textTransform: 'none',
+                              gap: 6,
+                              cursor: 'pointer',
+                              fontSize: 11,
+                              fontWeight: 600,
+                              marginTop: 4,
                             }}
                           >
-                            <span>{tagNome}</span>
-                            <span style={{ opacity: 0.7 }}>({formatarMoeda(cb.saldoAtual)})</span>
+                            <Plus size={12} />
+                            <span>Usar tag livre "{buscaTagConta.startsWith('#') ? buscaTagConta : `#${buscaTagConta}`}"</span>
                           </button>
-                        )
-                      })}
-                    </div>
+                        )}
+                      </div>
+                    </>
                   )}
                 </div>
 
@@ -1384,6 +1634,102 @@ export function V2PedidoCompraPage() {
                     textTransform: 'none',
                   }}
                 />
+              </div>
+
+              {/* Campo para Vincular Pedidos de Venda */}
+              <div
+                style={{
+                  padding: '12px 14px',
+                  borderRadius: 10,
+                  border: '1px solid #E0E7FF',
+                  background: '#F8FAFF',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 700, color: '#3730A3', textTransform: 'none' }}>
+                    <ShoppingCart size={14} color="#4F46E5" />
+                    <span>Pedidos de Venda Vinculados</span>
+                    <span style={{ fontSize: 10, background: '#EEF2FF', color: '#4F46E5', padding: '1px 6px', borderRadius: 10, border: '1px solid #C7D2FE' }}>
+                      {formPedidosVendaVinculados.length}
+                    </span>
+                  </label>
+                  {!isVisualizacao && (
+                    <button
+                      type="button"
+                      onClick={() => handleAbrirModalVincularVendas('formulario')}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        padding: '4px 9px',
+                        borderRadius: 6,
+                        background: '#4F46E5',
+                        border: 'none',
+                        color: '#FFFFFF',
+                        fontSize: 11,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        boxShadow: '0 1px 2px rgba(79, 70, 229, 0.2)',
+                      }}
+                    >
+                      <Plus size={12} />
+                      <span>Vincular Venda</span>
+                    </button>
+                  )}
+                </div>
+
+                {formPedidosVendaVinculados.length === 0 ? (
+                  <p style={{ margin: 0, fontSize: 11, color: '#64748B', fontStyle: 'italic' }}>
+                    Nenhum pedido de venda vinculado a esta compra. Clique em "Vincular Venda" para associar uma ou mais vendas atendidas por este pedido.
+                  </p>
+                ) : (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {formPedidosVendaVinculados.map((v) => (
+                      <div
+                        key={v.id}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          padding: '4px 8px',
+                          borderRadius: 8,
+                          background: '#FFFFFF',
+                          border: '1px solid #C7D2FE',
+                          fontSize: 11,
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                        }}
+                      >
+                        <strong style={{ color: '#4338CA' }}>{v.numero}</strong>
+                        <span style={{ color: '#475569', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {v.cliente_nome}
+                        </span>
+                        {v.total ? (
+                          <span style={{ color: '#0F2A43', fontWeight: 600 }}>
+                            {formatarMoeda(v.total)}
+                          </span>
+                        ) : null}
+                        {!isVisualizacao && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoverVinculoFormulario(v.id)}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: '#94A3B8',
+                              cursor: 'pointer',
+                              padding: 2,
+                              display: 'flex',
+                              alignItems: 'center',
+                            }}
+                            title="Desvincular venda"
+                          >
+                            <X size={12} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -1469,6 +1815,14 @@ export function V2PedidoCompraPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5 }}>
                   <span style={{ color: '#475569' }}>Conta Saída</span>
                   <span style={{ color: '#0D5BA3', fontWeight: 700 }}>{formContaSaidaTag}</span>
+                </div>
+              )}
+              {formPedidosVendaVinculados.length > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, paddingTop: 4, borderTop: '1px dashed #E2E8F0' }}>
+                  <span style={{ color: '#4338CA', fontWeight: 600 }}>Vendas Atendidas</span>
+                  <span style={{ color: '#4338CA', fontWeight: 700 }}>
+                    {formPedidosVendaVinculados.map((v) => v.numero).join(', ')}
+                  </span>
                 </div>
               )}
             </div>
@@ -1879,6 +2233,19 @@ export function V2PedidoCompraPage() {
                             {p.observacao}
                           </div>
                         )}
+                        {p.pedidosVendaVinculados && p.pedidosVendaVinculados.length > 0 && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {p.pedidosVendaVinculados.map((v) => (
+                              <span
+                                key={v.id}
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200"
+                                title={`Venda ${v.numero} - ${v.cliente_nome}`}
+                              >
+                                🛒 {v.numero} • {v.cliente_nome.split(' ')[0]}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </td>
 
                       {/* Status / Etapa (Criado / NF Fábrica / Recebido / Cancelado) */}
@@ -2182,6 +2549,64 @@ export function V2PedidoCompraPage() {
                     {formatarMoeda((pedidoVisualizando.total || 0) + (pedidoVisualizando.frete || 0))}
                   </span>
                 </div>
+              </div>
+
+              {/* Pedidos de Venda Vinculados (Permite vincular a qualquer momento) */}
+              <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 space-y-3 text-xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <ShoppingCart size={16} className="text-indigo-600" />
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-950">
+                      Pedidos de Venda Vinculados ({pedidoVisualizando.pedidosVendaVinculados?.length || 0})
+                    </h4>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleAbrirModalVincularVendas('drawer')}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-2xs cursor-pointer"
+                    title="Vincular pedido de venda a esta compra"
+                  >
+                    <Plus size={13} />
+                    <span>Vincular Venda</span>
+                  </button>
+                </div>
+
+                {!pedidoVisualizando.pedidosVendaVinculados || pedidoVisualizando.pedidosVendaVinculados.length === 0 ? (
+                  <p className="text-slate-400 italic text-[11px] m-0">
+                    Nenhum pedido de venda vinculado. Clique no botão acima para associar vendas atendidas por esta compra a qualquer momento.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {pedidoVisualizando.pedidosVendaVinculados.map((v) => (
+                      <div
+                        key={v.id}
+                        className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-indigo-100 shadow-2xs"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <strong className="text-indigo-700 font-black">{v.numero}</strong>
+                            <span className="text-slate-700 font-semibold truncate max-w-[200px]">
+                              {v.cliente_nome}
+                            </span>
+                          </div>
+                          {v.total ? (
+                            <span className="text-[11px] text-slate-500 font-medium block">
+                              Total da Venda: {formatarMoeda(v.total)} {v.status ? `• Status: ${v.status}` : ''}
+                            </span>
+                          ) : null}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDesvincularVendaDireto(v.id)}
+                          className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                          title="Desvincular pedido de venda"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Itens do Pedido com Barra de Progresso */}
@@ -2748,6 +3173,131 @@ export function V2PedidoCompraPage() {
                 <CheckCircle size={15} />
                 <span>Confirmar Entrada no Estoque</span>
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: VINCULAR PEDIDOS DE VENDA (Permite vincular a qualquer momento) ── */}
+      {showVincularVendasModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShoppingCart size={18} className="text-indigo-400" />
+                <h3 className="text-sm font-bold">Vincular Pedidos de Venda a esta Compra</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowVincularVendasModal(false)}
+                className="p-1 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-b border-slate-200 space-y-2">
+              <p className="text-xs text-slate-600 m-0">
+                Selecione um ou mais pedidos de venda que estão sendo atendidos por esta compra da fábrica. Você pode vincular ou desvincular a qualquer momento.
+              </p>
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder="Pesquisar por número (#2026...), nome do cliente ou valor..."
+                  value={buscaVendaModal}
+                  onChange={(e) => setBuscaVendaModal(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 bg-white rounded-xl border border-slate-200 text-xs text-slate-800 outline-none focus:border-indigo-500 shadow-2xs"
+                />
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {vendasDisponiveis
+                .filter((v) => {
+                  if (!buscaVendaModal.trim()) return true
+                  const termo = buscaVendaModal.toLowerCase()
+                  return (
+                    v.numero.toLowerCase().includes(termo) ||
+                    v.cliente_nome.toLowerCase().includes(termo) ||
+                    (v.cliente_documento && v.cliente_documento.includes(termo)) ||
+                    (v.total && v.total.toString().includes(termo))
+                  )
+                })
+                .map((v) => {
+                  const isChecked = vendasSelecionadasModal.includes(v.id)
+                  return (
+                    <div
+                      key={v.id}
+                      onClick={() => handleToggleVendaSelecionada(v.id)}
+                      className={`p-3 rounded-xl border flex items-center justify-between gap-3 cursor-pointer transition select-none ${
+                        isChecked
+                          ? 'border-indigo-400 bg-indigo-50/70 shadow-2xs'
+                          : 'border-slate-200 hover:border-slate-300 bg-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => handleToggleVendaSelecionada(v.id)}
+                          className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <strong className="text-xs font-black text-indigo-700">{v.numero}</strong>
+                            <span className="text-xs font-bold text-slate-900 truncate">{v.cliente_nome}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
+                            <span>Emissão: {formatarData(v.dataEmissao)}</span>
+                            <span>•</span>
+                            <span className="capitalize">Status: {v.status}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <span className="text-xs font-black text-slate-900 block tabular-nums">
+                          {formatarMoeda(v.total)}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-medium">
+                          {v.formaPagamento}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+
+              {vendasDisponiveis.length === 0 && (
+                <div className="py-8 text-center text-slate-400 text-xs">
+                  Nenhum pedido de venda encontrado no sistema.
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+              <span className="text-xs font-semibold text-indigo-900">
+                {vendasSelecionadasModal.length} {vendasSelecionadasModal.length === 1 ? 'venda selecionada' : 'vendas selecionadas'}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowVincularVendasModal(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={salvandoVinculoVenda}
+                  onClick={handleConfirmarVinculoVendas}
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs cursor-pointer transition inline-flex items-center gap-1.5"
+                >
+                  <Check size={14} />
+                  <span>{salvandoVinculoVenda ? 'Salvando...' : 'Confirmar Vínculo'}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
