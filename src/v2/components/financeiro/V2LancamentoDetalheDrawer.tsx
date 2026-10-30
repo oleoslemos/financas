@@ -113,7 +113,9 @@ export const V2LancamentoDetalheDrawer: React.FC<V2LancamentoDetalheDrawerProps>
             <div className="min-w-0">
               <h2 className="text-base font-extrabold text-slate-900 leading-tight">
                 {isPago
-                  ? 'Título Liquidado'
+                  ? isPagar
+                    ? 'Título Pago'
+                    : 'Título Recebido'
                   : isCancelado
                   ? 'Título Cancelado'
                   : 'Título em Aberto'}
@@ -139,7 +141,9 @@ export const V2LancamentoDetalheDrawer: React.FC<V2LancamentoDetalheDrawerProps>
             >
               <span className="w-1.5 h-1.5 rounded-full bg-current" />
               {isPago
-                ? 'Paga'
+                ? isPagar
+                  ? 'Paga'
+                  : 'Recebida'
                 : conta.status === 'vencida'
                 ? 'Vencida'
                 : isCancelado

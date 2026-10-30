@@ -316,12 +316,14 @@ export const V2EditarLancamentoDrawer: React.FC<V2EditarLancamentoDrawerProps> =
             <div className="flex items-center justify-between">
               <span className="text-slate-500 font-medium">Status do Lançamento:</span>
               <span className="font-bold uppercase tracking-wider text-[11px] text-slate-800">
-                {conta.status}
+                {conta.status === 'paga'
+                  ? (conta.tipo === 'receber' ? 'RECEBIDA' : 'PAGA')
+                  : conta.status}
               </span>
             </div>
             {conta.status === 'paga' && (
               <p className="text-[11px] text-emerald-700 font-medium">
-                Este título já foi liquidado (pago). As alterações não reverterão a baixa realizada.
+                Este título já foi liquidado ({conta.tipo === 'receber' ? 'recebido' : 'pago'}). As alterações não reverterão a baixa realizada.
               </p>
             )}
             {conta.pedido_id && (

@@ -114,6 +114,18 @@ export function statusDaParcela(p: ContaPagarParcela, hoje: string): Status {
   return 'aberta'
 }
 
+export function rotuloStatusFormatado(status: Status, tipo?: 'pagar' | 'receber'): string {
+  if (status === 'paga') {
+    return tipo === 'receber' ? 'Recebida' : 'Paga'
+  }
+  if (status === 'vencida') return 'Vencida'
+  if (status === 'aberta') return 'Aberta'
+  if (status === 'parcial') return 'Parcial'
+  if (status === 'cancelada') return 'Cancelada'
+  return status
+}
+
+
 /** Achata as contas em movimentos por parcela. */
 export function achatar(contas: ContaPagar[], hoje: string, base: BaseData): Movimento[] {
   const out: Movimento[] = []

@@ -25,6 +25,7 @@ import {
   mesesDisponiveis,
   rotuloDiaFormatado,
   rotuloMes,
+  rotuloStatusFormatado,
   totalizar,
   type BaseData,
   type Filtros,
@@ -282,7 +283,9 @@ export function V2ContasPagarPage() {
                 <span className="text-xs font-bold uppercase tracking-wider text-blue-200 block">
                   Saldo em Caixa
                 </span>
-                <span className="text-4xl font-extrabold tracking-tight mt-1 block">R$ 0,00</span>
+                <span className="text-4xl font-extrabold tracking-tight mt-1 block">
+                  {formatBRL(totaisGerais.saldoRealizado)}
+                </span>
               </div>
 
               <div className="flex items-center gap-12 text-right">
@@ -311,7 +314,9 @@ export function V2ContasPagarPage() {
                 <span className="text-[11px] font-bold uppercase tracking-wider text-blue-200 block">
                   Saldo em Caixa
                 </span>
-                <span className="text-3xl font-extrabold tracking-tight mt-0.5 block">R$ 0,00</span>
+                <span className="text-3xl font-extrabold tracking-tight mt-0.5 block">
+                  {formatBRL(totaisGerais.saldoRealizado)}
+                </span>
               </div>
 
               <div className="flex items-center justify-between pt-2 border-t border-blue-400/30 text-xs">
@@ -534,6 +539,13 @@ export function V2ContasPagarPage() {
                     : 'text-emerald-700 border-emerald-200 hover:bg-emerald-50/50'
                 }
 
+                let rotuloChip = rotuloStatusFormatado(s)
+                if (s === 'paga') {
+                  if (tipo === 'receber') rotuloChip = 'Recebida'
+                  else if (tipo === 'pagar') rotuloChip = 'Paga'
+                  else rotuloChip = 'Recebida / Paga'
+                }
+
                 return (
                   <button
                     key={s}
@@ -541,7 +553,7 @@ export function V2ContasPagarPage() {
                     onClick={() => alternarStatus(s)}
                     className={`px-3 py-1 rounded-full text-xs font-bold border transition-all cursor-pointer ${colorCls}`}
                   >
-                    {s.charAt(0).toUpperCase() + s.slice(1)}
+                    {rotuloChip}
                   </button>
                 )
               })}
@@ -693,7 +705,7 @@ export function V2ContasPagarPage() {
                             }`}
                           >
                             <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                            {m.status.charAt(0).toUpperCase() + m.status.slice(1)}
+                            {rotuloStatusFormatado(m.status, m.tipo)}
                           </span>
                         </td>
 
@@ -803,7 +815,7 @@ export function V2ContasPagarPage() {
                               <p className="text-[11px] text-slate-500 mt-0.5 truncate">
                                 {m.contraparte} · {m.contaOriginal?.forma_pagamento || 'outros'} ·{' '}
                                 {isPago
-                                  ? `recebido ${fmtData(m.pagoEm || m.vencimento)}`
+                                  ? `${isPagar ? 'pago' : 'recebido'} em ${fmtData(m.pagoEm || m.vencimento)}`
                                   : `vence ${fmtData(m.vencimento)}`}
                               </p>
                             </div>
@@ -836,7 +848,7 @@ export function V2ContasPagarPage() {
                                 }`}
                               >
                                 <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                                {m.status.charAt(0).toUpperCase() + m.status.slice(1)}
+                                {rotuloStatusFormatado(m.status, m.tipo)}
                               </span>
                             </div>
 
