@@ -58,11 +58,28 @@ import { buildWhatsappUrlWithText } from '../../lib/whatsapp'
 const FORMAS_PAGAMENTO: string[] = [
   'Dinheiro',
   'Pix',
-  'Cartão Débito',
-  'Cartão Crédito',
   'Boleto',
   'Crediário',
+  'Cartão Débito',
+  'Cartão Crédito 1x',
+  'Cartão Crédito 2x',
+  'Cartão Crédito 3x',
+  'Cartão Crédito 4x',
+  'Cartão Crédito 5x',
+  'Cartão Crédito 6x',
+  'Cartão Crédito 7x',
+  'Cartão Crédito 8x',
+  'Cartão Crédito 9x',
+  'Cartão Crédito 10x',
+  'Cartão Crédito 11x',
+  'Cartão Crédito 12x',
 ]
+
+/** Extrai o número de parcelas embutido na forma de pagamento (ex: "Cartão Crédito 3x" → 3) */
+function extrairParcelasDaForma(forma: string): number {
+  const match = forma.match(/(\d+)x/i)
+  return match ? parseInt(match[1], 10) : 1
+}
 
 const ABAS_STATUS: { value: 'todos' | StatusVenda; label: string }[] = [
   { value: 'todos', label: 'TODOS' },
@@ -659,7 +676,7 @@ export function V2PedidoVendasPage() {
     setFormTabelaPrecoNome(pedido.tabela_preco_nome || tabelasPreco[0]?.name || '')
     setFormDataEntrega(pedido.dataPrevistaEntrega || somarDias(dataHoje, 10))
     setFormFormaPagamento(pedido.formaPagamento)
-    setFormNumeroParcelas(pedido.numeroParcelas || 1)
+    setFormNumeroParcelas(Math.max(pedido.numeroParcelas || 1, extrairParcelasDaForma(pedido.formaPagamento || '')))
     setFormDataEmissao(pedido.dataEmissao || dataHoje)
     setFormNumeroManual(pedido.numero || '')
     setFormDataVencimento(pedido.dataVencimento || somarDias(pedido.dataEmissao || dataHoje, 30))
@@ -715,7 +732,7 @@ export function V2PedidoVendasPage() {
     setFormTabelaPrecoNome(original.tabela_preco_nome || tabelasPreco[0]?.name || '')
     setFormDataEntrega(somarDias(dataHoje, 10))
     setFormFormaPagamento(original.formaPagamento)
-    setFormNumeroParcelas(original.numeroParcelas || 1)
+    setFormNumeroParcelas(Math.max(original.numeroParcelas || 1, extrairParcelasDaForma(original.formaPagamento || '')))
     setFormDataEmissao(dataHoje)
     setFormNumeroManual('')
     setFormDataVencimento(somarDias(dataHoje, 30))
@@ -1777,27 +1794,15 @@ export function V2PedidoVendasPage() {
                   <label className="text-xs font-bold uppercase text-slate-500">Forma de Pagamento</label>
                   <select
                     value={formFormaPagamento}
-                    onChange={(e) => setFormFormaPagamento(e.target.value)}
+                    onChange={(e) => {
+                      setFormFormaPagamento(e.target.value)
+                      setFormNumeroParcelas(extrairParcelasDaForma(e.target.value))
+                    }}
                     className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none focus:border-emerald-500 cursor-pointer"
                   >
                     {FORMAS_PAGAMENTO.map((fp) => (
                       <option key={fp} value={fp}>
                         {fp}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs font-bold uppercase text-slate-500">Qtd. Parcelas</label>
-                  <select
-                    value={formNumeroParcelas}
-                    onChange={(e) => setFormNumeroParcelas(Math.max(1, Number(e.target.value) || 1))}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none focus:border-emerald-500 cursor-pointer"
-                  >
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((num) => (
-                      <option key={num} value={num}>
-                        {num === 1 ? '1x (À vista)' : `${num}x (${formatarMoeda(formTotalComFrete / num)}/mês)`}
                       </option>
                     ))}
                   </select>
@@ -2467,9 +2472,12 @@ export function V2PedidoVendasPage() {
                       <td className="px-4 py-4 font-medium text-slate-600">
                         <div className="flex flex-col">
                           <span>{p.formaPagamento}</span>
-                          <span className="text-[10px] text-slate-400">
-                            {p.numeroParcelas > 1 ? `${p.numeroParcelas} parcelas` : 'À vista'}
-                          </span>
+                          {/* Só mostra linha de parcelas se a forma não tem "Nx" já embutido */}
+                          {!p.formaPagamento?.match(/\dx/i) && (
+                            <span className="text-[10px] text-slate-400">
+                              {p.numeroParcelas > 1 ? `${p.numeroParcelas} parcelas` : 'À vista'}
+                            </span>
+                          )}
                         </div>
                       </td>
 
@@ -2611,9 +2619,12 @@ export function V2PedidoVendasPage() {
                         </span>
                         <span className="font-bold text-slate-800 text-xs">
                           {visualizandoPedido.formaPagamento}
-                          {Number(visualizandoPedido.numeroParcelas) > 1
-                            ? ` (${visualizandoPedido.numeroParcelas}x de ${formatarMoeda(visualizandoPedido.total / visualizandoPedido.numeroParcelas)})`
-                            : ' (À vista)'}
+                          {/* Se a forma já inclui "Nx" não duplicar a info de parcelas */}
+                          {!visualizandoPedido.formaPagamento?.match(/\dx/i) && (
+                            Number(visualizandoPedido.numeroParcelas) > 1
+                              ? ` (${visualizandoPedido.numeroParcelas}x de ${formatarMoeda(visualizandoPedido.total / visualizandoPedido.numeroParcelas)})`
+                              : ' (À vista)'
+                          )}
                         </span>
                       </div>
                     )}
