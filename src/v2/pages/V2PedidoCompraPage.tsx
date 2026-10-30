@@ -763,22 +763,23 @@ export function V2PedidoCompraPage() {
   // ──────────────────────────────────────────────────────────────────────────
   if (viewMode === 'novo') {
     return (
-      <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 font-sans">
+      <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-6 font-sans normal-case" style={{ textTransform: 'none' }}>
         {/* Voltar para pedidos de compra */}
-        <div style={{ marginBottom: 12 }}>
+        <div style={{ marginBottom: 10 }}>
           <button
             onClick={() => setViewMode('lista')}
             style={{
               background: 'none',
               border: 'none',
               color: '#0D5BA3',
-              fontSize: 14,
-              fontWeight: 700,
+              fontSize: 12,
+              fontWeight: 600,
               cursor: 'pointer',
               display: 'inline-flex',
               alignItems: 'center',
               gap: 4,
               padding: 0,
+              textTransform: 'none',
             }}
           >
             ← Pedidos de compra
@@ -786,16 +787,16 @@ export function V2PedidoCompraPage() {
         </div>
 
         {/* Título e Subtítulo + Pill de Status */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700, color: '#0F2A43' }}>
+            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#0F2A43', textTransform: 'none', letterSpacing: '-0.02em' }}>
               {isVisualizacao
                 ? `Visualizar Pedido #${pedidoEdicao?.numero}`
                 : pedidoEdicao
                 ? `Editar Pedido #${pedidoEdicao.numero}`
                 : 'Novo pedido de compra'}
             </h1>
-            <p style={{ margin: '4px 0 0', fontSize: 14, color: '#475569' }}>
+            <p style={{ margin: '3px 0 0', fontSize: 12, color: '#64748B', textTransform: 'none' }}>
               {isVisualizacao
                 ? 'Detalhes do pedido recebido e itens comprados (Modo Somente Leitura).'
                 : 'Três passos rápidos: de quem comprar, o que comprar e quando pagar e receber.'}
@@ -805,11 +806,12 @@ export function V2PedidoCompraPage() {
           <div
             style={{
               background: isVisualizacao ? '#DCFCE7' : '#E4EEE6',
-              padding: '6px 14px',
-              borderRadius: 20,
-              fontSize: 12,
+              padding: '4px 10px',
+              borderRadius: 16,
+              fontSize: 11,
               fontWeight: 700,
               color: isVisualizacao ? '#15803D' : '#334155',
+              textTransform: 'none',
             }}
           >
             {isVisualizacao ? '✓ Recebido · Somente Leitura' : 'Rascunho · ainda não salvo'}
@@ -817,43 +819,43 @@ export function V2PedidoCompraPage() {
         </div>
 
         {/* Grid Principal: 3 Passos à Esquerda + Resumo à Direita */}
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile || isTablet ? '1fr' : 'minmax(0, 1fr) 360px', gap: 24, alignItems: 'flex-start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile || isTablet ? '1fr' : 'minmax(0, 1fr) 340px', gap: 18, alignItems: 'flex-start' }}>
           {/* Coluna da Esquerda: Passos 1, 2 e 3 */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {/* ── PASSO 1: DE QUEM VOCÊ VAI COMPRAR? ── */}
             <div
               style={{
                 background: '#FFFFFF',
-                borderRadius: 16,
+                borderRadius: 14,
                 border: '1px solid #D7E4DA',
-                padding: '24px',
+                padding: '16px 18px',
                 boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
                 <div
                   style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 16,
+                    width: 24,
+                    height: 24,
+                    borderRadius: 12,
                     background: '#DCFCE7',
                     color: '#15803D',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontWeight: 700,
-                    fontSize: 15,
+                    fontSize: 12,
                   }}
                 >
                   ✓
                 </div>
-                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0F2A43' }}>
+                <h2 style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: '#0F2A43', textTransform: 'none' }}>
                   1. De quem você vai comprar?
                 </h2>
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                <label style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: '#475569', marginBottom: 4, textTransform: 'none' }}>
                   Fornecedor
                 </label>
                 <select
@@ -862,15 +864,16 @@ export function V2PedidoCompraPage() {
                   onChange={(e) => setFormFornecedor(e.target.value)}
                   style={{
                     width: '100%',
-                    padding: '12px 14px',
-                    borderRadius: 10,
+                    padding: '8px 10px',
+                    borderRadius: 8,
                     border: '1px solid #CBD5E1',
-                    fontSize: 14,
+                    fontSize: 12.5,
                     color: '#0F2A43',
                     background: isVisualizacao ? '#F8FAFC' : '#FFFFFF',
                     outline: 'none',
                     boxSizing: 'border-box',
                     cursor: isVisualizacao ? 'default' : 'pointer',
+                    textTransform: 'none',
                   }}
                 >
                   <option value="">Selecione um fornecedor...</option>
@@ -891,16 +894,17 @@ export function V2PedidoCompraPage() {
               {ultimoPedidoDoFornecedor && (
                 <div
                   style={{
-                    marginTop: 16,
+                    marginTop: 12,
                     background: '#F1F7F2',
-                    borderRadius: 10,
-                    padding: '12px 16px',
+                    borderRadius: 8,
+                    padding: '9px 12px',
                     display: 'flex',
                     alignItems: 'center',
                     gap: 8,
-                    fontSize: 13,
+                    fontSize: 11.5,
                     color: '#334155',
                     flexWrap: 'wrap',
+                    textTransform: 'none',
                   }}
                 >
                   <span>Último pedido a este fornecedor:</span>
@@ -911,14 +915,15 @@ export function V2PedidoCompraPage() {
                     style={{
                       background: ultimoPedidoDoFornecedor.status === 'recebido' ? '#DCFCE7' : '#E3EEFA',
                       color: ultimoPedidoDoFornecedor.status === 'recebido' ? '#15803D' : '#0D5BA3',
-                      padding: '3px 10px',
-                      borderRadius: 12,
-                      fontSize: 12,
+                      padding: '2px 8px',
+                      borderRadius: 10,
+                      fontSize: 10.5,
                       fontWeight: 700,
                       marginLeft: 'auto',
+                      textTransform: 'none',
                     }}
                   >
-                    {ultimoPedidoDoFornecedor.status === 'recebido' ? '✓ Recebido' : `● ${ultimoPedidoDoFornecedor.status.toUpperCase()}`}
+                    {ultimoPedidoDoFornecedor.status === 'recebido' ? '✓ Recebido' : `● ${ultimoPedidoDoFornecedor.status}`}
                   </span>
                 </div>
               )}
@@ -928,49 +933,49 @@ export function V2PedidoCompraPage() {
             <div
               style={{
                 background: '#FFFFFF',
-                borderRadius: 16,
+                borderRadius: 14,
                 border: '1px solid #D7E4DA',
-                padding: '24px',
+                padding: '16px 18px',
                 boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
                 <div
                   style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 16,
+                    width: 24,
+                    height: 24,
+                    borderRadius: 12,
                     background: '#DCFCE7',
                     color: '#15803D',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontWeight: 700,
-                    fontSize: 15,
+                    fontSize: 12,
                   }}
                 >
                   2
                 </div>
-                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0F2A43' }}>
+                <h2 style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: '#0F2A43', textTransform: 'none' }}>
                   2. O que você vai comprar?
                 </h2>
               </div>
 
               {/* Lista de Itens */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {formItens.map((item, idx) => (
                   <div
                     key={idx}
                     style={{
                       border: '1px solid #D7E4DA',
-                      borderRadius: 12,
-                      padding: '16px',
+                      borderRadius: 10,
+                      padding: '12px 14px',
                       background: '#FFFFFF',
                     }}
                   >
-                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1.8fr) 85px 130px', gap: 12 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1.8fr) 80px 120px', gap: 10 }}>
                       <div>
-                        <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                        <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#475569', marginBottom: 4, textTransform: 'none' }}>
                           Produto
                         </label>
                         <select
@@ -979,15 +984,16 @@ export function V2PedidoCompraPage() {
                           onChange={(e) => handleItemProdutoChange(idx, e.target.value)}
                           style={{
                             width: '100%',
-                            padding: '11px 12px',
-                            borderRadius: 10,
+                            padding: '7px 9px',
+                            borderRadius: 8,
                             border: '1px solid #CBD5E1',
-                            fontSize: 14,
+                            fontSize: 12,
                             color: '#0F2A43',
                             background: isVisualizacao ? '#F8FAFC' : '#FFFFFF',
                             outline: 'none',
                             boxSizing: 'border-box',
                             cursor: isVisualizacao ? 'default' : 'pointer',
+                            textTransform: 'none',
                           }}
                         >
                           <option value="">Selecione um produto...</option>
@@ -1000,7 +1006,7 @@ export function V2PedidoCompraPage() {
                       </div>
 
                       <div>
-                        <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                        <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#475569', marginBottom: 4, textTransform: 'none' }}>
                           Qtd.
                         </label>
                         <input
@@ -1011,20 +1017,21 @@ export function V2PedidoCompraPage() {
                           onChange={(e) => handleItemQuantidadeChange(idx, Number(e.target.value))}
                           style={{
                             width: '100%',
-                            padding: '11px 12px',
-                            borderRadius: 10,
+                            padding: '7px 9px',
+                            borderRadius: 8,
                             border: '1px solid #CBD5E1',
-                            fontSize: 14,
+                            fontSize: 12,
                             textAlign: 'center',
                             color: '#0F2A43',
                             background: isVisualizacao ? '#F8FAFC' : '#FFFFFF',
                             boxSizing: 'border-box',
+                            textTransform: 'none',
                           }}
                         />
                       </div>
 
                       <div>
-                        <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                        <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#475569', marginBottom: 4, textTransform: 'none' }}>
                           Custo unitário (R$)
                         </label>
                         <input
@@ -1035,21 +1042,22 @@ export function V2PedidoCompraPage() {
                           onChange={(e) => handleItemPrecoChange(idx, Number(e.target.value))}
                           style={{
                             width: '100%',
-                            padding: '11px 12px',
-                            borderRadius: 10,
+                            padding: '7px 9px',
+                            borderRadius: 8,
                             border: '1px solid #CBD5E1',
-                            fontSize: 14,
+                            fontSize: 12,
                             color: '#0F2A43',
                             background: isVisualizacao ? '#F8FAFC' : '#FFFFFF',
                             boxSizing: 'border-box',
+                            textTransform: 'none',
                           }}
                         />
                       </div>
                     </div>
 
                     {/* Subtotal da linha e botão de exclusão */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
-                      <span style={{ fontSize: 17, fontWeight: 700, color: '#0F2A43' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#0F2A43' }}>
                         {formatarMoeda(item.total)}
                       </span>
                       {!isVisualizacao && formItens.length > 1 && (
@@ -1057,17 +1065,19 @@ export function V2PedidoCompraPage() {
                           type="button"
                           onClick={() => handleRemoverItem(idx)}
                           style={{
-                            width: 36,
-                            height: 36,
-                            borderRadius: 8,
+                            width: 26,
+                            height: 26,
+                            borderRadius: 6,
                             border: '1px solid #CBD5E1',
                             background: '#FFFFFF',
-                            color: '#475569',
+                            color: '#64748B',
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            fontSize: 14,
+                            fontSize: 11,
+                            padding: 0,
+                            textTransform: 'none',
                           }}
                         >
                           ✕
@@ -1084,18 +1094,19 @@ export function V2PedidoCompraPage() {
                   type="button"
                   onClick={handleAdicionarItem}
                   style={{
-                    marginTop: 16,
-                    padding: '11px 18px',
-                    borderRadius: 10,
+                    marginTop: 12,
+                    padding: '7px 12px',
+                    borderRadius: 8,
                     border: '1px dashed #0D5BA3',
                     background: '#FFFFFF',
                     color: '#0D5BA3',
-                    fontSize: 14,
-                    fontWeight: 700,
+                    fontSize: 11.5,
+                    fontWeight: 600,
                     cursor: 'pointer',
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: 6,
+                    gap: 5,
+                    textTransform: 'none',
                   }}
                 >
                   + Adicionar outro produto
@@ -1107,38 +1118,38 @@ export function V2PedidoCompraPage() {
             <div
               style={{
                 background: '#FFFFFF',
-                borderRadius: 16,
+                borderRadius: 14,
                 border: '1px solid #D7E4DA',
-                padding: '24px',
+                padding: '16px 18px',
                 boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
                 <div
                   style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 16,
+                    width: 24,
+                    height: 24,
+                    borderRadius: 12,
                     background: '#0D5BA3',
                     color: '#FFFFFF',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontWeight: 700,
-                    fontSize: 15,
+                    fontSize: 12,
                   }}
                 >
                   3
                 </div>
-                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0F2A43' }}>
+                <h2 style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: '#0F2A43', textTransform: 'none' }}>
                   3. Pagamento, frete e previsão de recebimento
                 </h2>
               </div>
 
               {/* Linha 1: Forma de Pagamento e Frete (R$) */}
-              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.2fr 1fr', gap: 16, marginBottom: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.2fr 1fr', gap: 12, marginBottom: 12 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                  <label style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: '#475569', marginBottom: 4, textTransform: 'none' }}>
                     Forma de Pagamento
                   </label>
                   <select
@@ -1147,16 +1158,17 @@ export function V2PedidoCompraPage() {
                     onChange={(e) => setFormFormaPagamento(e.target.value)}
                     style={{
                       width: '100%',
-                      padding: '12px 14px',
-                      borderRadius: 10,
+                      padding: '8px 10px',
+                      borderRadius: 8,
                       border: '1px solid #CBD5E1',
-                      fontSize: 14,
+                      fontSize: 12,
                       fontWeight: 600,
                       color: '#0F2A43',
                       background: isVisualizacao ? '#F8FAFC' : '#FFFFFF',
                       outline: 'none',
                       boxSizing: 'border-box',
                       cursor: isVisualizacao ? 'default' : 'pointer',
+                      textTransform: 'none',
                     }}
                   >
                     {FORMAS_PAGAMENTO.map((f) => (
@@ -1168,7 +1180,7 @@ export function V2PedidoCompraPage() {
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                  <label style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: '#475569', marginBottom: 4, textTransform: 'none' }}>
                     Frete (R$) <span style={{ color: '#64748B', fontWeight: 400 }}>(opcional)</span>
                   </label>
                   <input
@@ -1181,23 +1193,24 @@ export function V2PedidoCompraPage() {
                     onChange={(e) => setFormFrete(Math.max(0, Number(e.target.value)))}
                     style={{
                       width: '100%',
-                      padding: '12px 14px',
-                      borderRadius: 10,
+                      padding: '8px 10px',
+                      borderRadius: 8,
                       border: '1px solid #CBD5E1',
-                      fontSize: 14,
+                      fontSize: 12,
                       color: '#0F2A43',
                       background: isVisualizacao ? '#F8FAFC' : '#FFFFFF',
                       outline: 'none',
                       boxSizing: 'border-box',
+                      textTransform: 'none',
                     }}
                   />
                 </div>
               </div>
 
               {/* Linha 2: Data do Pedido e Data de Vencimento */}
-              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.2fr 1fr', gap: 16, marginBottom: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.2fr 1fr', gap: 12, marginBottom: 12 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                  <label style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: '#475569', marginBottom: 4, textTransform: 'none' }}>
                     Data do Pedido
                   </label>
                   <input
@@ -1213,23 +1226,24 @@ export function V2PedidoCompraPage() {
                     }}
                     style={{
                       width: '100%',
-                      padding: '12px 14px',
-                      borderRadius: 10,
+                      padding: '8px 10px',
+                      borderRadius: 8,
                       border: '1px solid #CBD5E1',
-                      fontSize: 14,
+                      fontSize: 12,
                       color: '#0F2A43',
                       background: isVisualizacao ? '#F8FAFC' : '#FFFFFF',
                       outline: 'none',
                       boxSizing: 'border-box',
+                      textTransform: 'none',
                     }}
                   />
-                  <span style={{ display: 'block', fontSize: 12, color: '#475569', marginTop: 4 }}>
+                  <span style={{ display: 'block', fontSize: 10.5, color: '#64748B', marginTop: 3, textTransform: 'none' }}>
                     Pode ser retroativa
                   </span>
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                  <label style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: '#475569', marginBottom: 4, textTransform: 'none' }}>
                     Data de Vencimento
                   </label>
                   <input
@@ -1239,27 +1253,28 @@ export function V2PedidoCompraPage() {
                     onChange={(e) => setFormDataVencimento(e.target.value)}
                     style={{
                       width: '100%',
-                      padding: '12px 14px',
-                      borderRadius: 10,
+                      padding: '8px 10px',
+                      borderRadius: 8,
                       border: '1px solid #CBD5E1',
-                      fontSize: 14,
+                      fontSize: 12,
                       color: '#0F2A43',
                       background: isVisualizacao ? '#F8FAFC' : '#FFFFFF',
                       outline: 'none',
                       boxSizing: 'border-box',
+                      textTransform: 'none',
                     }}
                   />
-                  <span style={{ display: 'block', fontSize: 12, color: '#475569', marginTop: 4 }}>
+                  <span style={{ display: 'block', fontSize: 10.5, color: '#64748B', marginTop: 3, textTransform: 'none' }}>
                     Vencimento do pagamento (lançamento único)
                   </span>
                 </div>
               </div>
 
               {/* Linha 3: Conta de Saída (Tag) e Previsão de Recebimento */}
-              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.2fr 1fr', gap: 16, marginBottom: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.2fr 1fr', gap: 12, marginBottom: 12 }}>
                 <div>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
-                    <Tag size={14} color="#0D5BA3" />
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 600, color: '#475569', marginBottom: 4, textTransform: 'none' }}>
+                    <Tag size={13} color="#0D5BA3" />
                     Conta de Saída (Tag / Origem do recurso)
                   </label>
                   <input
@@ -1270,20 +1285,21 @@ export function V2PedidoCompraPage() {
                     onChange={(e) => setFormContaSaidaTag(e.target.value)}
                     style={{
                       width: '100%',
-                      padding: '12px 14px',
-                      borderRadius: 10,
+                      padding: '8px 10px',
+                      borderRadius: 8,
                       border: '1px solid #CBD5E1',
-                      fontSize: 14,
+                      fontSize: 12,
                       color: '#0F2A43',
                       background: isVisualizacao ? '#F8FAFC' : '#FFFFFF',
                       outline: 'none',
                       boxSizing: 'border-box',
+                      textTransform: 'none',
                     }}
                   />
                   {/* Tags Rápidas das Contas Cadastradas */}
                   {!isVisualizacao && contasBancarias.length > 0 && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-                      <span style={{ fontSize: 11, color: '#64748B', alignSelf: 'center' }}>Atalhos:</span>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 6 }}>
+                      <span style={{ fontSize: 10.5, color: '#64748B', alignSelf: 'center', textTransform: 'none' }}>Atalhos:</span>
                       {contasBancarias.map((cb) => {
                         const tagNome = `#${cb.nome.replace(/\s+/g, '')}`
                         const isSelecionado = formContaSaidaTag.toLowerCase().includes(cb.nome.toLowerCase()) || formContaSaidaTag === tagNome
@@ -1293,9 +1309,9 @@ export function V2PedidoCompraPage() {
                             type="button"
                             onClick={() => setFormContaSaidaTag(tagNome)}
                             style={{
-                              padding: '3px 8px',
-                              borderRadius: 12,
-                              fontSize: 11,
+                              padding: '2px 7px',
+                              borderRadius: 10,
+                              fontSize: 10.5,
                               fontWeight: 600,
                               border: isSelecionado ? '1px solid #0D5BA3' : '1px solid #CBD5E1',
                               background: isSelecionado ? '#E3EEFA' : '#F8FAFC',
@@ -1303,7 +1319,8 @@ export function V2PedidoCompraPage() {
                               cursor: 'pointer',
                               display: 'inline-flex',
                               alignItems: 'center',
-                              gap: 4,
+                              gap: 3,
+                              textTransform: 'none',
                             }}
                           >
                             <span>{tagNome}</span>
@@ -1316,7 +1333,7 @@ export function V2PedidoCompraPage() {
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                  <label style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: '#475569', marginBottom: 4, textTransform: 'none' }}>
                     Previsão de recebimento
                   </label>
                   <input
@@ -1326,25 +1343,26 @@ export function V2PedidoCompraPage() {
                     onChange={(e) => setFormDataRecebimentoPrevista(e.target.value)}
                     style={{
                       width: '100%',
-                      padding: '12px 14px',
-                      borderRadius: 10,
+                      padding: '8px 10px',
+                      borderRadius: 8,
                       border: '1px solid #CBD5E1',
-                      fontSize: 14,
+                      fontSize: 12,
                       color: '#0F2A43',
                       background: isVisualizacao ? '#F8FAFC' : '#FFFFFF',
                       outline: 'none',
                       boxSizing: 'border-box',
+                      textTransform: 'none',
                     }}
                   />
-                  <span style={{ display: 'block', fontSize: 12, color: '#475569', marginTop: 4 }}>
+                  <span style={{ display: 'block', fontSize: 10.5, color: '#64748B', marginTop: 3, textTransform: 'none' }}>
                     Padrão: 20 dias corridos a partir do pedido ({diasAteRecebimento} dias)
                   </span>
                 </div>
               </div>
 
               {/* Justificativa caso data de recebimento seja alterada */}
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: '#475569', marginBottom: 4, textTransform: 'none' }}>
                   Justificativa da data de recebimento <span style={{ color: '#64748B', fontWeight: 400 }}>(opcional)</span>
                 </label>
                 <input
@@ -1355,20 +1373,21 @@ export function V2PedidoCompraPage() {
                   onChange={(e) => setFormJustificativaDataRecebimento(e.target.value)}
                   style={{
                     width: '100%',
-                    padding: '11px 14px',
-                    borderRadius: 10,
+                    padding: '8px 10px',
+                    borderRadius: 8,
                     border: '1px solid #CBD5E1',
-                    fontSize: 14,
+                    fontSize: 12,
                     color: '#0F2A43',
                     background: isVisualizacao ? '#F8FAFC' : '#FFFFFF',
                     outline: 'none',
                     boxSizing: 'border-box',
+                    textTransform: 'none',
                   }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                <label style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: '#475569', marginBottom: 4, textTransform: 'none' }}>
                   Observação <span style={{ color: '#64748B', fontWeight: 400 }}>(opcional)</span>
                 </label>
                 <textarea
@@ -1379,15 +1398,16 @@ export function V2PedidoCompraPage() {
                   placeholder="Ex: Instruções de entrega, condições comerciais ou notas fiscais..."
                   style={{
                     width: '100%',
-                    padding: '12px 14px',
-                    borderRadius: 10,
+                    padding: '8px 10px',
+                    borderRadius: 8,
                     border: '1px solid #CBD5E1',
-                    fontSize: 14,
+                    fontSize: 12,
                     color: '#0F2A43',
                     background: isVisualizacao ? '#F8FAFC' : '#FFFFFF',
                     outline: 'none',
                     boxSizing: 'border-box',
                     resize: isVisualizacao ? 'none' : 'vertical',
+                    textTransform: 'none',
                   }}
                 />
               </div>
@@ -1398,67 +1418,67 @@ export function V2PedidoCompraPage() {
           <div
             style={{
               background: '#FFFFFF',
-              borderRadius: 16,
+              borderRadius: 14,
               border: '1px solid #D7E4DA',
-              padding: '24px',
+              padding: '16px 18px',
               boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
               position: isMobile || isTablet ? 'static' : 'sticky',
-              top: 24,
+              top: 20,
             }}
           >
-            <h3 style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 700, color: '#0F2A43' }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 13.5, fontWeight: 700, color: '#0F2A43', textTransform: 'none' }}>
               Resumo do pedido
             </h3>
 
-            <p style={{ margin: '0 0 16px', fontSize: 14, color: '#1E293B', lineHeight: 1.5 }}>
+            <p style={{ margin: '0 0 12px', fontSize: 11.5, color: '#334155', lineHeight: 1.45, textTransform: 'none' }}>
               Você está pedindo <strong>{formItens.filter((i) => i.produto_id).length} item(ns)</strong> à{' '}
               <strong>{formFornecedor ? formFornecedor.split(' ')[0] : '...'}</strong>, pagando com{' '}
               <strong>{formFormaPagamento}</strong>.
             </p>
 
-            <div style={{ borderTop: '1px solid #D7E4DA', borderBottom: '1px solid #D7E4DA', padding: '14px 0', margin: '14px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ borderTop: '1px solid #D7E4DA', borderBottom: '1px solid #D7E4DA', padding: '10px 0', margin: '10px 0', display: 'flex', flexDirection: 'column', gap: 6, textTransform: 'none' }}>
               {formItens.map((it, idx) => (
-                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5 }}>
                   <span style={{ color: '#475569' }}>
                     {it.produto_nome ? it.produto_nome.split('[')[0] : 'Produto não selecionado'} × {it.quantidade}
                   </span>
                   <span style={{ color: '#0F2A43', fontWeight: 600 }}>{formatarMoeda(it.total)}</span>
                 </div>
               ))}
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginTop: 4, paddingTop: 6, borderTop: '1px dashed #E2E8F0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, marginTop: 3, paddingTop: 5, borderTop: '1px dashed #E2E8F0' }}>
                 <span style={{ color: '#475569' }}>Subtotal Itens</span>
                 <span style={{ color: '#0F2A43', fontWeight: 600 }}>{formatarMoeda(totalCalculado)}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5 }}>
                 <span style={{ color: '#475569' }}>Frete</span>
                 <span style={{ color: '#0F2A43', fontWeight: 600 }}>{formatarMoeda(formFrete || 0)}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5 }}>
                 <span style={{ color: '#475569' }}>Data do Pedido</span>
                 <span style={{ color: '#0F2A43', fontWeight: 600 }}>{formatarData(formDataPedido)}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5 }}>
                 <span style={{ color: '#475569' }}>Vencimento</span>
                 <span style={{ color: '#0F2A43', fontWeight: 600 }}>{formDataVencimento ? formatarData(formDataVencimento) : 'À vista'}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5 }}>
                 <span style={{ color: '#475569' }}>Previsão de Recebimento</span>
                 <span style={{ color: '#0F2A43', fontWeight: 600 }}>{formatarData(formDataRecebimentoPrevista)}</span>
               </div>
               {formContaSaidaTag && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5 }}>
                   <span style={{ color: '#475569' }}>Conta Saída</span>
                   <span style={{ color: '#0D5BA3', fontWeight: 700 }}>{formContaSaidaTag}</span>
                 </div>
               )}
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', margin: '18px 0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', margin: '14px 0', textTransform: 'none' }}>
               <div>
-                <span style={{ fontSize: 14, fontWeight: 700, color: '#334155', display: 'block' }}>Total do pedido</span>
-                <span style={{ fontSize: 11, color: '#64748B' }}>(Itens + Frete)</span>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: '#334155', display: 'block' }}>Total do pedido</span>
+                <span style={{ fontSize: 10, color: '#64748B' }}>(Itens + Frete)</span>
               </div>
-              <span style={{ fontSize: 24, fontWeight: 800, color: '#0D5BA3' }}>
+              <span style={{ fontSize: 18, fontWeight: 800, color: '#0D5BA3' }}>
                 {formatarMoeda(totalCalculado + (Number(formFrete) || 0))}
               </span>
             </div>
@@ -1468,36 +1488,38 @@ export function V2PedidoCompraPage() {
                 style={{
                   background: '#F0FDF4',
                   border: '1.5px solid #BBF7D0',
-                  borderRadius: 12,
-                  padding: '14px',
-                  marginBottom: 12,
+                  borderRadius: 10,
+                  padding: '10px 12px',
+                  marginBottom: 10,
                   textAlign: 'center',
+                  textTransform: 'none',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, color: '#15803D', fontWeight: 800, fontSize: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, color: '#15803D', fontWeight: 800, fontSize: 12 }}>
                   ✓ Pedido Recebido
                 </div>
-                <p style={{ margin: '6px 0 0', fontSize: 12, color: '#166534', lineHeight: 1.4 }}>
+                <p style={{ margin: '4px 0 0', fontSize: 11, color: '#166534', lineHeight: 1.4 }}>
                   Este pedido já foi recebido e integrado ao estoque físico e financeiro. Para editá-lo, desfaça o recebimento na listagem.
                 </p>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 8 }}>
                 {/* Botão de Salvar Rascunho */}
                 <button
                   type="button"
                   onClick={() => handleSalvarPedido(false)}
                   style={{
                     width: '100%',
-                    padding: '13px',
-                    borderRadius: 12,
+                    padding: '8px 14px',
+                    borderRadius: 8,
                     background: '#0D5BA3',
                     color: '#FFFFFF',
-                    fontSize: 15,
+                    fontSize: 12,
                     fontWeight: 700,
                     border: 'none',
                     cursor: 'pointer',
-                    boxShadow: '0 2px 6px rgba(13, 91, 163, 0.2)',
+                    boxShadow: '0 1px 3px rgba(13, 91, 163, 0.2)',
+                    textTransform: 'none',
                   }}
                 >
                   {pedidoEdicao ? 'Salvar alterações' : 'Salvar como Rascunho (Criado)'}
@@ -1510,22 +1532,23 @@ export function V2PedidoCompraPage() {
                     onClick={() => handleSalvarPedido(true)}
                     style={{
                       width: '100%',
-                      padding: '12px',
-                      borderRadius: 12,
+                      padding: '7px 14px',
+                      borderRadius: 8,
                       background: '#F0FDF4',
                       border: '1.5px solid #15803D',
                       color: '#15803D',
-                      fontSize: 14,
+                      fontSize: 12,
                       fontWeight: 700,
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: 6,
+                      textTransform: 'none',
                     }}
                   >
                     <span>Salvar e Emitir Pedido</span>
-                    <ArrowRight size={16} />
+                    <ArrowRight size={14} />
                   </button>
                 )}
               </div>
@@ -1536,20 +1559,21 @@ export function V2PedidoCompraPage() {
               onClick={() => setViewMode('lista')}
               style={{
                 width: '100%',
-                padding: '11px',
-                borderRadius: 10,
+                padding: '7px 14px',
+                borderRadius: 8,
                 background: '#FFFFFF',
                 color: '#0F2A43',
-                fontSize: 14,
-                fontWeight: 700,
+                fontSize: 11.5,
+                fontWeight: 600,
                 border: '1px solid #CBD5E1',
                 cursor: 'pointer',
+                textTransform: 'none',
               }}
             >
               {isVisualizacao ? 'Voltar para lista' : 'Cancelar'}
             </button>
 
-            <p style={{ margin: '14px 0 0', fontSize: 12, color: '#64748B', lineHeight: 1.5 }}>
+            <p style={{ margin: '10px 0 0', fontSize: 10.5, color: '#64748B', lineHeight: 1.45, textTransform: 'none' }}>
               O ciclo do pedido segue as etapas: <strong>Criado → Emitido → Recebido</strong>, avançadas por você conforme o andamento real.
             </p>
           </div>
