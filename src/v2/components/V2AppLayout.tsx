@@ -116,11 +116,11 @@ function V2AppLayoutInner() {
     { to: '/v2/configuracoes', icon: Settings, label: 'Configurações' },
   ]
 
-  // 4 Tabs principais no celular (conforme mockup Início · Celular.png)
+  // 4 Tabs principais no celular — módulos mais acessados no dia a dia
   const mobileMainTabs = [
     { to: '/v2/inicio', icon: Home, label: 'Início' },
     { to: '/v2/crm', icon: UserCheck, label: 'CRM' },
-    { to: '/v2/clientes', icon: Users, label: 'Clientes' },
+    { to: '/v2/contas-pagar', icon: Wallet, label: 'Financeiro' },
     { to: '/v2/propostas-vendas', icon: ClipboardList, label: 'Propostas' },
   ]
 
@@ -332,13 +332,13 @@ function V2AppLayoutInner() {
           <Outlet />
         </main>
 
-        {/* ── BOTTOM TAB NAVIGATION NO CELULAR (MOCKUP INÍCIO · CELULAR) ── */}
+        {/* ── BOTTOM TAB NAVIGATION NO CELULAR ── */}
         <nav className="sm:hidden fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-slate-200 z-40 flex items-center justify-around px-2 shadow-[0_-4px_20px_rgba(0,0,0,0.06)]">
           {mobileMainTabs.map((tab) => {
             const isCrm = tab.to === '/v2/crm'
             const isActive = isCrm
               ? location.pathname.startsWith('/v2/crm')
-              : location.pathname === tab.to
+              : location.pathname === tab.to || location.pathname.startsWith(tab.to + '/')
 
             const Icon = tab.icon
 
