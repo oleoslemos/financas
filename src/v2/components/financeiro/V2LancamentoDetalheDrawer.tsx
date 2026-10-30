@@ -164,70 +164,100 @@ export const V2LancamentoDetalheDrawer: React.FC<V2LancamentoDetalheDrawerProps>
 
         {/* Content Body */}
         <div className="p-5 space-y-4 flex-1">
-          {/* Barra de Ações Rápidas no Topo */}
-          <div className="flex items-center gap-2 p-2 bg-slate-50 rounded-xl border border-slate-200/80">
-            {/* Botão Editar */}
-            {onAbrirEdicao && (
-              <button
-                type="button"
-                onClick={() => {
-                  onClose()
-                  onAbrirEdicao(conta)
-                }}
-                className="flex-1 py-1.5 px-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <Edit3 size={14} className="text-blue-600" /> Editar
-              </button>
-            )}
+          {/* Seção de Ações do Título */}
+          <div className="bg-slate-50/90 border border-slate-200/90 rounded-2xl p-3.5 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-600">
+                Ações do Título
+              </span>
+              <span className="text-[10px] text-slate-400 font-semibold">
+                ID #{conta.id.slice(0, 8)}
+              </span>
+            </div>
 
-            {/* Botão Baixar */}
-            {!isPago && !isCancelado && onAbrirBaixa && (
-              <button
-                type="button"
-                onClick={() => {
-                  onClose()
-                  onAbrirBaixa(conta)
-                }}
-                className="flex-1 py-1.5 px-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-              >
-                <Check size={14} /> Baixar
-              </button>
-            )}
+            <div className="grid grid-cols-2 gap-2">
+              {/* Editar */}
+              {onAbrirEdicao && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose()
+                    onAbrirEdicao(conta)
+                  }}
+                  className="py-2.5 px-3 bg-white hover:bg-blue-50/60 border border-slate-200 hover:border-blue-300 text-slate-700 hover:text-blue-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer"
+                  title="Editar dados deste lançamento"
+                >
+                  <Edit3 size={14} className="text-blue-600" />
+                  <span>Editar</span>
+                </button>
+              )}
 
-            {/* Botão Estornar */}
-            {isPago && (
-              <button
-                type="button"
-                onClick={() => setSubModo(subModo === 'estorno' ? 'normal' : 'estorno')}
-                className="flex-1 py-1.5 px-2 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <RotateCcw size={13} /> Estornar
-              </button>
-            )}
+              {/* Baixar (quando aberto) */}
+              {!isPago && !isCancelado && onAbrirBaixa && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose()
+                    onAbrirBaixa(conta)
+                  }}
+                  className="py-2.5 px-3 bg-[#0F3D6E] hover:bg-[#0c2f54] text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer"
+                  title="Realizar baixa financeira deste título"
+                >
+                  <Check size={14} className="stroke-[2.5]" />
+                  <span>Baixar Título</span>
+                </button>
+              )}
 
-            {/* Botão Cancelar */}
-            {!isPago && !isCancelado && onConfirmarCancelamento && (
-              <button
-                type="button"
-                onClick={() => setSubModo(subModo === 'cancelar' ? 'normal' : 'cancelar')}
-                className="p-1.5 text-slate-500 hover:text-amber-700 hover:bg-amber-50 border border-slate-200 rounded-lg transition-colors cursor-pointer"
-                title="Cancelar título"
-              >
-                <XCircle size={15} />
-              </button>
-            )}
+              {/* Estornar (quando pago) */}
+              {isPago && (
+                <button
+                  type="button"
+                  onClick={() => setSubModo(subModo === 'estorno' ? 'normal' : 'estorno')}
+                  className="py-2.5 px-3 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer"
+                  title="Reverter a liquidação e reabrir o título"
+                >
+                  <RotateCcw size={14} />
+                  <span>Estornar Baixa</span>
+                </button>
+              )}
 
-            {/* Botão Excluir */}
-            {!isPago && (
+              {/* Cancelar (quando aberto) */}
+              {!isPago && !isCancelado && onConfirmarCancelamento && (
+                <button
+                  type="button"
+                  onClick={() => setSubModo(subModo === 'cancelar' ? 'normal' : 'cancelar')}
+                  className="py-2.5 px-3 bg-white hover:bg-amber-50 border border-slate-200 hover:border-amber-300 text-slate-700 hover:text-amber-800 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer"
+                  title="Cancelar título financeiro"
+                >
+                  <XCircle size={14} className="text-amber-600" />
+                  <span>Cancelar</span>
+                </button>
+              )}
+
+              {/* Excluir (quando aberto) */}
+              {!isPago && (
+                <button
+                  type="button"
+                  onClick={() => setSubModo(subModo === 'excluir' ? 'normal' : 'excluir')}
+                  className="py-2.5 px-3 bg-white hover:bg-red-50 border border-slate-200 hover:border-red-300 text-slate-700 hover:text-red-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer"
+                  title="Excluir lançamento permanentemente"
+                >
+                  <Trash2 size={14} className="text-red-600" />
+                  <span>Excluir</span>
+                </button>
+              )}
+
+              {/* Imprimir Comprovante / Ficha */}
               <button
                 type="button"
-                onClick={() => setSubModo(subModo === 'excluir' ? 'normal' : 'excluir')}
-                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 border border-slate-200 rounded-lg transition-colors cursor-pointer"
-                title="Excluir lançamento"
+                onClick={handleImprimir}
+                className="py-2.5 px-3 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer"
+                title="Imprimir visualização / comprovante do título"
               >
-                <Trash2 size={15} />
+                <Printer size={14} className="text-slate-600" />
+                <span>Imprimir</span>
               </button>
-            )}
+            </div>
           </div>
 
           {/* Descrição / Origem */}

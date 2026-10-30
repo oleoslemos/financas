@@ -15,6 +15,7 @@ import {
   Table as TableIcon,
   List,
   Wallet,
+  ChevronRight,
 } from 'lucide-react'
 import {
   achatar,
@@ -584,7 +585,7 @@ export function V2ContasPagarPage() {
                     <th className="px-3 py-3 text-left w-28">Forma / Tag</th>
                     <th className="px-3 py-3 text-right w-28">Valor</th>
                     <th className="px-3 py-3 text-center w-24">Status</th>
-                    <th className="px-3 py-3 text-center w-28">Ações</th>
+                    <th className="px-2 py-3 text-center w-8"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -709,69 +710,9 @@ export function V2ContasPagarPage() {
                           </span>
                         </td>
 
-                        {/* Ações */}
-                        <td className="px-3 py-2.5 text-center whitespace-nowrap">
-                          <div
-                            className="flex items-center justify-center gap-1"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {/* Editar */}
-                            <button
-                              type="button"
-                              onClick={() => setContaParaEditar(m.contaOriginal)}
-                              className="p-1.5 text-slate-500 hover:text-blue-700 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 rounded-lg transition-colors cursor-pointer"
-                              title="Editar título"
-                            >
-                              <Edit3 size={13} />
-                            </button>
-
-                            {/* Baixar ou Estornar */}
-                            {!isPago && !isCancelado ? (
-                              <button
-                                type="button"
-                                onClick={() => setBaixaModal(m.contaOriginal)}
-                                className="p-1.5 text-emerald-700 hover:text-white hover:bg-emerald-700 border border-emerald-300 rounded-lg transition-colors cursor-pointer"
-                                title="Baixar título"
-                              >
-                                <Check size={13} className="stroke-[2.5]" />
-                              </button>
-                            ) : isPago ? (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setDetalheModal({ conta: m.contaOriginal, modo: 'estorno' })
-                                }
-                                className="p-1.5 text-amber-800 hover:bg-amber-100 border border-amber-200 bg-amber-50 rounded-lg transition-colors cursor-pointer"
-                                title="Estornar baixa"
-                              >
-                                <RotateCcw size={13} />
-                              </button>
-                            ) : null}
-
-                            {/* Cancelar ou Excluir */}
-                            {!isPago && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setDetalheModal({ conta: m.contaOriginal, modo: 'excluir' })
-                                }
-                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 border border-slate-200 hover:border-red-200 rounded-lg transition-colors cursor-pointer"
-                                title="Excluir ou cancelar"
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            )}
-
-                            {/* Ver Detalhes */}
-                            <button
-                              type="button"
-                              onClick={() => handleAbrirDetalheTitulo(m.contaOriginal)}
-                              className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors cursor-pointer"
-                              title="Ver detalhes completos"
-                            >
-                              <Eye size={13} />
-                            </button>
-                          </div>
+                        {/* Indicador de Visualização do Título */}
+                        <td className="px-2 py-2.5 text-center text-slate-300 group-hover:text-blue-600 transition-colors">
+                          <ChevronRight size={16} />
                         </td>
                       </tr>
                     )
