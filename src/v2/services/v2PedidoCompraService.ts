@@ -37,6 +37,15 @@ export type RecebimentoCompra = {
   justificativa?: string
 }
 
+export type NotaFiscalCompra = {
+  id: string
+  numeroNf: string
+  dataNf: string
+  chaveNf?: string | null
+  valor?: number
+  created_at?: string
+}
+
 export type PedidoCompra = {
   id: string
   numero: number | string
@@ -64,12 +73,14 @@ export type PedidoCompra = {
   justificativaDataRecebimento?: string
   /** Histórico de recebimentos parciais */
   recebimentos?: RecebimentoCompra[]
-  /** Número da Nota Fiscal emitida pelo fornecedor/fábrica */
+  /** Número da Nota Fiscal emitida pelo fornecedor/fábrica (legado) */
   numeroNf?: string | null
-  /** Data de emissão da NF do fornecedor */
+  /** Data de emissão da NF do fornecedor (legado) */
   dataNf?: string | null
-  /** Chave de acesso ou observações da NF */
+  /** Chave de acesso ou observações da NF (legado) */
   chaveNf?: string | null
+  /** Lista de múltiplas notas fiscais vinculadas ao pedido */
+  notasFiscais?: NotaFiscalCompra[]
 }
 
 // ─── Constantes ─────────────────────────────────────────────────────────
@@ -110,6 +121,7 @@ export function cleanPedidoCompraForSupabase(p: PedidoCompra): Record<string, an
     numeroNf: p.numeroNf || null,
     dataNf: p.dataNf || null,
     chaveNf: p.chaveNf || null,
+    notasFiscais: p.notasFiscais || [],
     recebimentos: p.recebimentos || [],
     itens: p.itens || [],
     created_at: p.created_at || new Date().toISOString(),
@@ -253,24 +265,83 @@ export async function updatePedidoCompra(pedido: PedidoCompra): Promise<PedidoCo
 }
 
 /**
- * Salva a Nota Fiscal emitida pelo fornecedor/fábrica.
+ * Salva ou adiciona uma Nota Fiscal emitida pelo fornecedor/fábrica.
+ * Suporta múltiplas notas por pedido de compra.
  * Se o pedido estiver como 'rascunho', avança a etapa para 'emitido' (NF Fábrica).
  */
 export async function salvarNfFornecedor(
   pedidoId: string,
   dados: {
+    id?: string
     numeroNf: string
     dataNf?: string
     chaveNf?: string
+    valor?: number
   }
 ): Promise<{ ok: true; pedido: PedidoCompra } | { ok: false; erro: string }> {
   const current = await listPedidosCompra()
   const pedido = current.find((p) => p.id === pedidoId)
   if (!pedido) return { ok: false, erro: 'Pedido não encontrado.' }
 
-  pedido.numeroNf = dados.numeroNf.trim()
-  pedido.dataNf = dados.dataNf || new Date().toISOString().split('T')[0]
-  if (dados.chaveNf) pedido.chaveNf = dados.chaveNf.trim()
+  if (!pedido.notasFiscais) {
+    pedido.notasFiscais = []
+    if (pedido.numeroNf) {
+      pedido.notasFiscais.push({
+        id: 'nf-legacy',
+        numeroNf: pedido.numeroNf,
+        dataNf: pedido.dataNf || new Date().toISOString().split('T')[0],
+        chaveNf: pedido.chaveNf || null,
+      })
+    }
+  }
+
+  const dataNfFinal = dados.dataNf || new Date().toISOString().split('T')[0]
+  const numeroNfFinal = dados.numeroNf.trim()
+  const chaveNfFinal = dados.chaveNf ? dados.chaveNf.trim() : null
+
+  if (dados.id) {
+    // Editar nota existente
+    const idx = pedido.notasFiscais.findIndex((n) => n.id === dados.id)
+    if (idx >= 0) {
+      pedido.notasFiscais[idx] = {
+        ...pedido.notasFiscais[idx],
+        numeroNf: numeroNfFinal,
+        dataNf: dataNfFinal,
+        chaveNf: chaveNfFinal,
+        valor: dados.valor != null ? Number(dados.valor) : pedido.notasFiscais[idx].valor,
+      }
+    } else {
+      pedido.notasFiscais.push({
+        id: dados.id,
+        numeroNf: numeroNfFinal,
+        dataNf: dataNfFinal,
+        chaveNf: chaveNfFinal,
+        valor: dados.valor != null ? Number(dados.valor) : undefined,
+        created_at: new Date().toISOString(),
+      })
+    }
+  } else {
+    // Adicionar nova nota
+    const novaId =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `nf-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
+
+    pedido.notasFiscais.push({
+      id: novaId,
+      numeroNf: numeroNfFinal,
+      dataNf: dataNfFinal,
+      chaveNf: chaveNfFinal,
+      valor: dados.valor != null ? Number(dados.valor) : undefined,
+      created_at: new Date().toISOString(),
+    })
+  }
+
+  // Manter retrocompatibilidade com campos legados usando a última nota
+  const ultima = pedido.notasFiscais[pedido.notasFiscais.length - 1]
+  pedido.numeroNf = ultima ? ultima.numeroNf : numeroNfFinal
+  pedido.dataNf = ultima ? ultima.dataNf : dataNfFinal
+  pedido.chaveNf = ultima ? ultima.chaveNf : chaveNfFinal
 
   // Se o pedido ainda estava em rascunho/criado, avança para emitido (NF Fábrica)
   if (pedido.status === 'rascunho') {
@@ -278,6 +349,36 @@ export async function salvarNfFornecedor(
     if (!pedido.dataEmissao) {
       pedido.dataEmissao = pedido.dataNf
     }
+  }
+
+  const updated = await updatePedidoCompra(pedido)
+  return { ok: true, pedido: updated }
+}
+
+/**
+ * Remove uma Nota Fiscal vinculada ao pedido de compra.
+ */
+export async function excluirNfFornecedor(
+  pedidoId: string,
+  nfId: string
+): Promise<{ ok: true; pedido: PedidoCompra } | { ok: false; erro: string }> {
+  const current = await listPedidosCompra()
+  const pedido = current.find((p) => p.id === pedidoId)
+  if (!pedido) return { ok: false, erro: 'Pedido não encontrado.' }
+
+  if (!pedido.notasFiscais) pedido.notasFiscais = []
+  pedido.notasFiscais = pedido.notasFiscais.filter((n) => n.id !== nfId)
+
+  // Atualizar campos legados
+  if (pedido.notasFiscais.length > 0) {
+    const ultima = pedido.notasFiscais[pedido.notasFiscais.length - 1]
+    pedido.numeroNf = ultima.numeroNf
+    pedido.dataNf = ultima.dataNf
+    pedido.chaveNf = ultima.chaveNf
+  } else {
+    pedido.numeroNf = null
+    pedido.dataNf = null
+    pedido.chaveNf = null
   }
 
   const updated = await updatePedidoCompra(pedido)

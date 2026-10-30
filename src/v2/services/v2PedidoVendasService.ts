@@ -6,6 +6,7 @@ import {
   deleteContaPagar,
   listContasPagar,
   StatusConta,
+  ContaPagar,
 } from './v2ContasPagarService'
 import {
   reservarEstoqueVenda,
@@ -64,8 +65,12 @@ export type PedidoVenda = {
   vendedor_nome?: string | null
   comissao_percentual?: number | null
   comissao_valor?: number | null
+  comissao_valor_total?: number | null
+  comissao_valor_gerado?: number | null
   comissao_gerada?: boolean | null
   comissao_data_geracao?: string | null
+  pagamento_fabrica?: number | null
+  resultado_liquido?: number | null
   itens: PedidoVendaItem[]
   created_at: string
   updated_at: string
@@ -239,8 +244,12 @@ export function cleanPedidoForSupabase(p: PedidoVenda): Record<string, any> {
     vendedor_nome: p.vendedor_nome || null,
     comissao_percentual: p.comissao_percentual != null ? Number(p.comissao_percentual) : null,
     comissao_valor: p.comissao_valor != null ? Number(p.comissao_valor) : null,
+    comissao_valor_total: p.comissao_valor_total != null ? Number(p.comissao_valor_total) : null,
+    comissao_valor_gerado: p.comissao_valor_gerado != null ? Number(p.comissao_valor_gerado) : null,
     comissao_gerada: Boolean(p.comissao_gerada),
     comissao_data_geracao: p.comissao_data_geracao || null,
+    pagamento_fabrica: p.pagamento_fabrica != null ? Number(p.pagamento_fabrica) : null,
+    resultado_liquido: p.resultado_liquido != null ? Number(p.resultado_liquido) : null,
     itens: p.itens || [],
     created_at: p.created_at || new Date().toISOString(),
     updated_at: p.updated_at || new Date().toISOString(),
@@ -615,97 +624,237 @@ export function calcularValorLiquidoPedido(pedido: PedidoVenda): number {
   return Math.max(0, Number((Number(pedido.total || 0) - Number(pedido.frete || 0)).toFixed(2)))
 }
 
+export interface CalculoComissaoVenda {
+  valorVenda: number
+  valorRecebido: number
+  pagamentoFabrica: number
+  resultadoLiquido: number
+  taxaPercentual: number
+  valorComissaoTotal: number
+  valorComissaoJaGerado: number
+  saldoRestante: number
+  status: 'pendente' | 'parcial' | 'gerada'
+}
+
+/**
+ * Realiza o cálculo exato da comissão sobre o RESULTADO LÍQUIDO da venda:
+ * Venda (Bruto)
+ * Valor Recebido (em caixa na baixa)
+ * Pagamento Fábrica (custo)
+ * Resultado Líquido = Valor Recebido - Pagamento Fábrica
+ * Comissão Total = Resultado Líquido * (taxa / 100)
+ */
+export function calcularComissaoVenda(
+  pedido: PedidoVenda,
+  contaReceber?: ContaPagar | null,
+  contasPagarComissao?: ContaPagar[]
+): CalculoComissaoVenda {
+  const valorVenda = Number(pedido.total) || 0
+
+  // Valor recebido = valorPago da baixa no financeiro (se liquidada)
+  const isBaixada = contaReceber && contaReceber.status === 'paga'
+  const valorRecebido = isBaixada
+    ? Number((contaReceber as any).valorPago || contaReceber.totalPago || contaReceber.total || valorVenda)
+    : 0
+
+  // Pagamento Fábrica = soma do custo dos itens ou valor manual salvo
+  let pagamentoFabrica = pedido.pagamento_fabrica != null ? Number(pedido.pagamento_fabrica) : 0
+  if (pagamentoFabrica === 0 && pedido.itens && pedido.itens.length > 0) {
+    let somaItens = 0
+    for (const it of pedido.itens) {
+      if (it.preco_fabrica && it.preco_fabrica > 0) {
+        somaItens += it.preco_fabrica * (it.quantidade || 1)
+      }
+    }
+    if (somaItens > 0) pagamentoFabrica = Number(somaItens.toFixed(2))
+  }
+
+  // Resultado Líquido = Valor Recebido - Pagamento Fábrica
+  const resultadoLiquido = Math.max(0, Number((valorRecebido - pagamentoFabrica).toFixed(2)))
+
+  // Taxa de comissão
+  const taxaPercentual = pedido.comissao_percentual != null ? Number(pedido.comissao_percentual) : 50
+
+  // Comissão total calculada
+  const valorComissaoTotal = Number(((resultadoLiquido * taxaPercentual) / 100).toFixed(2))
+
+  // Total já gerado em contas a pagar
+  let valorComissaoJaGerado = 0
+  if (contasPagarComissao && contasPagarComissao.length > 0) {
+    valorComissaoJaGerado = contasPagarComissao.reduce((acc, c) => acc + (Number(c.total) || 0), 0)
+    valorComissaoJaGerado = Number(valorComissaoJaGerado.toFixed(2))
+  } else if (pedido.comissao_valor_gerado != null) {
+    valorComissaoJaGerado = Number(pedido.comissao_valor_gerado)
+  } else if (pedido.comissao_gerada && pedido.comissao_valor) {
+    valorComissaoJaGerado = Number(pedido.comissao_valor)
+  }
+
+  const saldoRestante = Math.max(0, Number((valorComissaoTotal - valorComissaoJaGerado).toFixed(2)))
+
+  let status: 'pendente' | 'parcial' | 'gerada' = 'pendente'
+  if (valorComissaoJaGerado >= valorComissaoTotal && valorComissaoTotal > 0) {
+    status = 'gerada'
+  } else if (valorComissaoJaGerado > 0) {
+    status = 'parcial'
+  }
+
+  return {
+    valorVenda,
+    valorRecebido,
+    pagamentoFabrica,
+    resultadoLiquido,
+    taxaPercentual,
+    valorComissaoTotal,
+    valorComissaoJaGerado,
+    saldoRestante,
+    status,
+  }
+}
+
 export interface GerarComissaoParams {
   pedidoId: string
   vendedorNome: string
   taxaPercentual: number
+  valorComissao?: number // Valor que o usuário definiu (pode ser parcial ou total)
+  valorRecebido?: number
+  pagamentoFabrica?: number
+  resultadoLiquido?: number
   dataVencimento?: string
   formaPagamento?: string
 }
 
 /**
  * Gera a conta a pagar da comissão do pedido de venda no Financeiro
- * calculada sobre o VALOR LÍQUIDO do pedido.
+ * calculada sobre o RESULTADO LÍQUIDO da venda.
+ * Permite pagamentos parciais até atingir o total da comissão.
  */
 export async function gerarComissaoPedidoVenda(
   params: GerarComissaoParams
-): Promise<{ ok: true; valorComissao: number; valorLiquido: number } | { ok: false; erro: string }> {
+): Promise<{ ok: true; valorComissaoGerado: number; saldoRestante: number } | { ok: false; erro: string }> {
   const current = await listPedidosVenda()
   const pedido = current.find((p) => p.id === params.pedidoId)
   if (!pedido) return { ok: false, erro: 'Pedido não encontrado.' }
 
-  const valorLiquido = calcularValorLiquidoPedido(pedido)
-  if (valorLiquido <= 0) {
-    return { ok: false, erro: 'O valor líquido do pedido precisa ser maior que zero para gerar comissão.' }
+  const contas = await listContasPagar()
+  const contaReceber = contas.find((c) => c.pedido_id === pedido.id && c.tipo === 'receber')
+
+  const taxa = Number(params.taxaPercentual) || 50
+  const valorRecebido = params.valorRecebido != null
+    ? Number(params.valorRecebido)
+    : contaReceber && contaReceber.status === 'paga'
+    ? Number((contaReceber as any).valorPago || contaReceber.totalPago || contaReceber.total || pedido.total)
+    : Number(pedido.total)
+
+  const pagamentoFabrica = params.pagamentoFabrica != null
+    ? Number(params.pagamentoFabrica)
+    : Number(pedido.pagamento_fabrica || 0)
+
+  const resultadoLiquido = Math.max(0, Number((valorRecebido - pagamentoFabrica).toFixed(2)))
+  const valorComissaoTotal = Number(((resultadoLiquido * taxa) / 100).toFixed(2))
+
+  // Contas a pagar de comissão já geradas
+  const contasComissaoAnteriores = contas.filter(
+    (c) => c.pedido_id === pedido.id && c.tipo === 'pagar' && c.categoria === 'Comissões'
+  )
+  const totalJaGeradoAntes = contasComissaoAnteriores.reduce((acc, c) => acc + (Number(c.total) || 0), 0)
+
+  // Valor a gerar nesta operação
+  const valorGerar = params.valorComissao != null
+    ? Number(Number(params.valorComissao).toFixed(2))
+    : Math.max(0, Number((valorComissaoTotal - totalJaGeradoAntes).toFixed(2)))
+
+  if (valorGerar <= 0) {
+    return { ok: false, erro: 'O valor da comissão a gerar deve ser maior que zero.' }
   }
 
-  const taxa = Number(params.taxaPercentual) || 0
-  if (taxa <= 0) {
-    return { ok: false, erro: 'Informe um percentual de comissão válido (maior que 0%).' }
-  }
+  const novoTotalGerado = Number((totalJaGeradoAntes + valorGerar).toFixed(2))
+  const saldoRestante = Math.max(0, Number((valorComissaoTotal - novoTotalGerado).toFixed(2)))
 
-  const valorComissao = Number(((valorLiquido * taxa) / 100).toFixed(2))
   const vencimento = params.dataVencimento || adicionarDias(dataHoje(), 15)
   const vendedor = params.vendedorNome.trim() || 'Representante / Vendedor'
+
+  // Descrição do lançamento
+  const isParcial = saldoRestante > 0
+  const descLancamento = isParcial
+    ? `Comissão Venda #${pedido.numero} - Parcela R$ ${valorGerar.toFixed(2)} (Total R$ ${valorComissaoTotal.toFixed(2)}) - ${vendedor}`
+    : `Comissão Venda #${pedido.numero} - ${vendedor} (${taxa}%)`
 
   // Salvar no financeiro como conta a pagar
   await saveContaPagar({
     tipo: 'pagar',
     pedido_id: pedido.id,
-    descricao: `Comissão Venda ${pedido.numero} - ${vendedor} (${taxa}%)`,
+    descricao: descLancamento,
     fornecedor: vendedor,
     origem: 'venda',
     categoria: 'Comissões',
-    total: valorComissao,
+    total: valorGerar,
     totalPago: 0,
     status: 'aberta' as StatusConta,
     vencimento,
     forma_pagamento: params.formaPagamento || 'Pix',
     parcelas: [
       {
-        numero: 1,
+        numero: contasComissaoAnteriores.length + 1,
         vencimento,
-        valor: valorComissao,
+        valor: valorGerar,
         status: 'aberta' as StatusConta,
       },
     ],
   })
 
   // Atualizar pedido
-  pedido.comissao_gerada = true
-  pedido.comissao_valor = valorComissao
+  pedido.comissao_valor_total = valorComissaoTotal
+  pedido.comissao_valor_gerado = novoTotalGerado
+  pedido.comissao_valor = novoTotalGerado
   pedido.comissao_percentual = taxa
   pedido.vendedor_nome = vendedor
+  pedido.pagamento_fabrica = pagamentoFabrica
+  pedido.resultado_liquido = resultadoLiquido
+  pedido.comissao_gerada = novoTotalGerado >= valorComissaoTotal
   pedido.comissao_data_geracao = new Date().toISOString()
   await updatePedidoVenda(pedido)
 
-  return { ok: true, valorComissao, valorLiquido }
+  return { ok: true, valorComissaoGerado: valorGerar, saldoRestante }
 }
 
 /**
- * Estorna a comissão gerada (exclui a conta a pagar de comissão vinculada).
+ * Estorna comissão gerada (pode estornar uma conta específica ou todas do pedido).
  */
 export async function estornarComissaoPedidoVenda(
-  pedidoId: string
+  pedidoId: string,
+  contaId?: string
 ): Promise<{ ok: true } | { ok: false; erro: string }> {
   const current = await listPedidosVenda()
   const pedido = current.find((p) => p.id === pedidoId)
   if (!pedido) return { ok: false, erro: 'Pedido não encontrado.' }
 
-  // Excluir conta a pagar de comissão vinculada
   try {
     const contas = await listContasPagar()
-    const contaComissao = contas.find(
-      (c) => c.pedido_id === pedidoId && c.tipo === 'pagar' && c.categoria === 'Comissões'
-    )
-    if (contaComissao) {
-      await deleteContaPagar(contaComissao.id)
+    if (contaId) {
+      await deleteContaPagar(contaId)
+    } else {
+      const contasComissao = contas.filter(
+        (c) => c.pedido_id === pedidoId && c.tipo === 'pagar' && c.categoria === 'Comissões'
+      )
+      for (const c of contasComissao) {
+        await deleteContaPagar(c.id)
+      }
     }
   } catch {}
 
-  pedido.comissao_gerada = false
-  pedido.comissao_valor = 0
-  pedido.comissao_data_geracao = null
+  // Recalcular saldo gerado restante
+  const contasAtualizadas = await listContasPagar()
+  const contasRestantes = contasAtualizadas.filter(
+    (c) => c.pedido_id === pedidoId && c.tipo === 'pagar' && c.categoria === 'Comissões'
+  )
+  const totalRestante = contasRestantes.reduce((acc, c) => acc + (Number(c.total) || 0), 0)
+
+  pedido.comissao_valor_gerado = totalRestante
+  pedido.comissao_valor = totalRestante
+  pedido.comissao_gerada = totalRestante > 0 && pedido.comissao_valor_total != null && totalRestante >= pedido.comissao_valor_total
+  if (totalRestante === 0) {
+    pedido.comissao_data_geracao = null
+  }
   await updatePedidoVenda(pedido)
 
   return { ok: true }

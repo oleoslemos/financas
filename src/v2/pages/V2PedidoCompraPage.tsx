@@ -33,8 +33,10 @@ import {
   cancelarPedidoCompra,
   deletePedidoCompra,
   salvarNfFornecedor,
+  excluirNfFornecedor,
   gerarParcelasCompra,
   PedidoCompra,
+  NotaFiscalCompra,
   PedidoCompraItem,
   StatusPedido,
   type RecebimentoCompra,
@@ -123,6 +125,7 @@ export function V2PedidoCompraPage() {
 
   // State: Modal NF Fornecedor
   const [showNfModal, setShowNfModal] = useState(false)
+  const [nfIdEmEdicao, setNfIdEmEdicao] = useState<string | null>(null)
   const [nfNumero, setNfNumero] = useState('')
   const [nfData, setNfData] = useState(() => dataHoje)
   const [nfChave, setNfChave] = useState('')
@@ -425,11 +428,38 @@ export function V2PedidoCompraPage() {
     }
   }
 
-  // ── Handlers do Modal NF Fornecedor ──
-  const handleAbrirNfModal = (p: PedidoCompra) => {
-    setNfNumero(p.numeroNf || '')
-    setNfData(p.dataNf || dataHoje)
-    setNfChave(p.chaveNf || '')
+  // ── Helper para normalizar lista de notas fiscais do pedido ──
+  const obterNotasDoPedido = (p?: PedidoCompra | null): NotaFiscalCompra[] => {
+    if (!p) return []
+    if (p.notasFiscais && p.notasFiscais.length > 0) {
+      return p.notasFiscais
+    }
+    if (p.numeroNf) {
+      return [
+        {
+          id: 'nf-legacy',
+          numeroNf: p.numeroNf,
+          dataNf: p.dataNf || '',
+          chaveNf: p.chaveNf || null,
+        },
+      ]
+    }
+    return []
+  }
+
+  // ── Handlers do Modal NF Fornecedor (Suporta Múltiplas NFs) ──
+  const handleAbrirNfModal = (_p?: PedidoCompra | null, nf?: NotaFiscalCompra) => {
+    if (nf) {
+      setNfIdEmEdicao(nf.id)
+      setNfNumero(nf.numeroNf)
+      setNfData(nf.dataNf || dataHoje)
+      setNfChave(nf.chaveNf || '')
+    } else {
+      setNfIdEmEdicao(null)
+      setNfNumero('')
+      setNfData(dataHoje)
+      setNfChave('')
+    }
     setShowNfModal(true)
   }
 
@@ -443,6 +473,7 @@ export function V2PedidoCompraPage() {
     setSalvandoNf(true)
     try {
       const res = await salvarNfFornecedor(pedidoVisualizando.id, {
+        id: nfIdEmEdicao || undefined,
         numeroNf: nfNumero.trim(),
         dataNf: nfData || dataHoje,
         chaveNf: nfChave.trim() || undefined,
@@ -462,6 +493,27 @@ export function V2PedidoCompraPage() {
       alert('Erro ao salvar NF: ' + (err?.message || err))
     } finally {
       setSalvandoNf(false)
+    }
+  }
+
+  const handleExcluirNf = async (nfId: string) => {
+    if (!pedidoVisualizando) return
+    if (!window.confirm('Deseja realmente remover esta Nota Fiscal deste pedido?')) return
+
+    try {
+      const res = await excluirNfFornecedor(pedidoVisualizando.id, nfId)
+      if (!res.ok) {
+        alert(res.erro)
+        return
+      }
+      await loadData()
+      const atualizados = await listPedidosCompra()
+      const pAtualizado = atualizados.find((x) => x.id === pedidoVisualizando.id)
+      if (pAtualizado) {
+        setPedidoVisualizando(pAtualizado)
+      }
+    } catch (e: any) {
+      alert(e?.message || 'Erro ao excluir Nota Fiscal.')
     }
   }
 
@@ -1815,14 +1867,29 @@ export function V2PedidoCompraPage() {
 
                       {/* NF Fornecedor */}
                       <td className="px-4 py-4 text-slate-600 font-medium whitespace-nowrap">
-                        {p.numeroNf ? (
-                          <span className="inline-flex items-center gap-1 text-slate-800 font-bold bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
-                            <FileText size={12} className="text-slate-500" />
-                            NF {p.numeroNf}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 text-xs italic">Não informada</span>
-                        )}
+                        {(() => {
+                          const nfs = obterNotasDoPedido(p)
+                          if (nfs.length === 0) {
+                            return <span className="text-slate-400 text-xs italic">Não informada</span>
+                          }
+                          if (nfs.length === 1) {
+                            return (
+                              <span className="inline-flex items-center gap-1 text-slate-800 font-bold bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200 text-xs">
+                                <FileText size={12} className="text-slate-500" />
+                                NF {nfs[0].numeroNf}
+                              </span>
+                            )
+                          }
+                          return (
+                            <span
+                              className="inline-flex items-center gap-1 text-[#0D6BAF] font-bold bg-sky-50 px-2.5 py-1 rounded-lg border border-sky-200 text-xs"
+                              title={nfs.map((n) => `NF ${n.numeroNf}`).join(', ')}
+                            >
+                              <FileText size={12} className="text-[#0D6BAF]" />
+                              NF {nfs[0].numeroNf} (+{nfs.length - 1})
+                            </span>
+                          )
+                        })()}
                       </td>
 
                       {/* Pagamento */}
@@ -1955,13 +2022,18 @@ export function V2PedidoCompraPage() {
                 </div>
               </div>
 
-              {/* Bloco NF Fornecedor */}
-              <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-2">
+              {/* Bloco NF do Fornecedor / Fábrica (Múltiplas NFs) */}
+              <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <FileText size={16} className="text-[#0D6BAF]" />
                     <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
                       NF do Fornecedor / Fábrica
+                      {obterNotasDoPedido(pedidoVisualizando).length > 0 && (
+                        <span className="ml-1.5 px-2 py-0.5 rounded-full bg-sky-100 text-[#0D6BAF] text-[10px] font-black">
+                          {obterNotasDoPedido(pedidoVisualizando).length}
+                        </span>
+                      )}
                     </h4>
                   </div>
                   <button
@@ -1969,25 +2041,56 @@ export function V2PedidoCompraPage() {
                     onClick={() => handleAbrirNfModal(pedidoVisualizando)}
                     className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-[#0D6BAF] bg-sky-50 hover:bg-sky-100 rounded-lg transition-colors cursor-pointer border border-sky-200"
                   >
-                    <span>{pedidoVisualizando.numeroNf ? 'Alterar NF' : '+ Informar NF'}</span>
+                    <Plus size={13} />
+                    <span>Adicionar NF</span>
                   </button>
                 </div>
 
-                {pedidoVisualizando.numeroNf ? (
-                  <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <div>
-                      <span className="font-bold text-slate-800 text-sm">NF nº {pedidoVisualizando.numeroNf}</span>
-                      {pedidoVisualizando.dataNf && (
-                        <span className="text-slate-500 text-xs block">
-                          Emitida em {formatarData(pedidoVisualizando.dataNf)}
-                        </span>
-                      )}
-                    </div>
-                    {pedidoVisualizando.chaveNf && (
-                      <span className="text-[10px] font-mono text-slate-400 max-w-[200px] truncate" title={pedidoVisualizando.chaveNf}>
-                        Chave: {pedidoVisualizando.chaveNf}
-                      </span>
-                    )}
+                {obterNotasDoPedido(pedidoVisualizando).length > 0 ? (
+                  <div className="space-y-2 pt-1 border-t border-slate-100">
+                    {obterNotasDoPedido(pedidoVisualizando).map((nf, idx) => (
+                      <div
+                        key={nf.id || idx}
+                        className="p-2.5 bg-slate-50 border border-slate-200/90 rounded-xl flex items-center justify-between gap-3 text-xs"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-800 text-sm">
+                              NF nº {nf.numeroNf}
+                            </span>
+                            {nf.dataNf && (
+                              <span className="text-[11px] text-slate-500 font-medium">
+                                · Emitida em {formatarData(nf.dataNf)}
+                              </span>
+                            )}
+                          </div>
+                          {nf.chaveNf && (
+                            <p className="text-[10px] font-mono text-slate-400 truncate mt-0.5" title={nf.chaveNf}>
+                              Chave / Obs: {nf.chaveNf}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleAbrirNfModal(pedidoVisualizando, nf)}
+                            className="p-1.5 text-slate-500 hover:text-blue-700 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 rounded-lg transition cursor-pointer"
+                            title="Editar esta Nota Fiscal"
+                          >
+                            <Edit3 size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleExcluirNf(nf.id)}
+                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 border border-slate-200 hover:border-red-200 rounded-lg transition cursor-pointer"
+                            title="Remover esta Nota Fiscal"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   <p className="pt-1 text-xs text-slate-400 font-medium">
@@ -2262,7 +2365,7 @@ export function V2PedidoCompraPage() {
               <div className="flex items-center gap-2">
                 <FileText size={20} className="text-[#0D6BAF]" />
                 <h3 className="text-base font-bold text-slate-900">
-                  Nota Fiscal do Fornecedor
+                  {nfIdEmEdicao ? 'Editar Nota Fiscal do Fornecedor' : 'Adicionar Nota Fiscal do Fornecedor'}
                 </h3>
               </div>
               <button
@@ -2333,7 +2436,7 @@ export function V2PedidoCompraPage() {
                   disabled={salvandoNf}
                   className="rounded-xl bg-[#0D6BAF] hover:bg-[#095287] text-white px-5 py-2 text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-50"
                 >
-                  {salvandoNf ? 'Salvando...' : 'Salvar NF Fornecedor'}
+                  {salvandoNf ? 'Salvando...' : nfIdEmEdicao ? 'Salvar Alterações' : 'Adicionar Nota Fiscal'}
                 </button>
               </div>
             </form>
