@@ -129,6 +129,31 @@ export function cleanPedidoCompraForSupabase(p: PedidoCompra): Record<string, an
   }
 }
 
+export function cleanPedidoCompraBaseForSupabase(p: PedidoCompra): Record<string, any> {
+  return {
+    id: p.id,
+    numero: p.numero,
+    fornecedor: p.fornecedor || '',
+    status: p.status || 'rascunho',
+    dataEmissao: p.dataEmissao || null,
+    dataPrevistaEntrega: p.dataPrevistaEntrega || null,
+    observacao: p.observacao || null,
+    total: Number(p.total) || 0,
+    numeroParcelas: Number(p.numeroParcelas) || 1,
+    formaPagamento: p.formaPagamento || null,
+    contaSaidaTag: p.contaSaidaTag || null,
+    frete: Number(p.frete) || 0,
+    dataPedido: p.dataPedido || null,
+    dataVencimento: p.dataVencimento || null,
+    dataRecebimentoPrevista: p.dataRecebimentoPrevista || null,
+    justificativaDataRecebimento: p.justificativaDataRecebimento || null,
+    recebimentos: p.recebimentos || [],
+    itens: p.itens || [],
+    created_at: p.created_at || new Date().toISOString(),
+    updated_at: p.updated_at || new Date().toISOString(),
+  }
+}
+
 export async function listPedidosCompra(): Promise<PedidoCompra[]> {
   let localList: PedidoCompra[] = []
   try {
@@ -221,44 +246,55 @@ export async function updatePedidoCompra(pedido: PedidoCompra): Promise<PedidoCo
 
   if (supabase) {
     try {
-      await supabase.from(SUPABASE_TABLE).upsert(cleanPedidoCompraForSupabase(updated))
-    } catch {}
+      const clean = cleanPedidoCompraForSupabase(updated)
+      const { error: upErr } = await supabase.from(SUPABASE_TABLE).upsert(clean)
+      if (upErr) {
+        console.warn('Tentando persistência no Supabase com colunas base:', upErr.message)
+        await supabase.from(SUPABASE_TABLE).upsert(cleanPedidoCompraBaseForSupabase(updated))
+      }
+    } catch {
+      try {
+        await supabase.from(SUPABASE_TABLE).upsert(cleanPedidoCompraBaseForSupabase(updated))
+      } catch {}
+    }
   }
 
   const updatedList = current.map((p) => (p.id === pedido.id ? updated : p))
   localStorage.setItem(KEY, JSON.stringify(updatedList))
 
-  // Atualizar Contas a Pagar associada (preservando parcelas se já geradas)
-  const contaExistente = await getContaPagarPorPedidoId(pedido.id)
-  if (contaExistente) {
-    const itemNome = pedido.itens.length > 1
-      ? `${pedido.itens[0]?.produto_nome || 'Item'} (+${pedido.itens.length - 1} itens)`
-      : (pedido.itens[0]?.produto_nome || 'Item')
+  // Atualizar Contas a Pagar associada (apenas se NÃO cancelado)
+  if (updated.status !== 'cancelado') {
+    const contaExistente = await getContaPagarPorPedidoId(pedido.id)
+    if (contaExistente) {
+      const itemNome = pedido.itens.length > 1
+        ? `${pedido.itens[0]?.produto_nome || 'Item'} (+${pedido.itens.length - 1} itens)`
+        : (pedido.itens[0]?.produto_nome || 'Item')
 
-    const totalComFrete = (pedido.total ?? 0) + (pedido.frete ?? 0)
-    const vencimento = pedido.dataVencimento || contaExistente.parcelas?.[0]?.vencimento || new Date().toISOString().split('T')[0]
+      const totalComFrete = (pedido.total ?? 0) + (pedido.frete ?? 0)
+      const vencimento = pedido.dataVencimento || contaExistente.parcelas?.[0]?.vencimento || new Date().toISOString().split('T')[0]
 
-    let parcelasAtualizadas = contaExistente.parcelas
-    if (!parcelasAtualizadas || parcelasAtualizadas.length <= 1) {
-      parcelasAtualizadas = [
-        {
-          numero: 1,
-          vencimento,
-          valor: totalComFrete,
-          status: (contaExistente.parcelas?.[0]?.status || 'aberta') as StatusConta,
-        },
-      ]
+      let parcelasAtualizadas = contaExistente.parcelas
+      if (!parcelasAtualizadas || parcelasAtualizadas.length <= 1) {
+        parcelasAtualizadas = [
+          {
+            numero: 1,
+            vencimento,
+            valor: totalComFrete,
+            status: (contaExistente.parcelas?.[0]?.status || 'aberta') as StatusConta,
+          },
+        ]
+      }
+
+      await updateContaPagar({
+        ...contaExistente,
+        fornecedor: pedido.fornecedor,
+        descricao: `Pedido de Compra #${pedido.numero} - ${itemNome}`,
+        total: totalComFrete,
+        forma_pagamento: pedido.formaPagamento || contaExistente.forma_pagamento,
+        conta_bancaria_tag: pedido.contaSaidaTag || contaExistente.conta_bancaria_tag,
+        parcelas: parcelasAtualizadas,
+      })
     }
-
-    await updateContaPagar({
-      ...contaExistente,
-      fornecedor: pedido.fornecedor,
-      descricao: `Pedido de Compra #${pedido.numero} - ${itemNome}`,
-      total: totalComFrete,
-      forma_pagamento: pedido.formaPagamento || contaExistente.forma_pagamento,
-      conta_bancaria_tag: pedido.contaSaidaTag || contaExistente.conta_bancaria_tag,
-      parcelas: parcelasAtualizadas,
-    })
   }
 
   return updated
@@ -749,14 +785,16 @@ export async function cancelarPedidoCompra(pedidoId: string): Promise<{ ok: true
   const pedido = current.find((p) => p.id === pedidoId)
   if (!pedido) return { ok: false, erro: 'Pedido não encontrado.' }
 
+  // 1. Validar se tem pagamento baixado no financeiro
   const temPagamento = await verificarSePedidoTemPagamento(pedidoId)
   if (temPagamento) {
     return {
       ok: false,
-      erro: 'Não é possível cancelar o pedido: existem baixas/pagamentos efetuados no Contas a Pagar. Estorne os pagamentos antes de cancelar.',
+      erro: 'Não é possível cancelar o pedido de compra: existem baixas/pagamentos efetuados no Contas a Pagar. É necessário estornar os pagamentos no módulo Financeiro antes de cancelar.',
     }
   }
 
+  // 2. Se já foi recebido, estornar estoque
   if (pedido.status === 'recebido' || pedido.status === 'recebido_parcial') {
     const resEstorno = await desfazerEntradaCompra({
       pedidoId: pedido.id,
@@ -766,6 +804,12 @@ export async function cancelarPedidoCompra(pedidoId: string): Promise<{ ok: true
     if (!resEstorno.ok) return resEstorno
   }
 
+  // 3. Excluir contas a pagar vinculadas que estavam lançadas em aberto no financeiro
+  try {
+    await deleteContaPagarPorPedidoId(pedidoId)
+  } catch {}
+
+  // 4. Alterar status para cancelado
   pedido.status = 'cancelado'
   await updatePedidoCompra(pedido)
   return { ok: true }

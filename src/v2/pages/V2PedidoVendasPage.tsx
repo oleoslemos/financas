@@ -1207,7 +1207,7 @@ export function V2PedidoVendasPage() {
       dataPrevistaEntrega: formDataEntrega || null,
       dataVencimento: formDataVencimento || null,
       formaPagamento: formFormaPagamento,
-      numeroParcelas: (formNumeroParcelas && 1) || 1,
+      numeroParcelas: Math.max(1, Number(formNumeroParcelas) || 1),
       contaEntradaTag: formContaEntradaTag,
       frete: formFrete,
       observacao: formObservacao.trim() || null,
@@ -1789,6 +1789,21 @@ export function V2PedidoVendasPage() {
                 </div>
 
                 <div className="space-y-1">
+                  <label className="text-xs font-bold uppercase text-slate-500">Qtd. Parcelas</label>
+                  <select
+                    value={formNumeroParcelas}
+                    onChange={(e) => setFormNumeroParcelas(Math.max(1, Number(e.target.value) || 1))}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none focus:border-emerald-500 cursor-pointer"
+                  >
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((num) => (
+                      <option key={num} value={num}>
+                        {num === 1 ? '1x (À vista)' : `${num}x (${formatarMoeda(formTotalComFrete / num)}/mês)`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
                   <label className="text-xs font-bold uppercase text-slate-500">Frete (R$)</label>
                   <input
                     type="number"
@@ -1946,6 +1961,12 @@ export function V2PedidoVendasPage() {
                   <div className="flex justify-between items-center text-xs font-medium text-emerald-600">
                     <span>Desconto Aplicado:</span>
                     <span className="font-bold tabular-nums">-{formatarMoeda(descontoTotalForm)}</span>
+                  </div>
+                )}
+                {formNumeroParcelas > 1 && (
+                  <div className="flex justify-between items-center text-xs font-semibold text-indigo-700 bg-indigo-50/80 px-2.5 py-1.5 rounded-lg border border-indigo-100">
+                    <span>Condição:</span>
+                    <span className="tabular-nums font-bold">{formNumeroParcelas}x de {formatarMoeda(formTotalComFrete / formNumeroParcelas)}</span>
                   </div>
                 )}
                 <div className="flex justify-between items-center text-sm font-bold text-slate-900 pt-1 border-t border-slate-100">
@@ -2583,6 +2604,19 @@ export function V2PedidoVendasPage() {
                         </span>
                       </div>
                     )}
+                    {visualizandoPedido.formaPagamento && (
+                      <div className="mt-1">
+                        <span className="text-slate-400 text-[10px] uppercase font-bold block">
+                          Forma de Pagamento
+                        </span>
+                        <span className="font-bold text-slate-800 text-xs">
+                          {visualizandoPedido.formaPagamento}
+                          {Number(visualizandoPedido.numeroParcelas) > 1
+                            ? ` (${visualizandoPedido.numeroParcelas}x de ${formatarMoeda(visualizandoPedido.total / visualizandoPedido.numeroParcelas)})`
+                            : ' (À vista)'}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2756,7 +2790,7 @@ Opções de Pagamento:
               {/* Linha 2 de Ações: Status & Edição */}
               <div className="flex flex-wrap items-center gap-2">
                 {/* Editar */}
-                {(visualizandoPedido.status === 'proposta' || visualizandoPedido.status === 'aprovado') && (
+                {(visualizandoPedido.status === 'proposta' || visualizandoPedido.status === 'aprovado' || visualizandoPedido.status === 'cancelado') && (
                   <button
                     type="button"
                     onClick={() => handleEditarPedido(visualizandoPedido)}

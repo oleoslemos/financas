@@ -330,13 +330,18 @@ export async function getContaPagarPorPedidoId(pedidoId: string): Promise<ContaP
 }
 
 export async function verificarSePedidoTemPagamento(pedidoId: string): Promise<boolean> {
-  const conta = await getContaPagarPorPedidoId(pedidoId)
-  if (!conta) return false
-  if (conta.status === 'paga' || conta.status === 'parcial' || conta.totalPago > 0) {
-    return true
-  }
-  const temParcelaPaga = conta.parcelas.some((p) => p.status === 'paga' || p.status === 'parcial')
-  return temParcelaPaga
+  const todasContas = await listContasPagar()
+  const contasDoPedido = todasContas.filter((c) => c.pedido_id === pedidoId)
+  if (contasDoPedido.length === 0) return false
+
+  return contasDoPedido.some((conta) => {
+    if (conta.status === 'paga' || conta.status === 'parcial' || conta.totalPago > 0) {
+      return true
+    }
+    return conta.parcelas?.some(
+      (p) => p.status === 'paga' || p.status === 'parcial' || (p.baixa && (p.baixa.valorFinalPago > 0 || Boolean(p.baixa.dataBaixa)))
+    )
+  })
 }
 
 export async function saveContaPagar(
@@ -434,15 +439,22 @@ export async function deleteContaPagar(id: string): Promise<void> {
 
 export async function deleteContaPagarPorPedidoId(pedidoId: string): Promise<void> {
   const current = readFromStorage()
-  const conta = current.find((c) => c.pedido_id === pedidoId)
-  if (!conta) return
+  const contasDoPedido = current.filter((c) => c.pedido_id === pedidoId)
+  if (contasDoPedido.length === 0) {
+    if (supabase) {
+      try {
+        await supabase.from(SUPABASE_TABLE).delete().eq('pedido_id', pedidoId)
+      } catch {}
+    }
+    return
+  }
 
-  const filtered = current.filter((c) => c.id !== conta.id)
+  const filtered = current.filter((c) => c.pedido_id !== pedidoId)
   writeToStorage(filtered)
 
   if (supabase) {
     try {
-      await supabase.from(SUPABASE_TABLE).delete().eq('id', conta.id)
+      await supabase.from(SUPABASE_TABLE).delete().eq('pedido_id', pedidoId)
     } catch {}
   }
 }

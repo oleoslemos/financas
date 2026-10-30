@@ -5,8 +5,10 @@ import {
   deleteContaPagarPorPedidoId,
   deleteContaPagar,
   listContasPagar,
+  verificarSePedidoTemPagamento,
   StatusConta,
   ContaPagar,
+  ContaPagarParcela,
 } from './v2ContasPagarService'
 import {
   reservarEstoqueVenda,
@@ -256,6 +258,41 @@ export function cleanPedidoForSupabase(p: PedidoVenda): Record<string, any> {
   }
 }
 
+export function cleanPedidoBaseForSupabase(p: PedidoVenda): Record<string, any> {
+  return {
+    id: p.id,
+    numero: p.numero,
+    canal: p.canal || 'distribuicao',
+    status: p.status || 'proposta',
+    cliente_id: p.cliente_id || null,
+    cliente_nome: p.cliente_nome || '',
+    cliente_documento: p.cliente_documento || null,
+    cliente_cidade: p.cliente_cidade || null,
+    tabela_preco_id: p.tabela_preco_id || null,
+    tabela_preco_nome: p.tabela_preco_nome || null,
+    dataEmissao: p.dataEmissao || null,
+    dataPrevistaEntrega: p.dataPrevistaEntrega || null,
+    dataVencimento: p.dataVencimento || null,
+    dataEntrega: p.dataEntrega || null,
+    formaPagamento: p.formaPagamento || 'Boleto',
+    numeroParcelas: Math.max(1, Number(p.numeroParcelas) || 1),
+    contaEntradaTag: p.contaEntradaTag || null,
+    frete: Number(p.frete) || 0,
+    observacao: p.observacao || null,
+    subtotal: Number(p.subtotal) || 0,
+    descontoTotal: Number(p.descontoTotal) || 0,
+    total: Number(p.total) || 0,
+    desconto5xPercentual: Number(p.desconto5xPercentual) || 5,
+    total5x: Number(p.total5x) || 0,
+    descontoVistaPercentual: Number(p.descontoVistaPercentual) || 10,
+    totalVista: Number(p.totalVista) || 0,
+    condicaoSelecionada: p.condicaoSelecionada || 'sem_desconto',
+    itens: p.itens || [],
+    created_at: p.created_at || new Date().toISOString(),
+    updated_at: p.updated_at || new Date().toISOString(),
+  }
+}
+
 // ─── CRUD ────────────────────────────────────────────────────────────────────
 
 export async function listPedidosVenda(): Promise<PedidoVenda[]> {
@@ -382,22 +419,29 @@ export async function updatePedidoVenda(pedido: PedidoVenda): Promise<PedidoVend
   const current = await listPedidosVenda()
   const updated: PedidoVenda = {
     ...pedido,
-    numeroParcelas: 1,
+    numeroParcelas: Math.max(1, Number(pedido.numeroParcelas) || 1),
     updated_at: new Date().toISOString(),
   }
 
   if (supabase) {
     try {
-      const { error: upErr } = await supabase.from(SUPABASE_TABLE).upsert(cleanPedidoForSupabase(updated))
+      const clean = cleanPedidoForSupabase(updated)
+      const { error: upErr } = await supabase.from(SUPABASE_TABLE).upsert(clean)
       if (upErr) {
-        console.error('Erro ao atualizar pedido de venda no Supabase:', upErr)
+        console.warn('Tentando persistência no Supabase com colunas base:', upErr.message)
+        // Fallback defensivo com colunas essenciais para que o status NUNCA falhe
+        await supabase.from(SUPABASE_TABLE).upsert(cleanPedidoBaseForSupabase(updated))
       }
     } catch (e) {
-      console.error('Exceção ao atualizar pedido no Supabase:', e)
+      try {
+        await supabase.from(SUPABASE_TABLE).upsert(cleanPedidoBaseForSupabase(updated))
+      } catch (errFallback) {
+        console.error('Exceção ao atualizar pedido no Supabase:', errFallback)
+      }
     }
   }
 
-  // Atualizar conta a receber se já faturado
+  // Atualizar conta a receber se faturado ou entregue
   if (updated.status === 'faturado' || updated.status === 'entregue') {
     try {
       await updateContaPagarPorPedidoId(pedido.id, {
@@ -462,11 +506,28 @@ export async function faturarPedidoVenda(pedidoId: string): Promise<{ ok: true }
   const pedido = current.find((p) => p.id === pedidoId)
   if (!pedido) return { ok: false, erro: 'Pedido não encontrado.' }
 
-  // Vencimento padrão: dataPrevistaEntrega ou +30 dias da emissão
-  const vencimento =
+  // Vencimento padrão: dataVencimento, dataPrevistaEntrega ou +30 dias da emissão
+  const vencimentoInicial =
     pedido.dataVencimento ||
     pedido.dataPrevistaEntrega ||
     adicionarDias(pedido.dataEmissao || dataHoje(), 30)
+
+  const numParcelas = Math.max(1, Number(pedido.numeroParcelas) || 1)
+  const valorTotal = Number(pedido.total) || 0
+  const valorParcelaBase = Number((valorTotal / numParcelas).toFixed(2))
+
+  const parcelas: ContaPagarParcela[] = []
+  for (let i = 1; i <= numParcelas; i++) {
+    const venc = i === 1 ? vencimentoInicial : adicionarDias(vencimentoInicial, (i - 1) * 30)
+    // Ajuste de centavos na última parcela para fechar exatamente o valor total
+    const valor = i === numParcelas ? Number((valorTotal - valorParcelaBase * (numParcelas - 1)).toFixed(2)) : valorParcelaBase
+    parcelas.push({
+      numero: i,
+      vencimento: venc,
+      valor,
+      status: 'aberta' as StatusConta,
+    })
+  }
 
   await saveContaPagar({
     tipo: 'receber',
@@ -475,17 +536,12 @@ export async function faturarPedidoVenda(pedidoId: string): Promise<{ ok: true }
     fornecedor: pedido.cliente_nome,
     origem: 'venda',
     categoria: 'Receita de Vendas',
-    total: pedido.total,
+    total: valorTotal,
     totalPago: 0,
     status: 'aberta' as StatusConta,
-    parcelas: [
-      {
-        numero: 1,
-        vencimento,
-        valor: pedido.total,
-        status: 'aberta' as StatusConta,
-      },
-    ],
+    vencimento: vencimentoInicial,
+    forma_pagamento: pedido.formaPagamento || 'Boleto',
+    parcelas,
   })
 
   pedido.status = 'faturado'
@@ -535,7 +591,16 @@ export async function cancelarPedidoVenda(pedidoId: string): Promise<{ ok: true 
   const pedido = current.find((p) => p.id === pedidoId)
   if (!pedido) return { ok: false, erro: 'Pedido não encontrado.' }
 
-  // Liberar estoque reservado (se aprovado ou faturado)
+  // 1. Validar se tem título baixado/recebido no Financeiro
+  const temPagamento = await verificarSePedidoTemPagamento(pedidoId)
+  if (temPagamento) {
+    return {
+      ok: false,
+      erro: 'Não é possível cancelar: o título financeiro deste pedido já foi baixado/recebido. É necessário estornar o recebimento no módulo Financeiro antes de cancelar.',
+    }
+  }
+
+  // 2. Liberar estoque reservado (se aprovado ou faturado)
   if ((pedido.status === 'aprovado' || pedido.status === 'faturado') && pedido.itens?.length > 0) {
     try {
       await liberarEstoqueVenda({
@@ -553,11 +618,12 @@ export async function cancelarPedidoVenda(pedidoId: string): Promise<{ ok: true 
     }
   }
 
-  // Excluir conta a receber vinculada
+  // 3. Excluir conta a receber vinculada em aberto no financeiro
   try {
     await deleteContaPagarPorPedidoId(pedidoId)
   } catch {}
 
+  // 4. Alterar status para cancelado
   pedido.status = 'cancelado'
   await updatePedidoVenda(pedido)
   return { ok: true }
