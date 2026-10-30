@@ -108,21 +108,6 @@ export function V2ContasPagarPage() {
 
   useEffect(() => {
     void recarregar()
-
-    const onFocus = () => {
-      void recarregar()
-    }
-    const onVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        void recarregar()
-      }
-    }
-    window.addEventListener('focus', onFocus)
-    document.addEventListener('visibilitychange', onVisibility)
-    return () => {
-      window.removeEventListener('focus', onFocus)
-      document.removeEventListener('visibilitychange', onVisibility)
-    }
   }, [])
 
   // Cálculos do extrato
