@@ -535,10 +535,10 @@ export function V2ProdutosPage() {
 
             <button
               onClick={openNewModal}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition shadow-sm justify-center"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold text-white transition shadow-2xs justify-center"
               style={{ background: '#0D6BAF' }}
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="h-3.5 w-3.5" />
               Novo Produto
             </button>
           </div>

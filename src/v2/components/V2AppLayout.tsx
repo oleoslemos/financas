@@ -135,14 +135,14 @@ function V2AppLayoutInner() {
         }}
       >
         {/* Top: Logo Bem Aviv */}
-        <div className="h-[72px] px-4 flex items-center justify-between border-b border-slate-100 shrink-0">
+        <div className="h-[78px] px-3.5 flex items-center justify-between border-b border-slate-100 shrink-0">
           {sidebarExpanded ? (
             <div className="flex items-center justify-between w-full">
               <NavLink to="/v2/inicio" className="flex items-center gap-2">
                 <img
                   src="/logo-bem-aviv.png"
                   alt="Bem Aviv · Saúde e Longevidade"
-                  className="h-10 w-auto object-contain transition-transform hover:scale-102"
+                  className="h-12 max-h-[50px] w-auto object-contain transition-transform hover:scale-102"
                 />
               </NavLink>
               <button
@@ -171,7 +171,7 @@ function V2AppLayoutInner() {
         </div>
 
         {/* Links de Navegação */}
-        <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto overflow-x-hidden">
+        <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto overflow-x-hidden">
           {navItems.map((item) => {
             const { to, icon: Icon, label, subItems } = item
             const isCrm = to === '/v2/crm'
@@ -184,8 +184,8 @@ function V2AppLayoutInner() {
                   title={!sidebarExpanded ? label : undefined}
                   className={({ isActive }) => {
                     const active = isActive || isCrmActive
-                    return `group flex items-center gap-3 rounded-xl transition-all ${
-                      sidebarExpanded ? 'px-3.5 py-2.5' : 'p-2.5 justify-center'
+                    return `group flex items-center gap-2.5 rounded-xl transition-all ${
+                      sidebarExpanded ? 'px-3 py-1.5' : 'p-2 justify-center'
                     } ${
                       active
                         ? 'bg-[#EBF3FA] text-[#0D5BA3] font-bold shadow-2xs'
@@ -198,12 +198,12 @@ function V2AppLayoutInner() {
                     return (
                       <>
                         <Icon
-                          className={`h-5 w-5 shrink-0 transition-colors ${
+                          className={`h-4 w-4 shrink-0 transition-colors ${
                             active ? 'text-[#0D5BA3]' : 'text-slate-500 group-hover:text-slate-800'
                           }`}
                         />
                         {sidebarExpanded && (
-                          <span className="text-[13px] tracking-tight truncate leading-none">
+                          <span className="text-[11.5px] font-semibold tracking-tight truncate leading-tight">
                             {label}
                           </span>
                         )}
@@ -214,7 +214,7 @@ function V2AppLayoutInner() {
 
                 {/* Submenus CRM quando expandido */}
                 {subItems && sidebarExpanded && isCrmActive && (
-                  <div className="pl-6 pr-1 py-1 space-y-0.5 border-l-2 border-slate-200 ml-5 my-1">
+                  <div className="pl-5 pr-1 py-0.5 space-y-0.5 border-l-2 border-slate-200 ml-4 my-0.5">
                     {subItems.map((sub) => {
                       const isSubActive =
                         sub.to === '/v2/crm'
@@ -225,7 +225,7 @@ function V2AppLayoutInner() {
                         <NavLink
                           key={sub.to}
                           to={sub.to}
-                          className={`block rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all ${
+                          className={`block rounded-lg px-2 py-1 text-[11px] font-semibold transition-all ${
                             isSubActive
                               ? 'bg-[#EBF3FA] text-[#0D5BA3] font-bold'
                               : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'

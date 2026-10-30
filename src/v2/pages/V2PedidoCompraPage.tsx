@@ -1533,9 +1533,9 @@ export function V2PedidoCompraPage() {
           <button
             type="button"
             onClick={handleIniciarNovoPedido}
-            className="inline-flex items-center gap-2 rounded-xl bg-[#0D6BAF] hover:bg-[#095287] text-white px-4 py-2.5 text-xs font-bold transition shadow-xs cursor-pointer active:scale-95"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[#0D6BAF] hover:bg-[#095287] text-white px-3.5 py-1.5 text-xs font-bold transition shadow-2xs cursor-pointer active:scale-95"
           >
-            <Plus size={16} />
+            <Plus size={14} />
             <span>Novo Pedido</span>
           </button>
         </div>

@@ -227,10 +227,10 @@ export function V2ContasPagarPage() {
           <button
             type="button"
             onClick={() => setModalGerarComissoesAberto(true)}
-            className="inline-flex items-center gap-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm shadow-2xs transition-all cursor-pointer"
+            className="inline-flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 px-3 py-1.5 rounded-lg font-bold text-xs shadow-2xs transition-all cursor-pointer"
             title="Calcular e gerar comissões dos pedidos de vendas"
           >
-            <Percent size={16} className="text-emerald-700" />
+            <Percent size={14} className="text-emerald-700" />
             <span>Gerar Comissões</span>
           </button>
 
@@ -238,9 +238,9 @@ export function V2ContasPagarPage() {
           <button
             type="button"
             onClick={() => setDrawerNovoAberto(true)}
-            className="inline-flex items-center gap-2 bg-[#2D6A4F] hover:bg-[#24563F] text-white px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm shadow-sm transition-all hover:shadow cursor-pointer"
+            className="inline-flex items-center gap-1.5 bg-[#2D6A4F] hover:bg-[#24563F] text-white px-3.5 py-1.5 rounded-lg font-bold text-xs shadow-2xs transition-all hover:shadow cursor-pointer"
           >
-            <Plus size={18} /> Novo lançamento
+            <Plus size={15} /> Novo lançamento
           </button>
         </div>
       </div>
@@ -250,25 +250,25 @@ export function V2ContasPagarPage() {
         <button
           type="button"
           onClick={() => setAbaPrincipal('extrato')}
-          className={`px-4 sm:px-6 py-3 font-extrabold text-xs sm:text-sm border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+          className={`px-3.5 sm:px-4 py-2 font-bold text-xs border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
             abaPrincipal === 'extrato'
               ? 'border-[#0F3D6E] text-[#0F3D6E]'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
-          <Wallet size={16} /> Lançamentos Financeiros
+          <Wallet size={14} /> Lançamentos Financeiros
         </button>
 
         <button
           type="button"
           onClick={() => setAbaPrincipal('comissoes')}
-          className={`px-4 sm:px-6 py-3 font-extrabold text-xs sm:text-sm border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+          className={`px-3.5 sm:px-4 py-2 font-bold text-xs border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
             abaPrincipal === 'comissoes'
               ? 'border-emerald-700 text-emerald-800'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
-          <Percent size={16} /> Relatório de Comissões (Mês a Mês)
+          <Percent size={14} /> Relatório de Comissões (Mês a Mês)
         </button>
       </div>
 

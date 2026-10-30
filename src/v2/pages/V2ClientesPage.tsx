@@ -290,9 +290,9 @@ export function V2ClientesPage() {
               onClick={openNew}
               style={{
                 display: 'flex', alignItems: 'center', gap: 8,
-                padding: '0 18px', height: 40, borderRadius: 10,
+                padding: '0 14px', height: 32, borderRadius: 8,
                 border: 'none', background: BRAND_BLUE, color: '#FFFFFF',
-                fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                fontSize: 12, fontWeight: 700, cursor: 'pointer',
                 boxShadow: `0 4px 14px ${BRAND_BLUE}55`,
               }}
             >
