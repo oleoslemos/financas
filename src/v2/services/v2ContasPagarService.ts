@@ -270,55 +270,34 @@ export function cleanContaPagarForSupabase(c: ContaPagar): Record<string, any> {
 }
 
 /**
- * Sincronização explícita com Supabase (bidirecional entre dispositivos)
+ * Sincronização explícita com Supabase — Supabase é fonte de verdade.
+ * Sobrescreve o localStorage com o estado atual do remoto.
  */
 export async function syncContasPagarComSupabase(): Promise<{ ok: boolean; count: number; error?: string }> {
   if (!supabase) return { ok: false, count: 0, error: 'Supabase não inicializado' }
   try {
-    const localList = readFromStorage()
-    const deletedIds = getDeletedIds()
-
     const { data, error } = await supabase
       .from(SUPABASE_TABLE)
       .select('*')
       .order('created_at', { ascending: false })
 
     if (error) return { ok: false, count: 0, error: error.message }
+
     const remoteList = ((data as ContaPagar[]) || []).map((c) => ({
       ...c,
       tipo: c.tipo || 'pagar',
       totalPago: Number(c.totalPago ?? (c as any).total_pago ?? 0),
     }))
-    const remoteIds = new Set(remoteList.map((r) => r.id))
 
-    // Envia ao remoto apenas registros locais que:
-    // 1. Não são seeds (fin-00x)
-    // 2. Não estão no remoto
-    // 3. NÃO foram deletados localmente (tombstone)
-    const pendingLocal = localList.filter(
-      (loc) => !remoteIds.has(loc.id) && !loc.id.startsWith('fin-00') && !deletedIds.has(loc.id)
-    )
-
-    if (pendingLocal.length > 0) {
-      const cleanPending = pendingLocal.map(cleanContaPagarForSupabase)
-      const { error: upErr } = await supabase.from(SUPABASE_TABLE).upsert(cleanPending)
-      if (upErr) return { ok: false, count: 0, error: upErr.message }
-    }
-
-    // O merged final é sempre o que está no remoto + o que foi enviado agora
-    // Registros excluídos remotamente NÃO voltam (fonte de verdade = Supabase)
-    const merged = [...pendingLocal, ...remoteList]
-    writeToStorage(merged)
-    return { ok: true, count: merged.length }
+    // Supabase é a fonte de verdade: sobrescreve local completamente
+    writeToStorage(remoteList)
+    return { ok: true, count: remoteList.length }
   } catch (e: any) {
     return { ok: false, count: 0, error: e?.message || 'Erro desconhecido ao sincronizar' }
   }
 }
 
 export async function listContasPagar(): Promise<ContaPagar[]> {
-  const localList = readFromStorage()
-  const deletedIds = getDeletedIds()
-
   if (supabase) {
     try {
       const { data, error } = await supabase
@@ -327,50 +306,27 @@ export async function listContasPagar(): Promise<ContaPagar[]> {
         .order('created_at', { ascending: false })
 
       if (!error && data) {
-        // Remoto é a fonte de verdade: mapeia tudo que veio do servidor
+        // Supabase é a fonte de verdade absoluta.
+        // Nunca mescla com localStorage — isso causava re-upload de registros
+        // deletados por outros usuários (ressurreição de títulos).
         const remoteList = (data as ContaPagar[]).map((c) => ({
           ...c,
           tipo: c.tipo || 'pagar',
           totalPago: Number(c.totalPago ?? (c as any).total_pago ?? 0),
         }))
-        const remoteIds = new Set(remoteList.map((r) => r.id))
 
-        // Registros locais pendentes de upload:
-        // - Não estão no remoto
-        // - Não são seeds (fin-00x)
-        // - NÃO foram deletados localmente (tombstone) — evita re-enviar deletados
-        const pendingLocal = localList.filter(
-          (loc) => !remoteIds.has(loc.id) && !loc.id.startsWith('fin-00') && !deletedIds.has(loc.id)
-        )
-
-        if (pendingLocal.length > 0) {
-          try {
-            const cleanPending = pendingLocal.map(cleanContaPagarForSupabase)
-            const { error: upsertErr } = await supabase.from(SUPABASE_TABLE).upsert(cleanPending)
-            if (upsertErr) {
-              console.error('Erro ao sincronizar contas financeiras locais pendentes:', upsertErr)
-            } else {
-              console.log('Contas financeiras locais sincronizadas com sucesso no Supabase:', cleanPending.length)
-            }
-          } catch (syncErr) {
-            console.warn('Erro ao sincronizar contas locais pendentes:', syncErr)
-          }
-        }
-
-        // Lista final = pendentes locais + tudo do remoto
-        // Deleções feitas por outros usuários são refletidas porque usamos SOMENTE o remoto como base
-        const finalList = [...pendingLocal, ...remoteList]
-
-        // Persiste no localStorage (inclui remoção de registros deletados por outros usuários)
-        writeToStorage(finalList)
-        return finalList
+        // Sobrescreve o localStorage com exatamente o que está no remoto
+        writeToStorage(remoteList)
+        return remoteList
       }
     } catch (e) {
       console.warn('Falha ao buscar contas a pagar do Supabase, usando local:', e)
     }
   }
 
-  // Fallback offline: retorna local excluindo os IDs marcados como deletados
+  // Fallback offline: usa localStorage excluindo tombstone local
+  const localList = readFromStorage()
+  const deletedIds = getDeletedIds()
   return localList
     .filter((c) => !deletedIds.has(c.id))
     .map((c) => ({ ...c, tipo: c.tipo || 'pagar' }))
