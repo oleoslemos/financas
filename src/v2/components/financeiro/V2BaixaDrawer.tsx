@@ -19,7 +19,7 @@ const FORMAS_OPCOES = [
   'Pix',
   'Boleto',
   'Dinheiro',
-  'Transferência bancária',
+  'Transferência',
 ]
 
 function formatarTagConta(nome: string): string {

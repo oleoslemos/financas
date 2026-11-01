@@ -259,6 +259,8 @@ export async function syncContasPagarComSupabase(): Promise<{ ok: boolean; count
       totalPago: Number(c.totalPago ?? (c as any).total_pago ?? 0),
     }))
     const remoteIds = new Set(remoteList.map((r) => r.id))
+
+    // Envia ao remoto apenas registros locais que NÃO são seeds e NÃO estão no remoto
     const pendingLocal = localList.filter((loc) => !remoteIds.has(loc.id) && !loc.id.startsWith('fin-00'))
 
     if (pendingLocal.length > 0) {
@@ -267,6 +269,8 @@ export async function syncContasPagarComSupabase(): Promise<{ ok: boolean; count
       if (upErr) return { ok: false, count: 0, error: upErr.message }
     }
 
+    // O merged final é sempre o que está no remoto + o que foi enviado agora
+    // Registros excluídos remotamente NÃO voltam (fonte de verdade = Supabase)
     const merged = [...pendingLocal, ...remoteList]
     writeToStorage(merged)
     return { ok: true, count: merged.length }
@@ -287,12 +291,14 @@ export async function listContasPagar(): Promise<ContaPagar[]> {
         .order('created_at', { ascending: false })
 
       if (!error && data) {
-        list = (data as ContaPagar[]).map((c) => ({
+        const remoteList = (data as ContaPagar[]).map((c) => ({
           ...c,
           tipo: c.tipo || 'pagar',
           totalPago: Number(c.totalPago ?? (c as any).total_pago ?? 0),
         }))
-        const remoteIds = new Set(list.map((r) => r.id))
+        const remoteIds = new Set(remoteList.map((r) => r.id))
+
+        // Registros locais que ainda NÃO estão no remoto (precisam ser enviados)
         const pendingLocal = localList.filter((loc) => !remoteIds.has(loc.id) && !loc.id.startsWith('fin-00'))
 
         if (pendingLocal.length > 0) {
@@ -307,14 +313,17 @@ export async function listContasPagar(): Promise<ContaPagar[]> {
           } catch (syncErr) {
             console.warn('Erro ao sincronizar contas locais pendentes:', syncErr)
           }
-          list = [...pendingLocal, ...list]
+          list = [...pendingLocal, ...remoteList]
+        } else {
+          // IMPORTANTE: usa APENAS o que veio do remoto (fonte de verdade)
+          // Isso garante que exclusões feitas por outros usuários sejam refletidas
+          list = remoteList
         }
 
-        // Se o Supabase retornou registros ou se havia pendentes sincronizados, atualiza o storage local
-        if (list.length > 0) {
-          writeToStorage(list)
-          return list
-        }
+        // Atualiza o localStorage com o estado atual do remoto
+        // (inclui remoção de registros deletados remotamente por outros usuários)
+        writeToStorage(list)
+        return list
       }
     } catch (e) {
       console.warn('Falha ao buscar contas a pagar do Supabase, usando local:', e)

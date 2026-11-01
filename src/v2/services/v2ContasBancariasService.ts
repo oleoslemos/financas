@@ -12,48 +12,57 @@ export type ContaBancaria = {
 }
 
 const STORAGE_KEY = 'v2_contas_bancarias'
+// Versão do schema das contas – incrementar força reset do localStorage
+const STORAGE_VERSION = 'v2'
 
 const DEFAULT_CONTAS: ContaBancaria[] = [
   {
-    id: 'conta-inter',
-    nome: 'Banco Inter',
-    instituicao: 'Inter PJ',
-    tipo: 'corrente',
-    saldoAtual: 42580.0,
-    cor: '#F97316',
-    ativo: true,
-  },
-  {
-    id: 'conta-caixa',
-    nome: 'Caixa Geral / Espécie',
-    instituicao: 'Caixa Físico',
+    id: 'conta-mercadopago',
+    nome: 'MercadoPago',
+    instituicao: 'Mercado Pago',
     tipo: 'carteira',
-    saldoAtual: 3450.0,
-    cor: '#10B981',
+    saldoAtual: 0,
+    cor: '#009EE3',
     ativo: true,
   },
   {
-    id: 'conta-bb',
-    nome: 'Banco do Brasil',
-    instituicao: 'BB Agência Central',
-    tipo: 'corrente',
-    saldoAtual: 18900.0,
-    cor: '#EAB308',
+    id: 'conta-comissao-ls-mp',
+    nome: 'Comissão LS - MercadoPago',
+    instituicao: 'Mercado Pago',
+    tipo: 'carteira',
+    saldoAtual: 0,
+    cor: '#0064A6',
     ativo: true,
   },
   {
-    id: 'conta-nubank',
-    nome: 'Nubank PJ',
-    instituicao: 'Nu Pagamentos',
-    tipo: 'corrente',
-    saldoAtual: 15320.0,
-    cor: '#8B5CF6',
+    id: 'conta-impostos-mp',
+    nome: 'Impostos - MercadoPago',
+    instituicao: 'Mercado Pago',
+    tipo: 'carteira',
+    saldoAtual: 0,
+    cor: '#C92A2A',
+    ativo: true,
+  },
+  {
+    id: 'conta-contabilidade-mp',
+    nome: 'Contabilidade - MercadoPago',
+    instituicao: 'Mercado Pago',
+    tipo: 'carteira',
+    saldoAtual: 0,
+    cor: '#6741D9',
     ativo: true,
   },
 ]
 
 function readFromStorage(): ContaBancaria[] {
   try {
+    // Se a versão do storage mudou, reseta para o novo padrão
+    const storedVersion = localStorage.getItem(STORAGE_KEY + '_version')
+    if (storedVersion !== STORAGE_VERSION) {
+      localStorage.removeItem(STORAGE_KEY)
+      localStorage.setItem(STORAGE_KEY + '_version', STORAGE_VERSION)
+      return DEFAULT_CONTAS
+    }
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) return JSON.parse(raw) as ContaBancaria[]
   } catch {}
@@ -63,6 +72,7 @@ function readFromStorage(): ContaBancaria[] {
 function writeToStorage(list: ContaBancaria[]): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
+    localStorage.setItem(STORAGE_KEY + '_version', STORAGE_VERSION)
   } catch {}
 }
 
