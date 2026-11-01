@@ -55,6 +55,8 @@ export type ContaPagar = {
 }
 
 const KEY = 'v2_contas_pagar'
+const KEY_DELETED = 'v2_contas_pagar_deleted_ids' // tombstone: IDs deletados localmente
+const KEY_SYNCED = 'v2_contas_pagar_synced' // flag: já sincronizou com o remoto ao menos uma vez
 const SUPABASE_TABLE = 'v2_contas_pagar'
 
 const SEED_CONTAS: ContaPagar[] = [
@@ -199,7 +201,13 @@ function readFromStorage(): ContaPagar[] {
     const raw = localStorage.getItem(KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as ContaPagar[]
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      if (Array.isArray(parsed)) {
+        // Só retorna seeds se nunca sincronizou com o remoto
+        // (evita seeds voltarem quando remoto está vazio após deleções)
+        if (parsed.length > 0) return parsed
+        const jaSync = localStorage.getItem(KEY_SYNCED)
+        if (jaSync === '1') return [] // já sincronizou: respeita lista vazia
+      }
     }
   } catch {}
   return SEED_CONTAS
@@ -208,7 +216,28 @@ function readFromStorage(): ContaPagar[] {
 function writeToStorage(list: ContaPagar[]): void {
   try {
     localStorage.setItem(KEY, JSON.stringify(list))
+    // Marca que já houve ao menos uma sincronização bem-sucedida com o remoto
+    localStorage.setItem(KEY_SYNCED, '1')
   } catch {}
+}
+
+/** Registra IDs deletados localmente para não reenviar ao remoto */
+function addDeletedId(id: string): void {
+  try {
+    const raw = localStorage.getItem(KEY_DELETED)
+    const ids: string[] = raw ? JSON.parse(raw) : []
+    if (!ids.includes(id)) ids.push(id)
+    // Mantém apenas os últimos 500 para não crescer indefinidamente
+    localStorage.setItem(KEY_DELETED, JSON.stringify(ids.slice(-500)))
+  } catch {}
+}
+
+function getDeletedIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(KEY_DELETED)
+    return new Set(raw ? JSON.parse(raw) : [])
+  } catch {}
+  return new Set()
 }
 
 /**
@@ -247,6 +276,8 @@ export async function syncContasPagarComSupabase(): Promise<{ ok: boolean; count
   if (!supabase) return { ok: false, count: 0, error: 'Supabase não inicializado' }
   try {
     const localList = readFromStorage()
+    const deletedIds = getDeletedIds()
+
     const { data, error } = await supabase
       .from(SUPABASE_TABLE)
       .select('*')
@@ -260,8 +291,13 @@ export async function syncContasPagarComSupabase(): Promise<{ ok: boolean; count
     }))
     const remoteIds = new Set(remoteList.map((r) => r.id))
 
-    // Envia ao remoto apenas registros locais que NÃO são seeds e NÃO estão no remoto
-    const pendingLocal = localList.filter((loc) => !remoteIds.has(loc.id) && !loc.id.startsWith('fin-00'))
+    // Envia ao remoto apenas registros locais que:
+    // 1. Não são seeds (fin-00x)
+    // 2. Não estão no remoto
+    // 3. NÃO foram deletados localmente (tombstone)
+    const pendingLocal = localList.filter(
+      (loc) => !remoteIds.has(loc.id) && !loc.id.startsWith('fin-00') && !deletedIds.has(loc.id)
+    )
 
     if (pendingLocal.length > 0) {
       const cleanPending = pendingLocal.map(cleanContaPagarForSupabase)
@@ -281,7 +317,7 @@ export async function syncContasPagarComSupabase(): Promise<{ ok: boolean; count
 
 export async function listContasPagar(): Promise<ContaPagar[]> {
   const localList = readFromStorage()
-  let list: ContaPagar[] = []
+  const deletedIds = getDeletedIds()
 
   if (supabase) {
     try {
@@ -291,6 +327,7 @@ export async function listContasPagar(): Promise<ContaPagar[]> {
         .order('created_at', { ascending: false })
 
       if (!error && data) {
+        // Remoto é a fonte de verdade: mapeia tudo que veio do servidor
         const remoteList = (data as ContaPagar[]).map((c) => ({
           ...c,
           tipo: c.tipo || 'pagar',
@@ -298,8 +335,13 @@ export async function listContasPagar(): Promise<ContaPagar[]> {
         }))
         const remoteIds = new Set(remoteList.map((r) => r.id))
 
-        // Registros locais que ainda NÃO estão no remoto (precisam ser enviados)
-        const pendingLocal = localList.filter((loc) => !remoteIds.has(loc.id) && !loc.id.startsWith('fin-00'))
+        // Registros locais pendentes de upload:
+        // - Não estão no remoto
+        // - Não são seeds (fin-00x)
+        // - NÃO foram deletados localmente (tombstone) — evita re-enviar deletados
+        const pendingLocal = localList.filter(
+          (loc) => !remoteIds.has(loc.id) && !loc.id.startsWith('fin-00') && !deletedIds.has(loc.id)
+        )
 
         if (pendingLocal.length > 0) {
           try {
@@ -313,24 +355,25 @@ export async function listContasPagar(): Promise<ContaPagar[]> {
           } catch (syncErr) {
             console.warn('Erro ao sincronizar contas locais pendentes:', syncErr)
           }
-          list = [...pendingLocal, ...remoteList]
-        } else {
-          // IMPORTANTE: usa APENAS o que veio do remoto (fonte de verdade)
-          // Isso garante que exclusões feitas por outros usuários sejam refletidas
-          list = remoteList
         }
 
-        // Atualiza o localStorage com o estado atual do remoto
-        // (inclui remoção de registros deletados remotamente por outros usuários)
-        writeToStorage(list)
-        return list
+        // Lista final = pendentes locais + tudo do remoto
+        // Deleções feitas por outros usuários são refletidas porque usamos SOMENTE o remoto como base
+        const finalList = [...pendingLocal, ...remoteList]
+
+        // Persiste no localStorage (inclui remoção de registros deletados por outros usuários)
+        writeToStorage(finalList)
+        return finalList
       }
     } catch (e) {
       console.warn('Falha ao buscar contas a pagar do Supabase, usando local:', e)
     }
   }
 
-  return localList.map((c) => ({ ...c, tipo: c.tipo || 'pagar' }))
+  // Fallback offline: retorna local excluindo os IDs marcados como deletados
+  return localList
+    .filter((c) => !deletedIds.has(c.id))
+    .map((c) => ({ ...c, tipo: c.tipo || 'pagar' }))
 }
 
 export async function getContaPagarPorPedidoId(pedidoId: string): Promise<ContaPagar | undefined> {
@@ -438,6 +481,8 @@ export async function deleteContaPagar(id: string): Promise<void> {
   const current = readFromStorage()
   const filtered = current.filter((c) => c.id !== id)
   writeToStorage(filtered)
+  // Registra o ID como deletado para não re-enviar ao Supabase
+  addDeletedId(id)
 
   if (supabase) {
     try {
@@ -460,6 +505,8 @@ export async function deleteContaPagarPorPedidoId(pedidoId: string): Promise<voi
 
   const filtered = current.filter((c) => c.pedido_id !== pedidoId)
   writeToStorage(filtered)
+  // Registra os IDs como deletados para não re-enviar ao Supabase
+  contasDoPedido.forEach((c) => addDeletedId(c.id))
 
   if (supabase) {
     try {
