@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getCurrentV2User } from '../services/v2AuthService'
 import {
@@ -10,6 +10,8 @@ import {
   createPriceTableWithAllProducts,
   syncMissingProductsToPriceTable,
   calcSugestaoVendas,
+  calcPonto,
+  formatPonto,
   parseImportText,
   executeImportToCatalogAndTable,
   exportPriceTableToCSV,
@@ -30,6 +32,7 @@ import {
   X,
   FileSpreadsheet,
   Percent,
+  Coins,
   Sparkles,
   ArrowUpDown,
   ArrowUp,
@@ -69,8 +72,18 @@ export function V2TabelaPrecoPage() {
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [newTableName, setNewTableName] = useState('')
   const [newTableReajuste, setNewTableReajuste] = useState<number>(1.0)
+  const [newTableValorPonto, setNewTableValorPonto] = useState<number | ''>('')
   const [newTableIsDefault, setNewTableIsDefault] = useState(false)
   const [creatingTable, setCreatingTable] = useState(false)
+
+  // Timer ref para debounce de salvamento automático no Supabase / localStorage
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
+    }
+  }, [])
 
   // Modal state - Renomear Tabela
   const [renameModalOpen, setRenameModalOpen] = useState(false)
@@ -93,10 +106,10 @@ export function V2TabelaPrecoPage() {
   }, [search, filterLine, selectedTableId])
 
   // Sorting
-  const [sortField, setSortField] = useState<'sku' | 'name' | 'line' | 'fabrica' | 'sul' | 'sugestao'>('sku')
+  const [sortField, setSortField] = useState<'sku' | 'name' | 'line' | 'fabrica' | 'ponto' | 'sul' | 'sugestao'>('sku')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
 
-  const handleSort = (field: 'sku' | 'name' | 'line' | 'fabrica' | 'sul' | 'sugestao') => {
+  const handleSort = (field: 'sku' | 'name' | 'line' | 'fabrica' | 'ponto' | 'sul' | 'sugestao') => {
     if (sortField === field) {
       setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))
     } else {
@@ -147,10 +160,17 @@ export function V2TabelaPrecoPage() {
     }
 
     setCreatingTable(true)
-    const created = await createPriceTableWithAllProducts(newTableName.trim(), newTableReajuste, newTableIsDefault)
+    const valorPontoNum = typeof newTableValorPonto === 'number' ? newTableValorPonto : 0
+    const created = await createPriceTableWithAllProducts(
+      newTableName.trim(),
+      newTableReajuste,
+      newTableIsDefault,
+      valorPontoNum
+    )
     setCreatingTable(false)
     setCreateModalOpen(false)
     setNewTableName('')
+    setNewTableValorPonto('')
     setNewTableIsDefault(false)
 
     await loadData()
@@ -225,15 +245,36 @@ export function V2TabelaPrecoPage() {
     }
   }
 
-  // Handle Live Reajuste % Update
-  const handleReajustePercentChange = async (newPercent: number) => {
+  // Handle Live Reajuste % Update com debounce para salvar
+  const handleReajustePercentChange = (newPercent: number) => {
     if (!selectedTable) return
-    const updated = await savePriceTable({
+    const updated: V2PriceTable = {
       ...selectedTable,
       reajuste_percent: newPercent,
-    })
+    }
     setSelectedTable(updated)
     setTables((prev) => prev.map((t) => (t.id === updated.id ? updated : t)))
+
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
+    saveTimeoutRef.current = setTimeout(async () => {
+      await savePriceTable(updated)
+    }, 400)
+  }
+
+  // Handle Live Valor Ponto Update com debounce para salvar
+  const handleValorPontoChange = (newValorPonto: number) => {
+    if (!selectedTable) return
+    const updated: V2PriceTable = {
+      ...selectedTable,
+      valor_ponto: newValorPonto,
+    }
+    setSelectedTable(updated)
+    setTables((prev) => prev.map((t) => (t.id === updated.id ? updated : t)))
+
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
+    saveTimeoutRef.current = setTimeout(async () => {
+      await savePriceTable(updated)
+    }, 400)
   }
 
   // Handle Deleting Price Table
@@ -307,6 +348,10 @@ export function V2TabelaPrecoPage() {
       comp = (a.product_line || '').localeCompare(b.product_line || '')
     } else if (sortField === 'fabrica') {
       comp = (a.tabela_fabrica || 0) - (b.tabela_fabrica || 0)
+    } else if (sortField === 'ponto') {
+      const pA = calcPonto(a.tabela_fabrica, selectedTable?.valor_ponto || 0)
+      const pB = calcPonto(b.tabela_fabrica, selectedTable?.valor_ponto || 0)
+      comp = pA - pB
     } else if (sortField === 'sul') {
       comp = (a.tabela_vendas_sul || 0) - (b.tabela_vendas_sul || 0)
     } else if (sortField === 'sugestao') {
@@ -411,7 +456,7 @@ export function V2TabelaPrecoPage() {
                   >
                     {tables.map((t) => (
                       <option key={t.id} value={t.id}>
-                        {t.is_default ? '⭐ ' : ''}{t.name} ({t.items.length} itens - {t.reajuste_percent}% Reajuste){t.is_default ? ' [PADRÃO]' : ''}
+                        {t.is_default ? '⭐ ' : ''}{t.name} ({t.items.length} itens - {t.reajuste_percent}% Reajuste{t.valor_ponto ? ` - Ponto: ${t.valor_ponto}` : ''}){t.is_default ? ' [PADRÃO]' : ''}
                       </option>
                     ))}
                   </select>
@@ -456,7 +501,7 @@ export function V2TabelaPrecoPage() {
             </div>
 
             {selectedTable && (
-              <div className="flex items-center gap-2 pt-4 sm:pt-0 sm:pl-4 sm:border-l border-slate-200">
+              <div className="flex flex-wrap items-center gap-4 pt-4 sm:pt-0 sm:pl-4 sm:border-l border-slate-200">
                 <div>
                   <label className="block text-[11px] font-bold text-purple-900 uppercase tracking-wider mb-1 flex items-center gap-1">
                     <Percent className="h-3 w-3 text-purple-600" />
@@ -471,6 +516,24 @@ export function V2TabelaPrecoPage() {
                       className="w-24 rounded-xl px-3 py-1.5 border border-purple-300 font-black text-sm text-purple-900 bg-white outline-none focus:ring-2 focus:ring-purple-400"
                     />
                     <span className="text-xs font-bold text-purple-700">%</span>
+                  </div>
+                </div>
+
+                <div className="pl-4 border-l border-slate-200">
+                  <label className="block text-[11px] font-bold text-indigo-900 uppercase tracking-wider mb-1 flex items-center gap-1">
+                    <Coins className="h-3 w-3 text-indigo-600" />
+                    Valor Ponto:
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      placeholder="Ex: 3000"
+                      value={selectedTable.valor_ponto ? selectedTable.valor_ponto : ''}
+                      onChange={(e) => handleValorPontoChange(parseFloat(e.target.value) || 0)}
+                      className="w-28 rounded-xl px-3 py-1.5 border border-indigo-300 font-black text-sm text-indigo-900 bg-white outline-none focus:ring-2 focus:ring-indigo-400"
+                    />
                   </div>
                 </div>
               </div>
@@ -532,7 +595,7 @@ export function V2TabelaPrecoPage() {
                 <select
                   value={`${sortField}-${sortDirection}`}
                   onChange={(e) => {
-                    const [f, d] = e.target.value.split('-') as ['sku' | 'name' | 'line' | 'fabrica' | 'sul' | 'sugestao', 'asc' | 'desc']
+                    const [f, d] = e.target.value.split('-') as ['sku' | 'name' | 'line' | 'fabrica' | 'ponto' | 'sul' | 'sugestao', 'asc' | 'desc']
                     setSortField(f)
                     setSortDirection(d)
                   }}
@@ -544,6 +607,8 @@ export function V2TabelaPrecoPage() {
                   <option value="name-desc">Descrição Produto (Z ➔ A)</option>
                   <option value="fabrica-asc">Menor Preço Fábrica</option>
                   <option value="fabrica-desc">Maior Preço Fábrica</option>
+                  <option value="ponto-asc">Menor Ponto</option>
+                  <option value="ponto-desc">Maior Ponto</option>
                   <option value="sul-asc">Menor Tabela Sul</option>
                   <option value="sul-desc">Maior Tabela Sul</option>
                   <option value="sugestao-desc">Maior Sugestão Vendas</option>
@@ -655,6 +720,25 @@ export function V2TabelaPrecoPage() {
                     </th>
 
                     <th
+                      onClick={() => handleSort('ponto')}
+                      className="p-3.5 cursor-pointer hover:bg-slate-100/80 transition select-none group"
+                      title="Ponto = Tabela Fábrica (R$) / Valor Ponto (com 5 casas decimais)"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span>Ponto</span>
+                        {sortField === 'ponto' ? (
+                          sortDirection === 'asc' ? (
+                            <ArrowUp className="h-3.5 w-3.5 text-purple-600 font-black" />
+                          ) : (
+                            <ArrowDown className="h-3.5 w-3.5 text-purple-600 font-black" />
+                          )
+                        ) : (
+                          <ArrowUpDown className="h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 transition" />
+                        )}
+                      </div>
+                    </th>
+
+                    <th
                       onClick={() => handleSort('sul')}
                       className="p-3.5 cursor-pointer hover:bg-slate-100/80 transition select-none group"
                       title="Clique para ordenar por Tabela Sul"
@@ -698,6 +782,7 @@ export function V2TabelaPrecoPage() {
                 <tbody className="divide-y divide-slate-100 text-xs font-medium text-slate-700">
                   {paginatedItems.map((item, idx) => {
                     const sugestaoCalculada = calcSugestaoVendas(item.tabela_vendas_sul, selectedTable.reajuste_percent)
+                    const pontoCalculado = calcPonto(item.tabela_fabrica, selectedTable.valor_ponto || 0)
 
                     return (
                       <tr key={idx} className="hover:bg-purple-50/30 transition">
@@ -719,6 +804,18 @@ export function V2TabelaPrecoPage() {
 
                         <td className="p-3.5 font-medium text-slate-600">
                           {formatCurrency(item.tabela_fabrica)}
+                        </td>
+
+                        <td className="p-3.5">
+                          {selectedTable.valor_ponto && selectedTable.valor_ponto > 0 ? (
+                            <span className="font-mono font-bold text-indigo-700 bg-indigo-50/70 border border-indigo-200/60 px-2.5 py-1 rounded-lg text-xs inline-block">
+                              {formatPonto(pontoCalculado)}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 font-normal text-xs" title="Informe o Valor Ponto acima para calcular">
+                              -
+                            </span>
+                          )}
                         </td>
 
                         <td className="p-3.5 font-bold text-blue-700">
@@ -826,6 +923,28 @@ export function V2TabelaPrecoPage() {
                 />
                 <p className="text-[10px] text-slate-400 font-medium mt-1">
                   O valor da Sugestão de Vendas será calculado automaticamente com a regra de arredondamento especial.
+                </p>
+              </div>
+
+              <div>
+                <label className="block mb-1">Valor Ponto</label>
+                <div className="relative">
+                  <Coins className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    placeholder="Ex: 3000"
+                    value={newTableValorPonto}
+                    onChange={(e) => {
+                      const val = e.target.value === '' ? '' : parseFloat(e.target.value) || 0
+                      setNewTableValorPonto(val)
+                    }}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 font-medium text-sm outline-none focus:border-purple-500"
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400 font-medium mt-1">
+                  Regra do cálculo: Tabela Fábrica (R$) / Valor Ponto = Ponto com 5 casas decimais.
                 </p>
               </div>
 

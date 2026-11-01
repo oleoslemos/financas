@@ -589,7 +589,7 @@ export const V2LancamentoDetalheDrawer: React.FC<V2LancamentoDetalheDrawerProps>
                 </button>
                 <button
                   type="button"
-                  onClick={handleEstorno}
+                  onClick={() => handleEstorno()}
                   disabled={processando}
                   className="flex-1 py-2 px-3 border border-amber-400 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
                 >

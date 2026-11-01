@@ -11,12 +11,14 @@ export interface V2PriceTableItem {
   tabela_fabrica: number
   tabela_vendas_sul: number
   sugestao_vendas: number
+  ponto?: number
 }
 
 export interface V2PriceTable {
   id: string
   name: string
   reajuste_percent: number
+  valor_ponto?: number
   items: V2PriceTableItem[]
   active: boolean
   is_default?: boolean
@@ -52,6 +54,25 @@ export function calcSugestaoVendas(tabelaVendasSul: number, reajustePercent: num
   }
 }
 
+// ─── CÁLCULO DE PONTO (TABELA FÁBRICA / VALOR PONTO) ─────────────────────────
+/**
+ * Regra: "Tabela Fábrica (R$)" / "Valor Ponto" = Resultado com 5 casas decimais.
+ * Exemplo:
+ * Valor Ponto = 3000
+ * Tabela Fábrica (R$) = 47,72
+ * Cálculo = 47,72 / 3000 = 0,01590666667 => 0,01591
+ */
+export function calcPonto(tabelaFabrica: number, valorPonto: number): number {
+  if (!valorPonto || valorPonto <= 0 || !tabelaFabrica || tabelaFabrica <= 0) return 0
+  const raw = tabelaFabrica / valorPonto
+  return Number(raw.toFixed(5))
+}
+
+export function formatPonto(val: number): string {
+  if (val === undefined || val === null || isNaN(val)) return '0,00000'
+  return val.toFixed(5).replace('.', ',')
+}
+
 // ─── CRUD OPERATIONS ─────────────────────────────────────────────────────────
 
 export async function listPriceTables(): Promise<V2PriceTable[]> {
@@ -81,15 +102,19 @@ export async function savePriceTable(table: Omit<V2PriceTable, 'id' | 'created_a
   const isEdit = Boolean(table.id)
   const id = table.id || 'tbl-' + Date.now()
 
-  // Recalculate sugestao_vendas for all items in table based on current reajuste_percent
+  const valorPonto = table.valor_ponto !== undefined ? Number(table.valor_ponto) : 0
+
+  // Recalculate sugestao_vendas and ponto for all items in table
   const updatedItems: V2PriceTableItem[] = (table.items || []).map((item) => ({
     ...item,
     sugestao_vendas: calcSugestaoVendas(item.tabela_vendas_sul, table.reajuste_percent),
+    ponto: calcPonto(item.tabela_fabrica, valorPonto),
   }))
 
   const fullTable: V2PriceTable = {
     ...table,
     id,
+    valor_ponto: valorPonto,
     is_default: table.is_default ?? (current.length === 0 ? true : false),
     items: updatedItems,
     created_at: table.id
@@ -104,15 +129,21 @@ export async function savePriceTable(table: Omit<V2PriceTable, 'id' | 'created_a
         id: fullTable.id,
         name: fullTable.name,
         reajuste_percent: fullTable.reajuste_percent,
+        valor_ponto: fullTable.valor_ponto,
         items: fullTable.items,
         active: fullTable.active,
         is_default: fullTable.is_default,
         updated_at: fullTable.updated_at,
       }
       const { error } = await supabase.from(SUPABASE_TABLE).upsert(payload)
-      if (error && (error.message?.includes('is_default') || error.code === '42703')) {
-        // Fallback caso a coluna is_default ainda não exista na tabela do Supabase
-        delete payload.is_default
+      if (error && (error.message?.includes('is_default') || error.message?.includes('valor_ponto') || error.code === '42703')) {
+        // Fallback caso colunas ainda não existam no Supabase
+        if (error.message?.includes('valor_ponto') || error.code === '42703') {
+          delete payload.valor_ponto
+        }
+        if (error.message?.includes('is_default')) {
+          delete payload.is_default
+        }
         await supabase.from(SUPABASE_TABLE).upsert(payload)
       }
     } catch (err) {
@@ -162,14 +193,20 @@ export async function setDefaultPriceTable(id: string): Promise<V2PriceTable[]> 
           id: t.id,
           name: t.name,
           reajuste_percent: t.reajuste_percent,
+          valor_ponto: t.valor_ponto || 0,
           items: t.items,
           active: t.active,
           is_default: t.is_default,
           updated_at: t.updated_at,
         }
         const { error } = await supabase.from(SUPABASE_TABLE).upsert(payload)
-        if (error && (error.message?.includes('is_default') || error.code === '42703')) {
-          delete payload.is_default
+        if (error && (error.message?.includes('is_default') || error.message?.includes('valor_ponto') || error.code === '42703')) {
+          if (error.message?.includes('valor_ponto') || error.code === '42703') {
+            delete payload.valor_ponto
+          }
+          if (error.message?.includes('is_default')) {
+            delete payload.is_default
+          }
           await supabase.from(SUPABASE_TABLE).upsert(payload)
         }
       }
@@ -211,7 +248,8 @@ export async function deletePriceTable(id: string): Promise<void> {
 export async function createPriceTableWithAllProducts(
   name: string,
   reajustePercent: number,
-  isDefault: boolean = false
+  isDefault: boolean = false,
+  valorPonto: number = 0
 ): Promise<V2PriceTable> {
   const products = await listV2Products()
   const currentTables = await listPriceTables()
@@ -224,6 +262,7 @@ export async function createPriceTableWithAllProducts(
     tabela_fabrica: p.cost_price || 0,
     tabela_vendas_sul: p.sale_price || 0,
     sugestao_vendas: calcSugestaoVendas(p.sale_price || 0, reajustePercent),
+    ponto: calcPonto(p.cost_price || 0, valorPonto),
   }))
 
   const shouldBeDefault = isDefault || currentTables.length === 0
@@ -231,6 +270,7 @@ export async function createPriceTableWithAllProducts(
   const newTable = await savePriceTable({
     name,
     reajuste_percent: reajustePercent,
+    valor_ponto: valorPonto,
     items,
     active: true,
     is_default: shouldBeDefault,
@@ -265,6 +305,7 @@ export async function syncMissingProductsToPriceTable(tableId: string): Promise<
     tabela_fabrica: p.cost_price || 0,
     tabela_vendas_sul: p.sale_price || 0,
     sugestao_vendas: calcSugestaoVendas(p.sale_price || 0, table.reajuste_percent),
+    ponto: calcPonto(p.cost_price || 0, table.valor_ponto || 0),
   }))
 
   return savePriceTable({
@@ -436,18 +477,23 @@ export function exportPriceTableToCSV(table: V2PriceTable): void {
     'DESCRIÇÃO PRODUTO',
     'LINHA DO PRODUTO',
     'TABELA FÁBRICA (R$)',
+    'PONTO',
     'TABELA VENDAS SUL (R$)',
     'SUGESTÃO DE VENDAS (R$)',
   ]
 
-  const rows = (table.items || []).map((item) => [
-    `"${item.sku || ''}"`,
-    `"${(item.product_name || '').replace(/"/g, '""')}"`,
-    `"${(item.product_line || '').replace(/"/g, '""')}"`,
-    `"${(item.tabela_fabrica || 0).toFixed(2).replace('.', ',')}"`,
-    `"${(item.tabela_vendas_sul || 0).toFixed(2).replace('.', ',')}"`,
-    `"${(item.sugestao_vendas || 0).toFixed(2).replace('.', ',')}"`,
-  ].join(';'))
+  const rows = (table.items || []).map((item) => {
+    const ponto = calcPonto(item.tabela_fabrica, table.valor_ponto || 0)
+    return [
+      `"${item.sku || ''}"`,
+      `"${(item.product_name || '').replace(/"/g, '""')}"`,
+      `"${(item.product_line || '').replace(/"/g, '""')}"`,
+      `"${(item.tabela_fabrica || 0).toFixed(2).replace('.', ',')}"`,
+      `"${table.valor_ponto && table.valor_ponto > 0 ? formatPonto(ponto) : '0,00000'}"`,
+      `"${(item.tabela_vendas_sul || 0).toFixed(2).replace('.', ',')}"`,
+      `"${(item.sugestao_vendas || 0).toFixed(2).replace('.', ',')}"`,
+    ].join(';')
+  })
 
   const csvContent = '\uFEFF' + [headers.join(';'), ...rows].join('\n')
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
