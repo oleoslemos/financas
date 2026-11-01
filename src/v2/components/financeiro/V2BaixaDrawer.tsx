@@ -8,6 +8,7 @@ interface V2BaixaDrawerProps {
   isOpen: boolean
   onClose: () => void
   conta: ContaPagar | null
+  numeroParcela?: number
   contasBancarias: ContaBancaria[]
   onConfirmarBaixa: (params: BaixarLancamentoParams) => Promise<void>
   onCriarContaBancaria: (nome: string) => Promise<ContaBancaria>
@@ -33,6 +34,7 @@ export const V2BaixaDrawer: React.FC<V2BaixaDrawerProps> = ({
   isOpen,
   onClose,
   conta,
+  numeroParcela,
   contasBancarias,
   onConfirmarBaixa,
   onCriarContaBancaria,
@@ -40,7 +42,38 @@ export const V2BaixaDrawer: React.FC<V2BaixaDrawerProps> = ({
   if (!isOpen || !conta) return null
 
   const isPagar = (conta.tipo || 'pagar') === 'pagar'
-  const valorPrevisto = conta.saldo_residual && conta.saldo_residual > 0 ? conta.saldo_residual : conta.total
+  const temMultiplasParcelas = Boolean(conta.parcelas && conta.parcelas.length > 1)
+
+  const [parcelaSelecionadaNum, setParcelaSelecionadaNum] = useState<number>(() => {
+    if (numeroParcela) return numeroParcela
+    if (conta.parcelas && conta.parcelas.length > 0) {
+      const primeiraAberta = conta.parcelas.find((p) => p.status !== 'paga')
+      return primeiraAberta ? primeiraAberta.numero : 1
+    }
+    return 1
+  })
+
+  useEffect(() => {
+    if (numeroParcela) {
+      setParcelaSelecionadaNum(numeroParcela)
+    } else if (conta && conta.parcelas && conta.parcelas.length > 0) {
+      const primeiraAberta = conta.parcelas.find((p) => p.status !== 'paga')
+      setParcelaSelecionadaNum(primeiraAberta ? primeiraAberta.numero : 1)
+    }
+  }, [conta, numeroParcela])
+
+  const parcelaAtual = useMemo(() => {
+    if (!conta || !conta.parcelas || conta.parcelas.length === 0) return null
+    return conta.parcelas.find((p) => p.numero === parcelaSelecionadaNum) || conta.parcelas[0]
+  }, [conta, parcelaSelecionadaNum])
+
+  const valorPrevisto = useMemo(() => {
+    if (!conta) return 0
+    if (parcelaAtual) {
+      return Number(parcelaAtual.valor) || 0
+    }
+    return conta.saldo_residual && conta.saldo_residual > 0 ? conta.saldo_residual : conta.total
+  }, [conta, parcelaAtual])
 
   const [valorInput, setValorInput] = useState<string>(valorPrevisto.toFixed(2))
   const [diferencaDestino, setDiferencaDestino] = useState<'taxa' | 'parcial'>('taxa')
@@ -60,8 +93,7 @@ export const V2BaixaDrawer: React.FC<V2BaixaDrawerProps> = ({
 
   useEffect(() => {
     if (conta) {
-      const v = conta.saldo_residual && conta.saldo_residual > 0 ? conta.saldo_residual : conta.total
-      setValorInput(v.toFixed(2))
+      setValorInput(valorPrevisto.toFixed(2))
       setDiferencaDestino('taxa')
       setDataBaixa(new Date().toISOString().split('T')[0])
       setFormaPagamento(conta.forma_pagamento || (isPagar ? 'Boleto' : 'Cartão de crédito'))
@@ -90,7 +122,7 @@ export const V2BaixaDrawer: React.FC<V2BaixaDrawerProps> = ({
       setSugestaoCadastro(null)
       setDropdownAberto(false)
     }
-  }, [conta, contasBancarias])
+  }, [conta, valorPrevisto, contasBancarias, isPagar])
 
   const valorDigitado = parseFloat(valorInput.replace(',', '.')) || 0
   const diferenca = valorPrevisto - valorDigitado
@@ -196,6 +228,7 @@ export const V2BaixaDrawer: React.FC<V2BaixaDrawerProps> = ({
 
       await onConfirmarBaixa({
         id: conta.id,
+        numeroParcela: parcelaAtual?.numero,
         valorRecebidoOuPago: valorDigitado,
         diferencaDestino,
         dataBaixa,
@@ -214,6 +247,8 @@ export const V2BaixaDrawer: React.FC<V2BaixaDrawerProps> = ({
     return iso.split('-').reverse().join('/')
   }
 
+  const vencimentoExibido = parcelaAtual ? parcelaAtual.vencimento : conta.vencimento
+
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-black/40 backdrop-blur-xs flex justify-end">
       <div
@@ -228,9 +263,16 @@ export const V2BaixaDrawer: React.FC<V2BaixaDrawerProps> = ({
               <Check size={20} className="stroke-[2.5]" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base font-bold text-slate-900 leading-tight">Baixar lançamento</h2>
+              <h2 className="text-base font-bold text-slate-900 leading-tight">
+                {temMultiplasParcelas
+                  ? `Baixar Parcela ${parcelaAtual?.numero || 1}/${conta.parcelas.length}`
+                  : 'Baixar lançamento'}
+              </h2>
               <p className="text-xs text-slate-500 truncate mt-0.5">
-                {isPagar ? 'Registrar pagamento' : 'Registrar recebimento'} · lançamento único
+                {isPagar ? 'Registrar pagamento' : 'Registrar recebimento'} ·{' '}
+                {temMultiplasParcelas
+                  ? `Parcela ${parcelaAtual?.numero || 1} de ${conta.parcelas.length}`
+                  : 'lançamento único'}
               </p>
             </div>
           </div>
@@ -245,7 +287,44 @@ export const V2BaixaDrawer: React.FC<V2BaixaDrawerProps> = ({
 
         {/* Form Body */}
         <form id="form-baixa" onSubmit={handleSubmit} className="p-5 space-y-4 flex-1">
-          {/* Card Resumo do Título */}
+          {/* Seletor de Parcelas para Vendas/Compras Parceladas */}
+          {temMultiplasParcelas && (
+            <div className="bg-slate-50 border border-slate-200/90 rounded-xl p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-600">
+                  Parcelas ({conta.parcelas.length}x de {formatBRL(parcelaAtual?.valor || valorPrevisto)})
+                </span>
+                <span className="text-[10px] text-slate-400 font-semibold">
+                  Total {formatBRL(conta.total)}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5 scrollbar-thin">
+                {conta.parcelas.map((p) => {
+                  const isSel = p.numero === parcelaAtual?.numero
+                  const isPaga = p.status === 'paga'
+                  return (
+                    <button
+                      key={p.numero}
+                      type="button"
+                      onClick={() => setParcelaSelecionadaNum(p.numero)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold shrink-0 transition-all border flex items-center gap-1 cursor-pointer ${
+                        isSel
+                          ? 'bg-[#0F3D6E] text-white border-[#0F3D6E] shadow-xs'
+                          : isPaga
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span>{p.numero}ª · {formatBRL(p.valor)}</span>
+                      {isPaga && <span className="text-[10px] font-black">✓</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Card Resumo do Título / Parcela */}
           <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-2 text-xs">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
@@ -254,19 +333,27 @@ export const V2BaixaDrawer: React.FC<V2BaixaDrawerProps> = ({
                 </span>
                 <strong className="text-slate-900 block truncate font-bold text-xs mt-0.5">
                   {conta.descricao}
+                  {temMultiplasParcelas && (
+                    <span className="text-blue-700 ml-1.5 font-extrabold">
+                      (Parcela {parcelaAtual?.numero}/{conta.parcelas.length})
+                    </span>
+                  )}
                 </strong>
               </div>
               <div className="text-right shrink-0">
                 <span className="text-[10px] font-bold tracking-wider text-slate-400 uppercase block">
-                  Vencimento
+                  Vencimento {temMultiplasParcelas ? 'da Parcela' : ''}
                 </span>
-                <span className="font-semibold text-slate-700">{fmtData(conta.vencimento)}</span>
+                <span className="font-semibold text-slate-700">{fmtData(vencimentoExibido)}</span>
               </div>
             </div>
 
             <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 text-[11px] text-slate-600">
               <span>{isPagar ? 'Fornecedor' : 'Cliente'}: <strong>{conta.fornecedor || '—'}</strong></span>
-              <span>Previsto: <strong className="text-slate-900">{formatBRL(valorPrevisto)}</strong></span>
+              <span>
+                Previsto {temMultiplasParcelas ? 'nesta parcela' : ''}:{' '}
+                <strong className="text-slate-900">{formatBRL(valorPrevisto)}</strong>
+              </span>
             </div>
           </div>
 

@@ -131,25 +131,37 @@ export function achatar(contas: ContaPagar[], hoje: string, base: BaseData): Mov
   const out: Movimento[] = []
   for (const c of contas) {
     const tipo = c.tipo || 'pagar'
-    for (const p of c.parcelas) {
+    const isParcelaUnica = !c.parcelas || c.parcelas.length <= 1
+    for (const p of c.parcelas || []) {
       const status = statusDaParcela(p, hoje)
-      const pagoEm = p.baixa?.dataBaixa ?? c.data_baixa ?? null
+      const pagoEm = p.baixa?.dataBaixa ?? (isParcelaUnica ? c.data_baixa : null) ?? null
       const data = base === 'pagamento' ? (pagoEm || p.vencimento) : p.vencimento
       if (!data) continue
 
-      const valorPago = p.baixa ? p.baixa.valorFinalPago : (c.totalPago || 0)
+      const valorPago = p.baixa
+        ? p.baixa.valorFinalPago
+        : p.status === 'paga'
+        ? p.valor
+        : isParcelaUnica
+        ? (c.totalPago || 0)
+        : 0
+
       const restante =
         status === 'paga'
           ? 0
-          : c.saldo_residual !== undefined && c.saldo_residual > 0
+          : isParcelaUnica && c.saldo_residual !== undefined && c.saldo_residual > 0
           ? c.saldo_residual
           : Math.max(0, p.valor - valorPago)
+
+      const descricaoExibida = !isParcelaUnica
+        ? `${c.descricao} · Parcela ${p.numero}/${c.parcelas.length}`
+        : c.descricao
 
       out.push({
         id: `${c.id}-p${p.numero}`,
         contaId: c.id,
         tipo,
-        descricao: c.descricao,
+        descricao: descricaoExibida,
         contraparte: c.fornecedor || (tipo === 'receber' ? 'Cliente' : 'Fornecedor'),
         categoria: c.categoria || undefined,
         numero: p.numero,

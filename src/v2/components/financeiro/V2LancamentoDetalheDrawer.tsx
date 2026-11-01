@@ -20,11 +20,12 @@ interface V2LancamentoDetalheDrawerProps {
   isOpen: boolean
   onClose: () => void
   conta: ContaPagar | null
+  numeroParcelaFoco?: number
   modo?: 'detalhe' | 'detalhe_pago' | 'estorno' | 'excluir'
-  onConfirmarEstorno: (contaId: string) => Promise<void>
+  onConfirmarEstorno: (contaId: string, numeroParcela?: number) => Promise<void>
   onConfirmarExclusao: (contaId: string) => Promise<void>
   onConfirmarCancelamento?: (contaId: string) => Promise<void>
-  onAbrirBaixa?: (conta: ContaPagar) => void
+  onAbrirBaixa?: (conta: ContaPagar, numeroParcela?: number) => void
   onAbrirEdicao?: (conta: ContaPagar) => void
 }
 
@@ -32,6 +33,7 @@ export const V2LancamentoDetalheDrawer: React.FC<V2LancamentoDetalheDrawerProps>
   isOpen,
   onClose,
   conta,
+  numeroParcelaFoco,
   modo = 'detalhe',
   onConfirmarEstorno,
   onConfirmarExclusao,
@@ -109,10 +111,10 @@ export const V2LancamentoDetalheDrawer: React.FC<V2LancamentoDetalheDrawerProps>
     return iso.split('-').reverse().join('/')
   }
 
-  const handleEstorno = async () => {
+  const handleEstorno = async (numParcela?: number) => {
     setProcessando(true)
     try {
-      await onConfirmarEstorno(conta.id)
+      await onConfirmarEstorno(conta.id, numParcela ?? numeroParcelaFoco)
       onClose()
     } finally {
       setProcessando(false)
@@ -248,7 +250,7 @@ export const V2LancamentoDetalheDrawer: React.FC<V2LancamentoDetalheDrawerProps>
                   type="button"
                   onClick={() => {
                     onClose()
-                    onAbrirBaixa(conta)
+                    onAbrirBaixa(conta, numeroParcelaFoco)
                   }}
                   className="flex-1 h-10 bg-[#0F3D6E] hover:bg-[#0c2f54] text-white rounded-xl flex items-center justify-center transition-all shadow-2xs cursor-pointer"
                   title="Baixar lançamento"
@@ -385,8 +387,120 @@ export const V2LancamentoDetalheDrawer: React.FC<V2LancamentoDetalheDrawerProps>
             </div>
           </div>
 
-          {/* Valores da baixa quando pago */}
-          {isPago && (
+          {/* Seção de Parcelas detalhadas quando houver mais de 1 */}
+          {conta.parcelas && conta.parcelas.length > 1 && (
+            <div className="space-y-2 pt-2 border-t border-slate-100">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-600">
+                  Parcelas do Título ({conta.parcelas.length} parcelas)
+                </span>
+                <span className="text-[10px] font-semibold text-slate-500">
+                  Total Pago: <strong className="text-emerald-700">{formatBRL(conta.totalPago || 0)}</strong> de {formatBRL(conta.total)}
+                </span>
+              </div>
+
+              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                {conta.parcelas.map((p) => {
+                  const isParcPaga = p.status === 'paga'
+                  const isParcParcial = p.status === 'parcial'
+                  const isParcVencida = p.status === 'vencida'
+                  const isFoco = numeroParcelaFoco === p.numero
+
+                  return (
+                    <div
+                      key={p.numero}
+                      className={`p-3 rounded-xl border transition-all ${
+                        isFoco
+                          ? 'border-blue-500 bg-blue-50/40 ring-1 ring-blue-400'
+                          : isParcPaga
+                          ? 'border-emerald-200 bg-emerald-50/30'
+                          : 'border-slate-200 bg-white'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-black text-slate-900">
+                              Parcela {p.numero}/{conta.parcelas.length}
+                            </span>
+                            <span
+                              className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ${
+                                isParcPaga
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : isParcParcial
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : isParcVencida
+                                  ? 'bg-red-100 text-red-800'
+                                  : 'bg-blue-100 text-blue-800'
+                              }`}
+                            >
+                              {isParcPaga ? 'Paga' : isParcParcial ? 'Parcial' : isParcVencida ? 'Vencida' : 'Aberta'}
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-slate-500 block mt-0.5">
+                            Vence em <strong>{fmtData(p.vencimento)}</strong>
+                          </span>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <span
+                            className={`text-xs font-black tabular-nums block ${
+                              isPagar ? 'text-red-600' : 'text-emerald-700'
+                            }`}
+                          >
+                            {formatBRL(p.valor)}
+                          </span>
+
+                          {/* Botões de Ação por Parcela */}
+                          <div className="flex items-center justify-end gap-1.5 mt-1.5">
+                            {!isParcPaga && onAbrirBaixa && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onClose()
+                                  onAbrirBaixa(conta, p.numero)
+                                }}
+                                className="px-2.5 py-1 bg-[#0F3D6E] hover:bg-[#0c2f54] text-white rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                              >
+                                <Check size={12} className="stroke-[2.5]" /> Baixar
+                              </button>
+                            )}
+
+                            {isParcPaga && (
+                              <button
+                                type="button"
+                                onClick={() => handleEstorno(p.numero)}
+                                disabled={processando}
+                                className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
+                              >
+                                <RotateCcw size={11} /> Estornar
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Informações da baixa da parcela se paga */}
+                      {isParcPaga && p.baixa && (
+                        <div className="mt-2 pt-2 border-t border-emerald-100 text-[10px] text-slate-600 flex items-center justify-between">
+                          <span>
+                            Baixado em <strong>{fmtData(p.baixa.dataBaixa)}</strong> via{' '}
+                            {p.baixa.contaBancariaNome || tagConta}
+                          </span>
+                          <span className="font-extrabold text-emerald-800 tabular-nums">
+                            {formatBRL(p.baixa.valorFinalPago)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Valores da baixa quando pago (para lançamento único) */}
+          {isPago && (!conta.parcelas || conta.parcelas.length <= 1) && (
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-emerald-50/50 border border-emerald-200 rounded-xl p-3">
                 <span className="text-[10px] font-bold tracking-wider text-emerald-800 uppercase block">

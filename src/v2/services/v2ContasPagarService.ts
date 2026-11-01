@@ -502,6 +502,7 @@ export async function updateContaPagarPorPedidoId(
 
 export interface BaixarLancamentoParams {
   id: string
+  numeroParcela?: number
   valorRecebidoOuPago: number
   diferencaDestino: 'taxa' | 'parcial'
   dataBaixa: string
@@ -518,30 +519,51 @@ export async function baixarLancamento(params: BaixarLancamentoParams): Promise<
   if (!conta) return null
 
   const isPagar = (conta.tipo || 'pagar') === 'pagar'
-  const valorPrevisto = conta.total
-  const dif = valorPrevisto - params.valorRecebidoOuPago
+  const temParcelas = Array.isArray(conta.parcelas) && conta.parcelas.length > 0
 
-  let novoStatus: StatusConta = 'paga'
+  // Identifica a parcela alvo
+  const parcelaAlvoNum =
+    params.numeroParcela ??
+    (temParcelas
+      ? (conta.parcelas.find((p) => p.status !== 'paga')?.numero || conta.parcelas[0].numero)
+      : 1)
+
+  const listaParcelasBase: ContaPagarParcela[] = temParcelas
+    ? conta.parcelas
+    : [
+        {
+          numero: 1,
+          vencimento: conta.vencimento || params.dataBaixa,
+          valor: conta.total,
+          status: 'aberta' as StatusConta,
+        },
+      ]
+
+  const parcelaAlvo = listaParcelasBase.find((p) => p.numero === parcelaAlvoNum) || listaParcelasBase[0]
+  const valorPrevistoParcela = Number(parcelaAlvo.valor) || 0
+  const dif = valorPrevistoParcela - params.valorRecebidoOuPago
+
+  let novoStatusParcela: StatusConta = 'paga'
   let taxaAdmin = 0
-  let saldoResidual = 0
+  let saldoResidualParcela = 0
 
   if (params.diferencaDestino === 'parcial' && dif > 0) {
-    novoStatus = 'parcial'
-    saldoResidual = Math.round(dif * 100) / 100
+    novoStatusParcela = 'parcial'
+    saldoResidualParcela = Math.round(dif * 100) / 100
   } else {
-    novoStatus = 'paga'
+    novoStatusParcela = 'paga'
     if (dif > 0) {
       taxaAdmin = Math.round(dif * 100) / 100
     }
   }
 
-  // Atualiza saldo da conta bancária
+  // Atualiza saldo da conta bancária com o valor efetivamente movimentado
   const deltaBancario = isPagar ? -params.valorRecebidoOuPago : params.valorRecebidoOuPago
   await updateSaldoContaBancaria(params.contaBancariaId, deltaBancario)
 
   const baixaInfo: BaixaParcelaInfo = {
     dataBaixa: params.dataBaixa,
-    valorOriginal: valorPrevisto,
+    valorOriginal: valorPrevistoParcela,
     descontoTipo: 'R$',
     descontoValor: taxaAdmin,
     descontoFinal: taxaAdmin,
@@ -555,26 +577,55 @@ export async function baixarLancamento(params: BaixarLancamentoParams): Promise<
     contaBancariaNome: params.contaBancariaTag,
   }
 
-  const novasParcelas: ContaPagarParcela[] = (conta.parcelas && conta.parcelas.length > 0
-    ? conta.parcelas
-    : [{ numero: 1, vencimento: conta.vencimento || params.dataBaixa, valor: valorPrevisto, status: 'aberta' as StatusConta }]
-  ).map((p, idx) => {
-    if (idx === 0) {
+  const novasParcelas: ContaPagarParcela[] = listaParcelasBase.map((p) => {
+    if (p.numero === parcelaAlvoNum) {
       return {
         ...p,
-        status: novoStatus,
+        status: novoStatusParcela,
         baixa: baixaInfo,
       }
     }
     return p
   })
 
+  // Calcula os acumulados da conta inteira considerando todas as parcelas
+  const totalPagoAcumulado = novasParcelas.reduce((acc, p) => {
+    if (p.baixa?.valorFinalPago != null) return acc + Number(p.baixa.valorFinalPago)
+    if (p.status === 'paga') return acc + Number(p.valor)
+    return acc
+  }, 0)
+
+  const taxaAdminAcumulada = novasParcelas.reduce((acc, p) => {
+    return acc + Number(p.baixa?.descontoFinal || 0)
+  }, 0)
+
+  const saldoResidualAcumulado = novasParcelas.reduce((acc, p) => {
+    if (p.status === 'parcial' && p.baixa) {
+      return acc + Math.max(0, Number(p.valor) - Number(p.baixa.valorFinalPago))
+    }
+    return acc
+  }, 0)
+
+  const hojeStr = new Date().toISOString().split('T')[0]
+  const todasPagas = novasParcelas.every((p) => p.status === 'paga')
+  const algumaPagaOuParcial = novasParcelas.some(
+    (p) => p.status === 'paga' || p.status === 'parcial' || (p.baixa && p.baixa.valorFinalPago > 0)
+  )
+
+  const statusGeralConta: StatusConta = todasPagas
+    ? 'paga'
+    : algumaPagaOuParcial
+    ? 'parcial'
+    : conta.vencimento && conta.vencimento < hojeStr
+    ? 'vencida'
+    : 'aberta'
+
   const contaAtualizada: ContaPagar = {
     ...conta,
-    status: novoStatus,
-    totalPago: params.valorRecebidoOuPago,
-    taxa_administradora: taxaAdmin,
-    saldo_residual: saldoResidual,
+    status: statusGeralConta,
+    totalPago: Math.round(totalPagoAcumulado * 100) / 100,
+    taxa_administradora: Math.round(taxaAdminAcumulada * 100) / 100,
+    saldo_residual: Math.round(saldoResidualAcumulado * 100) / 100,
     diferenca_destino: params.diferencaDestino,
     conta_bancaria_id: params.contaBancariaId,
     conta_bancaria_tag: params.contaBancariaTag,
@@ -594,19 +645,25 @@ export async function baixarLancamento(params: BaixarLancamentoParams): Promise<
     } catch {}
   }
 
+  const textoParcela =
+    novasParcelas.length > 1 ? ` · Parcela ${parcelaAlvoNum}/${novasParcelas.length}` : ''
+
   void registrarAuditoria({
     usuario_nome: params.usuarioNome || 'Usuário',
     area: 'Financeiro',
-    objeto: conta.descricao,
-    o_que_mudou: 'Baixa de lançamento realizada',
+    objeto: `${conta.descricao}${textoParcela}`,
+    o_que_mudou: `Baixa${textoParcela} realizada`,
     detalhe: {
-      acao_titulo: 'Baixa de lançamento realizada',
+      acao_titulo: `Baixa de lançamento realizada${textoParcela}`,
       subtitulo: `${conta.descricao} · ${conta.fornecedor || ''}`,
       mudancas: [
-        { campo: 'Status', antes: conta.status, depois: novoStatus },
+        { campo: 'Status da parcela', antes: parcelaAlvo.status, depois: novoStatusParcela },
+        { campo: 'Status do título', antes: conta.status, depois: statusGeralConta },
         { campo: 'Valor baixado', antes: 'R$ 0,00', depois: `R$ ${params.valorRecebidoOuPago.toFixed(2)}` },
         ...(taxaAdmin > 0 ? [{ campo: 'Taxa / Ajuste', antes: 'R$ 0,00', depois: `R$ ${taxaAdmin.toFixed(2)}` }] : []),
-        ...(saldoResidual > 0 ? [{ campo: 'Saldo em aberto', antes: 'R$ 0,00', depois: `R$ ${saldoResidual.toFixed(2)}` }] : []),
+        ...(saldoResidualParcela > 0
+          ? [{ campo: 'Saldo em aberto (parcela)', antes: 'R$ 0,00', depois: `R$ ${saldoResidualParcela.toFixed(2)}` }]
+          : []),
       ],
       campos_extras: [
         { label: 'Conta bancária', valor: params.contaBancariaTag || params.contaBancariaId },
@@ -620,7 +677,121 @@ export async function baixarLancamento(params: BaixarLancamentoParams): Promise<
   return contaAtualizada
 }
 
-export async function estornarLancamento(id: string, usuarioNome?: string): Promise<ContaPagar | null> {
+export async function estornarBaixaParcela(
+  contaId: string,
+  numeroParcela: number,
+  usuarioNome?: string
+): Promise<ContaPagar | null> {
+  const current = readFromStorage()
+  const conta = current.find((c) => c.id === contaId)
+  if (!conta || !Array.isArray(conta.parcelas)) return null
+
+  const parcela = conta.parcelas.find((p) => p.numero === numeroParcela)
+  if (!parcela) return null
+
+  const valorPagoParcela = parcela.baixa?.valorFinalPago || (parcela.status === 'paga' ? parcela.valor : 0)
+  if (valorPagoParcela <= 0 && parcela.status !== 'paga' && parcela.status !== 'parcial') {
+    return null
+  }
+
+  const isPagar = (conta.tipo || 'pagar') === 'pagar'
+  const contaBancariaId = parcela.baixa?.contaBancariaId || conta.conta_bancaria_id
+
+  if (contaBancariaId && valorPagoParcela > 0) {
+    const deltaReversao = isPagar ? valorPagoParcela : -valorPagoParcela
+    await updateSaldoContaBancaria(contaBancariaId, deltaReversao)
+  }
+
+  const hojeStr = new Date().toISOString().split('T')[0]
+  const statusRevertido: StatusConta = parcela.vencimento < hojeStr ? 'vencida' : 'aberta'
+
+  const novasParcelas = conta.parcelas.map((p) => {
+    if (p.numero === numeroParcela) {
+      return {
+        ...p,
+        status: statusRevertido,
+        baixa: undefined,
+      }
+    }
+    return p
+  })
+
+  const totalPagoAcumulado = novasParcelas.reduce((acc, p) => {
+    if (p.baixa?.valorFinalPago != null) return acc + Number(p.baixa.valorFinalPago)
+    if (p.status === 'paga') return acc + Number(p.valor)
+    return acc
+  }, 0)
+
+  const taxaAdminAcumulada = novasParcelas.reduce((acc, p) => {
+    return acc + Number(p.baixa?.descontoFinal || 0)
+  }, 0)
+
+  const todasPagas = novasParcelas.every((p) => p.status === 'paga')
+  const algumaPagaOuParcial = novasParcelas.some(
+    (p) => p.status === 'paga' || p.status === 'parcial' || (p.baixa && p.baixa.valorFinalPago > 0)
+  )
+
+  const statusGeralConta: StatusConta = todasPagas
+    ? 'paga'
+    : algumaPagaOuParcial
+    ? 'parcial'
+    : conta.vencimento && conta.vencimento < hojeStr
+    ? 'vencida'
+    : 'aberta'
+
+  const contaAtualizada: ContaPagar = {
+    ...conta,
+    status: statusGeralConta,
+    totalPago: Math.round(totalPagoAcumulado * 100) / 100,
+    taxa_administradora: Math.round(taxaAdminAcumulada * 100) / 100,
+    data_baixa: algumaPagaOuParcial ? conta.data_baixa : undefined,
+    parcelas: novasParcelas,
+    updated_at: new Date().toISOString(),
+  }
+
+  const updatedList = current.map((c) => (c.id === contaId ? contaAtualizada : c))
+  writeToStorage(updatedList)
+
+  if (supabase) {
+    try {
+      const clean = cleanContaPagarForSupabase(contaAtualizada)
+      await supabase.from(SUPABASE_TABLE).upsert(clean)
+    } catch {}
+  }
+
+  void registrarAuditoria({
+    usuario_nome: usuarioNome || 'Usuário',
+    area: 'Financeiro',
+    objeto: `${conta.descricao} · Parcela ${numeroParcela}`,
+    o_que_mudou: `Estorno da parcela ${numeroParcela} realizado`,
+    detalhe: {
+      acao_titulo: `Estorno de parcela realizado (Parcela ${numeroParcela})`,
+      subtitulo: `${conta.descricao} · ${conta.fornecedor || ''}`,
+      mudancas: [
+        { campo: 'Status da parcela', antes: parcela.status, depois: statusRevertido },
+        { campo: 'Status do título', antes: conta.status, depois: statusGeralConta },
+        { campo: 'Valor estornado', antes: `R$ ${valorPagoParcela.toFixed(2)}`, depois: 'R$ 0,00' },
+      ],
+      campos_extras: [
+        { label: 'Conta bancária afetada', valor: parcela.baixa?.contaBancariaNome || contaBancariaId || '—' },
+        { label: 'Data do estorno', valor: hojeStr },
+      ],
+      link_objeto: '/v2/contas-pagar',
+    },
+  })
+
+  return contaAtualizada
+}
+
+export async function estornarLancamento(
+  id: string,
+  numeroParcela?: number,
+  usuarioNome?: string
+): Promise<ContaPagar | null> {
+  if (numeroParcela != null) {
+    return estornarBaixaParcela(id, numeroParcela, usuarioNome)
+  }
+
   const current = readFromStorage()
   const conta = current.find((c) => c.id === id)
   if (!conta) return null
@@ -629,22 +800,34 @@ export async function estornarLancamento(id: string, usuarioNome?: string): Prom
     return null
   }
 
-  const valorPago = conta.totalPago || conta.parcelas?.[0]?.baixa?.valorFinalPago || conta.total
   const isPagar = (conta.tipo || 'pagar') === 'pagar'
-  const contaBancariaId = conta.conta_bancaria_id || conta.parcelas?.[0]?.baixa?.contaBancariaId
+  const hojeStr = new Date().toISOString().split('T')[0]
 
-  if (contaBancariaId) {
-    const deltaReversao = isPagar ? valorPago : -valorPago
-    await updateSaldoContaBancaria(contaBancariaId, deltaReversao)
+  // Reverte todas as baixas de parcelas que foram feitas
+  if (Array.isArray(conta.parcelas) && conta.parcelas.length > 0) {
+    for (const p of conta.parcelas) {
+      const v = p.baixa?.valorFinalPago || (p.status === 'paga' ? p.valor : 0)
+      const bId = p.baixa?.contaBancariaId || conta.conta_bancaria_id
+      if (bId && v > 0) {
+        const delta = isPagar ? v : -v
+        await updateSaldoContaBancaria(bId, delta)
+      }
+    }
+  } else {
+    const valorPago = conta.totalPago || conta.total
+    const bId = conta.conta_bancaria_id
+    if (bId && valorPago > 0) {
+      const delta = isPagar ? valorPago : -valorPago
+      await updateSaldoContaBancaria(bId, delta)
+    }
   }
 
-  const hojeStr = new Date().toISOString().split('T')[0]
   const vencimento = conta.vencimento || conta.parcelas?.[0]?.vencimento || hojeStr
   const statusRevertido: StatusConta = vencimento < hojeStr ? 'vencida' : 'aberta'
 
   const novasParcelas = (conta.parcelas || []).map((p) => ({
     ...p,
-    status: statusRevertido,
+    status: p.vencimento < hojeStr ? ('vencida' as StatusConta) : ('aberta' as StatusConta),
     baixa: undefined,
   }))
 
@@ -674,16 +857,16 @@ export async function estornarLancamento(id: string, usuarioNome?: string): Prom
     usuario_nome: usuarioNome || 'Usuário',
     area: 'Financeiro',
     objeto: conta.descricao,
-    o_que_mudou: 'Estorno de baixa realizado',
+    o_que_mudou: 'Estorno de todas as baixas do título realizado',
     detalhe: {
-      acao_titulo: 'Estorno de baixa realizado',
+      acao_titulo: 'Estorno total de baixas realizado',
       subtitulo: `${conta.descricao} · ${conta.fornecedor || ''}`,
       mudancas: [
         { campo: 'Status', antes: conta.status, depois: statusRevertido },
-        { campo: 'Valor estornado', antes: `R$ ${valorPago.toFixed(2)}`, depois: 'R$ 0,00' },
+        { campo: 'Valor estornado', antes: `R$ ${conta.totalPago.toFixed(2)}`, depois: 'R$ 0,00' },
       ],
       campos_extras: [
-        { label: 'Conta bancária afetada', valor: conta.conta_bancaria_tag || contaBancariaId || '—' },
+        { label: 'Conta bancária afetada', valor: conta.conta_bancaria_tag || conta.conta_bancaria_id || '—' },
         { label: 'Data do estorno', valor: hojeStr },
       ],
       link_objeto: '/v2/contas-pagar',
@@ -771,11 +954,6 @@ export async function cancelarLancamento(
   return contaCancelada
 }
 
-export async function estornarBaixaParcela(
-  contaId: string,
-  _numeroParcela: number
-): Promise<ContaPagar | null> {
-  return estornarLancamento(contaId)
-}
+
 
 

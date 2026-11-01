@@ -85,9 +85,13 @@ export function V2ContasPagarPage() {
   const [drawerNovoAberto, setDrawerNovoAberto] = useState(false)
   const [contaParaEditar, setContaParaEditar] = useState<ContaPagar | null>(null)
   const [modalGerarComissoesAberto, setModalGerarComissoesAberto] = useState(false)
-  const [baixaModal, setBaixaModal] = useState<ContaPagar | null>(null)
+  const [baixaModal, setBaixaModal] = useState<{
+    conta: ContaPagar
+    numeroParcela?: number
+  } | null>(null)
   const [detalheModal, setDetalheModal] = useState<{
     conta: ContaPagar
+    numeroParcela?: number
     modo: 'detalhe' | 'detalhe_pago' | 'estorno' | 'excluir'
   } | null>(null)
 
@@ -181,8 +185,8 @@ export function V2ContasPagarPage() {
     await recarregar()
   }
 
-  const handleConfirmarEstorno = async (contaId: string) => {
-    await estornarLancamento(contaId)
+  const handleConfirmarEstorno = async (contaId: string, numeroParcela?: number) => {
+    await estornarLancamento(contaId, numeroParcela)
     await recarregar()
   }
 
@@ -196,8 +200,8 @@ export function V2ContasPagarPage() {
     await recarregar()
   }
 
-  const handleAbrirDetalheTitulo = (conta: ContaPagar) => {
-    setDetalheModal({ conta, modo: 'detalhe' })
+  const handleAbrirDetalheTitulo = (conta: ContaPagar, numeroParcela?: number) => {
+    setDetalheModal({ conta, numeroParcela, modo: 'detalhe' })
   }
 
   const handleCriarContaBancaria = async (nome: string) => {
@@ -610,7 +614,7 @@ export function V2ContasPagarPage() {
                     return (
                       <tr
                         key={m.id}
-                        onClick={() => handleAbrirDetalheTitulo(m.contaOriginal)}
+                        onClick={() => handleAbrirDetalheTitulo(m.contaOriginal, m.numero)}
                         className="hover:bg-blue-50/40 transition-colors cursor-pointer group"
                         title="Clique para abrir detalhes do título"
                       >
@@ -821,7 +825,7 @@ export function V2ContasPagarPage() {
                                 <>
                                   <button
                                     type="button"
-                                    onClick={() => setBaixaModal(m.contaOriginal)}
+                                    onClick={() => setBaixaModal({ conta: m.contaOriginal, numeroParcela: m.numero })}
                                     className="px-3.5 py-1.5 border border-blue-600 text-blue-700 hover:bg-blue-50/80 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
                                   >
                                     <Check size={14} className="stroke-[2.5]" /> Baixar
@@ -829,7 +833,7 @@ export function V2ContasPagarPage() {
                                   <button
                                     type="button"
                                     onClick={() =>
-                                      setDetalheModal({ conta: m.contaOriginal, modo: 'excluir' })
+                                      setDetalheModal({ conta: m.contaOriginal, numeroParcela: m.numero, modo: 'excluir' })
                                     }
                                     className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 border border-slate-200 hover:border-red-200 rounded-lg transition-colors cursor-pointer"
                                     title="Excluir lançamento"
@@ -842,7 +846,7 @@ export function V2ContasPagarPage() {
                                   <button
                                     type="button"
                                     onClick={() =>
-                                      setDetalheModal({ conta: m.contaOriginal, modo: 'estorno' })
+                                      setDetalheModal({ conta: m.contaOriginal, numeroParcela: m.numero, modo: 'estorno' })
                                     }
                                     className="px-3 py-1.5 border border-amber-300 text-amber-900 bg-amber-50 hover:bg-amber-100 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
                                   >
@@ -850,7 +854,7 @@ export function V2ContasPagarPage() {
                                   </button>
                                   <button
                                     type="button"
-                                    onClick={() => handleAbrirDetalheTitulo(m.contaOriginal)}
+                                    onClick={() => handleAbrirDetalheTitulo(m.contaOriginal, m.numero)}
                                     className="px-3 py-1.5 border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
                                   >
                                     <Eye size={14} /> Ver
@@ -893,7 +897,8 @@ export function V2ContasPagarPage() {
       <V2BaixaDrawer
         isOpen={baixaModal !== null}
         onClose={() => setBaixaModal(null)}
-        conta={baixaModal}
+        conta={baixaModal?.conta || null}
+        numeroParcela={baixaModal?.numeroParcela}
         contasBancarias={contasBancarias}
         onConfirmarBaixa={handleConfirmarBaixa}
         onCriarContaBancaria={handleCriarContaBancaria}
@@ -903,11 +908,12 @@ export function V2ContasPagarPage() {
         isOpen={detalheModal !== null}
         onClose={() => setDetalheModal(null)}
         conta={detalheModal?.conta || null}
+        numeroParcelaFoco={detalheModal?.numeroParcela}
         modo={detalheModal?.modo || 'detalhe'}
         onConfirmarEstorno={handleConfirmarEstorno}
         onConfirmarCancelamento={handleConfirmarCancelamento}
         onConfirmarExclusao={handleConfirmarExclusao}
-        onAbrirBaixa={(c) => setBaixaModal(c)}
+        onAbrirBaixa={(c, num) => setBaixaModal({ conta: c, numeroParcela: num })}
         onAbrirEdicao={(c) => setContaParaEditar(c)}
       />
     </div>
