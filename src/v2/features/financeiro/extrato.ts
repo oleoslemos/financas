@@ -24,6 +24,7 @@ export interface Movimento {
   data: string
   contaOriginal: ContaPagar
   parcelaOriginal: ContaPagarParcela
+  valorTotal: number
 }
 
 export interface Filtros {
@@ -132,6 +133,9 @@ export function achatar(contas: ContaPagar[], hoje: string, base: BaseData): Mov
   for (const c of contas) {
     const tipo = c.tipo || 'pagar'
     const isParcelaUnica = !c.parcelas || c.parcelas.length <= 1
+    const somaParcelas = (c.parcelas || []).reduce((acc, p) => acc + (Number(p.valor) || 0), 0)
+    const valorTotalConta = Math.max(Number(c.total) || 0, somaParcelas)
+
     for (const p of c.parcelas || []) {
       const status = statusDaParcela(p, hoje)
       const pagoEm = p.baixa?.dataBaixa ?? (isParcelaUnica ? c.data_baixa : null) ?? null
@@ -153,7 +157,8 @@ export function achatar(contas: ContaPagar[], hoje: string, base: BaseData): Mov
           ? c.saldo_residual
           : Math.max(0, p.valor - valorPago)
 
-      const descricaoExibida = !isParcelaUnica
+      const jaTemParcela = /parcela\s+\d+\/\d+/i.test(c.descricao)
+      const descricaoExibida = !isParcelaUnica && !jaTemParcela
         ? `${c.descricao} · Parcela ${p.numero}/${c.parcelas.length}`
         : c.descricao
 
@@ -175,6 +180,7 @@ export function achatar(contas: ContaPagar[], hoje: string, base: BaseData): Mov
         data,
         contaOriginal: c,
         parcelaOriginal: p,
+        valorTotal: valorTotalConta,
       })
     }
   }

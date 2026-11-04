@@ -315,7 +315,7 @@ export function V2PedidoVendasPage() {
   const [formNumeroParcelas, setFormNumeroParcelas] = useState(1)
   const [formDataEmissao, setFormDataEmissao] = useState(() => dataHoje)
   const [formNumeroManual, setFormNumeroManual] = useState('')
-  const [formDataVencimento, setFormDataVencimento] = useState(() => somarDias(dataHoje, 30))
+  const [formDataVencimento, setFormDataVencimento] = useState(() => dataHoje)
   const [formFrete, setFormFrete] = useState<number>(0)
   const [formContaEntradaTag, setFormContaEntradaTag] = useState('')
   const [formObservacao, setFormObservacao] = useState('')
@@ -636,7 +636,7 @@ export function V2PedidoVendasPage() {
     setFormNumeroParcelas(1)
     setFormDataEmissao(dataHoje)
     setFormNumeroManual('')
-    setFormDataVencimento(somarDias(dataHoje, 30))
+    setFormDataVencimento(dataHoje)
     setFormFrete(0)
     setFormContaEntradaTag(contasBancarias[0]?.nome ? `#${contasBancarias[0].nome}` : '#Inter')
     setFormObservacao('')
@@ -679,7 +679,7 @@ export function V2PedidoVendasPage() {
     setFormNumeroParcelas(Math.max(pedido.numeroParcelas || 1, extrairParcelasDaForma(pedido.formaPagamento || '')))
     setFormDataEmissao(pedido.dataEmissao || dataHoje)
     setFormNumeroManual(pedido.numero || '')
-    setFormDataVencimento(pedido.dataVencimento || somarDias(pedido.dataEmissao || dataHoje, 30))
+    setFormDataVencimento(pedido.dataVencimento || pedido.dataEmissao || dataHoje)
     setFormFrete(pedido.frete || 0)
     setFormContaEntradaTag(pedido.contaEntradaTag || '')
     setFormObservacao(pedido.observacao || '')
@@ -735,7 +735,7 @@ export function V2PedidoVendasPage() {
     setFormNumeroParcelas(Math.max(original.numeroParcelas || 1, extrairParcelasDaForma(original.formaPagamento || '')))
     setFormDataEmissao(dataHoje)
     setFormNumeroManual('')
-    setFormDataVencimento(somarDias(dataHoje, 30))
+    setFormDataVencimento(dataHoje)
     setFormFrete(original.frete || 0)
     setFormContaEntradaTag(original.contaEntradaTag || '')
     setFormObservacao(
@@ -1422,7 +1422,7 @@ export function V2PedidoVendasPage() {
                       const newDate = e.target.value
                       setFormDataEmissao(newDate)
                       if (newDate) {
-                        setFormDataVencimento(somarDias(newDate, 30))
+                        setFormDataVencimento(newDate)
                       }
                     }}
                     className="w-full rounded-xl border-2 border-sky-300 bg-white px-3.5 py-2.5 text-sm font-bold text-slate-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 cursor-pointer shadow-2xs"
@@ -1783,7 +1783,7 @@ export function V2PedidoVendasPage() {
                       const newDate = e.target.value
                       setFormDataEmissao(newDate)
                       if (newDate) {
-                        setFormDataVencimento(somarDias(newDate, 30))
+                        setFormDataVencimento(newDate)
                       }
                     }}
                     className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none focus:border-emerald-500 cursor-pointer"

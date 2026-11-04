@@ -600,9 +600,9 @@ export function V2ContasPagarPage() {
                     <th className="px-3 py-3 text-left min-w-[200px]">Descrição & Categoria</th>
                     <th className="px-3 py-3 text-left w-36">Contraparte</th>
                     <th className="px-3 py-3 text-left w-28">Forma / Tag</th>
-                    <th className="px-3 py-3 text-right w-28">Valor</th>
+                    <th className="px-3 py-3 text-right w-36">Valor Parcela / Total</th>
                     <th className="px-3 py-3 text-center w-24">Status</th>
-                    <th className="px-2 py-3 text-center w-8"></th>
+                    <th className="px-2 py-3 text-center w-24">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -698,13 +698,37 @@ export function V2ContasPagarPage() {
                           )}
                         </td>
 
-                        {/* Valor */}
-                        <td className="px-3 py-2.5 text-right font-black tabular-nums whitespace-nowrap">
-                          <span className={isPagar ? 'text-[#C92A2A]' : 'text-[#2D6A4F]'}>
-                            {isPagar
-                              ? `- ${formatBRL(isPago ? m.valorPago : m.valor)}`
-                              : `+ ${formatBRL(isPago ? m.valorPago : m.valor)}`}
-                          </span>
+                        {/* Valor Parcela & Total */}
+                        <td className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap">
+                          <div className="flex flex-col items-end">
+                            <div className="flex items-center gap-1.5 justify-end">
+                              <span className={`font-black text-xs ${isPagar ? 'text-[#C92A2A]' : 'text-[#2D6A4F]'}`}>
+                                {isPagar
+                                  ? `- ${formatBRL(isPago ? m.valorPago : m.valor)}`
+                                  : `+ ${formatBRL(isPago ? m.valorPago : m.valor)}`}
+                              </span>
+                              {m.totalParcelas > 1 && (
+                                <span
+                                  className="text-[10px] font-extrabold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.2 rounded"
+                                  title={`Parcela ${m.numero} de ${m.totalParcelas}`}
+                                >
+                                  {m.numero}/{m.totalParcelas}
+                                </span>
+                              )}
+                            </div>
+                            {m.totalParcelas > 1 ? (
+                              <span
+                                className="text-[10px] text-slate-500 font-medium mt-0.5"
+                                title="Valor Total do Pedido/Título"
+                              >
+                                Total: <strong className="text-slate-800">{formatBRL(m.valorTotal ?? m.valor * m.totalParcelas)}</strong>
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-slate-400 font-medium mt-0.5">
+                                À vista / Única
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Status */}
@@ -727,9 +751,40 @@ export function V2ContasPagarPage() {
                           </span>
                         </td>
 
-                        {/* Indicador de Visualização do Título */}
-                        <td className="px-2 py-2.5 text-center text-slate-300 group-hover:text-blue-600 transition-colors">
-                          <ChevronRight size={16} />
+                        {/* Ações */}
+                        <td
+                          className="px-2 py-2.5 text-center whitespace-nowrap"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setContaParaEditar(m.contaOriginal)}
+                              className="p-1.5 text-slate-400 hover:text-blue-700 hover:bg-blue-50 border border-transparent hover:border-blue-200 rounded-lg transition-colors cursor-pointer"
+                              title="Editar lançamento e tabela de parcelas"
+                            >
+                              <Edit3 size={14} />
+                            </button>
+                            {!isPago ? (
+                              <button
+                                type="button"
+                                onClick={() => setBaixaModal({ conta: m.contaOriginal, numeroParcela: m.numero })}
+                                className="px-2 py-1 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+                                title="Baixar esta parcela"
+                              >
+                                <Check size={12} className="stroke-[2.5]" /> Baixar
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleAbrirDetalheTitulo(m.contaOriginal, m.numero)}
+                                className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                                title="Ver detalhes"
+                              >
+                                <ChevronRight size={15} />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     )
@@ -783,31 +838,38 @@ export function V2ContasPagarPage() {
                             className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <div className="flex items-center gap-2.5">
-                              <span
-                                className={`text-sm sm:text-base font-extrabold ${
-                                  isPagar ? 'text-[#C92A2A]' : 'text-[#2D6A4F]'
-                                }`}
-                              >
-                                {isPagar
-                                  ? `- ${formatBRL(isPago ? m.valorPago : m.valor)}`
-                                  : `+ ${formatBRL(isPago ? m.valorPago : m.valor)}`}
-                              </span>
+                            <div className="flex flex-col items-end">
+                              <div className="flex items-center gap-2.5">
+                                <span
+                                  className={`text-sm sm:text-base font-extrabold ${
+                                    isPagar ? 'text-[#C92A2A]' : 'text-[#2D6A4F]'
+                                  }`}
+                                >
+                                  {isPagar
+                                    ? `- ${formatBRL(isPago ? m.valorPago : m.valor)}`
+                                    : `+ ${formatBRL(isPago ? m.valorPago : m.valor)}`}
+                                </span>
 
-                              <span
-                                className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-1 ${
-                                  m.status === 'paga'
-                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                    : m.status === 'vencida'
-                                    ? 'bg-red-50 text-red-700 border border-red-200'
-                                    : m.status === 'parcial'
-                                    ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                    : 'bg-blue-50 text-blue-700 border border-blue-200'
-                                }`}
-                              >
-                                <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                                {rotuloStatusFormatado(m.status, m.tipo)}
-                              </span>
+                                <span
+                                  className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-1 ${
+                                    m.status === 'paga'
+                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                      : m.status === 'vencida'
+                                      ? 'bg-red-50 text-red-700 border border-red-200'
+                                      : m.status === 'parcial'
+                                      ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                      : 'bg-blue-50 text-blue-700 border border-blue-200'
+                                  }`}
+                                >
+                                  <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                                  {rotuloStatusFormatado(m.status, m.tipo)}
+                                </span>
+                              </div>
+                              {m.totalParcelas > 1 && (
+                                <span className="text-[10px] text-slate-500 font-medium mt-0.5">
+                                  Total: <strong className="text-slate-700">{formatBRL(m.valorTotal ?? m.valor * m.totalParcelas)}</strong> ({m.totalParcelas} parcelas)
+                                </span>
+                              )}
                             </div>
 
                             <div className="flex items-center gap-1.5">

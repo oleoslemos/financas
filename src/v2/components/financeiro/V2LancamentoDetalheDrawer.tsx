@@ -349,21 +349,46 @@ export const V2LancamentoDetalheDrawer: React.FC<V2LancamentoDetalheDrawerProps>
                 Vencimento
               </span>
               <p className="text-xs font-extrabold text-slate-900 mt-0.5">
-                {fmtData(conta.vencimento)}
+                {fmtData(conta.parcelas?.find(p => p.numero === numeroParcelaFoco)?.vencimento || conta.vencimento)}
               </p>
+              {conta.parcelas && conta.parcelas.length > 1 && (
+                <span className="text-[10px] text-slate-400 block mt-0.5">
+                  {numeroParcelaFoco ? `Parcela ${numeroParcelaFoco}/${conta.parcelas.length}` : `${conta.parcelas.length} parcelas`}
+                </span>
+              )}
             </div>
 
             <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3">
-              <span className="text-[10px] font-bold tracking-wider text-slate-400 uppercase block">
-                Valor Previsto
-              </span>
-              <p
-                className={`text-xs font-black mt-0.5 ${
-                  isPagar ? 'text-[#C92A2A]' : 'text-[#2D6A4F]'
-                }`}
-              >
-                {isPagar ? `- ${formatBRL(conta.total)}` : `+ ${formatBRL(conta.total)}`}
-              </p>
+              {(() => {
+                const temMultiplas = Boolean(conta.parcelas && conta.parcelas.length > 1)
+                const somaParcs = (conta.parcelas || []).reduce((acc, p) => acc + (Number(p.valor) || 0), 0)
+                const totalGeral = Math.max(Number(conta.total) || 0, somaParcs)
+                const parcelaFoco = conta.parcelas?.find((p) => p.numero === numeroParcelaFoco)
+
+                return (
+                  <>
+                    <span className="text-[10px] font-bold tracking-wider text-slate-400 uppercase block">
+                      {temMultiplas && parcelaFoco
+                        ? `Valor da Parcela (${parcelaFoco.numero}/${conta.parcelas.length})`
+                        : 'Valor Previsto'}
+                    </span>
+                    <p
+                      className={`text-xs font-black mt-0.5 ${
+                        isPagar ? 'text-[#C92A2A]' : 'text-[#2D6A4F]'
+                      }`}
+                    >
+                      {isPagar
+                        ? `- ${formatBRL(parcelaFoco ? parcelaFoco.valor : totalGeral)}`
+                        : `+ ${formatBRL(parcelaFoco ? parcelaFoco.valor : totalGeral)}`}
+                    </p>
+                    {temMultiplas && (
+                      <span className="text-[10px] text-slate-500 font-medium block mt-0.5">
+                        Total Geral: <strong className="text-slate-800">{formatBRL(totalGeral)}</strong>
+                      </span>
+                    )}
+                  </>
+                )
+              })()}
             </div>
           </div>
 
@@ -394,9 +419,24 @@ export const V2LancamentoDetalheDrawer: React.FC<V2LancamentoDetalheDrawerProps>
                 <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-600">
                   Parcelas do Título ({conta.parcelas.length} parcelas)
                 </span>
-                <span className="text-[10px] font-semibold text-slate-500">
-                  Total Pago: <strong className="text-emerald-700">{formatBRL(conta.totalPago || 0)}</strong> de {formatBRL(conta.total)}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-semibold text-slate-500">
+                    Pago: <strong className="text-emerald-700">{formatBRL(conta.totalPago || 0)}</strong> de {formatBRL((conta.parcelas || []).reduce((acc, p) => acc + (Number(p.valor) || 0), 0))}
+                  </span>
+                  {onAbrirEdicao && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose()
+                        onAbrirEdicao(conta)
+                      }}
+                      className="px-2 py-0.5 text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md transition-colors cursor-pointer flex items-center gap-1"
+                      title="Editar tabela de parcelas"
+                    >
+                      <Edit3 size={11} /> Editar Tabela
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
