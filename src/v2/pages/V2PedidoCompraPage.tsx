@@ -21,6 +21,8 @@ import {
   PackageCheck,
   Calendar,
   Check,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 import { formatarMoeda } from '../../modules/lib/money'
 import { formatarData, hoje, somarDias } from '../../modules/lib/datas'
@@ -74,6 +76,31 @@ const MESES_LISTA = [
   { num: '11', short: 'NOV', full: 'Novembro' },
   { num: '12', short: 'DEZ', full: 'Dezembro' },
 ]
+
+/**
+ * Gera janela deslizante de meses: 12 anteriores + mês atual + 3 próximos
+ * centrada no mês de hoje, cruzando anos quando necessário.
+ */
+function gerarJanelaMeses(): { num: string; short: string; ano: number }[] {
+  const agora = new Date()
+  const mesAtual = agora.getMonth() + 1 // 1-12
+  const anoAtual = agora.getFullYear()
+
+  // Ponto de partida: 12 meses atrás
+  let m = mesAtual - 12
+  let a = anoAtual
+  while (m <= 0) { m += 12; a-- }
+
+  const resultado: { num: string; short: string; ano: number }[] = []
+  // Total: 12 anteriores + atual + 3 futuros = 16 meses
+  for (let i = 0; i < 16; i++) {
+    const mesInfo = MESES_LISTA.find((x) => x.num === String(m).padStart(2, '0'))!
+    resultado.push({ num: String(m).padStart(2, '0'), short: mesInfo.short, ano: a })
+    m++
+    if (m > 12) { m = 1; a++ }
+  }
+  return resultado
+}
 
 export function V2PedidoCompraPage() {
   const dataHoje = hoje()
@@ -2059,9 +2086,116 @@ export function V2PedidoCompraPage() {
       </div>
 
       {/* ── CARD COM ABAS, SELEÇÃO DE ANO/MÊS, BUSCA E TABELA (ESTILO VENDAS) ── */}
-      <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs space-y-4">
-        {/* Abas de Status */}
-        <div className="flex gap-4 border-b border-slate-100 pb-3 overflow-x-auto">
+      <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs space-y-3">
+        {/* Linha de navegação: Ano + Meses + Busca/Sync */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Navegador de Ano com setas */}
+          <div className="inline-flex items-center gap-0.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setFiltroAno((a) => a - 1)}
+              className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+              title="Ano anterior"
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <span className="text-xs font-black text-slate-800 px-1 min-w-[36px] text-center tabular-nums">{filtroAno}</span>
+            <button
+              type="button"
+              onClick={() => setFiltroAno((a) => a + 1)}
+              className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+              title="Próximo ano"
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
+
+          {/* Seta para meses anteriores */}
+          <button
+            type="button"
+            onClick={() => {
+              const all = gerarJanelaMeses()
+              const idx = all.findIndex((m) => m.ano === filtroAno && m.num === filtroMesNum)
+              if (idx > 0) {
+                const prev = all[idx - 1]
+                setFiltroMesNum(prev.num)
+                setFiltroAno(prev.ano)
+              }
+            }}
+            className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer shrink-0"
+            title="Mês anterior"
+          >
+            <ChevronLeft size={14} />
+          </button>
+
+          {/* Janela de meses visíveis */}
+          <div className="flex items-center gap-1 overflow-x-auto flex-1 min-w-0">
+            {gerarJanelaMeses().map((m) => {
+              const isSelected = filtroMesNum === m.num && filtroAno === m.ano
+              const isHoje = m.num === dataHoje.slice(5, 7) && m.ano === Number(dataHoje.slice(0, 4))
+              return (
+                <button
+                  key={`${m.ano}-${m.num}`}
+                  type="button"
+                  onClick={() => { setFiltroMesNum(m.num); setFiltroAno(m.ano) }}
+                  className={`rounded-lg px-2.5 py-1 text-[11px] font-bold uppercase transition-all cursor-pointer whitespace-nowrap ${
+                    isSelected
+                      ? 'bg-sky-600 text-white shadow-xs font-extrabold'
+                      : isHoje
+                      ? 'text-sky-600 bg-sky-50 border border-sky-200'
+                      : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+                  }`}
+                >
+                  {m.short}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Seta para próximo mês */}
+          <button
+            type="button"
+            onClick={() => {
+              const all = gerarJanelaMeses()
+              const idx = all.findIndex((m) => m.ano === filtroAno && m.num === filtroMesNum)
+              if (idx >= 0 && idx < all.length - 1) {
+                const next = all[idx + 1]
+                setFiltroMesNum(next.num)
+                setFiltroAno(next.ano)
+              }
+            }}
+            className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer shrink-0"
+            title="Próximo mês"
+          >
+            <ChevronRight size={14} />
+          </button>
+
+          {/* Busca e Sincronizar */}
+          <div className="flex items-center gap-2 ml-auto shrink-0">
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="BUSCAR POR FORNECEDOR, NF OU Nº..."
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                className="rounded-xl border border-slate-200 bg-white pl-9 pr-3 py-2 text-xs text-slate-700 uppercase font-medium outline-none focus:border-sky-500 shadow-2xs w-64"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={loadData}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700 transition cursor-pointer shadow-2xs"
+              title="Recarregar dados"
+            >
+              <RotateCcw size={13} className="text-slate-500" />
+              <span className="hidden sm:inline">Sincronizar</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Abas de Status — abaixo dos meses */}
+        <div className="flex gap-4 border-b border-slate-100 pb-2 overflow-x-auto">
           {[
             { value: 'todos', label: 'TODOS', count: contagemAbas.todos },
             { value: 'rascunho', label: 'CRIADOS / PROPOSTAS', count: contagemAbas.rascunho },
@@ -2094,65 +2228,6 @@ export function V2PedidoCompraPage() {
               </button>
             )
           })}
-        </div>
-
-        {/* Filtros de Ano, Mês e Busca */}
-        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 pt-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={filtroAno}
-              onChange={(e) => setFiltroAno(Number(e.target.value))}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-sky-500 shadow-2xs cursor-pointer"
-            >
-              {[2024, 2025, 2026, 2027].map((ano) => (
-                <option key={ano} value={ano}>
-                  {ano}
-                </option>
-              ))}
-            </select>
-
-            <div className="inline-flex items-center gap-1 overflow-x-auto max-w-full pb-1 sm:pb-0">
-              {MESES_LISTA.map((m) => {
-                const isSelected = filtroMesNum === m.num
-                return (
-                  <button
-                    key={m.num}
-                    type="button"
-                    onClick={() => setFiltroMesNum(m.num)}
-                    className={`rounded-lg px-2.5 py-1 text-[11px] font-bold uppercase transition-all cursor-pointer ${
-                      isSelected
-                        ? 'bg-sky-600 text-white shadow-xs font-extrabold'
-                        : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
-                    }`}
-                  >
-                    {m.short}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1 sm:w-80">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="BUSCAR POR FORNECEDOR, NF OU Nº..."
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 py-2 text-xs text-slate-700 uppercase font-medium outline-none focus:border-sky-500 shadow-2xs"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={loadData}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700 transition cursor-pointer shadow-2xs"
-              title="Recarregar dados"
-            >
-              <RotateCcw size={13} className="text-slate-500" />
-              <span className="hidden sm:inline">Sincronizar</span>
-            </button>
-          </div>
         </div>
 
         {/* Tabela de Pedidos de Compra (Semelhante à Tabela de Vendas) */}
