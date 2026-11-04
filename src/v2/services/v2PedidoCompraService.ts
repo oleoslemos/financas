@@ -250,7 +250,6 @@ export async function savePedidoCompra(pedido: Omit<PedidoCompra, 'id' | 'numero
 }
 
 export async function updatePedidoCompra(pedido: PedidoCompra): Promise<PedidoCompra> {
-  const current = await listPedidosCompra()
   const updated = {
     ...pedido,
     updated_at: new Date().toISOString(),
@@ -271,7 +270,14 @@ export async function updatePedidoCompra(pedido: PedidoCompra): Promise<PedidoCo
     }
   }
 
-  const updatedList = current.map((p) => (p.id === pedido.id ? updated : p))
+  // Atualiza localStorage sem rebuscar do Supabase para evitar race condition
+  let localList: PedidoCompra[] = []
+  try {
+    const raw = localStorage.getItem(KEY)
+    if (raw) localList = JSON.parse(raw)
+  } catch {}
+  const updatedList = localList.map((p) => (p.id === pedido.id ? updated : p))
+  if (!updatedList.some((p) => p.id === pedido.id)) updatedList.unshift(updated)
   localStorage.setItem(KEY, JSON.stringify(updatedList))
 
   // Atualizar Contas a Pagar associada (apenas se NÃO cancelado)
@@ -331,16 +337,17 @@ export async function salvarNfFornecedor(
   const pedido = current.find((p) => p.id === pedidoId)
   if (!pedido) return { ok: false, erro: 'Pedido não encontrado.' }
 
-  if (!pedido.notasFiscais) {
+  // Inicializa notasFiscais e migra NF legada se necessário
+  if (!pedido.notasFiscais || !Array.isArray(pedido.notasFiscais)) {
     pedido.notasFiscais = []
-    if (pedido.numeroNf) {
-      pedido.notasFiscais.push({
-        id: 'nf-legacy',
-        numeroNf: pedido.numeroNf,
-        dataNf: pedido.dataNf || new Date().toISOString().split('T')[0],
-        chaveNf: pedido.chaveNf || null,
-      })
-    }
+  }
+  if (pedido.notasFiscais.length === 0 && pedido.numeroNf) {
+    pedido.notasFiscais.push({
+      id: 'nf-legacy',
+      numeroNf: pedido.numeroNf,
+      dataNf: pedido.dataNf || new Date().toISOString().split('T')[0],
+      chaveNf: pedido.chaveNf || null,
+    })
   }
 
   const dataNfFinal = dados.dataNf || new Date().toISOString().split('T')[0]
