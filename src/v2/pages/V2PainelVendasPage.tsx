@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   TrendingUp,
   DollarSign,
@@ -8,6 +9,9 @@ import {
   ArrowUpRight,
   Settings,
   Calendar,
+  Users,
+  AlertCircle,
+  Loader2,
 } from 'lucide-react'
 import {
   ResponsiveContainer,
@@ -22,17 +26,12 @@ import {
   CartesianGrid,
 } from 'recharts'
 import { useSupabase } from '../../hooks/useSupabase'
-import { useCompany } from '../../context/CompanyContext'
-import { SalesGoalsEditor } from '../../components/bemAviv/SalesGoalsEditor'
+import { listPedidosVenda, type PedidoVenda } from '../services/v2PedidoVendasService'
 import {
-  emptyMonthlyGoals,
-  formatGoalMoneyInput,
-  monthlyGoalsToDraft,
-  parseGoalMoneyInput,
-  parseMonthlyGoals,
-  suggestMonthGoalFromHistory,
-  type MonthlyGoalsMap,
-} from '../../lib/salesGoals'
+  listRepresentantes,
+  listRepresentativeGoals,
+  type Representante,
+} from '../services/v2SettingsService'
 
 const MONTH_NAMES = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -41,187 +40,123 @@ const MONTH_NAMES = [
 
 const MONTH_SHORT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
-type OrderRow = {
-  id: string
-  order_date: string
-  total_amount: number
-  document_type: string
-  status: string
-  client_id?: string | null
-  payment_method?: string | null
-}
-
-type OrderItemRow = {
-  item_description: string
-  quantity: number
-  total_price: number
-}
+// Statuses que representam vendas reais confirmadas na V2
+const SOLD_STATUSES = new Set(['aprovado', 'faturado', 'entregue'])
 
 export function V2PainelVendasPage() {
   const supabase = useSupabase()
-  const { activeCompanyId, activeCompany } = useCompany()
+  const navigate = useNavigate()
 
   const [periodoModo, setPeriodoModo] = useState<'mes' | 'ano' | 'tudo'>('mes')
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear())
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth() + 1)
+  const [selectedRepId, setSelectedRepId] = useState<string>('todos')
 
-  // Metas do banco / estado
-  const [goalsMap, setGoalsMap] = useState<MonthlyGoalsMap>(() => emptyMonthlyGoals())
-  const [annualGoalVal, setAnnualGoalVal] = useState<number>(0)
-  const [isGoalsModalOpen, setIsGoalsModalOpen] = useState(false)
-  const [goalsLoading, setGoalsLoading] = useState(false)
-  const [goalsSaving, setGoalsSaving] = useState(false)
-  const [goalsMsg, setGoalsMsg] = useState<string | null>(null)
-  const [annualGoalDraft, setAnnualGoalDraft] = useState('')
-  const [monthlyGoalsDraft, setMonthlyGoalsDraft] = useState<Record<string, string>>(() =>
-    monthlyGoalsToDraft(emptyMonthlyGoals())
-  )
+  // Representantes e Metas carregadas de Configurações > Metas Mensais
+  const [representantes, setRepresentantes] = useState<Representante[]>([])
+  const [goalsMap, setGoalsMap] = useState<Record<string, number>>({})
+  const [loading, setLoading] = useState(false)
 
-  // Pedidos e itens
-  const [orders, setOrders] = useState<OrderRow[]>([])
-  const [items, setItems] = useState<OrderItemRow[]>([])
+  // Pedidos carregados da nova tabela v2_pedidos_venda
+  const [pedidos, setPedidos] = useState<PedidoVenda[]>([])
 
   const fmt = (v: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
 
-  // 1. Carregar Metas do Ano Selecionado
+  // 1. Carregar Metas do Ano Selecionado (da tabela bem_aviv_representative_goals)
   const loadGoals = useCallback(async () => {
-    if (!supabase || !activeCompanyId) return
-    setGoalsLoading(true)
-    setGoalsMsg(null)
-    const { data, error } = await supabase
-      .from('company_sales_goals')
-      .select('annual_goal, monthly_goals')
-      .eq('company_id', activeCompanyId)
-      .eq('year', selectedYear)
-      .maybeSingle()
-    setGoalsLoading(false)
+    try {
+      // 1.1 Carregar lista de representantes
+      const reps = await listRepresentantes()
+      setRepresentantes(reps)
 
-    if (error) {
-      setGoalsMsg(error.message)
-      setGoalsMap(emptyMonthlyGoals())
-      setAnnualGoalVal(0)
-      setAnnualGoalDraft('')
-      setMonthlyGoalsDraft(monthlyGoalsToDraft(emptyMonthlyGoals()))
-      return
+      // 1.2 Buscar metas na tabela bem_aviv_representative_goals
+      let goalsRows: Array<{ representative_id: string; month: string; sales_goal: number | null }> = []
+
+      if (supabase) {
+        try {
+          const { data, error } = await supabase
+            .from('bem_aviv_representative_goals')
+            .select('representative_id, month, sales_goal')
+            .gte('month', `${selectedYear}-01-01`)
+            .lte('month', `${selectedYear}-12-01`)
+
+          if (!error && data) {
+            goalsRows = data as any[]
+          }
+        } catch (err) {
+          console.warn('Erro ao consultar bem_aviv_representative_goals no Supabase:', err)
+        }
+      }
+
+      // Fallback local se estiver offline ou sem retorno
+      if (goalsRows.length === 0 && reps.length > 0) {
+        for (const rep of reps) {
+          const cached = await listRepresentativeGoals(rep.id, selectedYear)
+          goalsRows.push(...cached)
+        }
+      }
+
+      // 1.3 Mapear mês a mês (1 a 12) somando metas conforme filtro de representante
+      const map: Record<string, number> = {}
+      for (let m = 1; m <= 12; m++) {
+        const monthDate = `${selectedYear}-${String(m).padStart(2, '0')}-01`
+        const filtered =
+          selectedRepId && selectedRepId !== 'todos'
+            ? goalsRows.filter((g) => g.representative_id === selectedRepId && g.month === monthDate)
+            : goalsRows.filter((g) => g.month === monthDate)
+
+        const totalMetaMes = filtered.reduce((acc, curr) => acc + (Number(curr.sales_goal) || 0), 0)
+        map[String(m)] = totalMetaMes
+      }
+
+      setGoalsMap(map)
+    } catch (e) {
+      console.error('Erro ao carregar metas comerciais:', e)
     }
+  }, [supabase, selectedYear, selectedRepId])
 
-    if (!data) {
-      setGoalsMap(emptyMonthlyGoals())
-      setAnnualGoalVal(0)
-      setAnnualGoalDraft('')
-      setMonthlyGoalsDraft(monthlyGoalsToDraft(emptyMonthlyGoals()))
-      return
+  // 2. Carregar Pedidos de Venda da tabela v2_pedidos_venda
+  const loadOrders = useCallback(async () => {
+    setLoading(true)
+    try {
+      const list = await listPedidosVenda()
+      setPedidos(list)
+    } catch (e) {
+      console.error('Erro ao carregar pedidos de venda v2:', e)
+    } finally {
+      setLoading(false)
     }
-
-    const annual = Number((data as { annual_goal: number }).annual_goal ?? 0)
-    setAnnualGoalVal(annual)
-    setAnnualGoalDraft(annual > 0 ? formatGoalMoneyInput(annual) : '')
-    const monthlyParsed = parseMonthlyGoals((data as { monthly_goals: unknown }).monthly_goals)
-    setGoalsMap(monthlyParsed)
-    setMonthlyGoalsDraft(monthlyGoalsToDraft(monthlyParsed))
-  }, [supabase, activeCompanyId, selectedYear])
+  }, [])
 
   useEffect(() => {
     void loadGoals()
   }, [loadGoals])
 
-  // Salvar Metas
-  async function saveGoals() {
-    if (!supabase || !activeCompanyId) return
-    setGoalsSaving(true)
-    setGoalsMsg(null)
-    const annual_goal = parseGoalMoneyInput(annualGoalDraft)
-    const monthly_goals: Record<string, number> = {}
-    for (let m = 1; m <= 12; m++) {
-      const key = String(m)
-      monthly_goals[key] = parseGoalMoneyInput(monthlyGoalsDraft[key] ?? '')
-    }
-    const payload = {
-      company_id: activeCompanyId,
-      year: selectedYear,
-      annual_goal,
-      monthly_goals,
-      updated_at: new Date().toISOString(),
-    }
-    const { data: existing } = await supabase
-      .from('company_sales_goals')
-      .select('id')
-      .eq('company_id', activeCompanyId)
-      .eq('year', selectedYear)
-      .maybeSingle()
-
-    const { error } = existing?.id
-      ? await supabase.from('company_sales_goals').update(payload).eq('id', existing.id)
-      : await supabase.from('company_sales_goals').insert(payload)
-
-    setGoalsSaving(false)
-    if (error) {
-      setGoalsMsg(error.message)
-      return
-    }
-    setIsGoalsModalOpen(false)
-    await loadGoals()
-  }
-
-  // 2. Carregar Pedidos de Venda Realizados
-  const loadOrders = useCallback(async () => {
-    if (!supabase || !activeCompanyId) {
-      return
-    }
-
-    const [ordersRes, itemsRes] = await Promise.all([
-      supabase
-        .from('bem_aviv_sales_orders')
-        .select('id, order_date, total_amount, document_type, status, client_id, payment_method')
-        .eq('company_id', activeCompanyId)
-        .eq('document_type', 'PEDIDO')
-        .in('status', ['ABERTO', 'FINALIZADO', 'ENTREGA PENDENTE', 'ENTREGA PARCIAL', 'ENTREGUE']),
-      supabase
-        .from('bem_aviv_sales_order_items')
-        .select('item_description, quantity, total_price')
-        .eq('company_id', activeCompanyId),
-    ])
-
-    if (ordersRes.data) {
-      setOrders(ordersRes.data as OrderRow[])
-    }
-    if (itemsRes.data) {
-      setItems(itemsRes.data as OrderItemRow[])
-    }
-  }, [supabase, activeCompanyId])
-
   useEffect(() => {
     void loadOrders()
   }, [loadOrders])
 
-  // Pedidos confirmados (excluindo orçamentos ou cancelados)
-  const soldStatuses = useMemo(() => new Set(['FINALIZADO', 'ENTREGA PENDENTE', 'ENTREGA PARCIAL', 'ENTREGUE']), [])
+  // Nome do representante selecionado (se filtrado)
+  const repSelecionadoNome = useMemo(() => {
+    if (selectedRepId === 'todos') return null
+    return representantes.find((r) => r.id === selectedRepId)?.name || null
+  }, [selectedRepId, representantes])
 
-  // Histórico de vendas mês a mês all-time para suporte a sugestões
-  const monthlySoldAllTime = useMemo(() => {
-    const acc: Record<string, number> = {}
-    for (const o of orders) {
-      const st = (o.status ?? '').toUpperCase()
-      if (!soldStatuses.has(st)) continue
-      const mk = (o.order_date || '').slice(0, 7)
-      if (mk.length >= 7) {
-        acc[mk] = (acc[mk] ?? 0) + Number(o.total_amount || 0)
-      }
-    }
-    return acc
-  }, [orders, soldStatuses])
-
-  // Filtragem dos pedidos de acordo com o período selecionado
+  // Filtragem de pedidos pelo representante e período
   const pedidosFiltrados = useMemo(() => {
-    return orders.filter((o) => {
-      const st = (o.status ?? '').toUpperCase()
-      if (!soldStatuses.has(st)) return false
-      if (!o.order_date) return false
+    return pedidos.filter((p) => {
+      // Filtro de representante
+      if (repSelecionadoNome && p.vendedor_nome) {
+        if (p.vendedor_nome.trim().toUpperCase() !== repSelecionadoNome.trim().toUpperCase()) {
+          return false
+        }
+      }
 
-      const [anoStr, mesStr] = o.order_date.split('-')
-      const ano = Number(anoStr)
-      const mes = Number(mesStr)
+      // Filtro de data de emissão
+      if (!p.dataEmissao) return false
+      const ano = Number(p.dataEmissao.slice(0, 4))
+      const mes = Number(p.dataEmissao.slice(5, 7))
 
       if (periodoModo === 'mes') {
         return ano === selectedYear && mes === selectedMonth
@@ -230,35 +165,34 @@ export function V2PainelVendasPage() {
       }
       return true // 'tudo'
     })
-  }, [orders, soldStatuses, periodoModo, selectedYear, selectedMonth])
+  }, [pedidos, repSelecionadoNome, periodoModo, selectedYear, selectedMonth])
 
-  // Métricas calculadas para o período
-  const faturamentoRealizado = useMemo(() => {
-    return pedidosFiltrados.reduce((acc, o) => acc + Number(o.total_amount || 0), 0)
+  // Vendas confirmadas no período filtrado
+  const pedidosConfirmados = useMemo(() => {
+    return pedidosFiltrados.filter((p) => SOLD_STATUSES.has((p.status || '').toLowerCase()))
   }, [pedidosFiltrados])
 
-  const totalPedidos = pedidosFiltrados.length
+  // Faturamento e métricas realizadas
+  const faturamentoRealizado = useMemo(() => {
+    return pedidosConfirmados.reduce((acc, p) => acc + (Number(p.total) || 0), 0)
+  }, [pedidosConfirmados])
+
+  const totalPedidos = pedidosConfirmados.length
   const ticketMedio = totalPedidos > 0 ? faturamentoRealizado / totalPedidos : 0
 
-  // Meta calculada para o período selecionado
+  // Meta calculada para o período selecionado (lendo de Configurações > Metas)
   const metaPeriodo = useMemo(() => {
     if (periodoModo === 'mes') {
-      const metaMesAtual = goalsMap[String(selectedMonth)] ?? 0
-      return metaMesAtual > 0 ? metaMesAtual : 100000 // Fallback elegante se zerado
-    } else if (periodoModo === 'ano') {
-      const somaMeses = Object.values(goalsMap).reduce((a, b) => a + (b || 0), 0)
-      return annualGoalVal > 0 ? annualGoalVal : somaMeses > 0 ? somaMeses : 1200000
+      return goalsMap[String(selectedMonth)] ?? 0
     } else {
-      // Todo período: soma das metas conhecidas ou proporção
-      const somaMeses = Object.values(goalsMap).reduce((a, b) => a + (b || 0), 0)
-      return somaMeses > 0 ? somaMeses : faturamentoRealizado * 1.15
+      return Object.values(goalsMap).reduce((a, b) => a + (b || 0), 0)
     }
-  }, [periodoModo, selectedMonth, goalsMap, annualGoalVal, faturamentoRealizado])
+  }, [periodoModo, selectedMonth, goalsMap])
 
   const atingimentoMeta = metaPeriodo > 0 ? (faturamentoRealizado / metaPeriodo) * 100 : 0
   const faltamValor = Math.max(0, metaPeriodo - faturamentoRealizado)
 
-  // Cálculos de Ritmo e Projeções (conforme a imagem)
+  // Cálculos de Ritmo e Projeções
   const agora = new Date()
   const totalDiasNoMes = new Date(selectedYear, selectedMonth, 0).getDate()
   const diaAtualNoMes =
@@ -276,17 +210,29 @@ export function V2PainelVendasPage() {
 
   const esperadoAteHoje = metaPeriodo > 0 ? (metaPeriodo / totalDiasNoMes) * diaAtualNoMes : 0
   const pacePercentageOfDay = totalDiasNoMes > 0 ? (diaAtualNoMes / totalDiasNoMes) * 100 : 0
-  const estaAbaixoDoRitmo = atingimentoMeta < (pacePercentageOfDay * 0.85)
+  const estaAbaixoDoRitmo = metaPeriodo > 0 && atingimentoMeta < pacePercentageOfDay * 0.85
 
   const nomeMesAtivo = MONTH_NAMES[selectedMonth - 1] || 'Mês'
 
-  // Evolução Mês a Mês do Ano Selecionado (com as Metas configuradas para cada mês)
+  // Histórico de vendas mês a mês para o ano selecionado
   const evolucaoMeses = useMemo(() => {
     return Array.from({ length: 12 }, (_, i) => {
       const mesNum = i + 1
-      const mk = `${selectedYear}-${String(mesNum).padStart(2, '0')}`
-      const vendasMes = monthlySoldAllTime[mk] ?? 0
+      const mesPrefix = `${selectedYear}-${String(mesNum).padStart(2, '0')}`
+
+      // Soma dos pedidos confirmados daquele mês
+      const vendasMes = pedidos
+        .filter((p) => {
+          if (!SOLD_STATUSES.has((p.status || '').toLowerCase())) return false
+          if (repSelecionadoNome && p.vendedor_nome) {
+            if (p.vendedor_nome.trim().toUpperCase() !== repSelecionadoNome.trim().toUpperCase()) return false
+          }
+          return (p.dataEmissao || '').startsWith(mesPrefix)
+        })
+        .reduce((sum, p) => sum + (Number(p.total) || 0), 0)
+
       const metaMes = goalsMap[String(mesNum)] ?? 0
+
       return {
         mes: MONTH_SHORT[i],
         mesNum,
@@ -295,16 +241,19 @@ export function V2PainelVendasPage() {
         taxa: metaMes > 0 ? Math.round((vendasMes / metaMes) * 100) : 0,
       }
     })
-  }, [selectedYear, monthlySoldAllTime, goalsMap])
+  }, [selectedYear, pedidos, repSelecionadoNome, goalsMap])
 
-  // Mix de Produtos Mais Vendidos
+  // Mix de Produtos Mais Vendidos (extraído dos itens dos pedidos confirmados)
   const produtosDestaque = useMemo(() => {
     const map: Record<string, { qtd: number; valor: number }> = {}
-    for (const it of items) {
-      const nome = it.item_description || 'Produto Sem Descrição'
-      if (!map[nome]) map[nome] = { qtd: 0, valor: 0 }
-      map[nome].qtd += Number(it.quantity || 1)
-      map[nome].valor += Number(it.total_price || 0)
+
+    for (const p of pedidosConfirmados) {
+      for (const it of p.itens || []) {
+        const nome = it.produto_nome || 'Produto sem descrição'
+        if (!map[nome]) map[nome] = { qtd: 0, valor: 0 }
+        map[nome].qtd += Number(it.quantidade || 1)
+        map[nome].valor += Number(it.total ?? Number(it.quantidade || 1) * Number(it.preco_unitario || 0))
+      }
     }
 
     const totalVal = Object.values(map).reduce((a, b) => a + b.valor, 0) || 1
@@ -316,27 +265,18 @@ export function V2PainelVendasPage() {
     }))
 
     lista.sort((a, b) => b.valor - a.valor)
-    if (lista.length > 0) return lista.slice(0, 5)
+    return lista.slice(0, 5)
+  }, [pedidosConfirmados])
 
-    // Fallback padrão se não houver itens cadastrados ainda
-    return [
-      { nome: 'Colchão Queen Bio Quântico EKO7', qtd: 14, valor: 42000, fatia: 42 },
-      { nome: 'Colchão Casal Magnético Vibratoterápico', qtd: 11, valor: 28600, fatia: 29 },
-      { nome: 'Travesseiro Cervical Ergonômico', qtd: 26, valor: 10400, fatia: 11 },
-      { nome: 'Tênis FN1 Ortopédico', qtd: 18, valor: 8820, fatia: 9 },
-      { nome: 'Acessórios & Linha Terapêutica', qtd: 15, valor: 8811, fatia: 9 },
-    ]
-  }, [items])
-
-  // Origem das Vendas / Formas de Pagamento
+  // Formas de Pagamento utilizadas nos pedidos confirmados
   const origensVendas = useMemo(() => {
     const payMap: Record<string, number> = {}
-    for (const p of pedidosFiltrados) {
-      const m = p.payment_method || 'PIX'
+    for (const p of pedidosConfirmados) {
+      const m = p.formaPagamento || 'Outros'
       payMap[m] = (payMap[m] ?? 0) + 1
     }
-    const totalP = pedidosFiltrados.length || 1
-    const paleta = ['#16A34A', '#2563EB', '#9333EA', '#D97706', '#06B6D4']
+    const totalP = pedidosConfirmados.length || 1
+    const paleta = ['#16A34A', '#2563EB', '#9333EA', '#D97706', '#06B6D4', '#EC4899']
 
     const entries = Object.entries(payMap)
     if (entries.length > 0) {
@@ -347,13 +287,8 @@ export function V2PainelVendasPage() {
       }))
     }
 
-    return [
-      { name: 'Indicação de Clientes', value: 45, color: '#16A34A' },
-      { name: 'Visitas Comerciais (Presencial)', value: 35, color: '#2563EB' },
-      { name: 'Redes Sociais & WhatsApp', value: 15, color: '#9333EA' },
-      { name: 'Outros Canais', value: 5, color: '#D97706' },
-    ]
-  }, [pedidosFiltrados])
+    return []
+  }, [pedidosConfirmados])
 
   // Anos disponíveis para seleção
   const anosDisponiveis = [selectedYear - 1, selectedYear, selectedYear + 1]
@@ -361,46 +296,26 @@ export function V2PainelVendasPage() {
   return (
     <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 font-sans">
       {/* ── HEADER DA HISTÓRIA COMERCIAL ───────────────────────────── */}
-      <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+      <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ background: '#EFF6FF', border: '1.5px solid #BFDBFE', padding: '10px', borderRadius: 12 }}>
             <TrendingUp size={24} color="#1D4ED8" />
           </div>
           <div>
-            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 900, color: '#0F172A' }}>
-              Painel Comercial & Storytelling de Vendas
-            </h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <h1 style={{ margin: 0, fontSize: 22, fontWeight: 900, color: '#0F172A' }}>
+                Painel Comercial & Storytelling de Vendas
+              </h1>
+              {loading && <Loader2 size={16} className="animate-spin text-blue-600" />}
+            </div>
             <p style={{ margin: '3px 0 0', fontSize: 13, color: '#64748B' }}>
               Acompanhamento de vendas reais com base nas metas configuradas mês a mês.
             </p>
           </div>
         </div>
 
-        {/* Controles de Filtros e Configuração de Metas */}
+        {/* Controles de Filtros de Período (Botão Configurar Metas removido conforme solicitação) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          {/* Botão Configurar Metas */}
-          <button
-            onClick={() => setIsGoalsModalOpen(true)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '8px 14px',
-              borderRadius: 10,
-              background: '#FFFFFF',
-              border: '1.5px solid #CBD5E1',
-              color: '#334155',
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: 'pointer',
-              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-            }}
-          >
-            <Settings size={15} color="#2563EB" />
-            Configurar Metas
-          </button>
-
-          {/* Filtro de Período Modo */}
           <div style={{ display: 'flex', background: '#E2E8F0', padding: 4, borderRadius: 10 }}>
             <button
               onClick={() => setPeriodoModo('mes')}
@@ -454,7 +369,7 @@ export function V2PainelVendasPage() {
         </div>
       </div>
 
-      {/* ── BARRA SECUNDÁRIA: SELEÇÃO DE MÊS E ANO ──────────────────── */}
+      {/* ── BARRA SECUNDÁRIA: SELEÇÃO DE MÊS, ANO, REPRESENTANTE E META ──────────────────── */}
       <div
         style={{
           display: 'flex',
@@ -469,7 +384,7 @@ export function V2PainelVendasPage() {
           gap: 12,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 12, fontWeight: 700, color: '#64748B', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
             <Calendar size={14} /> Filtro Ativo:
           </span>
@@ -521,23 +436,80 @@ export function V2PainelVendasPage() {
               ))}
             </select>
           )}
+
+          {/* Seletor de Representante (se houver representantes cadastrados) */}
+          {representantes.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#64748B', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Users size={14} />
+              </span>
+              <select
+                value={selectedRepId}
+                onChange={(e) => setSelectedRepId(e.target.value)}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 8,
+                  border: '1.5px solid #CBD5E1',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: '#334155',
+                  background: '#F8FAFC',
+                  outline: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <option value="todos">Todos os Representantes (Geral)</option>
+                {representantes.map((rep) => (
+                  <option key={rep.id} value={rep.id}>
+                    {rep.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
-        {/* Indicador de meta configurada para a seleção */}
-        <div style={{ fontSize: 13, color: '#334155' }}>
-          Meta configurada para{' '}
-          <strong>
-            {periodoModo === 'mes'
-              ? `${MONTH_NAMES[selectedMonth - 1]} / ${selectedYear}`
-              : periodoModo === 'ano'
-              ? `Ano ${selectedYear}`
-              : 'Histórico'}
-          </strong>
-          : <span style={{ fontWeight: 900, color: '#16A34A', marginLeft: 4 }}>{fmt(metaPeriodo)}</span>
+        {/* Indicador de meta configurada em Configurações > Metas Mensais */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#334155' }}>
+          <span>
+            Meta configurada para{' '}
+            <strong>
+              {periodoModo === 'mes'
+                ? `${MONTH_NAMES[selectedMonth - 1]} / ${selectedYear}`
+                : periodoModo === 'ano'
+                ? `Ano ${selectedYear}`
+                : 'Histórico'}
+            </strong>
+            : <span style={{ fontWeight: 900, color: metaPeriodo > 0 ? '#16A34A' : '#94A3B8', marginLeft: 4 }}>
+                {metaPeriodo > 0 ? fmt(metaPeriodo) : 'Sem meta cadastrada'}
+              </span>
+          </span>
+
+          <button
+            type="button"
+            onClick={() => navigate('/v2/configuracoes?tab=metas')}
+            title="Ir para Configurações > Metas Mensais"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '4px 8px',
+              borderRadius: 6,
+              background: '#F1F5F9',
+              border: '1px solid #CBD5E1',
+              color: '#475569',
+              fontSize: 11,
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            <Settings size={12} />
+            Metas
+          </button>
         </div>
       </div>
 
-      {/* ── CARD PRINCIPAL DE META MENSAL / RITMO COMERCIAL (ESTILO IMAGEM ENVIADA) ── */}
+      {/* ── CARD PRINCIPAL DE META MENSAL / RITMO COMERCIAL ── */}
       <div
         style={{
           background: '#FFFFFF',
@@ -550,33 +522,59 @@ export function V2PainelVendasPage() {
       >
         {/* Badges superiores: Status do Ritmo + Meta do Mês */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
-          <span
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '4px 12px',
-              borderRadius: 6,
-              background: estaAbaixoDoRitmo ? '#FEFCE8' : '#F0FDF4',
-              border: `1.2px solid ${estaAbaixoDoRitmo ? '#FEF08A' : '#BBF7D0'}`,
-              fontSize: 12,
-              fontWeight: 800,
-              color: estaAbaixoDoRitmo ? '#A16207' : '#15803D',
-              textTransform: 'uppercase',
-              letterSpacing: '0.04em',
-            }}
-          >
-            {estaAbaixoDoRitmo ? '⚠ ATENÇÃO · ABAIXO DO RITMO' : '✓ PARABÉNS · NO RITMO DA META'}
-          </span>
+          {metaPeriodo > 0 ? (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '4px 12px',
+                borderRadius: 6,
+                background: estaAbaixoDoRitmo ? '#FEFCE8' : '#F0FDF4',
+                border: `1.2px solid ${estaAbaixoDoRitmo ? '#FEF08A' : '#BBF7D0'}`,
+                fontSize: 12,
+                fontWeight: 800,
+                color: estaAbaixoDoRitmo ? '#A16207' : '#15803D',
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+              }}
+            >
+              {estaAbaixoDoRitmo ? '⚠ ATENÇÃO · ABAIXO DO RITMO' : '✓ PARABÉNS · NO RITMO DA META'}
+            </span>
+          ) : (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '4px 12px',
+                borderRadius: 6,
+                background: '#F1F5F9',
+                border: '1.2px solid #CBD5E1',
+                fontSize: 12,
+                fontWeight: 800,
+                color: '#64748B',
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+              }}
+            >
+              <AlertCircle size={14} /> SEM META CONFIGURADA
+            </span>
+          )}
 
           <span style={{ fontSize: 13, color: '#64748B', fontWeight: 600 }}>
-            Meta do mês: <strong style={{ color: '#0F172A' }}>{fmt(metaPeriodo)}</strong>
+            Meta do mês:{' '}
+            <strong style={{ color: '#0F172A' }}>
+              {metaPeriodo > 0 ? fmt(metaPeriodo) : 'R$ 0,00'}
+            </strong>
           </span>
         </div>
 
         {/* Título de impacto: Mês, faltam R$ e dias restantes */}
         <h2 style={{ margin: '0 0 8px', fontSize: 26, fontWeight: 800, color: '#0F172A', lineHeight: 1.3 }}>
-          {atingimentoMeta >= 100 ? (
+          {metaPeriodo === 0 ? (
+            `${nomeMesAtivo} ainda não possui meta configurada em Configurações > Metas Mensais.`
+          ) : atingimentoMeta >= 100 ? (
             `🎉 ${nomeMesAtivo} atingiu a meta: superada em ${fmt(faturamentoRealizado - metaPeriodo)}!`
           ) : (
             `${nomeMesAtivo} está ${estaAbaixoDoRitmo ? 'bem abaixo' : 'próximo'} da meta: faltam ${fmt(faltamValor)} em ${diasRestantes} dias.`
@@ -585,7 +583,15 @@ export function V2PainelVendasPage() {
 
         {/* Subtítulo estimulante: Quanto precisa vender por dia vs ritmo atual */}
         <p style={{ margin: '0 0 24px', fontSize: 14, color: '#64748B', lineHeight: 1.6 }}>
-          Seria preciso vender <strong style={{ color: '#0F172A', fontWeight: 700 }}>{fmt(ritmoNecessarioPorDia)} por dia</strong> daqui até o fim do mês. O ritmo atual é de <strong style={{ color: '#0F172A', fontWeight: 700 }}>{fmt(ritmoAtualPorDia)} por dia</strong>.
+          {metaPeriodo > 0 ? (
+            <>
+              Seria preciso vender <strong style={{ color: '#0F172A', fontWeight: 700 }}>{fmt(ritmoNecessarioPorDia)} por dia</strong> daqui até o fim do mês. O ritmo atual é de <strong style={{ color: '#0F172A', fontWeight: 700 }}>{fmt(ritmoAtualPorDia)} por dia</strong>.
+            </>
+          ) : (
+            <>
+              Cadastre a meta mensal da equipe em <strong>Configurações &gt; Metas Mensais</strong> para habilitar as projeções diárias e o cálculo de ritmo.
+            </>
+          )}
         </p>
 
         {/* Linha com valores de realização e meta */}
@@ -595,55 +601,56 @@ export function V2PainelVendasPage() {
               {fmt(faturamentoRealizado)}
             </span>
             <span style={{ fontSize: 13, color: '#64748B', fontWeight: 600 }}>
-              realizados · {atingimentoMeta.toFixed(1)}% da meta
+              realizados {metaPeriodo > 0 ? `· ${atingimentoMeta.toFixed(1)}% da meta` : ''}
             </span>
           </div>
 
           <span style={{ fontSize: 13, color: '#64748B', fontWeight: 600 }}>
-            Meta {fmt(metaPeriodo)}
+            {metaPeriodo > 0 ? `Meta ${fmt(metaPeriodo)}` : 'Sem meta'}
           </span>
         </div>
 
         {/* Barra de Progresso com Marcador Flutuante "Esperado até hoje" */}
         <div style={{ position: 'relative', paddingTop: 28, marginBottom: 12 }}>
-          {/* Marcador flutuante */}
-          <div
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: `${Math.min(92, Math.max(8, pacePercentageOfDay))}%`,
-              transform: 'translateX(-50%)',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              pointerEvents: 'none',
-              transition: 'left 0.3s ease',
-            }}
-          >
-            <span
-              style={{
-                borderRadius: 20,
-                background: '#0F172A',
-                color: '#FFFFFF',
-                fontSize: 11,
-                fontWeight: 800,
-                padding: '4px 10px',
-                whiteSpace: 'nowrap',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
-              }}
-            >
-              Esperado até hoje · {fmt(esperadoAteHoje)}
-            </span>
+          {metaPeriodo > 0 && (
             <div
               style={{
-                width: 0,
-                height: 0,
-                borderLeft: '5px solid transparent',
-                borderRight: '5px solid transparent',
-                borderTop: '5px solid #0F172A',
+                position: 'absolute',
+                top: 0,
+                left: `${Math.min(92, Math.max(8, pacePercentageOfDay))}%`,
+                transform: 'translateX(-50%)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                pointerEvents: 'none',
+                transition: 'left 0.3s ease',
               }}
-            />
-          </div>
+            >
+              <span
+                style={{
+                  borderRadius: 20,
+                  background: '#0F172A',
+                  color: '#FFFFFF',
+                  fontSize: 11,
+                  fontWeight: 800,
+                  padding: '4px 10px',
+                  whiteSpace: 'nowrap',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
+                }}
+              >
+                Esperado até hoje · {fmt(esperadoAteHoje)}
+              </span>
+              <div
+                style={{
+                  width: 0,
+                  height: 0,
+                  borderLeft: '5px solid transparent',
+                  borderRight: '5px solid transparent',
+                  borderTop: '5px solid #0F172A',
+                }}
+              />
+            </div>
+          )}
 
           {/* Trilho da Barra */}
           <div
@@ -670,7 +677,7 @@ export function V2PainelVendasPage() {
 
         {/* Legenda explicativa */}
         <p style={{ margin: '0 0 24px', fontSize: 12, color: '#94A3B8' }}>
-          A linha escura mostra onde a meta deveria estar hoje, se as vendas fossem constantes até o dia {totalDiasNoMes}.
+          Acompanhamento das vendas confirmadas em <strong>v2_pedidos_venda</strong> frente à meta cadastrada em <strong>Configurações &gt; Metas Mensais</strong>.
         </p>
 
         {/* ── 3 MINI CARDS DE ESTÍMULO (FALTAM, PRECISA VENDER POR DIA, SE MANTIVER O RITMO) ── */}
@@ -725,9 +732,11 @@ export function V2PainelVendasPage() {
               <span style={{ fontSize: 22, fontWeight: 900, color: '#0F172A' }}>
                 {fmt(projecaoRitmoAtual)}
               </span>
-              <span style={{ fontSize: 13, color: '#64748B', fontWeight: 700 }}>
-                · {percentualProjecao.toFixed(0)}% da meta
-              </span>
+              {metaPeriodo > 0 && (
+                <span style={{ fontSize: 13, color: '#64748B', fontWeight: 700 }}>
+                  · {percentualProjecao.toFixed(0)}% da meta
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -742,7 +751,7 @@ export function V2PainelVendasPage() {
           </div>
           <p style={{ margin: '8px 0 0', fontSize: 22, fontWeight: 900, color: '#0F172A' }}>{fmt(faturamentoRealizado)}</p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6, fontSize: 12, color: '#16A34A', fontWeight: 700 }}>
-            <ArrowUpRight size={14} /> Total faturado
+            <ArrowUpRight size={14} /> Total faturado / aprovado
           </div>
         </div>
 
@@ -769,9 +778,15 @@ export function V2PainelVendasPage() {
             <span style={{ fontSize: 11, fontWeight: 800, color: '#64748B', textTransform: 'uppercase' }}>Atingimento da Meta</span>
             <span style={{ padding: 6, borderRadius: 8, background: '#FFFBEB', color: '#D97706' }}><Target size={16} /></span>
           </div>
-          <p style={{ margin: '8px 0 0', fontSize: 22, fontWeight: 900, color: '#0F172A' }}>{atingimentoMeta.toFixed(1)}%</p>
+          <p style={{ margin: '8px 0 0', fontSize: 22, fontWeight: 900, color: '#0F172A' }}>
+            {metaPeriodo > 0 ? `${atingimentoMeta.toFixed(1)}%` : '—'}
+          </p>
           <p style={{ margin: '6px 0 0', fontSize: 12, color: atingimentoMeta >= 100 ? '#16A34A' : '#D97706', fontWeight: 700 }}>
-            {atingimentoMeta >= 100 ? 'Meta atingida!' : `Faltam ${fmt(Math.max(0, metaPeriodo - faturamentoRealizado))}`}
+            {metaPeriodo === 0
+              ? 'Defina a meta em configurações'
+              : atingimentoMeta >= 100
+              ? 'Meta atingida!'
+              : `Faltam ${fmt(faltamValor)}`}
           </p>
         </div>
       </div>
@@ -783,22 +798,26 @@ export function V2PainelVendasPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <div>
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0F172A' }}>Evolução de Vendas x Meta Configurada</h3>
-              <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748B' }}>Histórico dos 12 meses de {selectedYear}</p>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748B' }}>Histórico dos 12 meses de {selectedYear} (tabela v2_pedidos_venda)</p>
             </div>
             <button
-              onClick={() => setIsGoalsModalOpen(true)}
+              onClick={() => navigate('/v2/configuracoes?tab=metas')}
               style={{
                 fontSize: 11,
                 fontWeight: 700,
-                padding: '4px 10px',
-                borderRadius: 6,
+                padding: '5px 12px',
+                borderRadius: 8,
                 background: '#EFF6FF',
                 color: '#1D4ED8',
                 border: '1px solid #BFDBFE',
                 cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
               }}
             >
-              Ajustar Metas
+              <Settings size={13} />
+              Configurar Metas
             </button>
           </div>
 
@@ -826,56 +845,62 @@ export function V2PainelVendasPage() {
 
           <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 12, fontSize: 11, color: '#64748B' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 10, height: 10, borderRadius: 2, background: '#2563EB' }} /> Vendas Realizadas
+              <span style={{ width: 10, height: 10, borderRadius: 2, background: '#2563EB' }} /> Vendas Realizadas (v2)
             </span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 10, height: 10, borderRadius: 2, background: '#E2E8F0' }} /> Meta Configurada do Mês
+              <span style={{ width: 10, height: 10, borderRadius: 2, background: '#E2E8F0' }} /> Meta Mensal
             </span>
           </div>
         </div>
 
-        {/* Origem das Vendas & Canais de Conversão */}
+        {/* Origem das Vendas & Formas de Pagamento */}
         <div style={{ background: '#FFFFFF', padding: '22px 24px', borderRadius: 18, border: '1.5px solid #E2E8F0', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0F172A' }}>Canais e Formas de Pagamento</h3>
-            <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748B' }}>Comportamento dos clientes no período selecionado</p>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0F172A' }}>Formas de Pagamento</h3>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748B' }}>Distribuição das vendas confirmadas no período selecionado</p>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20, margin: '14px 0', flexWrap: 'wrap' }}>
-            <div style={{ width: 160, height: 160 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={origensVendas}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={45}
-                    outerRadius={70}
-                    paddingAngle={3}
-                    dataKey="value"
-                  >
-                    {origensVendas.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(v: unknown) => [`${v}%`, 'Participação']} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
+          {origensVendas.length > 0 ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20, margin: '14px 0', flexWrap: 'wrap' }}>
+              <div style={{ width: 160, height: 160 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={origensVendas}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={45}
+                      outerRadius={70}
+                      paddingAngle={3}
+                      dataKey="value"
+                    >
+                      {origensVendas.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(v: unknown) => [`${v}%`, 'Participação']} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {origensVendas.map((o) => (
-                <div key={o.name} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: 3, background: o.color }} />
-                  <span style={{ color: '#334155', fontWeight: 600 }}>{o.name}</span>
-                  <span style={{ color: '#64748B', fontWeight: 700, marginLeft: 'auto' }}>{o.value}%</span>
-                </div>
-              ))}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {origensVendas.map((o) => (
+                  <div key={o.name} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: 3, background: o.color }} />
+                    <span style={{ color: '#334155', fontWeight: 600 }}>{o.name}</span>
+                    <span style={{ color: '#64748B', fontWeight: 700, marginLeft: 'auto' }}>{o.value}%</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div style={{ padding: '36px 16px', textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>
+              Nenhum pedido faturado ou aprovado no período selecionado.
+            </div>
+          )}
 
           <div style={{ background: '#F8FAFC', padding: '12px 14px', borderRadius: 10, fontSize: 12, color: '#475569', lineHeight: 1.5 }}>
-            💡 <strong>Ponto de Atenção:</strong> Acompanhar de perto os métodos e conversões para antecipar recebimentos e otimizar margens.
+            💡 <strong>Dica Comercial:</strong> Acompanhe as formas de pagamento para balancear recebimentos à vista e parcelamentos.
           </div>
         </div>
       </div>
@@ -885,137 +910,70 @@ export function V2PainelVendasPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <div>
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0F172A' }}>Mix de Produtos mais Vendidos</h3>
-            <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748B' }}>Produtos líderes que compõem o faturamento da empresa</p>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748B' }}>Produtos líderes com base nos itens cadastrados na tabela de vendas</p>
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {produtosDestaque.map((p, idx) => (
-            <div
-              key={p.nome}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '12px 16px',
-                borderRadius: 12,
-                background: '#F8FAFC',
-                border: '1px solid #E2E8F0',
-                gap: 12,
-                flexWrap: 'wrap',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: 8,
-                    background: idx === 0 ? '#FEF08A' : idx === 1 ? '#E2E8F0' : '#FFFFFF',
-                    color: '#0F172A',
-                    fontSize: 12,
-                    fontWeight: 900,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    border: '1px solid #CBD5E1',
-                  }}
-                >
-                  #{idx + 1}
-                </span>
-                <div>
-                  <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#0F172A' }}>{p.nome}</p>
-                  <p style={{ margin: '2px 0 0', fontSize: 11, color: '#64748B' }}>{p.qtd} unidades negociadas</p>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-                <div style={{ textAlign: 'right' }}>
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#0F172A' }}>{fmt(p.valor)}</p>
-                  <p style={{ margin: '2px 0 0', fontSize: 11, color: '#16A34A', fontWeight: 700 }}>{p.fatia}% do faturamento</p>
-                </div>
-
-                <div style={{ width: 80, height: 6, background: '#E2E8F0', borderRadius: 4, overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${p.fatia}%`, background: '#2563EB', borderRadius: 4 }} />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── MODAL DE CONFIGURAÇÃO DE METAS MENSAIS / ANUAIS ───────── */}
-      {isGoalsModalOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 9999,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'rgba(15, 23, 42, 0.5)',
-            backdropFilter: 'blur(3px)',
-            padding: 16,
-          }}
-        >
-          <div
-            style={{
-              background: '#FFFFFF',
-              borderRadius: 18,
-              width: '100%',
-              maxWidth: 620,
-              maxHeight: '90vh',
-              overflowY: 'auto',
-              padding: 24,
-              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.25)',
-            }}
-          >
-            <SalesGoalsEditor
-              companyKind={activeCompany?.company_kind}
-              goalYear={selectedYear}
-              onGoalYearChange={setSelectedYear}
-              annualGoalDraft={annualGoalDraft}
-              onAnnualGoalDraftChange={setAnnualGoalDraft}
-              monthlyGoalsDraft={monthlyGoalsDraft}
-              onMonthlyGoalDraftChange={(m, v) => setMonthlyGoalsDraft((prev) => ({ ...prev, [m]: v }))}
-              monthlySoldAllTime={monthlySoldAllTime}
-              soldForProgress={faturamentoRealizado}
-              goalsLoading={goalsLoading}
-              goalsSaving={goalsSaving}
-              goalsMsg={goalsMsg}
-              onSave={saveGoals}
-              onApplySuggestionsAll={() => {
-                const nextDraft = { ...monthlyGoalsDraft }
-                for (let m = 1; m <= 12; m++) {
-                  const s = suggestMonthGoalFromHistory(m, monthlySoldAllTime, selectedYear)
-                  if (s != null && s > 0) nextDraft[String(m)] = formatGoalMoneyInput(s)
-                }
-                setMonthlyGoalsDraft(nextDraft)
-              }}
-            />
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
-              <button
-                type="button"
-                onClick={() => setIsGoalsModalOpen(false)}
+        {produtosDestaque.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {produtosDestaque.map((p, idx) => (
+              <div
+                key={p.nome}
                 style={{
-                  padding: '9px 18px',
-                  borderRadius: 8,
-                  border: '1.5px solid #CBD5E1',
-                  background: '#FFFFFF',
-                  color: '#475569',
-                  fontSize: 13,
-                  fontWeight: 700,
-                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '12px 16px',
+                  borderRadius: 12,
+                  background: '#F8FAFC',
+                  border: '1px solid #E2E8F0',
+                  gap: 12,
+                  flexWrap: 'wrap',
                 }}
               >
-                Fechar
-              </button>
-            </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 8,
+                      background: idx === 0 ? '#FEF08A' : idx === 1 ? '#E2E8F0' : '#FFFFFF',
+                      color: '#0F172A',
+                      fontSize: 12,
+                      fontWeight: 900,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      border: '1px solid #CBD5E1',
+                    }}
+                  >
+                    #{idx + 1}
+                  </span>
+                  <div>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#0F172A' }}>{p.nome}</p>
+                    <p style={{ margin: '2px 0 0', fontSize: 11, color: '#64748B' }}>{p.qtd} unidades negociadas</p>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+                  <div style={{ textAlign: 'right' }}>
+                    <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#0F172A' }}>{fmt(p.valor)}</p>
+                    <p style={{ margin: '2px 0 0', fontSize: 11, color: '#16A34A', fontWeight: 700 }}>{p.fatia}% do faturamento</p>
+                  </div>
+
+                  <div style={{ width: 80, height: 6, background: '#E2E8F0', borderRadius: 4, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${p.fatia}%`, background: '#2563EB', borderRadius: 4 }} />
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <div style={{ padding: '36px 16px', textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>
+            Nenhum item vendido nos pedidos confirmados do período selecionado.
+          </div>
+        )}
+      </div>
     </div>
   )
 }
