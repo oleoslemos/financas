@@ -2141,86 +2141,86 @@ export function V2PedidoVendasPage() {
       </div>
 
       {/* ── CARDS DE KPIS RESPONSIVOS ── */}
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-2 sm:gap-4 grid-cols-2 lg:grid-cols-4">
         {/* KPI 1 */}
-        <div className="relative overflow-hidden rounded-2xl border border-slate-100 bg-white p-5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Em Negociação (Orçamentos)
+        <div className="relative overflow-hidden rounded-xl sm:rounded-2xl border border-slate-100 bg-white p-3 sm:p-5 shadow-xs">
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400 truncate">
+              Em Negociação
             </span>
-            <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
-              <FileSpreadsheet size={16} />
+            <div className="inline-flex h-6 w-6 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-md sm:rounded-lg bg-amber-50 text-amber-600">
+              <FileSpreadsheet className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </div>
           </div>
-          <div className="mt-3">
-            <h3 className="text-2xl font-black tabular-nums text-slate-900">
+          <div className="mt-1.5 sm:mt-3">
+            <h3 className="text-sm sm:text-2xl font-black tabular-nums text-slate-900 leading-tight truncate">
               {formatarMoeda(kpis.orcadoValor)}
             </h3>
-            <p className="mt-1 text-xs text-slate-500 font-medium">
-              {kpis.orcadoCount} {kpis.orcadoCount === 1 ? 'proposta aberta' : 'propostas abertas'}
+            <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-slate-500 font-medium truncate">
+              {kpis.orcadoCount} {kpis.orcadoCount === 1 ? 'proposta' : 'propostas'}
             </p>
           </div>
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-amber-400" />
         </div>
 
         {/* KPI 2 */}
-        <div className="relative overflow-hidden rounded-2xl border border-slate-100 bg-white p-5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Pedidos Aprovados
+        <div className="relative overflow-hidden rounded-xl sm:rounded-2xl border border-slate-100 bg-white p-3 sm:p-5 shadow-xs">
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400 truncate">
+              Aprovados
             </span>
-            <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-              <CheckCircle size={16} />
+            <div className="inline-flex h-6 w-6 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-md sm:rounded-lg bg-blue-50 text-blue-600">
+              <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </div>
           </div>
-          <div className="mt-3">
-            <h3 className="text-2xl font-black tabular-nums text-slate-900">
+          <div className="mt-1.5 sm:mt-3">
+            <h3 className="text-sm sm:text-2xl font-black tabular-nums text-slate-900 leading-tight truncate">
               {formatarMoeda(kpis.aprovadoValor)}
             </h3>
-            <p className="mt-1 text-xs text-slate-500 font-medium">
-              {kpis.aprovadoCount} {kpis.aprovadoCount === 1 ? 'pedido pronto' : 'pedidos prontos'}
+            <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-slate-500 font-medium truncate">
+              {kpis.aprovadoCount} {kpis.aprovadoCount === 1 ? 'pedido' : 'pedidos'}
             </p>
           </div>
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-500" />
         </div>
 
         {/* KPI 3 */}
-        <div className="relative overflow-hidden rounded-2xl border border-slate-100 bg-white p-5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Faturamento Concluído
+        <div className="relative overflow-hidden rounded-xl sm:rounded-2xl border border-slate-100 bg-white p-3 sm:p-5 shadow-xs">
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400 truncate">
+              Faturado
             </span>
-            <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
-              <DollarSign size={16} />
+            <div className="inline-flex h-6 w-6 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-md sm:rounded-lg bg-emerald-50 text-emerald-600">
+              <DollarSign className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </div>
           </div>
-          <div className="mt-3">
-            <h3 className="text-2xl font-black tabular-nums text-slate-900">
+          <div className="mt-1.5 sm:mt-3">
+            <h3 className="text-sm sm:text-2xl font-black tabular-nums text-slate-900 leading-tight truncate">
               {formatarMoeda(kpis.faturadoValor)}
             </h3>
-            <p className="mt-1 text-xs text-slate-500 font-medium">
-              Integrado com contas a receber
+            <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-slate-500 font-medium truncate">
+              A receber
             </p>
           </div>
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-emerald-500" />
         </div>
 
         {/* KPI 4 */}
-        <div className="relative overflow-hidden rounded-2xl border border-slate-100 bg-white p-5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Entregas Finalizadas
+        <div className="relative overflow-hidden rounded-xl sm:rounded-2xl border border-slate-100 bg-white p-3 sm:p-5 shadow-xs">
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400 truncate">
+              Entregues
             </span>
-            <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-purple-50 text-purple-600">
-              <Truck size={16} />
+            <div className="inline-flex h-6 w-6 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-md sm:rounded-lg bg-purple-50 text-purple-600">
+              <Truck className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </div>
           </div>
-          <div className="mt-3">
-            <h3 className="text-2xl font-black tabular-nums text-slate-900">
+          <div className="mt-1.5 sm:mt-3">
+            <h3 className="text-sm sm:text-2xl font-black tabular-nums text-slate-900 leading-tight truncate">
               {kpis.entregueCount}
             </h3>
-            <p className="mt-1 text-xs text-slate-500 font-medium">
-              Entregas com sucesso no período
+            <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-slate-500 font-medium truncate">
+              No período
             </p>
           </div>
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-purple-500" />
@@ -2314,10 +2314,10 @@ export function V2PedidoVendasPage() {
               onClick={handleSincronizarNuvem}
               disabled={isSyncing || loading}
               title="Sincronizar pedidos com a nuvem (Supabase)"
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:bg-slate-50 active:scale-95 transition shrink-0 cursor-pointer shadow-2xs disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl border border-sky-200 bg-sky-50 text-xs font-bold text-sky-700 hover:bg-sky-100 active:scale-95 transition shrink-0 cursor-pointer shadow-2xs disabled:opacity-50"
             >
               <RotateCcw size={14} className={isSyncing || loading ? 'animate-spin text-sky-600' : 'text-slate-500'} />
-              <span className="hidden sm:inline">Sincronizar</span>
+              <span>Sincronizar</span>
             </button>
           </div>
         </div>

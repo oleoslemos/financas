@@ -20,11 +20,13 @@ import {
   BarChart2,
   MoreHorizontal,
   ChevronLeft,
+  RefreshCw,
   type LucideIcon,
 } from 'lucide-react'
 import { PushNotificationModal } from '../../components/PushNotificationModal'
 import { supabase } from '../../lib/supabaseClient'
 import { fetchPendingNotificationItems } from '../../services/notificationAlertsService'
+import { subscribeToUpdate, forceAppUpdate } from '../../lib/pwaUpdate'
 
 export function V2AppLayout() {
   return (
@@ -43,6 +45,17 @@ function V2AppLayoutInner() {
   )
   const [isPushModalOpen, setIsPushModalOpen] = useState(false)
   const [pendingCount, setPendingCount] = useState<number>(0)
+  const [hasUpdate, setHasUpdate] = useState(false)
+  const [isUpdating, setIsUpdating] = useState(false)
+
+  useEffect(() => {
+    return subscribeToUpdate(setHasUpdate)
+  }, [])
+
+  const handleForceUpdate = async () => {
+    setIsUpdating(true)
+    await forceAppUpdate()
+  }
 
   // Atualizar expansão da sidebar conforme o redimensionamento (tablet recolhido por padrão)
   useEffect(() => {
@@ -313,6 +326,18 @@ function V2AppLayoutInner() {
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={handleForceUpdate}
+              disabled={isUpdating}
+              title="Atualizar versão do aplicativo"
+              className="relative h-9 w-9 rounded-xl border border-slate-200 bg-white shadow-2xs flex items-center justify-center text-slate-700 active:scale-95 transition"
+            >
+              <RefreshCw size={16} className={isUpdating ? 'animate-spin text-[#0D5BA3]' : 'text-slate-600'} />
+              {hasUpdate && (
+                <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-amber-500 animate-pulse" />
+              )}
+            </button>
+            <button
+              type="button"
               onClick={() => setIsPushModalOpen(true)}
               title="Notificações"
               className="relative h-9 w-9 rounded-xl border border-slate-200 bg-white shadow-2xs flex items-center justify-center text-slate-700 active:scale-95 transition"
@@ -326,6 +351,21 @@ function V2AppLayoutInner() {
             </button>
           </div>
         </header>
+
+        {/* Banner de Atualização Mobile se houver nova versão detectada */}
+        {hasUpdate && (
+          <div className="sm:hidden bg-amber-500 text-white text-xs px-4 py-2 flex items-center justify-between font-medium shadow-xs shrink-0">
+            <span>Nova versão disponível!</span>
+            <button
+              type="button"
+              onClick={handleForceUpdate}
+              disabled={isUpdating}
+              className="bg-white text-amber-800 font-bold px-2.5 py-1 rounded-lg text-[11px] active:scale-95 transition"
+            >
+              {isUpdating ? 'Atualizando...' : 'Atualizar agora'}
+            </button>
+          </div>
+        )}
 
         {/* ── CONTAINER DA PÁGINA (SCROLLÁVEL) ── */}
         <main className="flex-1 overflow-y-auto pb-20 sm:pb-6 relative">
@@ -435,23 +475,35 @@ function V2AppLayoutInner() {
               </div>
 
               {/* Ações inferiores no menu mobile */}
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMobileMenuOpen(false)
-                    setIsPushModalOpen(true)
-                  }}
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 bg-white"
-                >
-                  <Bell size={15} className="text-[#0D5BA3]" />
-                  Notificações
-                </button>
+              <div className="pt-3 border-t border-slate-100 flex flex-col gap-2.5">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleForceUpdate}
+                    disabled={isUpdating}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border border-sky-200 text-xs font-bold text-sky-800 bg-sky-50 active:scale-95 transition cursor-pointer"
+                  >
+                    <RefreshCw size={14} className={isUpdating ? 'animate-spin' : ''} />
+                    {isUpdating ? 'Atualizando...' : 'Atualizar App'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileMenuOpen(false)
+                      setIsPushModalOpen(true)
+                    }}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 bg-white active:scale-95 transition cursor-pointer"
+                  >
+                    <Bell size={15} className="text-[#0D5BA3]" />
+                    Notificações
+                  </button>
+                </div>
 
                 <button
                   type="button"
                   onClick={handleSignOut}
-                  className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-700"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-700 active:scale-95 transition cursor-pointer"
                 >
                   <LogOut size={15} />
                   Sair

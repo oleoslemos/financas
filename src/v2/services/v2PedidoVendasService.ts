@@ -293,6 +293,66 @@ export function cleanPedidoBaseForSupabase(p: PedidoVenda): Record<string, any> 
   }
 }
 
+// ─── Helpers de Persistência com Fallback Resiliente ─────────────────────────
+
+async function upsertPedidosWithFallback(pedidos: PedidoVenda[]): Promise<{ error?: any }> {
+  if (!supabase || pedidos.length === 0) return {}
+
+  // 1. Tentar persistência com todos os campos (incluindo comissões)
+  try {
+    const cleanFull = pedidos.map(cleanPedidoForSupabase)
+    const { error: fullErr } = await supabase.from(SUPABASE_TABLE).upsert(cleanFull)
+    if (!fullErr) return {}
+
+    console.warn('Falha com colunas completas no Supabase (coluna ausente no Postgres):', fullErr.message)
+  } catch (errFull: any) {
+    console.warn('Exceção com colunas completas no Supabase:', errFull?.message || errFull)
+  }
+
+  // 2. Fallback resiliente: persistir com colunas base para garantir sincronização entre smartphone e notebook
+  try {
+    const cleanBase = pedidos.map(cleanPedidoBaseForSupabase)
+    const { error: baseErr } = await supabase.from(SUPABASE_TABLE).upsert(cleanBase)
+    if (baseErr) {
+      console.error('Falha ao persistir com colunas base no Supabase:', baseErr)
+      return { error: baseErr }
+    }
+    return {}
+  } catch (errBase: any) {
+    console.error('Exceção ao persistir com colunas base no Supabase:', errBase)
+    return { error: errBase }
+  }
+}
+
+async function insertPedidoWithFallback(pedido: PedidoVenda): Promise<{ error?: any }> {
+  if (!supabase) return {}
+
+  // 1. Tentar inserir com todos os campos
+  try {
+    const cleanFull = cleanPedidoForSupabase(pedido)
+    const { error: fullErr } = await supabase.from(SUPABASE_TABLE).insert([cleanFull])
+    if (!fullErr) return {}
+
+    console.warn('Falha ao inserir com colunas completas no Supabase:', fullErr.message)
+  } catch (errFull: any) {
+    console.warn('Exceção ao inserir com colunas completas no Supabase:', errFull?.message || errFull)
+  }
+
+  // 2. Fallback resiliente: inserir com colunas base
+  try {
+    const cleanBase = cleanPedidoBaseForSupabase(pedido)
+    const { error: baseErr } = await supabase.from(SUPABASE_TABLE).insert([cleanBase])
+    if (baseErr) {
+      console.error('Falha ao inserir com colunas base no Supabase:', baseErr)
+      return { error: baseErr }
+    }
+    return {}
+  } catch (errBase: any) {
+    console.error('Exceção ao inserir com colunas base no Supabase:', errBase)
+    return { error: errBase }
+  }
+}
+
 // ─── CRUD ────────────────────────────────────────────────────────────────────
 
 export async function listPedidosVenda(): Promise<PedidoVenda[]> {
@@ -307,25 +367,44 @@ export async function listPedidosVenda(): Promise<PedidoVenda[]> {
         .order('created_at', { ascending: false })
 
       if (!error && data) {
-        list = data as PedidoVenda[]
-        const remoteIds = new Set(list.map((r) => r.id))
+        const remoteList = data as PedidoVenda[]
+        const remoteIds = new Set(remoteList.map((r) => r.id))
         const pendingLocal = localList.filter((loc) => !remoteIds.has(loc.id) && !loc.id.startsWith('pv-00'))
 
         if (pendingLocal.length > 0) {
           try {
-            const cleanPending = pendingLocal.map(cleanPedidoForSupabase)
-            const { error: upsertErr } = await supabase.from(SUPABASE_TABLE).upsert(cleanPending)
+            const { error: upsertErr } = await upsertPedidosWithFallback(pendingLocal)
             if (upsertErr) {
               console.error('Erro ao sincronizar pedidos locais pendentes:', upsertErr)
             } else {
-              console.log('Pedidos locais pendentes sincronizados com sucesso no Supabase:', cleanPending.length)
+              console.log('Pedidos locais pendentes sincronizados com sucesso no Supabase:', pendingLocal.length)
             }
           } catch (syncErr) {
             console.warn('Erro ao sincronizar pedidos locais pendentes:', syncErr)
           }
-          list = [...pendingLocal, ...list]
         }
 
+        // Fazer merge inteligente preservando dados locais enriquecidos caso o schema remoto não tenha certas colunas
+        const localMap = new Map(localList.map((l) => [l.id, l]))
+        const mergedRemote = remoteList.map((rem) => {
+          const loc = localMap.get(rem.id)
+          if (!loc) return rem
+          return {
+            ...loc,
+            ...rem,
+            vendedor_nome: rem.vendedor_nome ?? loc.vendedor_nome,
+            comissao_percentual: rem.comissao_percentual ?? loc.comissao_percentual,
+            comissao_valor: rem.comissao_valor ?? loc.comissao_valor,
+            comissao_valor_total: rem.comissao_valor_total ?? loc.comissao_valor_total,
+            comissao_valor_gerado: rem.comissao_valor_gerado ?? loc.comissao_valor_gerado,
+            comissao_gerada: rem.comissao_gerada ?? loc.comissao_gerada,
+            comissao_data_geracao: rem.comissao_data_geracao ?? loc.comissao_data_geracao,
+            pagamento_fabrica: rem.pagamento_fabrica ?? loc.pagamento_fabrica,
+            resultado_liquido: rem.resultado_liquido ?? loc.resultado_liquido,
+          }
+        })
+
+        list = [...pendingLocal, ...mergedRemote]
         writeToStorage(list)
         return list
       }
@@ -348,12 +427,30 @@ export async function syncPedidosVendaComSupabase(): Promise<{ ok: boolean; coun
     const pendingLocal = localList.filter((loc) => !remoteIds.has(loc.id) && !loc.id.startsWith('pv-00'))
 
     if (pendingLocal.length > 0) {
-      const cleanPending = pendingLocal.map(cleanPedidoForSupabase)
-      const { error: upErr } = await supabase.from(SUPABASE_TABLE).upsert(cleanPending)
-      if (upErr) return { ok: false, count: 0, error: upErr.message }
+      const { error: upErr } = await upsertPedidosWithFallback(pendingLocal)
+      if (upErr) return { ok: false, count: 0, error: upErr.message || String(upErr) }
     }
 
-    const merged = [...pendingLocal, ...remoteList]
+    const localMap = new Map(localList.map((l) => [l.id, l]))
+    const mergedRemote = remoteList.map((rem) => {
+      const loc = localMap.get(rem.id)
+      if (!loc) return rem
+      return {
+        ...loc,
+        ...rem,
+        vendedor_nome: rem.vendedor_nome ?? loc.vendedor_nome,
+        comissao_percentual: rem.comissao_percentual ?? loc.comissao_percentual,
+        comissao_valor: rem.comissao_valor ?? loc.comissao_valor,
+        comissao_valor_total: rem.comissao_valor_total ?? loc.comissao_valor_total,
+        comissao_valor_gerado: rem.comissao_valor_gerado ?? loc.comissao_valor_gerado,
+        comissao_gerada: rem.comissao_gerada ?? loc.comissao_gerada,
+        comissao_data_geracao: rem.comissao_data_geracao ?? loc.comissao_data_geracao,
+        pagamento_fabrica: rem.pagamento_fabrica ?? loc.pagamento_fabrica,
+        resultado_liquido: rem.resultado_liquido ?? loc.resultado_liquido,
+      }
+    })
+
+    const merged = [...pendingLocal, ...mergedRemote]
     writeToStorage(merged)
     return { ok: true, count: merged.length }
   } catch (err: any) {
@@ -400,7 +497,7 @@ export async function savePedidoVenda(
 
   if (supabase) {
     try {
-      const { error: insError } = await supabase.from(SUPABASE_TABLE).insert([cleanPedidoForSupabase(novo)])
+      const { error: insError } = await insertPedidoWithFallback(novo)
       if (insError) {
         console.error('Erro ao salvar pedido de venda no Supabase:', insError)
       }
@@ -425,19 +522,9 @@ export async function updatePedidoVenda(pedido: PedidoVenda): Promise<PedidoVend
 
   if (supabase) {
     try {
-      const clean = cleanPedidoForSupabase(updated)
-      const { error: upErr } = await supabase.from(SUPABASE_TABLE).upsert(clean)
-      if (upErr) {
-        console.warn('Tentando persistência no Supabase com colunas base:', upErr.message)
-        // Fallback defensivo com colunas essenciais para que o status NUNCA falhe
-        await supabase.from(SUPABASE_TABLE).upsert(cleanPedidoBaseForSupabase(updated))
-      }
+      await upsertPedidosWithFallback([updated])
     } catch (e) {
-      try {
-        await supabase.from(SUPABASE_TABLE).upsert(cleanPedidoBaseForSupabase(updated))
-      } catch (errFallback) {
-        console.error('Exceção ao atualizar pedido no Supabase:', errFallback)
-      }
+      console.error('Exceção ao atualizar pedido no Supabase:', e)
     }
   }
 

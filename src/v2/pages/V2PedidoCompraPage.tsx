@@ -1999,9 +1999,9 @@ export function V2PedidoCompraPage() {
       </div>
 
       {/* ── CARDS DE KPIS RESPONSIVOS (ESTILO VENDAS) ── */}
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-2 sm:gap-4 grid-cols-2 lg:grid-cols-4">
         {/* KPI 1: Criados / Em Aberto */}
-        <div className="relative overflow-hidden rounded-2xl border border-slate-100 bg-white p-5 shadow-xs">
+        <div className="relative overflow-hidden rounded-xl sm:rounded-2xl border border-slate-100 bg-white p-3 sm:p-5 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
               Em Aberto (Criados)

@@ -1,7 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
-import { registerSW } from 'virtual:pwa-register'
+import './lib/pwaUpdate'
 import App from './App'
 import { RootErrorBoundary } from './components/RootErrorBoundary'
 import { AuthProvider } from './context/AuthContext'
@@ -10,14 +10,6 @@ import './index.css'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim()
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()
 const hasValidSupabase = supabaseUrl && supabaseAnonKey
-
-// Garante que usuários recebam atualizações do app (evita ficar preso em build antigo).
-const updateSW = registerSW({
-  immediate: true,
-  onNeedRefresh() {
-    updateSW(true)
-  },
-})
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

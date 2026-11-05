@@ -185,8 +185,15 @@ export async function listPedidosCompra(): Promise<PedidoCompra[]> {
         if (pendingLocal.length > 0) {
           try {
             const cleanPending = pendingLocal.map(cleanPedidoCompraForSupabase)
-            await supabase.from(SUPABASE_TABLE).upsert(cleanPending)
-          } catch {}
+            const { error: upErr } = await supabase.from(SUPABASE_TABLE).upsert(cleanPending)
+            if (upErr) {
+              await supabase.from(SUPABASE_TABLE).upsert(pendingLocal.map(cleanPedidoCompraBaseForSupabase))
+            }
+          } catch {
+            try {
+              await supabase.from(SUPABASE_TABLE).upsert(pendingLocal.map(cleanPedidoCompraBaseForSupabase))
+            } catch {}
+          }
           list = [...pendingLocal, ...list]
         }
 
@@ -239,8 +246,15 @@ export async function savePedidoCompra(pedido: Omit<PedidoCompra, 'id' | 'numero
 
   if (supabase) {
     try {
-      await supabase.from(SUPABASE_TABLE).insert([cleanPedidoCompraForSupabase(newPedido)])
-    } catch {}
+      const { error: insErr } = await supabase.from(SUPABASE_TABLE).insert([cleanPedidoCompraForSupabase(newPedido)])
+      if (insErr) {
+        await supabase.from(SUPABASE_TABLE).insert([cleanPedidoCompraBaseForSupabase(newPedido)])
+      }
+    } catch {
+      try {
+        await supabase.from(SUPABASE_TABLE).insert([cleanPedidoCompraBaseForSupabase(newPedido)])
+      } catch {}
+    }
   }
 
   current.unshift(newPedido)
