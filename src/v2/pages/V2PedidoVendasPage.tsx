@@ -651,7 +651,7 @@ export function V2PedidoVendasPage() {
       {
         produto_id: '',
         produto_nome: '',
-        quantidade: 1,
+        quantidade: 0,
         preco_tabela: 0,
         preco_unitario: 0,
         preco_fabrica: 0,
@@ -703,7 +703,7 @@ export function V2PedidoVendasPage() {
             {
               produto_id: '',
               produto_nome: '',
-              quantidade: 1,
+              quantidade: 0,
               preco_tabela: 0,
               preco_unitario: 0,
               preco_fabrica: 0,
@@ -1078,7 +1078,7 @@ export function V2PedidoVendasPage() {
       {
         produto_id: '',
         produto_nome: '',
-        quantidade: 1,
+        quantidade: 0,
         preco_tabela: 0,
         preco_unitario: 0,
         preco_fabrica: 0,
@@ -1104,7 +1104,7 @@ export function V2PedidoVendasPage() {
       prev.map((it, idx) => {
         if (idx !== index) return it
         const precoUnit = precoSugestao || precoVenda || prod.sale_price || 0
-        const qtd = it.quantidade || 1
+        const qtd = it.quantidade || 0
         const total = precoUnit * qtd
 
         return {
@@ -1129,7 +1129,7 @@ export function V2PedidoVendasPage() {
         if (!it.produto_id) return it
         const { precoFabrica, precoVenda, precoSugestao } = getPrecosDoProduto(it.produto_id, novaTabelaNome)
         const precoUnit = precoSugestao || precoVenda || it.preco_unitario
-        const qtd = it.quantidade || 1
+        const qtd = it.quantidade || 0
         const desc = it.desconto_percentual || 0
         const total = Math.max(0, qtd * precoUnit * (1 - desc / 100))
 
@@ -1154,7 +1154,7 @@ export function V2PedidoVendasPage() {
       prev.map((it, idx) => {
         if (idx !== index) return it
         const atual = { ...it, [field]: value }
-        const qtd = atual.quantidade || 1
+        const qtd = atual.quantidade || 0
         const preco = atual.preco_unitario || 0
         const desc = atual.desconto_percentual || 0
         const totalItem = Math.max(0, qtd * preco * (1 - desc / 100))
@@ -1200,9 +1200,15 @@ export function V2PedidoVendasPage() {
       return
     }
 
-    const itensValidos = formItens.filter((it) => it.produto_id && it.produto_nome)
+    const temItemSemQtd = formItens.some((it) => it.produto_id && (!it.quantidade || Number(it.quantidade) <= 0))
+    if (temItemSemQtd) {
+      alert('Por favor, informe a quantidade de todos os produtos selecionados antes de salvar.')
+      return
+    }
+
+    const itensValidos = formItens.filter((it) => it.produto_id && it.produto_nome && Number(it.quantidade) > 0)
     if (itensValidos.length === 0) {
-      alert('Adicione pelo menos um produto ao pedido.')
+      alert('Adicione pelo menos um produto com quantidade preenchida à proposta.')
       return
     }
 
@@ -1593,13 +1599,6 @@ export function V2PedidoVendasPage() {
                     2. Produtos e Itens da Proposta
                   </h3>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleAddItem}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition-colors cursor-pointer"
-                >
-                  <Plus size={14} /> Adicionar Produto
-                </button>
               </div>
 
               <div className="space-y-4">
@@ -1620,9 +1619,10 @@ export function V2PedidoVendasPage() {
                           : 'border-slate-200/90 bg-slate-50/40'
                       }`}
                     >
-                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-                        {/* Campo Produto Autocomplete Pesquisável (Imagem 05) */}
-                        <div className="sm:col-span-5">
+                      {/* Estrutura Responsiva dos Campos do Item */}
+                      <div className="space-y-3">
+                        {/* LINHA 1 (Todas as telas): Produto do catálogo em uma única linha */}
+                        <div className="w-full">
                           <ProdutoSearchInput
                             item={item}
                             index={idx}
@@ -1633,55 +1633,73 @@ export function V2PedidoVendasPage() {
                           />
                         </div>
 
-                        {/* Quantidade */}
-                        <div className="sm:col-span-2 space-y-1">
-                          <label className="text-[11px] font-bold uppercase text-slate-500">Qtd</label>
-                          <input
-                            type="number"
-                            min="1"
-                            value={item.quantidade}
-                            onChange={(e) =>
-                              handleItemChange(idx, 'quantidade', Math.max(1, Number(e.target.value)))
-                            }
-                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 text-center outline-none focus:border-indigo-500 shadow-2xs"
-                          />
-                        </div>
+                        {/* TABLET / DESKTOP (sm+): Linha 2 com Qtd, Preço Unit., Total e Excluir */}
+                        {/* SMARTPHONE (<sm): Linha 2 = Qtd + Preço Unit. | Linha 3 = Total + Botão Excluir */}
+                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                          {/* Bloco Qtd + Preço Unitário (Smartphone Linha 2 / Tablet sm:col-span-6) */}
+                          <div className="grid grid-cols-12 gap-2 sm:contents">
+                            {/* Qtd */}
+                            <div className="col-span-4 sm:col-span-2 space-y-1">
+                              <label className="text-[11px] font-bold uppercase text-slate-500">Qtd</label>
+                              <input
+                                type="number"
+                                min="1"
+                                value={item.quantidade > 0 ? item.quantidade : ''}
+                                placeholder="0"
+                                onChange={(e) =>
+                                  handleItemChange(
+                                    idx,
+                                    'quantidade',
+                                    e.target.value === '' ? 0 : Math.max(0, parseInt(e.target.value, 10) || 0)
+                                  )
+                                }
+                                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 text-center outline-none focus:border-indigo-500 shadow-2xs"
+                              />
+                            </div>
 
-                        {/* Preço Unitário (Preço de Sugestão de Vendas) */}
-                        <div className="sm:col-span-2 space-y-1">
-                          <label className="text-[11px] font-bold uppercase text-slate-500" title="Preço de sugestão da tabela ativa">
-                            Preço Unit. (R$)
-                          </label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={item.preco_unitario}
-                            onChange={(e) =>
-                              handleItemChange(idx, 'preco_unitario', Number(e.target.value))
-                            }
-                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 text-right outline-none focus:border-indigo-500 shadow-2xs"
-                          />
-                        </div>
-
-                        {/* Total do Item */}
-                        <div className="sm:col-span-2 space-y-1">
-                          <label className="text-[11px] font-bold uppercase text-slate-500">Total (R$)</label>
-                          <div className="rounded-xl bg-white px-3 py-2 text-xs font-black text-slate-900 text-right tabular-nums border border-slate-200 shadow-2xs">
-                            {formatarMoeda(item.total)}
+                            {/* Preço Unitário formatado em R$ 0.000,00 */}
+                            <div className="col-span-8 sm:col-span-4 space-y-1">
+                              <label className="text-[11px] font-bold uppercase text-slate-500" title="Preço de sugestão da tabela ativa">
+                                Preço Unit. (R$)
+                              </label>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                value={item.preco_unitario > 0 ? formatarMoeda(item.preco_unitario) : ''}
+                                placeholder="R$ 0,00"
+                                onChange={(e) => {
+                                  const digits = e.target.value.replace(/\D/g, '')
+                                  const val = digits ? Number(digits) / 100 : 0
+                                  handleItemChange(idx, 'preco_unitario', val)
+                                }}
+                                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 text-right outline-none focus:border-indigo-500 shadow-2xs"
+                              />
+                            </div>
                           </div>
-                        </div>
 
-                        {/* Botão Remover */}
-                        <div className="sm:col-span-1 flex justify-center pb-1">
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveItem(idx)}
-                            disabled={formItens.length === 1}
-                            title="Remover produto da proposta"
-                            className="p-1.5 text-slate-400 hover:text-rose-600 disabled:opacity-30 transition-colors cursor-pointer"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                          {/* Bloco Total + Excluir (Smartphone Linha 3 / Tablet sm:col-span-6) */}
+                          <div className="flex items-end gap-2 sm:contents">
+                            {/* Total do Item */}
+                            <div className="flex-1 sm:col-span-5 space-y-1">
+                              <label className="text-[11px] font-bold uppercase text-slate-500">Total (R$)</label>
+                              <div className="w-full rounded-xl bg-white px-3 py-2 text-xs font-black text-slate-900 text-right tabular-nums border border-slate-200 shadow-2xs">
+                                {formatarMoeda(item.total)}
+                              </div>
+                            </div>
+
+                            {/* Botão Remover */}
+                            <div className="shrink-0 sm:col-span-1 flex justify-center pb-0.5">
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveItem(idx)}
+                                disabled={formItens.length === 1}
+                                title="Remover produto da proposta"
+                                className="p-2 sm:p-2 rounded-xl border border-slate-200 sm:border-transparent text-slate-400 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-30 transition-colors cursor-pointer"
+                              >
+                                <Trash2 size={17} />
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       </div>
 
@@ -1751,6 +1769,17 @@ export function V2PedidoVendasPage() {
                     </div>
                   )
                 })}
+              </div>
+
+              {/* Botão + Adicionar Produto logo abaixo do item (assim como é no compras) */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={handleAddItem}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-[#0D5BA3] bg-white px-4 py-2.5 text-xs font-bold text-[#0D5BA3] hover:bg-sky-50 transition-colors cursor-pointer shadow-2xs"
+                >
+                  <Plus size={15} /> Adicionar Produto
+                </button>
               </div>
             </div>
           </div>
@@ -2507,15 +2536,16 @@ export function V2PedidoVendasPage() {
         )}
       </div>
 
-      {/* ── BOTÃO FLUTUANTE "+ NOVA VENDA / PROPOSTA" (FAB - REQUISITO IMAGEM 04) ── */}
+      {/* ── BOTÃO FLUTUANTE "+ NOVA VENDA / PROPOSTA" (FAB COMPLETO) ── */}
       <button
         type="button"
         onClick={handleNovoPedido}
         title="Nova Venda / Proposta"
         aria-label="Adicionar Nova Venda ou Proposta"
-        className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#0D6BAF] text-white shadow-2xl hover:bg-[#095287] hover:scale-105 active:scale-95 transition-all cursor-pointer ring-4 ring-white/80"
+        className="fixed bottom-20 sm:bottom-6 right-4 sm:right-6 z-40 flex items-center gap-2 rounded-full bg-[#0D6BAF] text-white shadow-2xl hover:bg-[#095287] hover:scale-105 active:scale-95 transition-all cursor-pointer ring-4 ring-white/80 px-4 py-3 sm:px-5 sm:py-3.5"
       >
-        <Plus size={28} strokeWidth={2.8} />
+        <Plus size={22} strokeWidth={2.8} />
+        <span className="text-xs sm:text-sm font-bold tracking-wide">Nova Proposta</span>
       </button>
 
       {/* ── MODAL DE COMPARAÇÃO DE ORÇAMENTOS V2 ── */}
