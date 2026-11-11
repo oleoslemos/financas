@@ -5,9 +5,11 @@ import {
   Search,
   Calculator,
   Calendar,
-  ArrowRight,
   WifiOff,
   RefreshCw,
+  Eye,
+  Pencil,
+  X,
 } from 'lucide-react'
 import { listPedidosVenda, PedidoVenda } from '../../services/v2PedidoVendasService'
 import { getCurrentV2User } from '../../services/v2AuthService'
@@ -23,6 +25,7 @@ export function V2OrcamentoListaPage() {
   const [propostas, setPropostas] = useState<PedidoVenda[]>([])
   const [search, setSearch] = useState('')
   const [outboxIds, setOutboxIds] = useState<Set<string>>(new Set())
+  const [viewProposal, setViewProposal] = useState<PedidoVenda | null>(null)
 
   const loadData = async () => {
     setLoading(true)
@@ -160,8 +163,7 @@ export function V2OrcamentoListaPage() {
             return (
               <div
                 key={p.id}
-                onClick={() => navigate(`/v2/orcamento/propostas/${p.id}`)}
-                className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs hover:border-[#0D6BAF]/40 hover:shadow-xs transition cursor-pointer active:bg-slate-50 relative group"
+                className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs hover:border-slate-300 transition relative group"
               >
                 <div className="flex items-start justify-between gap-3">
                   
@@ -206,7 +208,7 @@ export function V2OrcamentoListaPage() {
                     </div>
                   </div>
 
-                  {/* Valor e Ação */}
+                  {/* Valor e Ações */}
                   <div className="text-right shrink-0 flex flex-col items-end justify-between self-stretch">
                     <div>
                       <div className="text-[11px] text-slate-400 font-bold uppercase">
@@ -221,9 +223,22 @@ export function V2OrcamentoListaPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center text-xs font-bold text-[#0D6BAF] group-hover:translate-x-1 transition-transform gap-1 mt-2">
-                      <span>Abrir</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
+                    {/* Botões Visualizar / Editar */}
+                    <div className="flex items-center gap-1.5 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => setViewProposal(p)}
+                        className="min-h-[32px] px-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-bold flex items-center gap-1 transition border border-slate-200"
+                      >
+                        <Eye className="w-3 h-3" /> Ver
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/v2/orcamento/propostas/${p.id}`)}
+                        className="min-h-[32px] px-2.5 rounded-lg bg-[#0D6BAF] hover:bg-[#0b5a93] text-white text-[11px] font-bold flex items-center gap-1 transition shadow-xs"
+                      >
+                        <Pencil className="w-3 h-3" /> Editar
+                      </button>
                     </div>
                   </div>
 
@@ -231,6 +246,143 @@ export function V2OrcamentoListaPage() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* ── MODAL DE VISUALIZAÇÃO READ-ONLY ── */}
+      {viewProposal && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => setViewProposal(null)}
+        >
+          <div
+            className="bg-white rounded-t-3xl sm:rounded-3xl max-w-lg w-full max-h-[90vh] overflow-y-auto border border-slate-200 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="sticky top-0 bg-white rounded-t-3xl sm:rounded-t-3xl p-5 border-b border-slate-100 flex items-center justify-between z-10">
+              <div>
+                <h3 className="font-black text-slate-900 text-base">Proposta #{viewProposal.numero}</h3>
+                <p className="text-xs text-slate-400 font-medium">
+                  {viewProposal.canal === 'representacao' ? 'Representação' : 'Distribuição'} · {formatDate(viewProposal.dataEmissao || viewProposal.created_at)}
+                </p>
+              </div>
+              <button type="button" onClick={() => setViewProposal(null)} className="p-2 rounded-xl hover:bg-slate-100 text-slate-400">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-5">
+              {/* Cliente */}
+              <div className="space-y-1">
+                <div className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Cliente</div>
+                <div className="text-sm font-bold text-slate-900">{viewProposal.cliente_nome}</div>
+                {viewProposal.cliente_cidade && <div className="text-xs text-slate-500">{viewProposal.cliente_cidade}</div>}
+              </div>
+
+              {/* Itens */}
+              <div className="space-y-2">
+                <div className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                  Itens ({viewProposal.itens?.length || 0})
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {(viewProposal.itens || []).map((it: any, idx: number) => (
+                    <div key={idx} className="py-2.5 flex items-center justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-bold text-slate-800 truncate">{it.produto_nome}</div>
+                        <div className="text-[10px] text-slate-400 font-medium">
+                          {it.quantidade}x · {formatBRL(it.preco_unitario)}/un
+                          {(it.desconto_percentual || 0) > 0 && <span className="text-emerald-600 ml-1">(-{it.desconto_percentual}%)</span>}
+                        </div>
+                      </div>
+                      <div className="text-xs font-black text-slate-900 tabular-nums shrink-0">{formatBRL(it.total)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Condições de Pagamento */}
+              <div className="space-y-2">
+                <div className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Condições de Pagamento</div>
+                <div className="grid grid-cols-1 gap-2">
+                  {/* Normal */}
+                  <div className={`p-3 rounded-xl border-2 transition ${viewProposal.condicaoSelecionada === 'sem_desconto' ? 'border-[#0D6BAF] bg-sky-50/50' : 'border-slate-100 bg-slate-50/50'}`}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-[11px] font-bold uppercase text-slate-600">Normal</div>
+                        <div className="text-[10px] text-slate-400">Tabela cheia</div>
+                      </div>
+                      <div className={`text-sm font-black tabular-nums ${viewProposal.condicaoSelecionada === 'sem_desconto' ? 'text-[#0D6BAF]' : 'text-slate-500'}`}>
+                        {formatBRL(viewProposal.total)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Até 5x */}
+                  <div className={`p-3 rounded-xl border-2 transition ${viewProposal.condicaoSelecionada === 'ate_5x' ? 'border-[#0D6BAF] bg-sky-50/50' : 'border-slate-100 bg-slate-50/50'}`}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-[11px] font-bold uppercase text-[#0D6BAF]">Até 5x</div>
+                        <div className="text-[10px] text-emerald-600 font-bold">-{viewProposal.desconto5xPercentual || 5}% desc.</div>
+                      </div>
+                      <div className={`text-sm font-black tabular-nums ${viewProposal.condicaoSelecionada === 'ate_5x' ? 'text-[#0D6BAF]' : 'text-slate-500'}`}>
+                        {formatBRL(viewProposal.total5x || viewProposal.total)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* À Vista */}
+                  <div className={`p-3 rounded-xl border-2 transition ${viewProposal.condicaoSelecionada === 'a_vista' ? 'border-emerald-600 bg-emerald-50/50' : 'border-slate-100 bg-slate-50/50'}`}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-[11px] font-bold uppercase text-emerald-700">À Vista</div>
+                        <div className="text-[10px] text-emerald-600 font-bold">-{viewProposal.descontoVistaPercentual || 10}% desc.</div>
+                      </div>
+                      <div className={`text-sm font-black tabular-nums ${viewProposal.condicaoSelecionada === 'a_vista' ? 'text-emerald-700' : 'text-slate-500'}`}>
+                        {formatBRL(viewProposal.totalVista || viewProposal.total)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Resumo */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                <div className="flex justify-between text-xs text-slate-500 font-medium">
+                  <span>Subtotal</span>
+                  <span className="tabular-nums">{formatBRL(viewProposal.subtotal)}</span>
+                </div>
+                {(viewProposal.frete || 0) > 0 && (
+                  <div className="flex justify-between text-xs text-slate-500 font-medium">
+                    <span>Frete</span>
+                    <span className="tabular-nums">{formatBRL(viewProposal.frete)}</span>
+                  </div>
+                )}
+                {viewProposal.formaPagamento && (
+                  <div className="flex justify-between text-xs text-slate-500 font-medium">
+                    <span>Forma de Pagamento</span>
+                    <span className="font-bold">{viewProposal.formaPagamento}</span>
+                  </div>
+                )}
+                {viewProposal.observacao && (
+                  <div className="pt-2 border-t border-slate-200">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase">Obs.</div>
+                    <div className="text-xs text-slate-600">{viewProposal.observacao}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="sticky bottom-0 p-4 border-t border-slate-100 bg-white rounded-b-3xl flex items-center justify-between gap-3">
+              <button type="button" onClick={() => setViewProposal(null)}
+                className="min-h-[44px] px-5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 transition"
+              >Fechar</button>
+              <button type="button" onClick={() => { navigate(`/v2/orcamento/propostas/${viewProposal.id}`); setViewProposal(null) }}
+                className="min-h-[44px] px-5 rounded-xl bg-[#0D6BAF] text-white font-black text-xs hover:bg-[#0b5a93] transition shadow-xs flex items-center gap-1.5"
+              ><Pencil className="w-3.5 h-3.5" /> Editar Orçamento</button>
+            </div>
+          </div>
         </div>
       )}
 

@@ -15,6 +15,8 @@ import {
   ShoppingBag,
   CreditCard,
   X,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 import {
   listPedidosVenda,
@@ -81,6 +83,11 @@ export function V2OrcamentoFormPage() {
   const [productSearch, setProductSearch] = useState('')
   const [lastRemovedItem, setLastRemovedItem] = useState<{ item: PedidoVendaItem; index: number } | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+
+  // Payment condition visibility toggles
+  const [showNormal, setShowNormal] = useState(true)
+  const [showAte5x, setShowAte5x] = useState(true)
+  const [showAVista, setShowAVista] = useState(true)
 
   // Validation Error Banner
   const [validationError, setValidationError] = useState<string | null>(null)
@@ -261,7 +268,7 @@ export function V2OrcamentoFormPage() {
 
   const availableProducts = useMemo(() => {
     if (!activeTable || !activeTable.items) return []
-    if (!productSearch.trim()) return activeTable.items
+    if (!productSearch.trim()) return []
 
     const q = productSearch.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     return activeTable.items.filter((item) => {
@@ -775,7 +782,7 @@ export function V2OrcamentoFormPage() {
                 Catálogo da Tabela Ativa
               </span>
               <span className="text-xs text-slate-400 font-bold">
-                {availableProducts.length} itens
+                {productSearch.trim() ? `${availableProducts.length} resultado${availableProducts.length !== 1 ? 's' : ''}` : 'Digite para buscar'}
               </span>
             </div>
 
@@ -928,10 +935,31 @@ export function V2OrcamentoFormPage() {
               Condições Comerciais
             </span>
 
+            {/* Toggles de visibilidade */}
+            <div className="flex items-center gap-2 text-[10px] font-bold flex-wrap">
+              <span className="text-slate-400">Mostrar:</span>
+              <button type="button" onClick={() => setShowNormal(!showNormal)}
+                className={`px-2 py-1 rounded-lg border transition flex items-center gap-1 ${showNormal ? 'bg-slate-100 text-slate-700 border-slate-300' : 'bg-slate-50 text-slate-300 border-slate-100 line-through'}`}
+              >
+                {showNormal ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />} Normal
+              </button>
+              <button type="button" onClick={() => setShowAte5x(!showAte5x)}
+                className={`px-2 py-1 rounded-lg border transition flex items-center gap-1 ${showAte5x ? 'bg-sky-50 text-[#0D6BAF] border-sky-200' : 'bg-slate-50 text-slate-300 border-slate-100 line-through'}`}
+              >
+                {showAte5x ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />} Até 5x
+              </button>
+              <button type="button" onClick={() => setShowAVista(!showAVista)}
+                className={`px-2 py-1 rounded-lg border transition flex items-center gap-1 ${showAVista ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-50 text-slate-300 border-slate-100 line-through'}`}
+              >
+                {showAVista ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />} À Vista
+              </button>
+            </div>
+
             {/* 3 Cartões de Condição */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               
               {/* Opção 1: Preço Normal */}
+              {showNormal && (
               <div
                 onClick={() => setCondicaoSelecionada('sem_desconto')}
                 className={`p-3 rounded-xl border transition cursor-pointer flex flex-col justify-between ${
@@ -948,8 +976,10 @@ export function V2OrcamentoFormPage() {
                   {formatBRL(totalNormal)}
                 </div>
               </div>
+              )}
 
               {/* Opção 2: Até 5x */}
+              {showAte5x && (
               <div
                 onClick={() => setCondicaoSelecionada('ate_5x')}
                 className={`p-3 rounded-xl border transition cursor-pointer flex flex-col justify-between ${
@@ -966,8 +996,10 @@ export function V2OrcamentoFormPage() {
                   {formatBRL(total5x)}
                 </div>
               </div>
+              )}
 
               {/* Opção 3: À Vista */}
+              {showAVista && (
               <div
                 onClick={() => setCondicaoSelecionada('a_vista')}
                 className={`p-3 rounded-xl border transition cursor-pointer flex flex-col justify-between ${
@@ -984,6 +1016,7 @@ export function V2OrcamentoFormPage() {
                   {formatBRL(totalVista)}
                 </div>
               </div>
+              )}
 
             </div>
 
