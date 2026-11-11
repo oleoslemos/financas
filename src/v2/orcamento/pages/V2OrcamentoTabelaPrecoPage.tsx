@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { Search, X, Lock, Tag, AlertCircle, RefreshCw, WifiOff } from 'lucide-react'
+import { Search, X, Lock, Tag, AlertCircle, RefreshCw, WifiOff, LayoutGrid, Table } from 'lucide-react'
 import { listPriceTables, V2PriceTable } from '../../services/v2TabelaPrecoService'
 import { listV2Products, V2Product } from '../../services/v2ProdutosService'
 import { getCurrentV2User } from '../../services/v2AuthService'
@@ -14,6 +14,9 @@ export function V2OrcamentoTabelaPrecoPage() {
   const [canViewCost, setCanViewCost] = useState(false)
   const [cachedTime, setCachedTime] = useState<string | null>(null)
   const [isOffline, setIsOffline] = useState(() => typeof navigator !== 'undefined' ? !navigator.onLine : false)
+
+  // Modo de visualização: 'cards' para mobile ou 'table' para tabela
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards')
 
   // Search state
   const [isSearchOpen, setIsSearchOpen] = useState(false)
@@ -163,25 +166,25 @@ export function V2OrcamentoTabelaPrecoPage() {
   return (
     <div className="max-w-7xl mx-auto space-y-4">
 
-      {/* ── HEADER CARD COM NOME E REAJUSTE NÃO EDITÁVEL ── */}
+      {/* ── HEADER CARD RESPONSIVO: DESKTOP & SMARTPHONE ── */}
       <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-2xs space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           
           {/* Título & Identificação */}
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-sky-50 text-[#0D6BAF] flex items-center justify-center border border-sky-100 shrink-0">
+          <div className="flex items-start sm:items-center gap-2.5">
+            <div className="w-10 h-10 rounded-xl bg-sky-50 text-[#0D6BAF] flex items-center justify-center border border-sky-100 shrink-0 mt-0.5 sm:mt-0">
               <Tag className="w-5 h-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-base sm:text-lg font-black text-slate-900 leading-tight">
                   {activeTable.name}
                 </h1>
-                <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
                   Ativa
                 </span>
               </div>
-              <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
+              <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5 flex-wrap">
                 {cachedTime && <span>Atualizada em {cachedTime}</span>}
                 {isOffline && (
                   <span className="flex items-center gap-1 text-amber-700 font-bold bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
@@ -192,37 +195,67 @@ export function V2OrcamentoTabelaPrecoPage() {
             </div>
           </div>
 
-          {/* Reajuste e Botão Lupa */}
-          <div className="flex items-center gap-2 ml-auto">
+          {/* Reajuste, Alternador Cards/Tabela e Botão Lupa */}
+          <div className="flex items-center justify-between sm:justify-end gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
             {/* Reajuste % - Read Only com Cadeado */}
             <div
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-700"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 text-xs shrink-0"
               title="Percentual de reajuste fixado na tabela ativa (somente leitura)"
             >
               <Lock className="w-3.5 h-3.5 text-slate-400" />
-              <span className="text-xs font-semibold text-slate-500">Reajuste:</span>
-              <span className="text-xs font-black text-slate-900 tabular-nums" aria-readonly="true">
+              <span className="font-semibold text-slate-500">Reajuste:</span>
+              <span className="font-black text-slate-900 tabular-nums">
                 {(Number(activeTable.reajuste_percent) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} %
               </span>
             </div>
 
-            {/* Botão Lupa de Pesquisa */}
-            <button
-              type="button"
-              onClick={() => {
-                setIsSearchOpen(!isSearchOpen)
-                if (isSearchOpen) setSearchQuery('')
-              }}
-              className={`min-w-[44px] min-h-[44px] rounded-xl flex items-center justify-center transition border ${
-                isSearchOpen
-                  ? 'bg-[#0D6BAF] text-white border-[#0D6BAF] shadow-xs'
-                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-              }`}
-              title="Pesquisar produtos"
-              aria-label="Abrir pesquisa"
-            >
-              <Search className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1.5">
+              {/* Botão Alternar Modo: Cards / Tabela */}
+              <div className="flex items-center border border-slate-200 rounded-xl bg-slate-50 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('cards')}
+                  className={`p-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 ${
+                    viewMode === 'cards'
+                      ? 'bg-white text-[#0D6BAF] shadow-xs'
+                      : 'text-slate-400 hover:text-slate-600'
+                  }`}
+                  title="Visualização em Cards (ideal para celular)"
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('table')}
+                  className={`p-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 ${
+                    viewMode === 'table'
+                      ? 'bg-white text-[#0D6BAF] shadow-xs'
+                      : 'text-slate-400 hover:text-slate-600'
+                  }`}
+                  title="Visualização em Tabela Completa"
+                >
+                  <Table className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Botão Lupa de Pesquisa */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSearchOpen(!isSearchOpen)
+                  if (isSearchOpen) setSearchQuery('')
+                }}
+                className={`min-w-[40px] min-h-[40px] rounded-xl flex items-center justify-center transition border ${
+                  isSearchOpen
+                    ? 'bg-[#0D6BAF] text-white border-[#0D6BAF] shadow-xs'
+                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                }`}
+                title="Pesquisar produtos"
+                aria-label="Abrir pesquisa"
+              >
+                <Search className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
         </div>
@@ -259,101 +292,176 @@ export function V2OrcamentoTabelaPrecoPage() {
 
       </div>
 
-      {/* ── TABELA DE PRODUTOS COMPLETA ── */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
-        <div className="overflow-x-auto max-h-[calc(100dvh-240px)]">
-          <table className="w-full text-left border-collapse text-sm">
-            
-            {/* Header Sticky */}
-            <thead className="bg-slate-50 text-slate-600 font-bold text-xs uppercase tracking-wider sticky top-0 z-10 border-b border-slate-200">
-              <tr>
-                <th scope="col" className="py-3 px-4 min-w-[220px] sticky left-0 bg-slate-50 z-20 border-r border-slate-200">
-                  Produto
-                </th>
-                {canViewCost && (
-                  <th scope="col" className="py-3 px-3 min-w-[130px] text-right">
-                    Tabela Fábrica
-                  </th>
-                )}
-                <th scope="col" className="py-3 px-3 min-w-[130px] text-right">
-                  Vendas Sul
-                </th>
-                <th scope="col" className="py-3 px-3 min-w-[140px] text-right text-[#0D6BAF]">
-                  Sugestão Vendas
-                </th>
-                <th scope="col" className="py-3 px-3 min-w-[100px] text-right">
-                  Ponto
-                </th>
-              </tr>
-            </thead>
+      {/* ── MODO 1: VISUALIZAÇÃO EM CARDS (OTIMIZADO PARA SMARTPHONE) ── */}
+      {viewMode === 'cards' ? (
+        <div className="space-y-2.5">
+          {filteredItems.length === 0 ? (
+            <div className="bg-white rounded-2xl p-8 text-center text-slate-400 border border-slate-200">
+              <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50 text-slate-400" />
+              <span className="text-sm font-medium">Nenhum produto encontrado para a pesquisa.</span>
+            </div>
+          ) : (
+            filteredItems.map((item, index) => {
+              const prod = productsMap.get(item.product_id)
+              const sku = item.sku || prod?.code_sku || '—'
+              const nome = item.product_name || prod?.name || 'Produto sem descrição'
+              const linha = item.product_line || prod?.product_line
 
-            {/* Body */}
-            <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
-              {filteredItems.length === 0 ? (
-                <tr>
-                  <td colSpan={canViewCost ? 5 : 4} className="py-12 text-center text-slate-400">
-                    <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                    <span>Nenhum produto encontrado para o termo pesquisado.</span>
-                  </td>
-                </tr>
-              ) : (
-                filteredItems.map((item, index) => {
-                  const prod = productsMap.get(item.product_id)
-                  const sku = item.sku || prod?.code_sku || '—'
-                  const nome = item.product_name || prod?.name || 'Produto sem descrição'
-                  const linha = item.product_line || prod?.product_line
-
-                  return (
-                    <tr
-                      key={item.product_id || index}
-                      className="hover:bg-slate-50/80 transition-colors h-[56px]"
-                    >
-                      {/* Coluna 1: Produto (Sticky à esquerda) */}
-                      <td className="py-2.5 px-4 sticky left-0 bg-white hover:bg-slate-50/80 z-10 border-r border-slate-100">
-                        <div className="font-bold text-slate-900 leading-snug line-clamp-2">
-                          {nome}
-                        </div>
-                        <div className="flex items-center gap-2 text-[11px] text-slate-400 font-medium mt-0.5">
-                          <span className="font-mono text-slate-500 font-semibold">{sku}</span>
-                          {linha && (
-                            <>
-                              <span>•</span>
-                              <span>{linha}</span>
-                            </>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Tabela Fábrica (Apenas para autorizados) */}
-                      {canViewCost && (
-                        <td className="py-2.5 px-3 text-right text-slate-500 tabular-nums">
-                          {formatBRL(item.tabela_fabrica)}
-                        </td>
+              return (
+                <div
+                  key={item.product_id || index}
+                  className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-2xs space-y-3 hover:border-slate-300 transition"
+                >
+                  {/* Linha Superior: Nome do Produto e Linha */}
+                  <div className="space-y-1">
+                    <h3 className="font-bold text-slate-900 text-sm leading-snug">
+                      {nome}
+                    </h3>
+                    <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
+                      <span className="font-mono text-slate-500 font-semibold">{sku}</span>
+                      {linha && (
+                        <>
+                          <span>•</span>
+                          <span className="text-slate-500 font-medium">{linha}</span>
+                        </>
                       )}
+                    </div>
+                  </div>
 
-                      {/* Vendas Sul */}
-                      <td className="py-2.5 px-3 text-right text-slate-600 tabular-nums">
+                  {/* Linha de Preços: Legível e sem cortes no smartphone */}
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 items-end">
+                    {/* Vendas Sul (Piso) */}
+                    <div className="space-y-0.5">
+                      <div className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                        Vendas Sul (Piso)
+                      </div>
+                      <div className="text-sm font-bold text-slate-700 tabular-nums">
                         {formatBRL(item.tabela_vendas_sul)}
-                      </td>
+                      </div>
+                      {canViewCost && item.tabela_fabrica != null && (
+                        <div className="text-[10px] text-slate-400">
+                          Fábrica: {formatBRL(item.tabela_fabrica)}
+                        </div>
+                      )}
+                    </div>
 
-                      {/* Sugestão de Vendas (Destaque Comercial) */}
-                      <td className="py-2.5 px-3 text-right font-black text-[#0D6BAF] text-base tabular-nums">
+                    {/* Sugestão de Vendas (Preço Principal em Destaque) */}
+                    <div className="text-right space-y-0.5">
+                      <div className="text-[10px] font-black uppercase text-[#0D6BAF] tracking-wider">
+                        Sugestão Vendas
+                      </div>
+                      <div className="text-base sm:text-lg font-black text-[#0D6BAF] tabular-nums">
                         {formatBRL(item.sugestao_vendas)}
-                      </td>
-
-                      {/* Ponto */}
-                      <td className="py-2.5 px-3 text-right text-slate-500 tabular-nums font-semibold">
-                        {item.ponto != null ? item.ponto.toFixed(5) : '—'}
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-
-          </table>
+                      </div>
+                      {item.ponto != null && (
+                        <div className="text-[10px] text-slate-400 font-mono">
+                          Ponto: {item.ponto.toFixed(3)}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })
+          )}
         </div>
-      </div>
+      ) : (
+        /* ── MODO 2: VISUALIZAÇÃO EM TABELA COMPLETA (SEM STICKY QUE BLOQUEIA NO SMARTPHONE) ── */
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+          <div className="overflow-x-auto max-h-[calc(100dvh-240px)]">
+            <table className="w-full text-left border-collapse text-sm min-w-[620px]">
+              
+              {/* Header */}
+              <thead className="bg-slate-50 text-slate-600 font-bold text-xs uppercase tracking-wider sticky top-0 z-10 border-b border-slate-200">
+                <tr>
+                  <th scope="col" className="py-3 px-4 min-w-[220px]">
+                    Produto
+                  </th>
+                  {canViewCost && (
+                    <th scope="col" className="py-3 px-3 min-w-[120px] text-right">
+                      Tabela Fábrica
+                    </th>
+                  )}
+                  <th scope="col" className="py-3 px-3 min-w-[120px] text-right">
+                    Vendas Sul
+                  </th>
+                  <th scope="col" className="py-3 px-3 min-w-[130px] text-right text-[#0D6BAF]">
+                    Sugestão Vendas
+                  </th>
+                  <th scope="col" className="py-3 px-3 min-w-[90px] text-right">
+                    Ponto
+                  </th>
+                </tr>
+              </thead>
+
+              {/* Body */}
+              <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
+                {filteredItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={canViewCost ? 5 : 4} className="py-12 text-center text-slate-400">
+                      <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                      <span>Nenhum produto encontrado para o termo pesquisado.</span>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredItems.map((item, index) => {
+                    const prod = productsMap.get(item.product_id)
+                    const sku = item.sku || prod?.code_sku || '—'
+                    const nome = item.product_name || prod?.name || 'Produto sem descrição'
+                    const linha = item.product_line || prod?.product_line
+
+                    return (
+                      <tr
+                        key={item.product_id || index}
+                        className="hover:bg-slate-50/80 transition-colors h-[56px]"
+                      >
+                        {/* Coluna 1: Produto (sem sticky para não cobrir valores no smartphone) */}
+                        <td className="py-2.5 px-4">
+                          <div className="font-bold text-slate-900 leading-snug">
+                            {nome}
+                          </div>
+                          <div className="flex items-center gap-2 text-[11px] text-slate-400 font-medium mt-0.5">
+                            <span className="font-mono text-slate-500 font-semibold">{sku}</span>
+                            {linha && (
+                              <>
+                                <span>•</span>
+                                <span>{linha}</span>
+                              </>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Tabela Fábrica (Apenas para autorizados) */}
+                        {canViewCost && (
+                          <td className="py-2.5 px-3 text-right text-slate-500 tabular-nums">
+                            {formatBRL(item.tabela_fabrica)}
+                          </td>
+                        )}
+
+                        {/* Vendas Sul */}
+                        <td className="py-2.5 px-3 text-right text-slate-600 tabular-nums font-semibold">
+                          {formatBRL(item.tabela_vendas_sul)}
+                        </td>
+
+                        {/* Sugestão de Vendas (Destaque Comercial) */}
+                        <td className="py-2.5 px-3 text-right font-black text-[#0D6BAF] text-base tabular-nums">
+                          {formatBRL(item.sugestao_vendas)}
+                        </td>
+
+                        {/* Ponto */}
+                        <td className="py-2.5 px-3 text-right text-slate-500 tabular-nums font-semibold">
+                          {item.ponto != null ? item.ponto.toFixed(5) : '—'}
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+
+            </table>
+          </div>
+        </div>
+      )}
 
     </div>
   )
