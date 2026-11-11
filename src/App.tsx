@@ -113,6 +113,8 @@ export default function App() {
   return (
     <Suspense fallback={<p className="text-sm text-slate-500 p-4">Carregando módulo...</p>}>
       <Routes>
+        {/* Redirecionamento da raiz / direto para /v2/login */}
+        <Route path="/" element={<Navigate to="/v2/login" replace />} />
         {/* Rotas V2 */}
         {/* Módulo Orçamento Mobile */}
         <Route path="/v2/orcamento/login" element={<V2SignInPage variant="orcamento" />} />
