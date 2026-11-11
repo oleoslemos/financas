@@ -4,6 +4,7 @@ import { Tag, Calculator, Users, LogOut, Wifi, WifiOff, RefreshCw } from 'lucide
 import { getCurrentV2User, logoutV2User } from '../../services/v2AuthService'
 import { CompanyProvider } from '../../../context/CompanyContext'
 import { subscribeNetworkStatus, syncOutboxNow, getOutbox } from '../services/v2OrcamentoOfflineService'
+import { OrcamentoPwaManifest } from '../components/OrcamentoPwaManifest'
 
 export function V2OrcamentoLayout() {
   return (
@@ -68,6 +69,8 @@ function V2OrcamentoLayoutInner() {
   }
 
   return (
+    <>
+      <OrcamentoPwaManifest />
     <div className="min-h-[100dvh] w-screen flex flex-col md:flex-row bg-[#F4F8F3] text-slate-900 font-sans select-none overflow-x-hidden">
       
       {/* ── TOP BAR (MOBILE & TABLET COMPACT) ── */}
@@ -196,5 +199,6 @@ function V2OrcamentoLayoutInner() {
       </div>
 
     </div>
+    </>
   )
 }
