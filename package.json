@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:orcamento": "tsc -b && vite build --config vite.config.orcamento.ts",
     "preview": "vite preview",
     "lint": "eslint .",
     "sync:tasks": "node scripts/tasks-sync.mjs"

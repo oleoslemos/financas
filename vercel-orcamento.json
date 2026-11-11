@@ -1,0 +1,9 @@
+{
+  "installCommand": "npm install --include=dev",
+  "buildCommand": "npm run build:orcamento",
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

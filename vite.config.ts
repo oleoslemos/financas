@@ -33,7 +33,7 @@ export default defineConfig(() => {
           theme_color: '#0F3764',
           background_color: '#ffffff',
           display: 'standalone',
-          orientation: 'any',
+          orientation: 'portrait',
           start_url: '/',
           scope: '/',
           id: '/',

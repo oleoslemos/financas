@@ -159,16 +159,12 @@ export function V2OrcamentoClientesCrmPage() {
       setQuickError('Telefone é obrigatório.')
       return
     }
-    if (!quickBirthDate) {
-      setQuickError('Data de nascimento é obrigatória.')
-      return
-    }
 
     try {
       const res = await createClient({
         full_name: quickName.trim(),
         phone_1: quickPhone.trim(),
-        birth_date: quickBirthDate,
+        birth_date: quickBirthDate || null,
         group_reference: quickRef.trim() || null,
         cpf: '',
         phone_2: null,
@@ -670,11 +666,10 @@ export function V2OrcamentoClientesCrmPage() {
 
               <div>
                 <label className="text-xs font-bold text-slate-700 block mb-1">
-                  Data de Nascimento *
+                  Data de Nascimento <span className="text-slate-400 font-medium">(opcional)</span>
                 </label>
                 <input
                   type="date"
-                  required
                   value={quickBirthDate}
                   onChange={(e) => setQuickBirthDate(e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-[#0D6BAF]"
