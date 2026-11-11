@@ -31,7 +31,7 @@ export default defineConfig(() => {
           short_name: 'Bem Aviv Hub',
           description: 'Gestão comercial, CRM e financeira Bem Aviv',
           theme_color: '#0F3764',
-          background_color: '#ffffff',
+          background_color: '#0F3764',
           display: 'standalone',
           orientation: 'portrait',
           start_url: '/',

@@ -275,6 +275,8 @@ export async function createClient(
   const payload = {
     ...input,
     user_id: targetUserId,
+    // Garante que company_id nunca é null (NOT NULL no banco)
+    company_id: input.company_id || DEFAULT_COMPANY_ID,
   }
 
   const { data, error } = await supabase
