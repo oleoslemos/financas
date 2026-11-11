@@ -287,6 +287,7 @@ export function V2OrcamentoFormPage() {
       const prod = productsMap.get(priceItem.product_id)
       const unitPrice = priceItem.sugestao_vendas || priceItem.tabela_vendas_sul || 0
       const precoFabrica = priceItem.tabela_fabrica || prod?.cost_price || 0
+      const precoVendaMin = priceItem.tabela_vendas_sul || 0
 
       if (existing) {
         return prev.map((it) => {
@@ -308,6 +309,7 @@ export function V2OrcamentoFormPage() {
           preco_tabela: unitPrice,
           preco_unitario: unitPrice,
           preco_fabrica: precoFabrica,
+          preco_venda_minimo: precoVendaMin,
           desconto_percentual: 0,
           total: unitPrice,
         },
@@ -561,6 +563,28 @@ export function V2OrcamentoFormPage() {
     return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
   }
 
+  const getItemPricing = (it: PedidoVendaItem) => {
+    const itemTbl = activeTable?.items?.find((ti) => ti.product_id === it.produto_id)
+    const prod = productsMap.get(it.produto_id)
+    const precoFabrica = it.preco_fabrica || Number(itemTbl?.tabela_fabrica) || Number(prod?.cost_price) || 0
+    const precoVendaMin = it.preco_venda_minimo || Number(itemTbl?.tabela_vendas_sul) || 0
+    const precoRef = it.preco_tabela || Number(itemTbl?.sugestao_vendas) || it.preco_unitario || 0
+    const maxDescontoValor = Math.max(0, precoRef - precoVendaMin)
+    const maxDescontoPerc = precoRef > 0 && precoVendaMin > 0 ? (maxDescontoValor / precoRef) * 100 : 0
+    const precoEfetivo = precoRef * (1 - (it.desconto_percentual || 0) / 100)
+    const isAbaixoPiso = precoVendaMin > 0 && precoEfetivo < precoVendaMin - 0.01
+
+    return {
+      precoFabrica,
+      precoVendaMin,
+      precoRef,
+      maxDescontoValor,
+      maxDescontoPerc,
+      precoEfetivo,
+      isAbaixoPiso,
+    }
+  }
+
   // 5 Most recent clients
   const recentClients = useMemo(() => {
     return clients.slice(0, 5)
@@ -789,6 +813,7 @@ export function V2OrcamentoFormPage() {
             <div className="relative">
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
+                id="catalogo-busca-input"
                 type="text"
                 placeholder="Buscar produto por nome, SKU, linha..."
                 value={productSearch}
@@ -857,75 +882,122 @@ export function V2OrcamentoFormPage() {
                 Nenhum item adicionado ainda. Selecione produtos no catálogo à esquerda.
               </div>
             ) : (
-              <div className="space-y-2.5 max-h-[300px] overflow-y-auto divide-y divide-slate-100">
-                {items.map((it, idx) => (
-                  <div key={it.produto_id || idx} className="pt-2 space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs font-bold text-slate-900 leading-tight">
-                          {it.produto_nome}
-                        </div>
-                        <div className="text-[10px] text-slate-400">
-                          Tabela: {formatBRL(it.preco_tabela)}
-                        </div>
-                      </div>
+              <div className="space-y-2.5 max-h-[420px] overflow-y-auto divide-y divide-slate-100">
+                {items.map((it, idx) => {
+                  const pricing = getItemPricing(it)
 
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveItem(idx)}
-                        className="text-slate-300 hover:text-red-500 p-1 transition"
-                        title="Remover item"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                  return (
+                    <div key={it.produto_id || idx} className="pt-2 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-bold text-slate-900 leading-tight">
+                            {it.produto_nome}
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            Sugestão Tabela: {formatBRL(it.preco_tabela)}
+                          </div>
+                        </div>
 
-                    {/* Controles de Quantidade, Desconto e Total */}
-                    <div className="flex items-center justify-between gap-2">
-                      {/* Qtd - e + */}
-                      <div className="flex items-center border border-slate-200 rounded-xl bg-slate-50 overflow-hidden">
                         <button
                           type="button"
-                          onClick={() => handleUpdateQuantity(it.produto_id, -1)}
-                          className="w-8 h-8 flex items-center justify-center text-slate-600 hover:bg-slate-200 active:bg-slate-300 transition"
+                          onClick={() => handleRemoveItem(idx)}
+                          className="text-slate-300 hover:text-red-500 p-1 transition"
+                          title="Remover item"
                         >
-                          <Minus className="w-3.5 h-3.5" />
-                        </button>
-                        <span className="w-8 text-center text-xs font-black text-slate-800 tabular-nums">
-                          {it.quantidade}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleUpdateQuantity(it.produto_id, 1)}
-                          className="w-8 h-8 flex items-center justify-center text-slate-600 hover:bg-slate-200 active:bg-slate-300 transition"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
 
-                      {/* Desconto % */}
-                      <div className="flex items-center gap-1">
-                        <span className="text-[10px] font-bold text-slate-400">Desc:</span>
-                        <input
-                          type="number"
-                          min="0"
-                          max={maxDiscountAllowed}
-                          value={it.desconto_percentual || 0}
-                          onChange={(e) => handleUpdateDiscount(it.produto_id, parseFloat(e.target.value) || 0)}
-                          className="w-14 px-1.5 py-1 text-center rounded-lg border border-slate-200 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#0D6BAF]"
-                        />
-                        <span className="text-[10px] font-bold text-slate-400">%</span>
+                      {/* Controles de Quantidade, Desconto e Total */}
+                      <div className="flex items-center justify-between gap-2">
+                        {/* Qtd - e + */}
+                        <div className="flex items-center border border-slate-200 rounded-xl bg-slate-50 overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateQuantity(it.produto_id, -1)}
+                            className="w-8 h-8 flex items-center justify-center text-slate-600 hover:bg-slate-200 active:bg-slate-300 transition"
+                          >
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
+                          <span className="w-8 text-center text-xs font-black text-slate-800 tabular-nums">
+                            {it.quantidade}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateQuantity(it.produto_id, 1)}
+                            className="w-8 h-8 flex items-center justify-center text-slate-600 hover:bg-slate-200 active:bg-slate-300 transition"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        {/* Desconto % */}
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] font-bold text-slate-400">Desc:</span>
+                          <input
+                            type="number"
+                            min="0"
+                            max={maxDiscountAllowed}
+                            value={it.desconto_percentual || 0}
+                            onChange={(e) => handleUpdateDiscount(it.produto_id, parseFloat(e.target.value) || 0)}
+                            className="w-14 px-1.5 py-1 text-center rounded-lg border border-slate-200 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#0D6BAF]"
+                          />
+                          <span className="text-[10px] font-bold text-slate-400">%</span>
+                        </div>
+
+                        {/* Total do item */}
+                        <div className="text-right font-black text-xs text-slate-900 tabular-nums">
+                          {formatBRL(it.total)}
+                        </div>
                       </div>
 
-                      {/* Total do item */}
-                      <div className="text-right font-black text-xs text-slate-900 tabular-nums">
-                        {formatBRL(it.total)}
+                      {/* Linha Única: Tabela Fábrica | Tabela Venda (Piso) | Desconto máx. permitido */}
+                      <div className="rounded-xl bg-slate-50/90 border border-slate-200/80 p-2.5 text-[11px] text-slate-600 space-y-1">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 leading-snug">
+                          <span>
+                            Tabela Fábrica: <strong className="text-slate-800 font-bold">{formatBRL(pricing.precoFabrica)}</strong>
+                          </span>
+                          <span className="text-slate-300">|</span>
+                          <span>
+                            Tabela Venda (Piso): <strong className="text-indigo-950 font-bold">{formatBRL(pricing.precoVendaMin)}</strong>
+                          </span>
+                          <span className="text-slate-300">|</span>
+                          <span>
+                            Desconto máx. permitido:{' '}
+                            <strong className="text-emerald-700 font-bold">
+                              {pricing.maxDescontoPerc.toFixed(1)}% ({formatBRL(pricing.maxDescontoValor)})
+                            </strong>
+                          </span>
+                        </div>
+                        {pricing.isAbaixoPiso && (
+                          <div className="text-[10px] font-bold text-amber-800 bg-amber-100/70 border border-amber-300 rounded-lg px-2 py-0.5 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 text-amber-700 shrink-0" />
+                            <span>Preço praticado ({formatBRL(pricing.precoEfetivo)}) está abaixo do piso ({formatBRL(pricing.precoVendaMin)})!</span>
+                          </div>
+                        )}
                       </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
+
+            {/* Botão + Adicionar Produto (Tracejado igual versão de pedidos) */}
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const el = document.getElementById('catalogo-busca-input') as HTMLInputElement
+                  if (el) {
+                    el.focus()
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                  }
+                }}
+                className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-[#0D6BAF] bg-sky-50/40 hover:bg-sky-50 px-4 py-2.5 text-xs font-bold text-[#0D6BAF] transition-colors cursor-pointer shadow-2xs active:scale-98"
+              >
+                <Plus className="w-4 h-4" /> Adicionar Produto
+              </button>
+            </div>
           </div>
 
           {/* ETAPA 3: CONDIÇÕES COMERCIAIS & 3 CARDS DE PAGAMENTO */}
