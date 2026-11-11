@@ -18,23 +18,33 @@
     <meta name="apple-mobile-web-app-title" content="Bem Aviv Hub" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>Bem Aviv Hub</title>
-      <script>
+    <script>
       (function() {
-        var isOrcamento = window.location.pathname.startsWith('/v2/orcamento');
+        var path = window.location.pathname.toLowerCase();
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
         manifestLink.id = 'app-manifest-link';
-        manifestLink.href = isOrcamento ? '/manifest-orcamento.webmanifest' : '/manifest.webmanifest';
-        document.head.appendChild(manifestLink);
 
         var appleIcon = document.querySelector('link[rel="apple-touch-icon"]');
-        if (appleIcon && isOrcamento) {
-          appleIcon.href = '/apple-touch-icon-orcamento.png';
-        }
         var themeMeta = document.querySelector('meta[name="theme-color"]');
-        if (themeMeta && !isOrcamento) {
-          themeMeta.content = '#FFFFFF';
+
+        if (path.startsWith('/v2/orcamento')) {
+          manifestLink.href = '/manifest-orcamento.webmanifest';
+          if (appleIcon) appleIcon.href = '/apple-touch-icon-orcamento.png';
+          if (themeMeta) themeMeta.content = '#0F3764';
+          document.title = 'Bem Aviv Orçamentos';
+        } else if (path.startsWith('/v2')) {
+          manifestLink.href = '/manifest-v2.webmanifest';
+          if (appleIcon) appleIcon.href = '/apple-touch-icon.png';
+          if (themeMeta) themeMeta.content = '#FFFFFF';
+          document.title = 'Bem Aviv V2';
+        } else {
+          manifestLink.href = '/manifest-gestao.webmanifest';
+          if (appleIcon) appleIcon.href = '/apple-touch-icon.png';
+          if (themeMeta) themeMeta.content = '#FFFFFF';
+          document.title = 'Bem Aviv Gestão';
         }
+        document.head.appendChild(manifestLink);
       })();
     </script>
   </head>

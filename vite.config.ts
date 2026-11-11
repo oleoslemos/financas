@@ -29,6 +29,8 @@ export default defineConfig(() => {
           'maskable-orcamento-512x512.png',
           'logo-bem-aviv.png',
           'manifest-orcamento.webmanifest',
+          'manifest-v2.webmanifest',
+          'manifest-gestao.webmanifest',
         ],
         manifest: {
           name: 'Bem Aviv Hub',
