@@ -162,6 +162,58 @@ export function V2SettingsRegrasComerciais() {
             </div>
           </div>
 
+          {/* Desconto comercial Até 5x */}
+          <div className="flex items-center justify-between pt-3 gap-4">
+            <div>
+              <p className="font-bold text-slate-900 text-sm">Desconto padrão "Até 5x"</p>
+              <p className="text-xs text-slate-500 font-medium">
+                Percentual aplicado automaticamente no cartão de condição comercial "Até 5x"
+              </p>
+            </div>
+            <div className="relative w-28 shrink-0">
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.5"
+                value={rules.desconto_5x_percentual ?? 5}
+                onChange={(e) =>
+                  setRules((prev) => ({ ...prev, desconto_5x_percentual: parseFloat(e.target.value) || 0 }))
+                }
+                className="w-full text-right pr-7 pl-3 py-2 rounded-xl border border-slate-200 font-bold text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                %
+              </span>
+            </div>
+          </div>
+
+          {/* Desconto comercial À Vista */}
+          <div className="flex items-center justify-between pt-3 gap-4">
+            <div>
+              <p className="font-bold text-slate-900 text-sm">Desconto padrão "À Vista"</p>
+              <p className="text-xs text-slate-500 font-medium">
+                Percentual aplicado automaticamente no cartão de condição comercial "À Vista"
+              </p>
+            </div>
+            <div className="relative w-28 shrink-0">
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.5"
+                value={rules.desconto_vista_percentual ?? 10}
+                onChange={(e) =>
+                  setRules((prev) => ({ ...prev, desconto_vista_percentual: parseFloat(e.target.value) || 0 }))
+                }
+                className="w-full text-right pr-7 pl-3 py-2 rounded-xl border border-slate-200 font-bold text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                %
+              </span>
+            </div>
+          </div>
+
           {/* Reservar estoque na aprovação */}
           <div className="flex items-center justify-between pt-3 gap-4">
             <div>

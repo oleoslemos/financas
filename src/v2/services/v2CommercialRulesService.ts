@@ -9,6 +9,8 @@ export interface CommercialRules {
   permitir_estoque_insuficiente: boolean
   gerar_contas_receber_ao_aprovar: boolean
   adiantamento_ja_baixado: boolean
+  desconto_5x_percentual: number // ex: 5 (%)
+  desconto_vista_percentual: number // ex: 10 (%)
 }
 
 export const DEFAULT_COMMERCIAL_RULES: CommercialRules = {
@@ -20,6 +22,8 @@ export const DEFAULT_COMMERCIAL_RULES: CommercialRules = {
   permitir_estoque_insuficiente: true,
   gerar_contas_receber_ao_aprovar: true,
   adiantamento_ja_baixado: true,
+  desconto_5x_percentual: 5,
+  desconto_vista_percentual: 10,
 }
 
 const STORAGE_KEY = 'v2_regras_comerciais_config'
@@ -44,6 +48,8 @@ export async function getCommercialRules(): Promise<CommercialRules> {
           permitir_estoque_insuficiente: Boolean(data.permitir_estoque_insuficiente ?? DEFAULT_COMMERCIAL_RULES.permitir_estoque_insuficiente),
           gerar_contas_receber_ao_aprovar: Boolean(data.gerar_contas_receber_ao_aprovar ?? DEFAULT_COMMERCIAL_RULES.gerar_contas_receber_ao_aprovar),
           adiantamento_ja_baixado: Boolean(data.adiantamento_ja_baixado ?? DEFAULT_COMMERCIAL_RULES.adiantamento_ja_baixado),
+          desconto_5x_percentual: Number(data.desconto_5x_percentual ?? DEFAULT_COMMERCIAL_RULES.desconto_5x_percentual),
+          desconto_vista_percentual: Number(data.desconto_vista_percentual ?? DEFAULT_COMMERCIAL_RULES.desconto_vista_percentual),
         }
       }
     } catch {}
@@ -74,6 +80,8 @@ export async function saveCommercialRules(rules: CommercialRules): Promise<void>
         permitir_estoque_insuficiente: rules.permitir_estoque_insuficiente,
         gerar_contas_receber_ao_aprovar: rules.gerar_contas_receber_ao_aprovar,
         adiantamento_ja_baixado: rules.adiantamento_ja_baixado,
+        desconto_5x_percentual: rules.desconto_5x_percentual,
+        desconto_vista_percentual: rules.desconto_vista_percentual,
         updated_at: new Date().toISOString(),
       })
     } catch {}

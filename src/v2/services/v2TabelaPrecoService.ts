@@ -30,27 +30,34 @@ export interface V2PriceTable {
 const KEY_PRICE_TABLES = 'v2_price_tables_v2'
 const SUPABASE_TABLE = 'v2_tabelas_preco'
 
-// ─── CALCULO SUGESTÃO DE VENDAS (REGRA DE ARREDONDAMENTO ESPECIAL) ─────────────
+// ─── CALCULO SUGESTÃO DE VENDAS (REGRA DE ARREDONDAMENTO DETERMINÍSTICA B1) ─
 /**
  * Cálculo: Tabela Vendas Sul + % Reajuste
- * Regra:
- * - truncar o valor calculado (ex: 8060.76 => 8060)
- * - olhar o último dígito do valor truncado:
- *   - se >= 0 e < 5 => arredondar para 5 (ex: 8060 => 8065.00)
- *   - se >= 5 e <= 9 => arredondar para a próxima dezena (ex: 11195 => 11200.00)
+ * Regra determinística formal (B1):
+ * - base = vendas_sul * (1 + reajuste/100)
+ * - v = trunc(base)
+ * - u = v mod 10
+ * - se u = 0: mantém v (já termina em 0)
+ * - se 1 <= u <= 5: v - u + 5 (arredonda para final 5)
+ * - se 6 <= u <= 9: v - u + 10 (arredonda para a próxima dezena)
+ * Exemplos:
+ * 1.232,80 => v = 1232, u = 2 => 1232 - 2 + 5 = 1235.00
+ * 8.060,00 => v = 8060, u = 0 => 8060.00
+ * 11.197,00 => v = 11197, u = 7 => 11197 - 7 + 10 = 11200.00
  */
 export function calcSugestaoVendas(tabelaVendasSul: number, reajustePercent: number): number {
   if (!tabelaVendasSul || tabelaVendasSul <= 0) return 0
 
   const raw = tabelaVendasSul * (1 + (reajustePercent || 0) / 100)
-  const truncated = Math.floor(raw)
-  const lastDigit = Math.abs(truncated) % 10
-  const baseTens = Math.floor(truncated / 10) * 10
+  const v = Math.floor(raw)
+  const u = Math.abs(v) % 10
 
-  if (lastDigit >= 0 && lastDigit < 5) {
-    return baseTens + 5
+  if (u === 0) {
+    return v
+  } else if (u >= 1 && u <= 5) {
+    return v - u + 5
   } else {
-    return baseTens + 10
+    return v - u + 10
   }
 }
 

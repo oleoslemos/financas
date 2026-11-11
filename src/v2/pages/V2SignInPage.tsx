@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { loginV2User } from '../services/v2AuthService'
+import { useState, useEffect } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
+import { loginV2User, getCurrentV2User } from '../services/v2AuthService'
 import {
   Eye,
   EyeOff,
@@ -9,8 +9,30 @@ import {
   Loader2,
 } from 'lucide-react'
 
-export function V2SignInPage() {
+interface V2SignInPageProps {
+  variant?: 'default' | 'orcamento'
+}
+
+export function V2SignInPage({ variant = 'default' }: V2SignInPageProps) {
   const navigate = useNavigate()
+  const location = useLocation()
+
+  // Redireciona imediatamente se já estiver logado (sessão compartilhada)
+  useEffect(() => {
+    const existing = getCurrentV2User()
+    if (existing) {
+      if (variant === 'orcamento') {
+        const params = new URLSearchParams(location.search)
+        const redirectParam = params.get('redirect')
+        const destination = redirectParam && redirectParam.startsWith('/v2/orcamento/')
+          ? redirectParam
+          : '/v2/orcamento/tabela-preco'
+        navigate(destination, { replace: true })
+      } else {
+        navigate('/v2', { replace: true })
+      }
+    }
+  }, [variant, navigate, location.search])
 
   // Form States
   const [showPassword, setShowPassword] = useState(false)
@@ -42,7 +64,16 @@ export function V2SignInPage() {
 
       setSuccessMessage(`Bem-vindo, ${user.full_name}!`)
       setTimeout(() => {
-        navigate('/v2')
+        if (variant === 'orcamento') {
+          const params = new URLSearchParams(location.search)
+          const redirectParam = params.get('redirect')
+          const destination = redirectParam && redirectParam.startsWith('/v2/orcamento/')
+            ? redirectParam
+            : '/v2/orcamento/tabela-preco'
+          navigate(destination)
+        } else {
+          navigate('/v2')
+        }
       }, 600)
     } catch {
       setErrorMessage('Erro ao realizar login. Verifique seu usuário e senha.')

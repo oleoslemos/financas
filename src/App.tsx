@@ -68,6 +68,13 @@ const ProjectClientsPage = lazy(() => import('./pages/ProjectClientsPage').then(
 const ProjectAssigneesPage = lazy(() => import('./pages/ProjectAssigneesPage').then((m) => ({ default: m.ProjectAssigneesPage })))
 
 // V2 Imports
+// V2 Orçamento Mobile
+const V2OrcamentoGuard = lazy(() => import('./v2/orcamento/guards/V2OrcamentoGuard').then((m) => ({ default: m.V2OrcamentoGuard })))
+const V2OrcamentoLayout = lazy(() => import('./v2/orcamento/layouts/V2OrcamentoLayout').then((m) => ({ default: m.V2OrcamentoLayout })))
+const V2OrcamentoTabelaPrecoPage = lazy(() => import('./v2/orcamento/pages/V2OrcamentoTabelaPrecoPage').then((m) => ({ default: m.V2OrcamentoTabelaPrecoPage })))
+const V2OrcamentoListaPage = lazy(() => import('./v2/orcamento/pages/V2OrcamentoListaPage').then((m) => ({ default: m.V2OrcamentoListaPage })))
+const V2OrcamentoFormPage = lazy(() => import('./v2/orcamento/pages/V2OrcamentoFormPage').then((m) => ({ default: m.V2OrcamentoFormPage })))
+const V2OrcamentoClientesCrmPage = lazy(() => import('./v2/orcamento/pages/V2OrcamentoClientesCrmPage').then((m) => ({ default: m.V2OrcamentoClientesCrmPage })))
 const V2SignInPage = lazy(() => import('./v2/pages/V2SignInPage').then((m) => ({ default: m.V2SignInPage })))
 const V2AppLayout = lazy(() => import('./v2/components/V2AppLayout').then((m) => ({ default: m.V2AppLayout })))
 const V2AdminUsersPage = lazy(() => import('./v2/pages/V2AdminUsersPage').then((m) => ({ default: m.V2AdminUsersPage })))
@@ -107,6 +114,19 @@ export default function App() {
     <Suspense fallback={<p className="text-sm text-slate-500 p-4">Carregando módulo...</p>}>
       <Routes>
         {/* Rotas V2 */}
+        {/* Módulo Orçamento Mobile */}
+        <Route path="/v2/orcamento/login" element={<V2SignInPage variant="orcamento" />} />
+        <Route element={<V2OrcamentoGuard />}>
+          <Route element={<V2OrcamentoLayout />}>
+            <Route path="/v2/orcamento" element={<Navigate to="/v2/orcamento/tabela-preco" replace />} />
+            <Route path="/v2/orcamento/tabela-preco" element={<V2OrcamentoTabelaPrecoPage />} />
+            <Route path="/v2/orcamento/propostas" element={<V2OrcamentoListaPage />} />
+            <Route path="/v2/orcamento/propostas/nova" element={<V2OrcamentoFormPage />} />
+            <Route path="/v2/orcamento/propostas/:id" element={<V2OrcamentoFormPage />} />
+            <Route path="/v2/orcamento/clientes" element={<V2OrcamentoClientesCrmPage />} />
+            <Route path="/v2/orcamento/*" element={<Navigate to="/v2/orcamento/tabela-preco" replace />} />
+          </Route>
+        </Route>
         <Route path="/v2/login" element={<V2SignInPage />} />
         <Route path="/v2/admin/usuarios" element={<V2AdminUsersPage />} />
         <Route element={<V2AppLayout />}>
