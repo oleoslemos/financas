@@ -827,7 +827,7 @@ export interface OrderStats {
 
 export function computeOrderStats(orders: ClientOrderRow[]): OrderStats {
   const sales = orders.filter(
-    (o) => o.document_type === 'PEDIDO' && !/CANCEL/i.test(o.status ?? ''),
+    (o) => o.document_type === 'PEDIDO' && !/CANCEL/i.test(o.status ?? '') && /APROVADO/i.test(o.status ?? ''),
   )
   const total = sales.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0)
   const count = sales.length
