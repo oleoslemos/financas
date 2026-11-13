@@ -125,8 +125,9 @@ export function V2ClientDrawer({
   const [addingRelative, setAddingRelative] = useState(false)
 
   // Orders state
-  const [orders, setOrders] = useState<ClientOrderRow[]>([])
-  const [loadingOrders, setLoadingOrders] = useState(false)
+  const [orders, setOrders] = useState<ClientOrderRow[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [filterParams, setFilterParams] = useState<{ documentType?: string }>({});
 
   const overlayRef = useRef<HTMLDivElement>(null)
   const prevClientIdRef = useRef<string | null>(null)
@@ -453,15 +454,26 @@ export function V2ClientDrawer({
     }
   }
 
-  const orderStats = useMemo(() => {
-    const s = computeOrderStats(orders)
-    return {
-      total: s.total,
-      count: s.count,
-      average: s.average,
-      lastOrderDate: s.lastOrderDate ? formatDate(s.lastOrderDate) : '—',
-    }
-  }, [orders])
+  const [showAll, setShowAll] = React.useState(true);
+const orderStats = useMemo(() => {
+  const s = computeOrderStats(orders);
+  return {
+    total: s.total,
+    count: s.count,
+    average: s.average,
+    lastOrderDate: s.lastOrderDate ? formatDate(s.lastOrderDate) : '—',
+  };
+}, [orders]);
+
+// Filter orders (optionally by document type), exclude CANCELADO, and sort by most recent
+const displayedOrders = useMemo(() => {
+  let result = orders.filter((o) => (o.status || '').toUpperCase() !== 'CANCELADO');
+  if (filterParams.documentType) {
+    result = result.filter((o) => o.document_type === filterParams.documentType);
+  }
+  // Keep sorting by order_date descending
+  return result.sort((a, b) => new Date(b.order_date).getTime() - new Date(a.order_date).getTime());
+}, [orders, filterParams.documentType]);
 
   const formatBRL = (val: number) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
   const BRAND_BLUE = '#0D6BAF'
@@ -1361,11 +1373,11 @@ export function V2ClientDrawer({
                             </tr>
                           </thead>
                           <tbody>
-                            {orders.map((ord, idx) => (
+                            {displayedOrders.map((ord, idx) => (
                               <tr
                                 key={ord.id}
                                 style={{
-                                  borderBottom: idx < orders.length - 1 ? '1px solid #F3F4F6' : 'none',
+                                  borderBottom: idx < displayedOrders.length - 1 ? '1px solid #F3F4F6' : 'none',
                                   background: idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA',
                                 }}
                               >
@@ -1394,8 +1406,8 @@ export function V2ClientDrawer({
                                       borderRadius: 4,
                                       fontSize: 10,
                                       fontWeight: 700,
-                                      background: ord.document_type === 'PEDIDO' ? '#DBEAFE' : '#FEF3C7',
-                                      color: ord.document_type === 'PEDIDO' ? '#1E40AF' : '#92400E',
+                                      background: ord.document_type === 'PEDIDO' ? '#DBEAFE' : '#FFE4B5',
+                                      color: ord.document_type === 'PEDIDO' ? '#1E40AF' : '#B45309',
                                     }}
                                   >
                                     {ord.document_type === 'PEDIDO' ? 'Pedido' : 'Orçamento'}
@@ -1423,8 +1435,35 @@ export function V2ClientDrawer({
                                 >
                                   {formatBRL(Number(ord.total_amount) || 0)}
                                 </td>
-                                <td style={{ padding: '8px 8px', color: '#4B5563', fontSize: 11 }}>
-                                  {ord.status || '—'}
+                                <td style={{ padding: '8px 8px' }}>
+                                  {(() => {
+                                    const s = (ord.status || '').toUpperCase();
+                                    const cfg =
+                                      s === 'APROVADO'
+                                        ? { bg: '#D1FAE5', color: '#065F46', border: '#6EE7B7', label: 'Aprovado' }
+                                        : s === 'PENDENTE'
+                                        ? { bg: '#FEF3C7', color: '#92400E', border: '#FCD34D', label: 'Pendente' }
+                                        : s === 'EM ABERTO' || s === 'ABERTO'
+                                        ? { bg: '#E0F2FE', color: '#075985', border: '#BAE6FD', label: ord.status }
+                                        : { bg: '#F3F4F6', color: '#6B7280', border: '#E5E7EB', label: ord.status || '—' };
+                                    return (
+                                      <span
+                                        style={{
+                                          display: 'inline-block',
+                                          padding: '2px 7px',
+                                          borderRadius: 4,
+                                          fontSize: 10,
+                                          fontWeight: 700,
+                                          background: cfg.bg,
+                                          color: cfg.color,
+                                          border: `1px solid ${cfg.border}`,
+                                          whiteSpace: 'nowrap',
+                                        }}
+                                      >
+                                        {cfg.label}
+                                      </span>
+                                    );
+                                  })()}
                                 </td>
                               </tr>
                             ))}
