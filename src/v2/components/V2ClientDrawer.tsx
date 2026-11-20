@@ -127,6 +127,7 @@ export function V2ClientDrawer({
   // Orders state
   const [orders, setOrders] = useState<ClientOrderRow[]>([]);
   const [filterParams] = useState<{ documentType?: string }>({});
+  const [loadingOrders, setLoadingOrders] = useState(false);
 
 
   const overlayRef = useRef<HTMLDivElement>(null)
