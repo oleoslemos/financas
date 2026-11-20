@@ -331,6 +331,40 @@ export async function updateClient(
   return { data: data as unknown as BemAvivClient, error: null }
 }
 
+// New helper to update client and propagate name change to orders
+export async function updateClienteNome(
+  id: string,
+  changes: Partial<BemAvivClientInput>,
+  companyId?: string | null,
+): Promise<{ data: BemAvivClient | null; error: string | null }> {
+  // First, update the client record
+  const clientResult = await updateClient(id, changes, companyId)
+  if (clientResult.error) {
+    return { data: null, error: clientResult.error }
+  }
+  const updatedClient = clientResult.data
+
+  // If the full_name was changed, propagate to orders via RPC
+  if (changes.full_name && updatedClient) {
+    try {
+      const { error: rpcError } = await supabase.rpc('public.update_client_name_on_orders', {
+        p_client_id: id,
+        p_new_name: changes.full_name,
+      })
+      if (rpcError) {
+        console.error('RPC error updating client name on orders:', rpcError)
+        // Return client data but also report RPC error
+        return { data: updatedClient, error: rpcError.message }
+      }
+    } catch (e: any) {
+      console.error('Exception calling RPC:', e)
+      return { data: updatedClient, error: e.message ?? 'Error calling RPC' }
+    }
+  }
+
+  return { data: updatedClient, error: null }
+}
+
 export async function deleteClient(
   id: string,
   companyId?: string | null,
