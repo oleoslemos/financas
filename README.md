@@ -1,0 +1,85 @@
+# LSH
+
+Planejamento financeiro (web + PWA): **Clerk** (login) + **Supabase** (Postgres + RLS).
+
+## Documentação do módulo Bem Aviv
+
+- Visão funcional do menu, status de implementação e próximos passos:
+  - [`BEMAVIV_MENU_IMPLEMENTACAO_E_PROXIMOS_PASSOS.md`](./BEMAVIV_MENU_IMPLEMENTACAO_E_PROXIMOS_PASSOS.md)
+
+### Troubleshooting rápido (Follow-up)
+
+- Se o contato for registrado mas não aparecer no histórico, confirme se o front está usando o mesmo padrão de `user_id` da tabela `bem_aviv_client_followups`.
+- Referência da correção aplicada em 27/04/2026: seção **Correções recentes** no documento do Bem Aviv.
+
+## Rodar local
+
+```bash
+npm install
+cp .env.example .env
+# Preencha VITE_* no .env
+npm run dev
+```
+
+## Supabase
+
+1. Crie o projeto no [Supabase](https://supabase.com).
+2. No **SQL Editor**, execute o arquivo [`supabase/migrations/20260320120000_initial_schema.sql`](./supabase/migrations/20260320120000_initial_schema.sql).
+3. Configure a integração **Clerk ↔ Supabase** (recomendado: **nativa**, sem template):
+   - [Documentação Clerk + Supabase](https://clerk.com/docs/integrations/databases/supabase)
+   - No **Clerk**: ative a integração Supabase e copie o **Clerk domain**.
+   - No **Supabase**: **Authentication → Sign In / Up → Add provider → Clerk** e cole o domínio.
+   - O app envia o **token de sessão** do Clerk (`getToken()`). Opcionalmente ainda tenta o template **`supabase`** se você usar o fluxo legado.
+   - RLS continua com `auth.jwt()->>'sub'` = ID do usuário no Clerk.
+
+## Clerk
+
+1. Crie uma aplicação em [Clerk](https://clerk.com).
+2. Copie a **Publishable key** para `VITE_CLERK_PUBLISHABLE_KEY`.
+3. Em **Paths**, use sign-in `/sign-in` e sign-up `/sign-up` (o app já expõe essas rotas).
+
+### Restringir quem pode usar o app
+
+**1) No código (já implementado)**  
+Defina no `.env` e na Vercel a variável:
+
+`VITE_ALLOWED_EMAILS=leoslemos@gmail.com,suelenjalves@gmail.com`
+
+(separados por vírgula ou `;`, maiúsculas/minúsculas ignoradas). Quem entrar com outro e-mail vê “Acesso restrito” e pode sair.  
+Se `VITE_ALLOWED_EMAILS` estiver vazia, **não** há esse filtro no front.
+
+**Lista por host (um único build)** — defina `VITE_ALLOWED_EMAILS_BY_HOST` como JSON: chave = hostname (ex.: `bemaviv.vercel.app`), valor = mesma lista CSV de e-mails. Se o host não existir no JSON, vale `VITE_ALLOWED_EMAILS`. Opcional: `VITE_DEFAULT_COMPANY_SLUG_BY_HOST` para sobrescrever a empresa padrão por host (slugs em `public.companies`).
+
+**Clerk + RLS multi-empresa:** as policies usam `public.auth_jwt_email_lower()` para casar com `company_members.email`. No Clerk, inclua o **e-mail** no **Session token** (Customize session token → claims), por exemplo `{"email": "{{user.primary_email_address.email_address}}"}` ou o formato recomendado na documentação atual do Clerk + Supabase, para que o Postgres receba o e-mail no JWT.
+
+**Empresas (Bem Aviv / ComfortCare):** quais empresas o usuário vê vêm de `company_members` (e-mail). O hostname só sugere o padrão (`bemaviv.vercel.app` → `bem-aviv`, `distribuidoreko7.vercel.app` → `comfortcare`). Se o e-mail estiver em **duas** empresas, o app pede para escolher a empresa **antes** do menu (por sessão do navegador); depois pode trocar no seletor do topo.
+
+### Workspace compartilhado (mesmos dados para todos)
+
+Defina `VITE_SHARED_DATA_OWNER_ID` com o `user.id` (Clerk) do usuário dono dos dados (ex.: conta do Léo).  
+Com isso, todas as telas passam a ler/gravar usando esse mesmo `user_id`, independentemente de quem logou.
+
+Exemplo:
+
+`VITE_SHARED_DATA_OWNER_ID=user_2abcDEF...`
+
+Além disso, aplique a migration `supabase/migrations/20260407110000_shared_workspace_policies.sql` para permitir acesso compartilhado entre usuários autenticados.
+
+**2) No Clerk (recomendado para bloquear cadastro)**  
+No [Clerk Dashboard](https://dashboard.clerk.com) → sua aplicação → **User & authentication** → **Restrictions** (ou **Allowlist** / lista permitida, conforme o plano): limite quem pode **criar conta** ou use **somente convites**, alinhado aos mesmos e-mails. Assim estranhos nem chegam a logar.
+
+> Os valores `VITE_*` vão no bundle do navegador — a lista de e-mails não é “secreta”. Para regra sensível, use restrições no Clerk ou um backend.
+
+## Deploy na Vercel
+
+1. [Importar](https://vercel.com/new) o repositório Git. Para o domínio **`bemaviv.vercel.app`**, o **nome do projeto** na Vercel deve ser **`bemaviv`**.
+2. **Root Directory**: vazio (raiz), salvo se o código estiver em subpasta.
+3. **Environment Variables** (Production e Preview): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_CLERK_PUBLISHABLE_KEY`, e opcionalmente `VITE_ALLOWED_EMAILS` (ex.: `a@x.com,b@y.com`).
+4. O [`vercel.json`](./vercel.json) usa `npm install --include=dev` (garante Vite/TypeScript no build), `npm run build` e saída **`dist`**, além do rewrite do SPA.
+
+**Se o deploy falhar:** abra o deployment → log de **Build** e veja a última mensagem de erro. Comuns: `vite`/`tsc` não encontrados (corrigido com o `installCommand` acima), repositório desconectado (**Settings → Git**), ou **Root Directory** errado.
+
+## Segurança
+
+- Não commite `.env`.
+- Não use `SUPABASE_SERVICE_ROLE_KEY` no frontend; só no servidor se um dia houver backend.

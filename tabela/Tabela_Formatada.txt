@@ -1,0 +1,787 @@
+modelo | dimensoes | preço venda
+Diamante (40cm) | 0,78 ou 0,88 x 1,88 | 4194,53
+Série Ouro Premium (35cm) | 0,78 ou 0,88 x 1,88 | 3510,75
+Pangeia (29cm) | 0,78 ou 0,88 x 1,88 | 2879,67
+News (26cm) | 0,78 ou 0,88 x 1,88 | 2371,67
+Eletrônicos Quântica + Vibro e Cromo (Premium) | 0,78 ou 0,88 x 1,88 | 1223,39
+Diamante (40cm) | 1,19 x 1,88 | 5033,44
+Série Ouro Premium (35cm) | 1,19 x 1,88 | 4212,90
+Pangeia (29cm) | 1,19 x 1,88 | 3455,61
+News (26cm) | 1,19 x 1,88 | 2846,00
+Diamante (40cm) | 1,28 ou 1,38 x 1,88 | 6990,89
+Série Ouro Premium (35cm) | 1,28 ou 1,38 x 1,88 | 5851,25
+Pangeia (29cm) | 1,28 ou 1,38 x 1,88 | 4799,46
+News (26cm) | 1,28 ou 1,38 x 1,88 | 3952,78
+Eletrônicos Quântica + Vibro e Cromo (Premium) | 1,28 ou 1,38 x 1,88 | 1635,79
+Diamante (40cm) | 1,58 x 1,98 | 8389,07
+Série Ouro Premium (35cm) | 1,58 x 1,98 | 7021,50
+Pangeia (29cm) | 1,58 x 1,98 | 5759,35
+News (26cm) | 1,58 x 1,98 | 4743,33
+Diamante (40cm) | 1,93 x 2,03 | 9437,70
+Série Ouro Premium (35cm) | 1,93 x 2,03 | 7899,19
+Pangeia (29cm) | 1,93 x 2,03 | 6479,26
+News (26cm) | 1,93 x 2,03 | 5336,25
+Diamante (40cm) | acima 1,93 x acima 2,03 | 10136,79
+Série Ouro Premium (35cm) | acima 1,93 x acima 2,03 | 8484,31
+Pangeia (29cm) | acima 1,93 x acima 2,03 | 6959,21
+News (26cm) | acima 1,93 x acima 2,03 | 5731,53
+Box Premium C/ Baú (48cm) | 0,78 ou 0,88 x 1,88 | 1372,44
+Box Premium Clássico (35cm) | 0,78 ou 0,88 x 1,88 | 443,16
+Box Premium Slim (30cm) | 0,78 ou 0,88 x 1,88 | 372,57
+Box Premium C/ Baú (48cm) | 1,19 x 1,88 | 1567,43
+Box Premium Clássico (35cm) | 1,19 x 1,88 | 517,68
+Box Premium Slim (30cm) | 1,19 x 1,88 | 447,09
+Box Premium C/ Baú (48cm) | 1,28 ou 1,38 x 1,88 | 1718,99
+Box Premium Clássico (35cm) | 1,28 ou 1,38 x 1,88 | 691,55
+Box Premium Slim (30cm) | 1,28 ou 1,38 x 1,88 | 620,96
+Box Premium C/ Baú (48cm) | 1,58 x 1,98 | 2934,53
+Box Premium Clássico (35cm) | 1,58 x 1,98 | 1083,10
+Box Premium Slim (30cm) | 1,58 x 1,98 | 1012,51
+Box Premium C/ Baú (48cm) | 1,93 x 2,03 | 3089,01
+Box Premium Clássico (35cm) | 1,93 x 2,03 | 1224,39
+Box Premium Slim (30cm) | 1,93 x 2,03 | 1153,80
+Box Premium C/ Baú (48cm) | acima 1,93 x acima 2,03 | 3306,00
+Box Premium Clássico (35cm) | acima 1,93 x acima 2,03 | 1260,40
+Box Premium Slim (30cm) | acima 1,93 x acima 2,03 | 1189,81
+Cabeceira Olímpia | módulo 0,34 x 1,30 | 92,49
+Cabeceira Maceió (+12cm) | p/ box 0,88 | 348,70
+Cabeceira Cincinatti (+12cm) | p/ box 0,88 | 275,26
+Cabeceira Rio (+12cm) | p/ box 0,88 | 275,26
+Cabeceira Havaí (+12cm) | p/ box 0,88 | 398,91
+Cabeceira Havaí Slim (+12cm) | p/ box 0,88 | 327,27
+Cabeceira Himalaia (+12cm) | p/ box 0,88 | 282,24
+Cabeceira Olímpia | p/ box 0,88 | 277,47
+Cabeceira Maceió (+12cm) | p/ box 1,19 | 358,65
+Cabeceira Cincinatti (+12cm) | p/ box 1,19 | 283,12
+Cabeceira Rio (+12cm) | p/ box 1,19 | 283,12
+Cabeceira Havaí (+12cm) | p/ box 1,19 | 410,31
+Cabeceira Havaí Slim (+12cm) | p/ box 1,19 | 336,61
+Cabeceira Himalaia (+12cm) | p/ box 1,19 | 290,30
+Cabeceira Olímpia | p/ box 1,19 | 369,96
+Cabeceira Maceió (+12cm) | p/ box 1,38 | 498,13
+Cabeceira Cincinatti (+12cm) | p/ box 1,38 | 393,22
+Cabeceira Rio (+12cm) | p/ box 1,38 | 393,22
+Cabeceira Havaí (+12cm) | p/ box 1,38 | 569,87
+Cabeceira Havaí Slim (+12cm) | p/ box 1,38 | 467,52
+Cabeceira Himalaia (+12cm) | p/ box 1,38 | 403,19
+Cabeceira Olímpia | p/ box 1,38 | 462,45
+Cabeceira Maceió (+12cm) | p/ box 1,58 | 597,75
+Cabeceira Cincinatti (+12cm) | p/ box 1,58 | 471,87
+Cabeceira Rio (+12cm) | p/ box 1,58 | 471,87
+Cabeceira Havaí (+12cm) | p/ box 1,58 | 683,84
+Cabeceira Havaí Slim (+12cm) | p/ box 1,58 | 561,02
+Cabeceira Himalaia (+12cm) | p/ box 1,58 | 483,83
+Cabeceira Olímpia | p/ box 1,58 | 462,45
+Cabeceira Maceió (+12cm) | p/ box 1,93 | 672,47
+Cabeceira Cincinatti (+12cm) | p/ box 1,93 | 530,85
+Cabeceira Rio (+12cm) | p/ box 1,93 | 530,85
+Cabeceira Havaí (+12cm) | p/ box 1,93 | 769,32
+Cabeceira Havaí Slim (+12cm) | p/ box 1,93 | 631,15
+Cabeceira Himalaia (+12cm) | p/ box 1,93 | 544,31
+Cabeceira Olímpia | p/ box 1,93 | 554,94
+Cabeceira Maceió (+12cm) | p/ box acima 2,05 | 707,34
+Cabeceira Cincinatti (+12cm) | p/ box acima 2,05 | 558,38
+Cabeceira Rio (+12cm) | p/ box acima 2,05 | 558,38
+Cabeceira Havaí (+12cm) | p/ box acima 2,05 | 809,21
+Cabeceira Havaí Slim (+12cm) | p/ box acima 2,05 | 663,87
+Cabeceira Himalaia (+12cm) | p/ box acima 2,05 | 572,53
+Cabeceira Diamante (+12cm) | p/ box 0,88 | 632,21
+Cabeceira Gran Jaguar (+63cm) | p/ box 0,88 | 579,83
+Cabeceira Roma (+25cm) | p/ box 0,88 | 723,98
+Cabeceira Lisboa (+84cm) | p/ box 0,88 | 714,17
+Cabeceira Diamante (+12cm) | p/ box 1,19 | 650,26
+Cabeceira Gran Jaguar (+63cm) | p/ box 1,19 | 596,39
+Cabeceira Roma (+25cm) | p/ box 1,19 | 744,66
+Cabeceira Lisboa (+84cm) | p/ box 1,19 | 725,91
+Cabeceira Diamante (+12cm) | p/ box 1,38 | 903,13
+Cabeceira Gran Jaguar (+63cm) | p/ box 1,38 | 828,32
+Cabeceira Roma (+25cm) | p/ box 1,38 | 1034,24
+Cabeceira Lisboa (+84cm) | p/ box 1,38 | 1008,20
+Cabeceira Diamante (+12cm) | p/ box 1,58 | 1083,76
+Cabeceira Gran Jaguar (+63cm) | p/ box 1,58 | 993,98
+Cabeceira Roma (+25cm) | p/ box 1,58 | 1241,09
+Cabeceira Lisboa (+84cm) | p/ box 1,58 | 1209,84
+Cabeceira Diamante (+12cm) | p/ box 1,93 | 1219,23
+Cabeceira Gran Jaguar (+63cm) | p/ box 1,93 | 1118,23
+Cabeceira Roma (+25cm) | p/ box 1,93 | 1396,23
+Cabeceira Lisboa (+84cm) | p/ box 1,93 | 1361,07
+Cabeceira Diamante (+12cm) | p/ box acima 2,05 | 1282,45
+Cabeceira Gran Jaguar (+63cm) | p/ box acima 2,05 | 1176,21
+Cabeceira Roma (+25cm) | p/ box acima 2,05 | 1468,63
+Cabeceira Lisboa (+84cm) | p/ box acima 2,05 | 1431,65
+Lunar (24cm) | 0,88 x 1,88 | 1154,48
+Único (27cm) | 0,88 x 1,88 | 1613,55
+Eletrônicos Vibro + Quântica (Relax) | 0,88 x 1,88 | 775,40
+Seven Vibro + Quântica (30cm) | 0,88 x 1,88 | 1104,79
+Renova Vibro + Quântica (20cm) | 0,88 x 1,88 | 858,49
+Lunar (24cm) | 1,19 x 1,88 | 1385,37
+Único (27cm) | 1,19 x 1,88 | 1936,26
+Seven Vibro + Quântica (30cm) | 1,19 x 1,88 | 1325,75
+Renova Vibro + Quântica (20cm) | 1,19 x 1,88 | 1030,18
+Lunar (24cm) | 1,38 x 1,88 | 1924,13
+Único (27cm) | 1,38 x 1,88 | 2689,25
+Eletrônicos Vibro + Quântica (Relax) | 1,38 x 1,88 | 912,24
+Seven Vibro + Quântica (30cm) | 1,38 x 1,88 | 1841,31
+Renova Vibro + Quântica (20cm) | 1,38 x 1,88 | 1430,81
+Lunar (24cm) | 1,58 x 1,98 | 2308,95
+Único (27cm) | 1,58 x 1,98 | 3227,10
+Seven Vibro + Quântica (30cm) | 1,58 x 1,98 | 2209,58
+Renova Vibro + Quântica (20cm) | 1,58 x 1,98 | 1716,37
+Lunar (24cm) | 1,93 x 2,03 | 2597,57
+Único (27cm) | 1,93 x 2,03 | 3630,49
+Seven Vibro + Quântica (30cm) | 1,93 x 2,03 | 2485,77
+Renova Vibro + Quântica (20cm) | 1,93 x 2,03 | 1930,66
+Único (27cm) | acima 1,93 x acima 2,03 | 3899,42
+Cabeceira Relax Olímpia | módulo 0,34 x 1,30 | 69,97
+Cabeceira Relax Maceió (+12cm) | p/ box 0,88 | 281,52
+Cabeceira Relax Cincinatti (+12cm) | p/ box 0,88 | 208,08
+Cabeceira Relax Rio (+12cm) | p/ box 0,88 | 208,08
+Cabeceira Relax Havaí (+12cm) | p/ box 0,88 | 314,09
+Cabeceira Relax Havaí Slim (+12cm) | p/ box 0,88 | 247,75
+Cabeceira Relax Himalaia (+12cm) | p/ box 0,88 | 215,07
+Cabeceira Relax Olímpia | p/ box 0,88 | 209,91
+Cabeceira Relax Maceió (+12cm) | p/ box 1,19 | 289,56
+Cabeceira Relax Cincinatti (+12cm) | p/ box 1,19 | 214,03
+Cabeceira Relax Rio (+12cm) | p/ box 1,19 | 214,03
+Cabeceira Relax Havaí (+12cm) | p/ box 1,19 | 323,06
+Cabeceira Relax Havaí Slim (+12cm) | p/ box 1,19 | 254,82
+Cabeceira Relax Himalaia (+12cm) | p/ box 1,19 | 221,21
+Cabeceira Relax Olímpia | p/ box 1,19 | 279,88
+Cabeceira Relax Maceió (+12cm) | p/ box 1,38 | 402,16
+Cabeceira Relax Cincinatti (+12cm) | p/ box 1,38 | 297,26
+Cabeceira Relax Rio (+12cm) | p/ box 1,38 | 297,26
+Cabeceira Relax Havaí (+12cm) | p/ box 1,38 | 448,70
+Cabeceira Relax Havaí Slim (+12cm) | p/ box 1,38 | 353,92
+Cabeceira Relax Himalaia (+12cm) | p/ box 1,38 | 307,24
+Cabeceira Relax Olímpia | p/ box 1,38 | 349,85
+Cabeceira Relax Maceió (+12cm) | p/ box 1,58 | 482,60
+Cabeceira Relax Cincinatti (+12cm) | p/ box 1,58 | 356,71
+Cabeceira Relax Rio (+12cm) | p/ box 1,58 | 356,71
+Cabeceira Relax Havaí (+12cm) | p/ box 1,58 | 538,44
+Cabeceira Relax Havaí Slim (+12cm) | p/ box 1,58 | 424,70
+Cabeceira Relax Himalaia (+12cm) | p/ box 1,58 | 368,69
+Cabeceira Relax Olímpia | p/ box 1,58 | 349,84
+Cabeceira Relax Maceió (+12cm) | p/ box 1,93 | 542,92
+Cabeceira Relax Cincinatti (+12cm) | p/ box 1,93 | 401,30
+Cabeceira Relax Rio (+12cm) | p/ box 1,93 | 401,30
+Cabeceira Relax Havaí (+12cm) | p/ box 1,93 | 605,74
+Cabeceira Relax Havaí Slim (+12cm) | p/ box 1,93 | 477,79
+Cabeceira Relax Himalaia (+12cm) | p/ box 1,93 | 414,77
+Cabeceira Relax Olímpia | p/ box 1,93 | 419,82
+Cabeceira Relax Diamante (+12cm) | p/ box 0,88 | 292,85
+Cabeceira Relax Gran Jaguar (+63cm) | p/ box 0,88 | 466,03
+Cabeceira Relax Roma (+25cm) | p/ box 0,88 | 671,22
+Cabeceira Relax Lisboa (+84cm) | p/ box 0,88 | 714,17
+Cabeceira Relax Diamante (+12cm) | p/ box 1,19 | 301,22
+Cabeceira Relax Gran Jaguar (+63cm) | p/ box 1,19 | 479,34
+Cabeceira Relax Roma (+25cm) | p/ box 1,19 | 690,39
+Cabeceira Relax Lisboa (+84cm) | p/ box 1,19 | 725,91
+Cabeceira Relax Diamante (+12cm) | p/ box 1,38 | 418,36
+Cabeceira Relax Gran Jaguar (+63cm) | p/ box 1,38 | 665,75
+Cabeceira Relax Roma (+25cm) | p/ box 1,38 | 958,87
+Cabeceira Relax Lisboa (+84cm) | p/ box 1,38 | 1008,20
+Cabeceira Relax Diamante (+12cm) | p/ box 1,58 | 502,03
+Cabeceira Relax Gran Jaguar (+63cm) | p/ box 1,58 | 798,90
+Cabeceira Relax Roma (+25cm) | p/ box 1,58 | 1150,64
+Cabeceira Relax Lisboa (+84cm) | p/ box 1,58 | 1209,84
+Cabeceira Relax Diamante (+12cm) | p/ box 1,93 | 564,78
+Cabeceira Relax Gran Jaguar (+63cm) | p/ box 1,93 | 898,76
+Cabeceira Relax Roma (+25cm) | p/ box 1,93 | 1294,47
+Cabeceira Relax Lisboa (+84cm) | p/ box 1,93 | 1361,07
+Cabeceira Relax Diamante (+12cm) | p/ box acima 2,05 | 594,06
+Cabeceira Relax Gran Jaguar (+63cm) | p/ box acima 2,05 | 945,37
+Cabeceira Relax Roma (+25cm) | p/ box acima 2,05 | 1361,59
+Cabeceira Relax Lisboa (+84cm) | p/ box acima 2,05 | 1431,65
+Cama Cabeceira+Cama+Base Gran Jaguar | 0,88 X 1,88 | 2014,43
+Cama Cabeceira+Cama+Base Roma | 0,88 X 1,88 | 1865,73
+Cama Cabeceira+Cama+Base Lisboa | 0,88 X 1,88 | 1732,39
+Cama Cama+Base Gran Jaguar | 0,88 X 1,88 | 1705,57
+Cama Cama+Base Roma | 0,88 X 1,88 | 1556,03
+Cama Cama+Base Lisboa | 0,88 X 1,88 | 1434,80
+Cama Cabeceira+Cama+Base Gran Jaguar | 1,19 X 1,88 | 2071,98
+Cama Cabeceira+Cama+Base Roma | 1,19 X 1,88 | 1919,04
+Cama Cabeceira+Cama+Base Lisboa | 1,19 X 1,88 | 1781,88
+Cama Cama+Base Gran Jaguar | 1,19 X 1,88 | 1754,30
+Cama Cama+Base Roma | 1,19 X 1,88 | 1600,49
+Cama Cama+Base Lisboa | 1,19 X 1,88 | 1475,79
+Cama Cabeceira+Cama+Base Gran Jaguar | 1,38 X 1,88 | 2877,76
+Cama Cabeceira+Cama+Base Roma | 1,38 X 1,88 | 2665,34
+Cama Cabeceira+Cama+Base Lisboa | 1,38 X 1,88 | 2474,84
+Cama Cama+Base Gran Jaguar | 1,38 X 1,88 | 2436,53
+Cama Cama+Base Roma | 1,38 X 1,88 | 2222,90
+Cama Cama+Base Lisboa | 1,38 X 1,88 | 2049,71
+Cama Cabeceira+Cama+Base Gran Jaguar | 1,58 X 1,98 | 3453,32
+Cama Cabeceira+Cama+Base Roma | 1,58 X 1,98 | 3198,41
+Cama Cabeceira+Cama+Base Lisboa | 1,58 X 1,98 | 2969,81
+Cama Cama+Base Gran Jaguar | 1,58 X 1,98 | 2923,84
+Cama Cama+Base Roma | 1,58 X 1,98 | 2667,49
+Cama Cama+Base Lisboa | 1,58 X 1,98 | 2459,66
+Cama Cabeceira+Cama+Base Gran Jaguar | 1,93 X 2,03 | 3884,99
+Cama Cabeceira+Cama+Base Roma | 1,93 X 2,03 | 3598,22
+Cama Cabeceira+Cama+Base Lisboa | 1,93 X 2,03 | 3341,04
+Cama Cama+Base Gran Jaguar | 1,93 X 2,03 | 3289,33
+Cama Cama+Base Roma | 1,93 X 2,03 | 3000,93
+Cama Cama+Base Lisboa | 1,93 X 2,03 | 2767,12
+Cama Cabeceira+Cama+Base Gran Jaguar | ac. 1,93 x ac. 2,03 | 4086,42
+Cama Cabeceira+Cama+Base Roma | ac. 1,93 x ac. 2,03 | 3784,78
+Cama Cabeceira+Cama+Base Lisboa | ac. 1,93 x ac. 2,03 | 3514,28
+Cama Cama+Base Gran Jaguar | ac. 1,93 x ac. 2,03 | 3459,87
+Cama Cama+Base Roma | ac. 1,93 x ac. 2,03 | 3156,53
+Cama Cama+Base Lisboa | ac. 1,93 x ac. 2,03 | 2910,59
+Colchão Baby (12cm) | até 0,87 x 1,50 | 501,50
+Eletrônicos Vibro + Quântica (Colchonete/Baby) | até 0,87 x 1,50 | 752,81
+Colchonete (12cm) | 0,78 ou 0,88 x 1,88 | 1199,92
+Manta Perfilada (3cm) | 0,78 ou 0,88 x 1,88 | 727,22
+Manta de Conforto (3cm) | 0,78 ou 0,88 x 1,88 | 360,59
+Colchonete (12cm) | 1,19 x 1,88 | 1439,90
+Manta Perfilada (3cm) | 1,19 x 1,88 | 872,67
+Manta de Conforto (3cm) | 1,19 x 1,88 | 432,71
+Colchonete (12cm) | 1,28 ou 1,38 x 1,88 | 1999,86
+Eletrônicos Vibro + Quântica (Colchonete/Baby) | 1,28 ou 1,38 x 1,88 | 885,66
+Manta Perfilada (3cm) | 1,28 ou 1,38 x 1,88 | 1212,04
+Manta de Conforto (3cm) | 1,28 ou 1,38 x 1,88 | 600,99
+Colchonete (12cm) | 1,58 x 1,98 | 2399,84
+Manta Perfilada (3cm) | 1,58 x 1,98 | 1454,44
+Manta de Conforto (3cm) | 1,58 x 1,98 | 739,50
+Colchonete (12cm) | 1,93 x 2,03 | 2699,81
+Manta Perfilada (3cm) | 1,93 x 2,03 | 1636,25
+Manta de Conforto (3cm) | 1,93 x 2,03 | 961,35
+Colchonete (12cm) | acima 1,93 x acima 2,03 | 2899,80
+Manta Perfilada (3cm) | acima 1,93 x acima 2,03 | 1757,45
+Manta de Conforto (3cm) | acima 1,93 x acima 2,03 | 1182,45
+Manta Quântica | 0,88 x 1,88 | 634,97
+Manta Quântica | 1,38 x 1,88 | 907,66
+Manta Quântica | 1,58 x 1,98 | 1089,19
+Manta Quântica | 1,93 x 2,03 | 1225,34
+Bicama C/ Cama Auxiliar (elevada) (23 + 20 cm) | 0,88 x 1,98 | 2809,88
+Eletrônicos Quântica + Vibro (Bicama) | 0,88 x 1,98 | 752,82
+Bicama C/ Baú (20 e 16 cm) | 0,90 x 2,00 | 3947,56
+Bicama S/ Baú (20 e 16 cm) | 0,90 x 2,00 | 3355,43
+Bicama C/ Baú (20 e 16 cm) | 1,19 x 2,00 | 4342,19
+Bicama S/ Baú (20 e 16 cm) | 1,19 x 2,00 | 3690,86
+CADEIRA PRESIDENTE C/ VIBRO E QUÂNTICA |  | 4353,73
+CADEIRA DIRETOR |  | 2075,09
+CADEIRA SECRETÁRIA |  | 1357,33
+BAÚ P/ PESEIRA |  | 993,97
+POLTRONA |  | 3747,73
+POLTRONA C/ MASS. E QUÂNTICA |  | 4978,67
+POLTRONA RECLINÁVEL C/ VIBRO E QUÂNTICA |  | 5963,70
+TRAVESSEIRO SOFT |  | 143,94
+CORPO - HUGGING |  | 205,21
+ALMOFADA DE VIAGEM |  | 58,59
+SUPORTE MULTICOMFORTO SIMPLES |  | 175,85
+CAPA DE SUPORTE MULTICONF. SIMPLES |  | 36,30
+SUPORTE MULTICONFORTO PREMIUM C/ VIBRO E QUÂNTICA |  | 481,87
+DRIVE |  | 197,16
+DRIVE C/ MASS. E QUÂNTICA |  | 920,39
+OFFICE |  | 133,53
+CAPA DE SUPORTE MULTICONF. PREMIUM |  | 45,33
+Jogo de Lençol Malha | SOLTEIRO 0,88 | 140,93
+Jogo de Lençol Percal Classic Acetinado | SOLTEIRO 0,88 | 232,97
+Lençol Malha | SOLTEIRO 0,88 | 60,61
+Lençol Percal Acetinado | SOLTEIRO 0,88 | 115,02
+Capa Protetor Impermeável | SOLTEIRO 0,88 | 72,15
+Jogo de Lençol Malha | SOLTEIRO 1,19 | 140,93
+Jogo de Lençol Percal Classic Acetinado | SOLTEIRO 1,19 | 232,97
+Lençol Malha | SOLTEIRO 1,19 | 60,61
+Lençol Percal Acetinado | SOLTEIRO 1,19 | 115,02
+Jogo de Lençol Malha | CASAL 1,38 | 188,22
+Jogo de Lençol Percal Classic Acetinado | CASAL 1,38 | 311,14
+Lençol Malha | CASAL 1,38 | 76,90
+Lençol Percal Acetinado | CASAL 1,38 | 153,61
+Capa Protetor Impermeável | CASAL 1,38 | 92,95
+Jogo de Lençol Malha | QUEEN 1,58 | 210,77
+Jogo de Lençol Percal Classic Acetinado | QUEEN 1,58 | 348,42
+Lençol Malha | QUEEN 1,58 | 84,92
+Lençol Percal Acetinado | QUEEN 1,58 | 172,02
+Capa Protetor Impermeável | QUEEN 1,58 | 105,01
+Jogo de Lençol Malha | KING 1,93 | 235,85
+Jogo de Lençol Percal Classic Acetinado | KING 1,93 | 465,14
+Lençol Malha | KING 1,93 | 95,62
+Lençol Percal Acetinado | KING 1,93 | 192,49
+Capa Protetor Impermeável | KING 1,93 | 124,76
+Edredom Malha | SOLTEIRO 0,88 | 207,38
+Edredom Coberdrom Malha | SOLTEIRO 0,88 | 168,45
+Edredom Percal Acetinado | SOLTEIRO 0,88 | 277,47
+Edredom Coberdrom Plush | SOLTEIRO 0,88 | 202,04
+Manta | SOLTEIRO 0,88 | 74,16
+Kit Colcha | SOLTEIRO 0,88 | 133,44
+Kit Colcha c/ Almofadas | SOLTEIRO 0,88 | 158,81
+Edredom Malha | SOLTEIRO 1,19 | 207,38
+Edredom Coberdrom Malha | SOLTEIRO 1,19 | 202,14
+Edredom Percal Acetinado | SOLTEIRO 1,19 | 332,96
+Edredom Coberdrom Plush | SOLTEIRO 1,19 | 242,44
+Kit Colcha | SOLTEIRO 1,19 | 160,13
+Kit Colcha c/ Almofadas | SOLTEIRO 1,19 | 264,68
+Edredom Malha | CASAL 1,38 | 243,89
+Edredom Coberdrom Malha | CASAL 1,38 | 280,75
+Edredom Percal Acetinado | CASAL 1,38 | 462,45
+Edredom Coberdrom Plush | CASAL 1,38 | 336,73
+Manta | CASAL 1,38 | 81,81
+Kit Colcha | CASAL 1,38 | 222,41
+Kit Colcha c/ Almofadas | CASAL 1,38 | 367,61
+Edredom Malha | QUEEN 1,58 | 288,92
+Edredom Coberdrom Malha | QUEEN 1,58 | 336,90
+Edredom Percal Acetinado | QUEEN 1,58 | 554,94
+Edredom Coberdrom Plush | QUEEN 1,58 | 404,08
+Manta | QUEEN 1,58 | 97,05
+Kit Colcha | QUEEN 1,58 | 266,89
+Kit Colcha c/ Almofadas | QUEEN 1,58 | 441,13
+Edredom Malha | KING 1,93 | 354,62
+Edredom Coberdrom Malha | KING 1,93 | 379,01
+Edredom Percal Acetinado | KING 1,93 | 624,30
+Edredom Coberdrom Plush | KING 1,93 | 454,58
+Manta | KING 1,93 | 116,01
+Kit Colcha | KING 1,93 | 300,25
+Kit Colcha c/ Almofadas | KING 1,93 | 496,27
+Fronha Malha | ADULTO (0,70 x 0,50m) | 15,93
+Fronha Percal Classic Acetinado | ADULTO (0,70 x 0,50m) | 15,52
+Capa Protetora | ADULTO (0,70 x 0,50m) | 23,21
+Almofada Avulsa | 0,30 x 0,50 | 47,58
+Almofada Versatile | 0,30 x 0,50 | 25,01
+Fronha Malha | CORPO (1,30 x 0,30m) | 19,11
+Fronha Malha | JUVENIL (0,49 x 0,31m) | 15,93
+Fronha Percal Classic Acetinado | JUVENIL (0,49 x 0,31m) | 15,52
+Capa Protetora | JUVENIL (0,49 x 0,31m) | 21,28
+Almofada Avulsa | 0,40 x 0,40 | 48,81
+Fronha Malha | BABY (0,35 x 0,24m) | 15,93
+Fronha Percal Classic Acetinado | BABY (0,35 x 0,24m) | 15,52
+Capa Protetora | BABY (0,35 x 0,24m) | 13,50
+Almofada Versatile | 0,45 x 0,45 | 25,29
+CHINELO FEMININO |  | 55,48
+CINTA LOMBAR P; M; G; GG; EXG |  | 148,37
+LEGGING FEMININA |  | 141,18
+CHINELO MASCULINO |  | 60,42
+BERMUDA FEMININA |  | 61,99
+TÊNIS FN1 |  | 244,34
+COLAR DE MAGNETOS P; M; G; GG |  | 93,99
+SHORTS FEMININO |  | 85,08
+PALMILHA |  | 47,72
+REGATA FEMININA |  | 39,68
+ADESIVO DE MAGNETO |  | 52,11
+REGATA FITNESS FEMININA |  | 37,26
+IMANTADOR |  | 43,26
+TOP NADADOR FEMININO |  | 47,64
+MÁSCARA |  | 110,42
+TOP TRADICIONAL FEMININO |  | 51,84
+PULSEIRA HEALTH'7 |  | 160,21
+BERMUDA MASCULINA |  | 94,92
+ALM. SUPORTE |  | 50,73
+REGATA MASCULINA |  | 67,06
+COL. FITNESS |  | 50,06
+BLUSA 3/4 UNISSEX |  | 77,69
+COL. EQUILIBRIUM |  | 120,06
+MACAQUINHO |  | 115,45
+COL. NOMADE |  | 251,64
+MACAQUINHO C/ PERNA PRETO |  | 139,76
+GARRAFA EKO7 |  | 251,64
+MACAQUINHO C/ MANGA PRETO |  | 123,48
+MACACAO PRETO |  | 163,43
+Dreams Pet Plus | P (57 X 53cm) | 95,35
+Dreams Pet Slim | P (57 X 53cm) | 67,94
+Dreams Pet Puff | P (57 X 53cm) | 60,50
+SHORTS SAIA PRETO |  | 79,46
+Dreams Pet Plus | M (82 X 71cm) | 157,26
+Dreams Pet Slim | M (82 X 71cm) | 112,06
+Dreams Pet Puff | M (82 X 71cm) | 100,64
+LEGGING FEMININA PRETA EMANA |  | 103,52
+Dreams Pet Plus | G (100 X 86cm) | 198,32
+Dreams Pet Slim | G (100 X 86cm) | 165,04
+BLUSA MASCULINA C/MANGA |  | 85,55
+CALCINHA |  | 52,20
+SUTIÃ |  | 106,50
+JOGO DE TOALHAS (500 g/m²) |  | 239,07
+JOGO DE TOALHAS (800 g/m²) |  | 313,73
+TOALHA BANHO (500 g/m²) |  | 79,22
+TOALHA BANHO (800 g/m²) |  | 108,13
+TOALHA ROSTO (500 g/m²) |  | 38,46
+TOALHA ROSTO (800 g/m²) |  | 46,97
+TAPETE (500 g/m²) |  | 36,49
+TAPETE (800 g/m²) |  | 43,52
+ROUPÃO (360 g/m²) |  | 156,35
+ROUPÃO (PLUSH) |  | 68,42
+CONTROLE DETECTOR QUANTICO E MAGN |  | 172,39
+BASE SUPER INFRA |  | 204,15
+BOLSA MAQUETE (TODOS OS MODELOS) |  | 95,32
+KIT PÁGINA CATÁLOGO MIOLO |  | 81,97
+PASTA MARROM P/ CATÁLOGO |  | 82,98
+MAQUETE SÉRIE OURO C/ VIBRO E QUÂNTICA |  | 971,67
+MAQUETE PANGEIA C/ VIBRO E QUÂNTICA |  | 971,67
+MAQUETE NEWS C/ VIBRO E QUÂNTICA |  | 971,67
+CUIA PERSONALIZADA |  | 62,85
+FACA PERSONALIZADA |  | 116,03
+PIN DE REPRESENTANTE |  | 22,44
+PIN DE DISTRIBUIDOR |  | 172,68
+MOSTRUÁRIO DE TECIDOS |  | 123,50
+SACOLA PEQUENA |  | 8,24
+SACOLA MÉDIA |  | 10,30
+EMBALAGEM P/ COLCHÃO 0,88 |  | 14,42
+EMBALAGEM P/ COLCHÃO 1,38 |  | 18,54
+Peseira Linho Chumbo / Boucle Branco | p/ colchão 0,88 | 242,57
+Peseira Linho Areia / Verde / Sky Dourado / Gelo | p/ colchão 0,88 | 217,80
+Peseira Veludo Azul / Preto | p/ colchão 0,88 | 188,85
+Peseira Suede Bege Escuro / Veludo Grafite / Veludo Cinza | p/ colchão 0,88 | 84,90
+Peseira Linho Bege / Azul / Rose / Prata / Marrom | p/ colchão 0,88 | 72,77
+EMBALAGEM P/ COLCHÃO 1,58 |  | 22,66
+Peseira Linho Chumbo / Boucle Branco | p/ colchão 1,19 | 291,08
+Peseira Linho Areia / Verde / Sky Dourado / Gelo | p/ colchão 1,19 | 261,36
+Peseira Veludo Azul / Preto | p/ colchão 1,19 | 226,62
+Peseira Suede Bege Escuro / Veludo Grafite / Veludo Cinza | p/ colchão 1,19 | 101,88
+Peseira Linho Bege / Azul / Rose / Prata / Marrom | p/ colchão 1,19 | 87,32
+EMBALAGEM P/ COLCHÃO 2,00 |  | 26,78
+Peseira Linho Chumbo / Boucle Branco | p/ colchão 1,38 | 404,28
+Peseira Linho Areia / Verde / Sky Dourado / Gelo | p/ colchão 1,38 | 363,00
+Peseira Veludo Azul / Preto | p/ colchão 1,38 | 314,76
+Peseira Suede Bege Escuro / Veludo Grafite / Veludo Cinza | p/ colchão 1,38 | 141,50
+Peseira Linho Bege / Azul / Rose / Prata / Marrom | p/ colchão 1,38 | 121,28
+EMBALAGEM C/ PAPELÃO |  | 131,44
+Peseira Linho Chumbo / Boucle Branco | p/ colchão 1,58 | 485,13
+Peseira Linho Areia / Verde / Sky Dourado / Gelo | p/ colchão 1,58 | 435,60
+Peseira Veludo Azul / Preto | p/ colchão 1,58 | 377,71
+Peseira Suede Bege Escuro / Veludo Grafite / Veludo Cinza | p/ colchão 1,58 | 169,80
+Peseira Linho Bege / Azul / Rose / Prata / Marrom | p/ colchão 1,58 | 145,54
+EMBALAGEM C/ PLÁSTICO BOLHA |  | 65,72
+Peseira Linho Chumbo / Boucle Branco | p/ colchão 1,93 | 545,77
+Peseira Linho Areia / Verde / Sky Dourado / Gelo | p/ colchão 1,93 | 490,05
+Peseira Veludo Azul / Preto | p/ colchão 1,93 | 424,92
+Peseira Suede Bege Escuro / Veludo Grafite / Veludo Cinza | p/ colchão 1,93 | 191,02
+Peseira Linho Bege / Azul / Rose / Prata / Marrom | p/ colchão 1,93 | 163,73
+KIT PÉS FUME 4X2 12CM |  | 105,62
+Peseira Linho Chumbo / Boucle Branco | p/ colchão ac. 1,93 | 586,20
+Peseira Linho Areia / Verde / Sky Dourado / Gelo | p/ colchão ac. 1,93 | 526,35
+Peseira Veludo Azul / Preto | p/ colchão ac. 1,93 | 456,40
+Peseira Suede Bege Escuro / Veludo Grafite / Veludo Cinza | p/ colchão ac. 1,93 | 205,17
+Peseira Linho Bege / Azul / Rose / Prata / Marrom | p/ colchão ac. 1,93 | 175,86
+CAMADA EXTRA |  | 10,30
+Assistência Espuma D28 STANDARD 10cm (camada niveladora Montreal) | 0,88 x 1,88 | 375,37
+Assistência Espuma D28 STANDARD 10cm (camada niveladora Montreal) | 1,19 x 1,88 | 507,61
+Assistência Espuma D28 STANDARD 10cm (camada niveladora Montreal) | 1,38 x 1,88 | 588,65
+Assistência Espuma D28 STANDARD 10cm (camada niveladora Montreal) | 1,58 x 1,98 | 709,82
+Assistência Espuma D28 STANDARD 10cm (camada niveladora Montreal) | 1,93 x 2,03 | 888,95
+Assistência Espuma D28 STANDARD 16cm (borda p/ colchão de molas) | 0,88 x 1,88 | 95,63
+Assistência Espuma D28 STANDARD 16cm (borda p/ colchão de molas) | 1,19 x 1,88 | 95,66
+Assistência Espuma D28 STANDARD 16cm (borda p/ colchão de molas) | 1,38 x 1,88 | 95,67
+Assistência Espuma D28 STANDARD 16cm (borda p/ colchão de molas) | 1,58 x 1,98 | 100,78
+Assistência Espuma D28 STANDARD 16cm (borda p/ colchão de molas) | 1,93 x 2,03 | 103,35
+Assistência Espuma D28 STANDARD 3cm (camada de médio impacto) | 0,88 x 1,88 | 112,61
+Assistência Espuma D28 STANDARD 3cm (camada de médio impacto) | 1,19 x 1,88 | 152,28
+Assistência Espuma D28 STANDARD 3cm (camada de médio impacto) | 1,38 x 1,88 | 176,60
+Assistência Espuma D28 STANDARD 3cm (camada de médio impacto) | 1,58 x 1,98 | 212,94
+Assistência Espuma D28 STANDARD 3cm (camada de médio impacto) | 1,93 x 2,03 | 266,68
+Assistência Espuma D28 STANDARD 6cm (camada niveladora) | 0,88 x 1,88 | 225,22
+Assistência Espuma D28 STANDARD 6cm (camada niveladora) | 1,19 x 1,88 | 304,56
+Assistência Espuma D28 STANDARD 6cm (camada niveladora) | 1,38 x 1,88 | 353,19
+Assistência Espuma D28 STANDARD 6cm (camada niveladora) | 1,58 x 1,98 | 425,89
+Assistência Espuma D28 STANDARD 6cm (camada niveladora) | 1,93 x 2,03 | 533,37
+Assistência Espuma D33 STANDARD 10cm (camada niveladora G7) | 0,88 x 1,88 | 428,17
+Assistência Espuma D33 STANDARD 10cm (camada niveladora G7) | 1,19 x 1,88 | 579,01
+Assistência Espuma D33 STANDARD 10cm (camada niveladora G7) | 1,38 x 1,88 | 671,45
+Assistência Espuma D33 STANDARD 10cm (camada niveladora G7) | 1,58 x 1,98 | 809,66
+Assistência Espuma D33 STANDARD 10cm (camada niveladora G7) | 1,93 x 2,03 | 1013,99
+Assistência Espuma D33 STANDARD 16cm (borda p/ colchão Diamante) | 0,88 x 1,88 | 109,07
+Assistência Espuma D33 STANDARD 16cm (borda p/ colchão Diamante) | 1,19 x 1,88 | 109,10
+Assistência Espuma D33 STANDARD 16cm (borda p/ colchão Diamante) | 1,38 x 1,88 | 109,11
+Assistência Espuma D33 STANDARD 16cm (borda p/ colchão Diamante) | 1,58 x 1,98 | 114,93
+Assistência Espuma D33 STANDARD 16cm (borda p/ colchão Diamante) | 1,93 x 2,03 | 117,86
+Assistência Espuma D33 STANDARD 3cm (camada de médio impacto) | 0,88 x 1,88 | 128,45
+Assistência Espuma D33 STANDARD 3cm (camada de médio impacto) | 1,19 x 1,88 | 173,70
+Assistência Espuma D33 STANDARD 3cm (camada de médio impacto) | 1,38 x 1,88 | 201,44
+Assistência Espuma D33 STANDARD 3cm (camada de médio impacto) | 1,58 x 1,98 | 242,90
+Assistência Espuma D33 STANDARD 3cm (camada de médio impacto) | 1,93 x 2,03 | 304,20
+Assistência Espuma D33 STANDARD 4cm (camada de médio impacto) | 0,88 x 1,88 | 171,27
+Assistência Espuma D33 STANDARD 4cm (camada de médio impacto) | 1,19 x 1,88 | 231,60
+Assistência Espuma D33 STANDARD 4cm (camada de médio impacto) | 1,38 x 1,88 | 268,58
+Assistência Espuma D33 STANDARD 4cm (camada de médio impacto) | 1,58 x 1,98 | 323,86
+Assistência Espuma D33 STANDARD 4cm (camada de médio impacto) | 1,93 x 2,03 | 405,60
+Assistência Espuma D35 COMFORT 4cm (camada de conforto articular) | 0,88 x 1,88 | 145,74
+Assistência Espuma D35 COMFORT 4cm (camada de conforto articular) | 1,19 x 1,88 | 197,08
+Assistência Espuma D35 COMFORT 4cm (camada de conforto articular) | 1,38 x 1,88 | 228,55
+Assistência Espuma D35 COMFORT 4cm (camada de conforto articular) | 1,58 x 1,98 | 275,59
+Assistência Espuma D35 COMFORT 4cm (camada de conforto articular) | 1,93 x 2,03 | 345,14
+Assistência Espuma D35 COMFORT 9cm (camada de conforto articular) | 0,88 x 1,88 | 327,91
+Assistência Espuma D35 COMFORT 9cm (camada de conforto articular) | 1,19 x 1,88 | 443,43
+Assistência Espuma D35 COMFORT 9cm (camada de conforto articular) | 1,38 x 1,88 | 514,23
+Assistência Espuma D35 COMFORT 9cm (camada de conforto articular) | 1,58 x 1,98 | 620,07
+Assistência Espuma D35 COMFORT 9cm (camada de conforto articular) | 1,93 x 2,03 | 776,56
+Assistência Espuma D35 COMFORT 11cm (camada de conforto articular) | 0,88 x 1,88 | 400,78
+Assistência Espuma D35 COMFORT 11cm (camada de conforto articular) | 1,19 x 1,88 | 541,97
+Assistência Espuma D35 COMFORT 11cm (camada de conforto articular) | 1,38 x 1,88 | 628,50
+Assistência Espuma D35 COMFORT 11cm (camada de conforto articular) | 1,58 x 1,98 | 757,86
+Assistência Espuma D35 COMFORT 11cm (camada de conforto articular) | 1,93 x 2,03 | 949,12
+Assistência Espuma D40 FRESH 3cm (camada hipersoft) | 0,88 x 1,88 | 151,53
+Assistência Espuma D40 FRESH 3cm (camada hipersoft) | 1,19 x 1,88 | 204,92
+Assistência Espuma D40 FRESH 3cm (camada hipersoft) | 1,38 x 1,88 | 237,63
+Assistência Espuma D40 FRESH 3cm (camada hipersoft) | 1,58 x 1,98 | 286,55
+Assistência Espuma D40 FRESH 3cm (camada hipersoft) | 1,93 x 2,03 | 358,86
+Assistência Espuma D45 STANDARD 10cm (caixa ortopédica) | 0,88 x 1,88 | 677,72
+Assistência Espuma D45 STANDARD 10cm (caixa ortopédica) | 1,19 x 1,88 | 916,46
+Assistência Espuma D45 STANDARD 10cm (caixa ortopédica) | 1,38 x 1,88 | 1062,78
+Assistência Espuma D45 STANDARD 10cm (caixa ortopédica) | 1,58 x 1,98 | 1281,53
+Assistência Espuma D45 STANDARD 10cm (caixa ortopédica) | 1,93 x 2,03 | 1604,95
+Assistência Espuma D45 STANDARD 8cm (caixa ortopédica) | 0,88 x 1,88 | 542,17
+Assistência Espuma D45 STANDARD 8cm (caixa ortopédica) | 1,19 x 1,88 | 733,17
+Assistência Espuma D45 STANDARD 8cm (caixa ortopédica) | 1,38 x 1,88 | 850,23
+Assistência Espuma D45 STANDARD 8cm (caixa ortopédica) | 1,58 x 1,98 | 1025,23
+Assistência Espuma D45 STANDARD 8cm (caixa ortopédica) | 1,93 x 2,03 | 1283,96
+Assistência Espuma D60 SPRING 3cm (camada de alta resiliência) | 0,88 x 1,88 | 253,31
+Assistência Espuma D60 SPRING 3cm (camada de alta resiliência) | 1,19 x 1,88 | 342,55
+Assistência Espuma D60 SPRING 3cm (camada de alta resiliência) | 1,38 x 1,88 | 397,24
+Assistência Espuma D60 SPRING 3cm (camada de alta resiliência) | 1,58 x 1,98 | 479,00
+Assistência Espuma D60 SPRING 3cm (camada de alta resiliência) | 1,93 x 2,03 | 599,89
+Assistência Espuma D60 SPRING 6cm (camada de alta resiliência) | 0,88 x 1,88 | 506,62
+Assistência Espuma D60 SPRING 6cm (camada de alta resiliência) | 1,19 x 1,88 | 685,09
+Assistência Espuma D60 SPRING 6cm (camada de alta resiliência) | 1,38 x 1,88 | 794,48
+Assistência Espuma D60 SPRING 6cm (camada de alta resiliência) | 1,58 x 1,98 | 958,00
+Assistência Espuma D60 SPRING 6cm (camada de alta resiliência) | 1,93 x 2,03 | 1199,77
+Assistência Espuma D33 NANOEX PERFILADO 3cm c/ M+IVL | 0,88 x 1,88 | 570,67
+Assistência Espuma D33 NANOEX PERFILADO 3cm c/ M+IVL | 1,19 x 1,88 | 771,70
+Assistência Espuma D33 NANOEX PERFILADO 3cm c/ M+IVL | 1,38 x 1,88 | 894,92
+Assistência Espuma D33 NANOEX PERFILADO 3cm c/ M+IVL | 1,58 x 1,98 | 1079,12
+Assistência Espuma D33 NANOEX PERFILADO 3cm c/ M+IVL | 1,93 x 2,03 | 1351,45
+Assistência Espuma D33 STANDARD PERFILADO 3cm c/ M+IVL | 0,88 x 1,88 | 448,21
+Assistência Espuma D33 STANDARD PERFILADO 3cm c/ M+IVL | 1,19 x 1,88 | 606,11
+Assistência Espuma D33 STANDARD PERFILADO 3cm c/ M+IVL | 1,38 x 1,88 | 702,88
+Assistência Espuma D33 STANDARD PERFILADO 3cm c/ M+IVL | 1,58 x 1,98 | 847,55
+Assistência Espuma D33 STANDARD PERFILADO 3cm c/ M+IVL | 1,93 x 2,03 | 1061,44
+Assistência Espuma RETIRADA DE MAGNETO E/OU IVL |  | 103,00
+Assistência Faixa COMFORT | 0,88 x 1,88 | 81,07
+Assistência Faixa COMFORT | 1,19 x 1,88 | 90,07
+Assistência Faixa COMFORT | 1,38 x 1,88 | 95,61
+Assistência Faixa COMFORT | 1,58 x 1,98 | 104,29
+Assistência Faixa COMFORT | 1,93 x 2,03 | 115,93
+Assistência Faixa CONJ ARTICULADO TRAD versão DIAMANTE (inferior) | 0,88 x 1,88 | 240,05
+Assistência Faixa CONJ ARTICULADO TRAD versão DIAMANTE (inferior) | 1,19 x 1,88 | 266,75
+Assistência Faixa CONJ ARTICULADO TRAD versão DIAMANTE (inferior) | 1,38 x 1,88 | 283,07
+Assistência Faixa CONJ ARTICULADO TRAD versão DIAMANTE (inferior) | 1,58 x 1,98 | 308,88
+Assistência Faixa CONJ ARTICULADO TRAD versão DIAMANTE (inferior) | 1,93 x 2,03 | 342,89
+Assistência Faixa CONJ ARTICULADO TRAD versão DIAMANTE (superior) | 0,88 x 1,88 | 120,03
+Assistência Faixa CONJ ARTICULADO TRAD versão DIAMANTE (superior) | 1,19 x 1,88 | 133,37
+Assistência Faixa CONJ ARTICULADO TRAD versão DIAMANTE (superior) | 1,38 x 1,88 | 141,53
+Assistência Faixa CONJ ARTICULADO TRAD versão DIAMANTE (superior) | 1,58 x 1,98 | 154,44
+Assistência Faixa CONJ ARTICULADO TRAD versão DIAMANTE (superior) | 1,93 x 2,03 | 171,44
+Assistência Faixa CONJ ARTICULADO JOELHO versão DIAMANTE | 0,88 x 1,88 | 240,05
+Assistência Faixa CONJ ARTICULADO JOELHO versão DIAMANTE | 1,19 x 1,88 | 266,75
+Assistência Faixa CONJ ARTICULADO JOELHO versão DIAMANTE | 1,38 x 1,88 | 283,07
+Assistência Faixa CONJ ARTICULADO JOELHO versão DIAMANTE | 1,58 x 1,98 | 308,88
+Assistência Faixa CONJ ARTICULADO JOELHO versão DIAMANTE | 1,93 x 2,03 | 342,89
+Assistência Faixa DIAMANTE (inferior) | 0,88 x 1,88 | 298,26
+Assistência Faixa DIAMANTE (inferior) | 1,19 x 1,88 | 331,38
+Assistência Faixa DIAMANTE (inferior) | 1,38 x 1,88 | 351,69
+Assistência Faixa DIAMANTE (inferior) | 1,58 x 1,98 | 383,77
+Assistência Faixa DIAMANTE (inferior) | 1,93 x 2,03 | 426,54
+Assistência Faixa DIAMANTE (superior) | 0,88 x 1,88 | 159,78
+Assistência Faixa DIAMANTE (superior) | 1,19 x 1,88 | 177,52
+Assistência Faixa DIAMANTE (superior) | 1,38 x 1,88 | 188,41
+Assistência Faixa DIAMANTE (superior) | 1,58 x 1,98 | 205,59
+Assistência Faixa DIAMANTE (superior) | 1,93 x 2,03 | 228,50
+Assistência Faixa COLCHÃO P/ CONJ FLEXIBED (qualquer versão) | 0,88 x 1,88 | 99,42
+Assistência Faixa COLCHÃO P/ CONJ FLEXIBED (qualquer versão) | 1,19 x 1,88 | 110,46
+Assistência Faixa COLCHÃO P/ CONJ FLEXIBED (qualquer versão) | 1,38 x 1,88 | 117,23
+Assistência Faixa COLCHÃO P/ CONJ FLEXIBED (qualquer versão) | 1,58 x 1,98 | 127,92
+Assistência Faixa COLCHÃO P/ CONJ FLEXIBED (qualquer versão) | 1,93 x 2,03 | 142,18
+Assistência Faixa LUNAR | 0,88 x 1,88 | 40,53
+Assistência Faixa LUNAR | 1,19 x 1,88 | 45,03
+Assistência Faixa LUNAR | 1,38 x 1,88 | 47,80
+Assistência Faixa LUNAR | 1,58 x 1,98 | 52,16
+Assistência Faixa LUNAR | 1,93 x 2,03 | 57,96
+Assistência Faixa MONTREAL BY EKO'7 | 0,88 x 1,88 | 31,82
+Assistência Faixa MONTREAL BY EKO'7 | 1,19 x 1,88 | 35,36
+Assistência Faixa MONTREAL BY EKO'7 | 1,38 x 1,88 | 37,53
+Assistência Faixa MONTREAL BY EKO'7 | 1,58 x 1,98 | 40,95
+Assistência Faixa MONTREAL BY EKO'7 | 1,93 x 2,03 | 45,51
+Assistência Faixa ÚNICO | 0,88 x 1,88 | 73,23
+Assistência Faixa ÚNICO | 1,19 x 1,88 | 81,35
+Assistência Faixa ÚNICO | 1,38 x 1,88 | 86,36
+Assistência Faixa ÚNICO | 1,58 x 1,98 | 94,23
+Assistência Faixa ÚNICO | 1,93 x 2,03 | 104,70
+Assistência Faixa CONJ ARTICULADO TRAD versão NEWS | 0,88 x 1,88 | 141,28
+Assistência Faixa CONJ ARTICULADO TRAD versão NEWS | 1,19 x 1,88 | 156,97
+Assistência Faixa CONJ ARTICULADO TRAD versão NEWS | 1,38 x 1,88 | 166,59
+Assistência Faixa CONJ ARTICULADO TRAD versão NEWS | 1,58 x 1,98 | 181,78
+Assistência Faixa CONJ ARTICULADO TRAD versão NEWS | 1,93 x 2,03 | 202,05
+Assistência Faixa NEWS | 0,88 x 1,88 | 134,22
+Assistência Faixa NEWS | 1,19 x 1,88 | 149,12
+Assistência Faixa NEWS | 1,38 x 1,88 | 158,26
+Assistência Faixa NEWS | 1,58 x 1,98 | 172,69
+Assistência Faixa NEWS | 1,93 x 2,03 | 191,94
+Assistência Faixa CONJ ARTICULADO TRAD versão PANGEIA | 0,88 x 1,88 | 259,25
+Assistência Faixa CONJ ARTICULADO TRAD versão PANGEIA | 1,19 x 1,88 | 288,09
+Assistência Faixa CONJ ARTICULADO TRAD versão PANGEIA | 1,38 x 1,88 | 305,71
+Assistência Faixa CONJ ARTICULADO TRAD versão PANGEIA | 1,58 x 1,98 | 333,59
+Assistência Faixa CONJ ARTICULADO TRAD versão PANGEIA | 1,93 x 2,03 | 370,32
+Assistência Faixa PANGEIA | 0,88 x 1,88 | 268,43
+Assistência Faixa PANGEIA | 1,19 x 1,88 | 298,24
+Assistência Faixa PANGEIA | 1,38 x 1,88 | 316,53
+Assistência Faixa PANGEIA | 1,58 x 1,98 | 345,39
+Assistência Faixa PANGEIA | 1,93 x 2,03 | 383,89
+Assistência Faixa CONJ ARTICULADO TRAD versão SERIE OURO (inferior) | 0,88 x 1,88 | 56,16
+Assistência Faixa CONJ ARTICULADO TRAD versão SERIE OURO (inferior) | 1,19 x 1,88 | 62,41
+Assistência Faixa CONJ ARTICULADO TRAD versão SERIE OURO (inferior) | 1,38 x 1,88 | 66,24
+Assistência Faixa CONJ ARTICULADO TRAD versão SERIE OURO (inferior) | 1,58 x 1,98 | 72,28
+Assistência Faixa CONJ ARTICULADO TRAD versão SERIE OURO (inferior) | 1,93 x 2,03 | 80,33
+Assistência Faixa CONJ ARTICULADO TRAD versão SERIE OURO (superior) | 0,88 x 1,88 | 28,08
+Assistência Faixa CONJ ARTICULADO TRAD versão SERIE OURO (superior) | 1,19 x 1,88 | 31,21
+Assistência Faixa CONJ ARTICULADO TRAD versão SERIE OURO (superior) | 1,38 x 1,88 | 33,12
+Assistência Faixa CONJ ARTICULADO TRAD versão SERIE OURO (superior) | 1,58 x 1,98 | 36,14
+Assistência Faixa CONJ ARTICULADO TRAD versão SERIE OURO (superior) | 1,93 x 2,03 | 40,16
+Assistência Faixa CONJ ARTICULADO JOELHO versão SERIE OURO | 0,88 x 1,88 | 56,16
+Assistência Faixa CONJ ARTICULADO JOELHO versão SERIE OURO | 1,19 x 1,88 | 62,41
+Assistência Faixa CONJ ARTICULADO JOELHO versão SERIE OURO | 1,38 x 1,88 | 66,24
+Assistência Faixa CONJ ARTICULADO JOELHO versão SERIE OURO | 1,58 x 1,98 | 72,28
+Assistência Faixa CONJ ARTICULADO JOELHO versão SERIE OURO | 1,93 x 2,03 | 80,33
+Assistência Faixa SERIE OURO (inferior) | 0,88 x 1,88 | 36,51
+Assistência Faixa SERIE OURO (inferior) | 1,19 x 1,88 | 40,57
+Assistência Faixa SERIE OURO (inferior) | 1,38 x 1,88 | 43,06
+Assistência Faixa SERIE OURO (inferior) | 1,58 x 1,98 | 46,98
+Assistência Faixa SERIE OURO (inferior) | 1,93 x 2,03 | 52,21
+Assistência Faixa SERIE OURO (superior) | 0,88 x 1,88 | 64,59
+Assistência Faixa SERIE OURO (superior) | 1,19 x 1,88 | 71,78
+Assistência Faixa SERIE OURO (superior) | 1,38 x 1,88 | 76,18
+Assistência Faixa SERIE OURO (superior) | 1,58 x 1,98 | 83,13
+Assistência Faixa SERIE OURO (superior) | 1,93 x 2,03 | 92,38
+Assistência Faixa SEVEN | 0,88 x 1,88 | 73,23
+Assistência Faixa SEVEN | 1,19 x 1,88 | 81,35
+Assistência Faixa SEVEN | 1,38 x 1,88 | 86,36
+Assistência Faixa SEVEN | 1,58 x 1,98 | 94,23
+Assistência Faixa SEVEN | 1,93 x 2,03 | 104,70
+Assistência Tampo MONTREAL | 0,88 x 1,88 | 104,19
+Assistência Tampo MONTREAL | 1,19 x 1,88 | 139,30
+Assistência Tampo MONTREAL | 1,38 x 1,88 | 160,81
+Assistência Tampo MONTREAL | 1,58 x 1,98 | 183,46
+Assistência Tampo MONTREAL | 1,93 x 2,03 | 223,10
+Assistência Tampo ÚNICO | 0,88 x 1,88 | 125,03
+Assistência Tampo ÚNICO | 1,19 x 1,88 | 167,16
+Assistência Tampo ÚNICO | 1,38 x 1,88 | 192,98
+Assistência Tampo ÚNICO | 1,58 x 1,98 | 220,16
+Assistência Tampo ÚNICO | 1,93 x 2,03 | 267,72
+Assistência Tampo SERIE OURO | 0,88 x 1,88 | 183,23
+Assistência Tampo SERIE OURO | 1,19 x 1,88 | 244,97
+Assistência Tampo SERIE OURO | 1,38 x 1,88 | 282,81
+Assistência Tampo SERIE OURO | 1,58 x 1,98 | 322,64
+Assistência Tampo SERIE OURO | 1,93 x 2,03 | 392,35
+Assistência Tampo CONJ ARTICULADO TRAD e JOELHO versão SERIE OURO | 0,88 x 1,88 | 129,60
+Assistência Tampo CONJ ARTICULADO TRAD e JOELHO versão SERIE OURO | 1,19 x 1,88 | 173,27
+Assistência Tampo CONJ ARTICULADO TRAD e JOELHO versão SERIE OURO | 1,38 x 1,88 | 200,04
+Assistência Tampo CONJ ARTICULADO TRAD e JOELHO versão SERIE OURO | 1,58 x 1,98 | 228,21
+Assistência Tampo CONJ ARTICULADO TRAD e JOELHO versão SERIE OURO | 1,93 x 2,03 | 277,52
+Assistência Tampo CONJ ARTICULADO TRAD e JOELHO versão DIAMANTE | 0,88 x 1,88 | 353,03
+Assistência Tampo CONJ ARTICULADO TRAD e JOELHO versão DIAMANTE | 1,19 x 1,88 | 471,98
+Assistência Tampo CONJ ARTICULADO TRAD e JOELHO versão DIAMANTE | 1,38 x 1,88 | 544,89
+Assistência Tampo CONJ ARTICULADO TRAD e JOELHO versão DIAMANTE | 1,58 x 1,98 | 621,64
+Assistência Tampo CONJ ARTICULADO TRAD e JOELHO versão DIAMANTE | 1,93 x 2,03 | 755,94
+Assistência Tampo CONJ ARTICULADO TRAD e JOELHO versão NEWS | 0,88 x 1,88 | 175,31
+Assistência Tampo CONJ ARTICULADO TRAD e JOELHO versão NEWS | 1,19 x 1,88 | 234,39
+Assistência Tampo CONJ ARTICULADO TRAD e JOELHO versão NEWS | 1,38 x 1,88 | 270,59
+Assistência Tampo CONJ ARTICULADO TRAD e JOELHO versão NEWS | 1,58 x 1,98 | 308,71
+Assistência Tampo CONJ ARTICULADO TRAD e JOELHO versão NEWS | 1,93 x 2,03 | 375,40
+Assistência Tampo CONJ ARTICULADO TRAD e JOELHO versão PANGEIA | 0,88 x 1,88 | 179,32
+Assistência Tampo CONJ ARTICULADO TRAD e JOELHO versão PANGEIA | 1,19 x 1,88 | 239,75
+Assistência Tampo CONJ ARTICULADO TRAD e JOELHO versão PANGEIA | 1,38 x 1,88 | 276,78
+Assistência Tampo CONJ ARTICULADO TRAD e JOELHO versão PANGEIA | 1,58 x 1,98 | 315,77
+Assistência Tampo CONJ ARTICULADO TRAD e JOELHO versão PANGEIA | 1,93 x 2,03 | 383,99
+Assistência Tampo COLCHÃO P/ CONJ ART FLEXIBED (qualquer versão) | 0,88 x 1,88 | 264,17
+Assistência Tampo COLCHÃO P/ CONJ ART FLEXIBED (qualquer versão) | 1,19 x 1,88 | 353,18
+Assistência Tampo COLCHÃO P/ CONJ ART FLEXIBED (qualquer versão) | 1,38 x 1,88 | 407,74
+Assistência Tampo COLCHÃO P/ CONJ ART FLEXIBED (qualquer versão) | 1,58 x 1,98 | 465,17
+Assistência Tampo COLCHÃO P/ CONJ ART FLEXIBED (qualquer versão) | 1,93 x 2,03 | 565,67
+Assistência Tampo DIAMANTE | 0,88 x 1,88 | 439,13
+Assistência Tampo DIAMANTE | 1,19 x 1,88 | 587,10
+Assistência Tampo DIAMANTE | 1,38 x 1,88 | 677,79
+Assistência Tampo DIAMANTE | 1,58 x 1,98 | 773,25
+Assistência Tampo DIAMANTE | 1,93 x 2,03 | 940,31
+Assistência Tampo LUNAR | 0,88 x 1,88 | 125,03
+Assistência Tampo LUNAR | 1,19 x 1,88 | 167,16
+Assistência Tampo LUNAR | 1,38 x 1,88 | 192,98
+Assistência Tampo LUNAR | 1,58 x 1,98 | 220,16
+Assistência Tampo LUNAR | 1,93 x 2,03 | 267,72
+Assistência Tampo MONTREAL BY EKO'7 | 0,88 x 1,88 | 98,34
+Assistência Tampo MONTREAL BY EKO'7 | 1,19 x 1,88 | 131,47
+Assistência Tampo MONTREAL BY EKO'7 | 1,38 x 1,88 | 151,78
+Assistência Tampo MONTREAL BY EKO'7 | 1,58 x 1,98 | 173,16
+Assistência Tampo MONTREAL BY EKO'7 | 1,93 x 2,03 | 210,57
+Assistência Tampo NEWS | 0,88 x 1,88 | 218,07
+Assistência Tampo NEWS | 1,19 x 1,88 | 291,56
+Assistência Tampo NEWS | 1,38 x 1,88 | 336,59
+Assistência Tampo NEWS | 1,58 x 1,98 | 384,00
+Assistência Tampo NEWS | 1,93 x 2,03 | 466,96
+Assistência Tampo COMFORT | 0,88 x 1,88 | 125,03
+Assistência Tampo COMFORT | 1,19 x 1,88 | 167,16
+Assistência Tampo COMFORT | 1,38 x 1,88 | 192,98
+Assistência Tampo COMFORT | 1,58 x 1,98 | 220,16
+Assistência Tampo COMFORT | 1,93 x 2,03 | 267,72
+Assistência Tampo PANGEIA | 0,88 x 1,88 | 179,32
+Assistência Tampo PANGEIA | 1,19 x 1,88 | 239,75
+Assistência Tampo PANGEIA | 1,38 x 1,88 | 276,78
+Assistência Tampo PANGEIA | 1,58 x 1,98 | 315,77
+Assistência Tampo PANGEIA | 1,93 x 2,03 | 383,99
+Assistência Tampo SEVEN | 0,88 x 1,88 | 125,03
+Assistência Tampo SEVEN | 1,19 x 1,88 | 167,16
+Assistência Tampo SEVEN | 1,38 x 1,88 | 192,98
+Assistência Tampo SEVEN | 1,58 x 1,98 | 220,16
+Assistência Tampo SEVEN | 1,93 x 2,03 | 267,72
+Assistência Tampo MANTA QUÂNTICA (apenas revestimento s/ eletrônicos) | 0,88 x 1,88 | 135,11
+Assistência Tampo MANTA QUÂNTICA (apenas revestimento s/ eletrônicos) | 1,19 x 1,88 | 180,63
+Assistência Tampo MANTA QUÂNTICA (apenas revestimento s/ eletrônicos) | 1,38 x 1,88 | 208,53
+Assistência Tampo MANTA QUÂNTICA (apenas revestimento s/ eletrônicos) | 1,58 x 1,98 | 237,90
+Assistência Tampo MANTA QUÂNTICA (apenas revestimento s/ eletrônicos) | 1,93 x 2,03 | 289,30
+Assistência Tampo INFERIOR (padrão) | 0,88 x 1,88 | 33,56
+Assistência Tampo INFERIOR (padrão) | 1,19 x 1,88 | 44,87
+Assistência Tampo INFERIOR (padrão) | 1,38 x 1,88 | 51,80
+Assistência Tampo INFERIOR (padrão) | 1,58 x 1,98 | 59,09
+Assistência Tampo INFERIOR (padrão) | 1,93 x 2,03 | 71,86
+Assistência Diversos REVESTIMENTO COLCHÃO BABY |  | 246,95
+Assistência Diversos REVESTIMENTO BOX BAÚ | 0,88 x 1,88 | 279,78
+Assistência Diversos REVESTIMENTO BOX BAÚ | 1,19 x 1,88 | 310,35
+Assistência Diversos REVESTIMENTO BOX BAÚ | 1,38 x 1,88 | 329,15
+Assistência Diversos REVESTIMENTO BOX BAÚ | 1,58 x 1,98 | 559,55
+Assistência Diversos REVESTIMENTO BOX BAÚ | 1,93 x 2,03 | 605,03
+Assistência Diversos REVESTIMENTO BOX CLASSICO | 0,88 x 1,88 | 444,03
+Assistência Diversos REVESTIMENTO BOX CLASSICO | 1,19 x 1,88 | 492,56
+Assistência Diversos REVESTIMENTO BOX CLASSICO | 1,38 x 1,88 | 522,39
+Assistência Diversos REVESTIMENTO BOX CLASSICO | 1,58 x 1,98 | 888,06
+Assistência Diversos REVESTIMENTO BOX CLASSICO | 1,93 x 2,03 | 960,25
+Assistência Diversos REVESTIMENTO BOX SLIM E CAMA FLOATING BED | 0,88 x 1,88 | 444,03
+Assistência Diversos REVESTIMENTO BOX SLIM E CAMA FLOATING BED | 1,19 x 1,88 | 492,56
+Assistência Diversos REVESTIMENTO BOX SLIM E CAMA FLOATING BED | 1,38 x 1,88 | 522,39
+Assistência Diversos REVESTIMENTO BOX SLIM E CAMA FLOATING BED | 1,58 x 1,98 | 888,06
+Assistência Diversos REVESTIMENTO BOX SLIM E CAMA FLOATING BED | 1,93 x 2,03 | 960,25
+Assistência Diversos REVESTIMENTO BOX P/ ARTICULADO | 0,88 x 1,88 | 370,03
+Assistência Diversos REVESTIMENTO BOX P/ ARTICULADO | 1,19 x 1,88 | 410,47
+Assistência Diversos REVESTIMENTO BOX P/ ARTICULADO | 1,38 x 1,88 | 435,32
+Assistência Diversos REVESTIMENTO BOX P/ ARTICULADO | 1,58 x 1,98 | 740,05
+Assistência Diversos REVESTIMENTO BOX P/ ARTICULADO | 1,93 x 2,03 | 800,21
+Assistência Diversos REVESTIMENTO BOX BICAMA C/ OU SEM BÁU (S/ COLCHÕES) | 0,88 x 1,88 | 444,03
+Assistência Diversos REVESTIMENTO BOX BICAMA C/ OU SEM BÁU (S/ COLCHÕES) | 1,19 x 1,88 | 410,47
+Assistência Diversos REVESTIMENTO BOX BICAMA C/ OU SEM BÁU (S/ COLCHÕES) | 1,38 x 1,88 | 435,32
+Assistência Diversos REVESTIMENTO BOX BICAMA C/ OU SEM BÁU (S/ COLCHÕES) | 1,58 x 1,98 | 740,05
+Assistência Diversos REVESTIMENTO BOX BICAMA C/ OU SEM BÁU (S/ COLCHÕES) | 1,93 x 2,03 | 800,21
+Assistência Diversos REVESTIMENTOS LATERAIS P/ CONJ ART FLEXIBED (qualquer versão) | 0,88 x 1,88 | 444,03
+Assistência Diversos REVESTIMENTOS LATERAIS P/ CONJ ART FLEXIBED (qualquer versão) | 1,19 x 1,88 | 492,56
+Assistência Diversos REVESTIMENTOS LATERAIS P/ CONJ ART FLEXIBED (qualquer versão) | 1,38 x 1,88 | 522,39
+Assistência Diversos REVESTIMENTOS LATERAIS P/ CONJ ART FLEXIBED (qualquer versão) | 1,58 x 1,98 | 888,06
+Assistência Diversos REVESTIMENTOS LATERAIS P/ CONJ ART FLEXIBED (qualquer versão) | 1,93 x 2,03 | 960,25
+Assistência Diversos REVESTIMENTO CABECEIRAS (TODOS OS MODELOS) | 0,88 x 1,88 | 325,29
+Assistência Diversos REVESTIMENTO CABECEIRAS (TODOS OS MODELOS) | 1,19 x 1,88 | 405,72
+Assistência Diversos REVESTIMENTO CABECEIRAS (TODOS OS MODELOS) | 1,38 x 1,88 | 455,09
+Assistência Diversos REVESTIMENTO CABECEIRAS (TODOS OS MODELOS) | 1,58 x 1,98 | 506,94
+Assistência Diversos REVESTIMENTO CABECEIRAS (TODOS OS MODELOS) | 1,93 x 2,03 | 597,77
+Assistência Diversos REVESTIMENTO EXTERNO PUFF MÉDIO (TODAS AS VERSÕES) |  | 147,02
+Assistência Diversos REVESTIMENTO EXTERNO PUFF GRANDE (TODAS AS VERSÕES) |  | 215,79
+Assistência Diversos PROCESSO DE COMPACTAÇÃO E EMBALAGEM P/ COLCHÃO S/ BAG |  | 257,50
+Assistência Diversos REVESTIMENTO MAQUETE SERIE OURO |  | 100,49
+Assistência Diversos REVESTIMENTO MAQUETE NEWS |  | 95,97
+Assistência Diversos REVESTIMENTO MAQUETE PANGEIA |  | 100,49
+Assistência Diversos REVESTIMENTO DRIVE |  | 281,49
+Assistência Diversos REVESTIMENTO POLTRONA |  | 1791,40
+Assistência Diversos REVESTIMENTO CADEIRA DIRETOR E PRESIDENTE |  | 936,29
+Assistência Diversos REVESTIMENTO + ESPUMAS MAQUETE SERIE OURO PREMIUM |  | 546,04
+Assistência Diversos REVESTIMENTO + ESPUMAS MAQUETE SERIE OURO PREMIUM PILLOW |  | 587,00
+Assistência Diversos CONVERSOR COM P4 2A 12V C2012 P RC (FONTE) |  | 82,40
+Assistência Diversos CENTRAL ELETRÔNICA RELAX |  | 247,20
+Assistência Diversos CENTRAL ELETRÔNICA PREMIUM |  | 565,47
+Assistência Diversos FONTE DE POLTRONA ARTICULACAO |  | 543,10
+Assistência Diversos CONTROLE E CENTRAL ELETRONICO DE POLTRONA |  | 916,01
+Assistência Diversos CONTROLE SEM FIO MAN K2 PT 6 BOTOES BASELINE |  | 716,24
+Assistência Diversos CONTROLE SEM FIO P/ FLEXIBED |  | 716,24
+Assistência Diversos SUPORTE CONTROLE RELAX |  | 7,21
+Assistência Diversos SUPORTE CONTROLE PREMIUM |  | 10,30

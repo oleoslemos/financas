@@ -116,7 +116,7 @@ export function V2PainelVendasPage() {
     }
   }, [supabase, selectedYear, selectedRepId])
 
-  // 2. Carregar Pedidos de Venda da tabela v2_pedidos_venda
+  // 2. Carregar Pedidos de Venda da tabela bemaviv_pedidos_venda
   const loadOrders = useCallback(async () => {
     setLoading(true)
     try {

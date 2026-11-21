@@ -1,0 +1,32 @@
+{
+  "name": "Bem Aviv Orçamentos",
+  "short_name": "Orçamentos",
+  "description": "Tabela de preços, orçamentos e CRM mobile Bem Aviv",
+  "theme_color": "#0F3764",
+  "background_color": "#0F3764",
+  "display": "standalone",
+  "orientation": "portrait",
+  "start_url": "/v2/orcamento/login",
+  "scope": "/v2/orcamento/",
+  "id": "/v2/orcamento/",
+  "icons": [
+    {
+      "src": "/pwa-orcamento-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-orcamento-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/maskable-orcamento-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

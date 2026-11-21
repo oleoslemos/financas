@@ -79,7 +79,7 @@ export type PedidoVenda = {
 }
 
 const STORAGE_KEY = 'bemaviv_pedidos_venda'
-const SUPABASE_TABLE = 'v2_pedidos_venda'
+const SUPABASE_TABLE = 'bemaviv_pedidos_venda'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
