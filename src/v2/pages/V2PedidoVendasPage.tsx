@@ -56,24 +56,8 @@ import { V2OrcamentosComparisonModal } from '../components/V2OrcamentosCompariso
 import { buildWhatsappUrlWithText } from '../../lib/whatsapp'
 
 const FORMAS_PAGAMENTO: string[] = [
-  'Dinheiro',
   'Pix',
-  'Boleto',
-  'Crediário',
-  'Cartão Débito',
-  'Cartão Crédito 1x',
-  'Cartão Crédito 2x',
-  'Cartão Crédito 3x',
-  'Cartão Crédito 4x',
-  'Cartão Crédito 5x',
-  'Cartão Crédito 6x',
-  'Cartão Crédito 7x',
-  'Cartão Crédito 8x',
-  'Cartão Crédito 9x',
-  'Cartão Crédito 10x',
-  'Cartão Crédito 11x',
-  'Cartão Crédito 12x',
-]
+];
 
 /** Extrai o número de parcelas embutido na forma de pagamento (ex: "Cartão Crédito 3x" → 3) */
 function extrairParcelasDaForma(forma: string): number {
