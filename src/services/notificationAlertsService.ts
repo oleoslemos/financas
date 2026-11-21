@@ -180,7 +180,7 @@ export async function fetchPendingNotificationItems(
       const targetIso = targetDate.toISOString().slice(0, 10)
 
       let ordQuery = supabase
-        .from('v2_pedidos_venda')
+        .from('bemaviv_pedidos_venda')
         .select('id, client_id, document_number, order_date, status')
         .eq('status', 'ENTREGUE')
         .eq('order_date', targetIso)
