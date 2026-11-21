@@ -75,7 +75,7 @@ export async function registerV2User(
     return { user: null as any, error: 'Este nome de usuário já está cadastrado.' }
   }
 
-  // Attempt Supabase insert if table v2_users exists
+  // Attempt Supabase insert if table bemaviv_users exists
   const newUserRecord = {
     id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
     full_name: cleanName,
@@ -89,7 +89,7 @@ export async function registerV2User(
   if (supabase) {
     try {
       const { data: existingSupabaseUser, error: selErr } = await supabase
-        .from('v2_users')
+        .from('bemaviv_users')
         .select('id')
         .eq('username', cleanUsername)
         .maybeSingle()
@@ -100,7 +100,7 @@ export async function registerV2User(
         return { user: null as any, error: 'Este nome de usuário já está cadastrado no banco de dados.' }
       }
 
-      const { error: insErr } = await supabase.from('v2_users').insert({
+      const { error: insErr } = await supabase.from('bemaviv_users').insert({
         id: newUserRecord.id,
         full_name: cleanName,
         username: cleanUsername,
@@ -154,7 +154,7 @@ export async function loginV2User(data: {
   if (supabase) {
     try {
       let query = supabase
-        .from('v2_users')
+        .from('bemaviv_users')
         .select('id, full_name, username, email, password_hash, created_at')
 
       if (isEmail) {
@@ -206,7 +206,7 @@ export async function fetchV2Users(): Promise<V2User[]> {
   if (supabase) {
     try {
       const { data, error } = await supabase
-        .from('v2_users')
+        .from('bemaviv_users')
         .select('id, full_name, username, email, role, created_at')
         .order('created_at', { ascending: true })
 
@@ -269,7 +269,7 @@ export async function deleteV2UserByUsername(username: string): Promise<{ error:
   // Remove from Supabase
   if (supabase) {
     try {
-      await supabase.from('v2_users').delete().eq('username', cleanUsername)
+      await supabase.from('bemaviv_users').delete().eq('username', cleanUsername)
     } catch (e) {
       console.warn('Falha ao remover do Supabase:', e)
     }
@@ -283,9 +283,10 @@ export async function clearAllV2Users(): Promise<void> {
   setV2Session(null)
   if (supabase) {
     try {
-      await supabase.from('v2_users').delete().neq('id', 'x')
+      await supabase.from('bemaviv_users').delete().neq('id', 'x')
     } catch (e) {
       console.warn('Falha ao limpar usuários do Supabase:', e)
     }
   }
 }
+
