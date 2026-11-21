@@ -78,7 +78,7 @@ export type PedidoVenda = {
   updated_at: string
 }
 
-const STORAGE_KEY = 'v2_pedidos_venda'
+const STORAGE_KEY = 'bemaviv_pedidos_venda'
 const SUPABASE_TABLE = 'v2_pedidos_venda'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

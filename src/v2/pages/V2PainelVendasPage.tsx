@@ -57,7 +57,7 @@ export function V2PainelVendasPage() {
   const [goalsMap, setGoalsMap] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(false)
 
-  // Pedidos carregados da nova tabela v2_pedidos_venda
+  // Pedidos carregados da nova tabela bemaviv_pedidos_venda
   const [pedidos, setPedidos] = useState<PedidoVenda[]>([])
 
   const fmt = (v: number) =>

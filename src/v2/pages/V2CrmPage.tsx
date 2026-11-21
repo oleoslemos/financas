@@ -241,7 +241,7 @@ export function V2CrmPage() {
         .in('document_type', ['ORCAMENTO', 'PEDIDO'])
         .in('status', ['ABERTO', 'FINALIZADO', 'ENTREGA PENDENTE', 'ENTREGA PARCIAL', 'ENTREGUE', 'CANCELADO']),
       supabase
-        .from('v2_pedidos_venda')
+        .from('bemaviv_pedidos_venda')
         .select('id, status, total'),
       supabase
         .from('bem_aviv_clients')
