@@ -39,6 +39,8 @@ interface ProductSignature {
   tamanhoGrade?: string
   corGrade?: string
   isAssistencia: boolean
+  isVestuarioAcessoriosLingerie: boolean
+  descricaoLimpa: string
   nomeOriginal: string
   nomeNormalizado: string
   linha: string
@@ -52,14 +54,33 @@ function normalizarTexto(txt: string): string {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[()\/+,-]/g, ' ')
+    .replace(/['"()\/+,-]/g, ' ')
+    .replace(/[;:]/g, ' ')
+    .replace(/\./g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+// Limpa descrições de Lingeries, Vestuário e Acessórios Diversos
+// Remove menções de grade P ao EXG para permitir busca puramente por descrição
+function limparDescricaoVestuarioAcessorios(nome: string): string {
+  let norm = normalizarTexto(nome)
+  // Remove indicativos de grade P ao EXG
+  norm = norm.replace(/\b(p|m|g|gg|exg|xg)\b/g, '')
+  // Remove menções de marca sufixada
+  norm = norm.replace(/\beko7\b/g, '')
+  norm = norm.replace(/\beko\s*7\b/g, '')
+  // Normaliza abreviações comuns
+  norm = norm.replace(/\balm\b/g, 'almofada')
+  norm = norm.replace(/\bcol\b/g, 'colchaozinho')
+  norm = norm.replace(/\s+/g, ' ').trim()
+  return norm
 }
 
 // Extrai Modelo Principal, Medida/Tamanho e Altura
 function extrairAssinatura(nome: string, linha: string, preco: number, sku?: string): ProductSignature {
   const norm = normalizarTexto(nome)
+  const normLinha = normalizarTexto(linha)
   const isAssistencia = norm.startsWith('assistencia') || norm.includes('assistencia faixa') || norm.includes('assistencia tampo') || norm.includes('assistencia diversos')
 
   // 1. Identificar modelo base abrangente
@@ -204,13 +225,30 @@ function extrairAssinatura(nome: string, linha: string, preco: number, sku?: str
     }
   }
 
+  const isVestuarioAcessoriosLingerie =
+    normLinha.includes('lingerie') ||
+    normLinha.includes('vestuario') ||
+    normLinha.includes('acessorio') ||
+    [
+      'cinta_lombar', 'colar_magnetos', 'adesivo_magneto', 'imantador', 'mascara_dormir',
+      'pulseira_health', 'alm_suporte', 'col_fitness', 'col_equilibrium', 'col_nomade',
+      'garrafa_eko7', 'legging_emana', 'legging_fem', 'bermuda_fem', 'bermuda_masc',
+      'shorts_saia', 'shorts_fem', 'regata_fitness', 'regata_fem', 'regata_masc',
+      'top_nadador', 'top_tradicional', 'blusa_3_4', 'macaquinho_perna', 'macaquinho_manga',
+      'macaquinho', 'macacao_preto', 'blusa_masc_manga', 'calcinha', 'sutia'
+    ].includes(modeloKey)
+
+  const descricaoLimpa = limparDescricaoVestuarioAcessorios(nome)
+
   // 2. Identificar medida padrão (largura x comprimento, pet ou gramatura)
   let medidaKey = 'padrao'
   let tamanhoGrade: string | undefined = undefined
   let corGrade: string | undefined = undefined
 
-  const isCalcado = ['chinelo_nuvem', 'chinelo_fem', 'chinelo_masc', 'tenis_fn1', 'palmilha'].includes(modeloKey)
-  if (isCalcado) {
+  if (isVestuarioAcessoriosLingerie) {
+    // Para Lingeries, Vestuário e Acessórios Diversos: a busca é feita puramente pela descrição (grade P ao EXG inclusa)
+    medidaKey = 'padrao'
+  } else if (isCalcado) {
     // 1. Extração de Tamanho para Calçados (ex: [33/34], 33/34, [32/33/34], etc.)
     const matchTamBracket = norm.match(/\[(\d{2}(?:\/\d{2})*(?:\/\d{2})*)\]/)
     const matchTamRaw = norm.match(/\b(\d{2}\/\d{2}(?:\/\d{2})*)\b/)
@@ -293,6 +331,8 @@ function extrairAssinatura(nome: string, linha: string, preco: number, sku?: str
     tamanhoGrade,
     corGrade,
     isAssistencia,
+    isVestuarioAcessoriosLingerie,
+    descricaoLimpa,
     nomeOriginal: nome,
     nomeNormalizado: norm,
     linha,
@@ -345,6 +385,26 @@ export function comparePriceTables(
     // Se não houver com mesma altura, pega o primeiro com mesmo modelo + medida base
     if (!match) {
       match = candidatos.find(c => !assinaturasUsadasAnterior.has(c))
+    }
+
+    // REGRA ESPECÍFICA: Para Lingeries, Vestuário e Acessórios Diversos, busca puramente pela descrição (grade P ao EXG inclusa)
+    if (!match && sigNova.isVestuarioAcessoriosLingerie) {
+      for (const [, lista] of mapaAnterior) {
+        const achado = lista.find(c => {
+          if (assinaturasUsadasAnterior.has(c)) return false
+          const mesmoModelo = c.modeloKey !== 'outro' && c.modeloKey === sigNova.modeloKey
+          const mesmaDescricao =
+            c.descricaoLimpa.length > 3 && sigNova.descricaoLimpa.length > 3 &&
+            (c.descricaoLimpa === sigNova.descricaoLimpa ||
+             c.descricaoLimpa.includes(sigNova.descricaoLimpa) ||
+             sigNova.descricaoLimpa.includes(c.descricaoLimpa))
+          return mesmoModelo || mesmaDescricao
+        })
+        if (achado) {
+          match = achado
+          break
+        }
+      }
     }
 
     // Fallback: se for 'outro', tenta correspondência por nome similar
