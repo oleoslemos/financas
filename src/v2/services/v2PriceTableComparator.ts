@@ -225,18 +225,19 @@ function extrairAssinatura(nome: string, linha: string, preco: number, sku?: str
     }
   }
 
-  const isVestuarioAcessoriosLingerie =
-    normLinha.includes('lingerie') ||
-    normLinha.includes('vestuario') ||
-    normLinha.includes('acessorio') ||
-    [
-      'cinta_lombar', 'colar_magnetos', 'adesivo_magneto', 'imantador', 'mascara_dormir',
-      'pulseira_health', 'alm_suporte', 'col_fitness', 'col_equilibrium', 'col_nomade',
-      'garrafa_eko7', 'legging_emana', 'legging_fem', 'bermuda_fem', 'bermuda_masc',
-      'shorts_saia', 'shorts_fem', 'regata_fitness', 'regata_fem', 'regata_masc',
-      'top_nadador', 'top_tradicional', 'blusa_3_4', 'macaquinho_perna', 'macaquinho_manga',
-      'macaquinho', 'macacao_preto', 'blusa_masc_manga', 'calcinha', 'sutia'
-    ].includes(modeloKey)
+// Detecta se o item pertence à categoria Calçados
+const isCalcado = (() => {
+  // termos que identificam calçados
+  const termosCalcado = [
+    'tenis fn1', 'chinelo feminino', 'chinelo masculino',
+    'chinelo nuvem', 'palmilha', 'cinta lombar', 'colar de magnetos',
+    'adesivo de magneto', 'imantador', 'mascara para dormir',
+    'pulseira health', 'alm. suporte', 'col. fitness',
+    'col. equilibrium', 'col. nomade', 'garrafa eko7',
+  ]
+  // `norm` já contém a descrição normalizada
+  return termosCalcado.some(t => norm.includes(t))
+})()
 
   const descricaoLimpa = limparDescricaoVestuarioAcessorios(nome)
 
@@ -246,13 +247,29 @@ function extrairAssinatura(nome: string, linha: string, preco: number, sku?: str
   let corGrade: string | undefined = undefined
 
   if (isVestuarioAcessoriosLingerie) {
-    // Para Lingeries, Vestuário e Acessórios Diversos: a busca é feita puramente pela descrição (grade P ao EXG inclusa)
-    medidaKey = 'padrao'
-  } else if (isCalcado) {
-    // 1. Extração de Tamanho para Calçados (ex: [33/34], 33/34, [32/33/34], etc.)
-    const matchTamBracket = norm.match(/\[(\d{2}(?:\/\d{2})*(?:\/\d{2})*)\]/)
-    const matchTamRaw = norm.match(/\b(\d{2}\/\d{2}(?:\/\d{2})*)\b/)
-    const matchTamNum = norm.match(/\[(\d{2})\]/) || norm.match(/\b(3[2-9]|4[0-5])\b/)
+  // Para Lingeries, Vestuário e Acessórios Diversos a busca usa apenas a descrição
+  medidaKey = 'padrao'
+} else if (isCalcado) {
+  // 1. Extração de Tamanho para Calçados (ex.: [33/34], 33/34, [32/33/34], etc.)
+  const matchTamBracket = norm.match(/\[(\d{2}(?:\/\d{2})*(?:\/\d{2})*)\]/)
+  const matchTamRaw = norm.match(/\b(\d{2}\/\d{2}(?:\/\d{2})*)\b/)
+  const matchTamNum = norm.match(/\[(\d{2})\]/) || norm.match(/\b(3[2-9]|4[0-5])\b/)
+
+  if (matchTamBracket) {
+    tamanhoGrade = matchTamBracket[1]
+  } else if (matchTamRaw) {
+    tamanhoGrade = matchTamRaw[1]
+  } else if (matchTamNum) {
+    tamanhoGrade = matchTamNum[1]
+  }
+
+  // 2. Extração de Cor para Calçados
+  const coresConhecidas = [
+    'off white', 'preta', 'preto', 'branca', 'branco', 'azul',
+    'roxa', 'roxo', 'rosa neon', 'rosa claro', 'rosa', 'laranja',
+    'cinza mescla', 'mescla', 'verde', 'marsala', 'vermelha',
+  ]
+  // (continua o restante do código existente)
 
     if (matchTamBracket) {
       tamanhoGrade = matchTamBracket[1]
@@ -380,9 +397,15 @@ export function comparePriceTables(
     const key = `${sigNova.modeloKey}|${sigNova.medidaKey}`
     const candidatos = mapaAnterior.get(key) || []
 
-    // Procura primeiro candidato exato com mesma altura
-    let match = candidatos.find(c => c.altura === sigNova.altura && !assinaturasUsadasAnterior.has(c))
-    // Se não houver com mesma altura, pega o primeiro com mesmo modelo + medida base
+    // Procura primeiro candidato exato com a mesma altura
+    let match = candidatos.find(
+      c => c.altura === sigNova.altura && !assinaturasUsadasAnterior.has(c)
+    )
+    // Se o modelo for cabeceira, ignore a diferença de altura e aceita o primeiro candidato do mesmo modelo
+    if (!match && sigNova.modeloKey.startsWith('cabeceira')) {
+      match = candidatos.find(c => !assinaturasUsadasAnterior.has(c))
+    }
+    // Caso ainda não haja correspondência, pega o primeiro candidato do mesmo modelo + medida base
     if (!match) {
       match = candidatos.find(c => !assinaturasUsadasAnterior.has(c))
     }
