@@ -616,30 +616,30 @@ export function V2AdmPage() {
                       </div>
                     </div>
 
-                    {/* Lista / Tabela */}
-                    <div className="max-h-80 overflow-y-auto rounded-xl border border-slate-700 bg-slate-900/50">
-                      <table className="w-full text-left text-xs">
-                        <thead className="bg-slate-900 border-b border-slate-700 text-slate-400 font-bold sticky top-0">
+                    {/* Lista / Tabela com estilização explícita escura (evita override global de td do index.css) */}
+                    <div className="max-h-96 overflow-y-auto rounded-xl border border-slate-700 bg-slate-900 shadow-inner">
+                      <table className="w-full text-left text-xs border-collapse" style={{ backgroundColor: '#0f172a' }}>
+                        <thead className="sticky top-0 z-10 text-slate-300 font-bold uppercase tracking-wider text-[11px]" style={{ backgroundColor: '#1e293b' }}>
                           <tr>
-                            <th className="p-3">Status</th>
-                            <th className="p-3">Produto</th>
-                            <th className="p-3">Linha</th>
-                            <th className="p-3 text-right">Preço Anterior</th>
-                            <th className="p-3 text-right">Novo Preço</th>
-                            <th className="p-3 text-right">Variação</th>
+                            <th className="p-3" style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#94a3b8' }}>Status</th>
+                            <th className="p-3" style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#94a3b8' }}>Produto</th>
+                            <th className="p-3" style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#94a3b8' }}>Linha</th>
+                            <th className="p-3 text-right" style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#94a3b8' }}>Preço Anterior</th>
+                            <th className="p-3 text-right" style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#94a3b8' }}>Novo Preço</th>
+                            <th className="p-3 text-right" style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#94a3b8' }}>Variação</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800">
                           {filteredDiffItems.length === 0 ? (
                             <tr>
-                              <td colSpan={6} className="p-6 text-center text-slate-500">
+                              <td colSpan={6} className="p-8 text-center text-slate-500 font-semibold" style={{ backgroundColor: '#0f172a', borderColor: '#1e293b' }}>
                                 Nenhum produto encontrado para este filtro.
                               </td>
                             </tr>
                           ) : (
                             filteredDiffItems.map((item, idx) => (
-                              <tr key={idx} className="hover:bg-slate-800/40 transition">
-                                <td className="p-3 whitespace-nowrap">
+                              <tr key={idx} className="transition" style={{ backgroundColor: idx % 2 === 0 ? '#0f172a' : '#141e33' }}>
+                                <td className="p-3 whitespace-nowrap" style={{ backgroundColor: 'inherit', borderColor: '#1e293b' }}>
                                   {item.tipo === 'NOVO' && (
                                     <span className="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-950 text-emerald-400 border border-emerald-700/50">
                                       NOVO
@@ -648,12 +648,14 @@ export function V2AdmPage() {
                                   {item.tipo === 'ALTERADO' && (
                                     <span
                                       className={`px-2 py-0.5 rounded text-[10px] font-black border ${
-                                        (item.diferenca || 0) > 0
+                                        item.detalheMudanca
+                                          ? 'bg-amber-950 text-amber-300 border-amber-700/50'
+                                          : (item.diferenca || 0) > 0
                                           ? 'bg-indigo-950 text-indigo-400 border-indigo-700/50'
                                           : 'bg-teal-950 text-teal-400 border-teal-700/50'
                                       }`}
                                     >
-                                      {(item.diferenca || 0) > 0 ? 'REAJUSTE' : 'REDUÇÃO'}
+                                      {item.detalheMudanca ? 'ESPECIFICAÇÃO' : (item.diferenca || 0) > 0 ? 'REAJUSTE' : 'REDUÇÃO'}
                                     </span>
                                   )}
                                   {item.tipo === 'INALTERADO' && (
@@ -662,34 +664,45 @@ export function V2AdmPage() {
                                     </span>
                                   )}
                                   {item.tipo === 'REMOVIDO' && (
-                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-950 text-amber-400 border border-amber-700/50">
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-950 text-rose-400 border border-rose-800/50">
                                       AUSENTE
                                     </span>
                                   )}
                                 </td>
-                                <td className="p-3 font-bold text-white max-w-xs truncate">
-                                  {item.nome}
+                                <td className="p-3 font-bold text-white max-w-sm" style={{ backgroundColor: 'inherit', borderColor: '#1e293b' }}>
+                                  <div className="text-white text-xs leading-5">{item.nome}</div>
+                                  {item.detalheMudanca && (
+                                    <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-black text-amber-300 bg-amber-950/70 px-2 py-0.5 rounded border border-amber-800/60">
+                                      <span>📐 {item.detalheMudanca}</span>
+                                    </div>
+                                  )}
                                 </td>
-                                <td className="p-3 text-slate-400 whitespace-nowrap">
+                                <td className="p-3 text-slate-400 whitespace-nowrap text-xs" style={{ backgroundColor: 'inherit', borderColor: '#1e293b' }}>
                                   {item.linha}
                                 </td>
-                                <td className="p-3 text-right text-slate-400 whitespace-nowrap">
+                                <td className="p-3 text-right text-slate-400 whitespace-nowrap text-xs" style={{ backgroundColor: 'inherit', borderColor: '#1e293b' }}>
                                   {item.precoAnterior !== undefined ? formatCurrency(item.precoAnterior) : '—'}
                                 </td>
-                                <td className="p-3 text-right font-black text-white whitespace-nowrap">
+                                <td className="p-3 text-right font-black text-white whitespace-nowrap text-xs" style={{ backgroundColor: 'inherit', borderColor: '#1e293b' }}>
                                   {item.precoNovo !== undefined ? formatCurrency(item.precoNovo) : '—'}
                                 </td>
-                                <td className="p-3 text-right whitespace-nowrap">
+                                <td className="p-3 text-right whitespace-nowrap text-xs" style={{ backgroundColor: 'inherit', borderColor: '#1e293b' }}>
                                   {item.tipo === 'ALTERADO' && item.diferenca !== undefined ? (
-                                    <div className="flex items-center justify-end gap-1 font-bold">
-                                      {item.diferenca > 0 ? (
-                                        <TrendingUp className="h-3 w-3 text-indigo-400" />
-                                      ) : (
-                                        <TrendingDown className="h-3 w-3 text-teal-400" />
-                                      )}
-                                      <span className={item.diferenca > 0 ? 'text-indigo-400' : 'text-teal-400'}>
+                                    <div className="flex flex-col items-end gap-0.5 font-bold">
+                                      <div className="flex items-center gap-1">
+                                        {item.diferenca > 0 ? (
+                                          <TrendingUp className="h-3 w-3 text-indigo-400" />
+                                        ) : item.diferenca < 0 ? (
+                                          <TrendingDown className="h-3 w-3 text-teal-400" />
+                                        ) : null}
+                                        <span className={item.diferenca > 0 ? 'text-indigo-400 font-black' : item.diferenca < 0 ? 'text-teal-400 font-black' : 'text-slate-400'}>
+                                          {item.diferenca > 0 ? '+' : ''}
+                                          {item.variacaoPercentual}%
+                                        </span>
+                                      </div>
+                                      <span className="text-[10px] text-slate-500 font-medium">
                                         {item.diferenca > 0 ? '+' : ''}
-                                        {item.variacaoPercentual}%
+                                        {formatCurrency(item.diferenca)}
                                       </span>
                                     </div>
                                   ) : item.tipo === 'NOVO' ? (
