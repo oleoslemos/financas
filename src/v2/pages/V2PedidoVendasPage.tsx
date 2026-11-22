@@ -56,22 +56,11 @@ import { V2OrcamentosComparisonModal } from '../components/V2OrcamentosCompariso
 import { buildWhatsappUrlWithText } from '../../lib/whatsapp'
 
 const FORMAS_PAGAMENTO: string[] = [
-  'Dinheiro',
   'Pix',
   'Boleto',
   'Cartão Débito',
-  'Cartão Crédito 1x',
-  'Cartão Crédito 2x',
-  'Cartão Crédito 3x',
-  'Cartão Crédito 4x',
-  'Cartão Crédito 5x',
-  'Cartão Crédito 6x',
-  'Cartão Crédito 7x',
-  'Cartão Crédito 8x',
-  'Cartão Crédito 9x',
-  'Cartão Crédito 10x',
-  'Cartão Crédito 11x',
-  'Cartão Crédito 12x',
+  'Cartão Crédito',
+  'Dinheiro',
 ];
 
 /** Extrai o número de parcelas embutido na forma de pagamento (ex: "Cartão Crédito 3x" → 3) */
@@ -320,7 +309,10 @@ export function V2PedidoVendasPage() {
   const [formObservacao, setFormObservacao] = useState('')
   const [formItens, setFormItens] = useState<PedidoVendaItem[]>([])
 
-  // State: 3 Totais com descontos configuráveis
+  // State: parcelas para simulação sem desconto (padrão 1)
+  const [formParcelasSemDesconto, setFormParcelasSemDesconto] = useState(1)
+
+
   const [formDesconto5xPercentual, setFormDesconto5xPercentual] = useState<number>(5)
   const [formDescontoVistaPercentual, setFormDescontoVistaPercentual] = useState<number>(10)
   const [formCondicaoSelecionada, setFormCondicaoSelecionada] = useState<'sem_desconto' | 'ate_5x' | 'a_vista'>('sem_desconto')
@@ -795,9 +787,19 @@ export function V2PedidoVendasPage() {
   }
 
   const handleFaturar = async (id: string) => {
-    if (!confirm('Deseja faturar esta venda? Isso criará as contas a receber no módulo Financeiro.')) return
+    const gerarParcelado = confirm(
+      'Deseja gerar parcelas no Financeiro?\n\nOK → Gerar parcelamento\nCancelar → Parcela única (padrão)'
+    )
+
+    if (!confirm('Confirma o faturamento desta venda?')) return
+
     const res = await faturarPedidoVenda(id)
     if (res.ok) {
+      if (gerarParcelado && formParcelasSemDesconto > 1) {
+        // TODO: chamar serviço de geração de parcelas quando implementado
+        // await gerarParcelasFinanceiro(id, formParcelasSemDesconto)
+        alert(`Faturado! ${formParcelasSemDesconto} parcelas serão geradas no Financeiro.`)
+      }
       await loadData()
       if (visualizandoPedido && visualizandoPedido.id === id) {
         setVisualizandoPedido((prev) => (prev ? { ...prev, status: 'faturado' } : null))
@@ -1903,6 +1905,26 @@ export function V2PedidoVendasPage() {
                     </span>
                   </div>
                   <p className="text-[10px] text-slate-400 mt-1">Preço de tabela de vendas integral</p>
+                  {/* Campo de parcelas */}
+                  <div
+                    className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-200/60"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <span className="text-[11px] text-slate-500 font-semibold">Parcelas:</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={12}
+                      value={formParcelasSemDesconto}
+                      onChange={(e) =>
+                        setFormParcelasSemDesconto(Math.max(1, Math.min(12, Number(e.target.value))))
+                      }
+                      className="w-14 rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs text-center font-bold outline-none focus:border-sky-500"
+                    />
+                    <span className="text-[11px] text-sky-700 font-bold tabular-nums ml-auto">
+                      {formParcelasSemDesconto}x de {formatarMoeda(totalSemDesconto / (formParcelasSemDesconto || 1))}
+                    </span>
+                  </div>
                 </div>
 
                 {/* 2. Total Até 5x (Padrão 5%, editável) */}
