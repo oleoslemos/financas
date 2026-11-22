@@ -241,9 +241,9 @@ const isCalcado = (() => {
 
   // Detecta se o item pertence a Lingeries, Vestuário ou Acessórios Diversos
   const isVestuarioAcessoriosLingerie = (
-    normLinha.includes('lingerie') ||
-    normLinha.includes('vestuario') ||
-    normLinha.includes('acessorio') ||
+    norm.includes('lingerie') ||
+    norm.includes('vestuario') ||
+    norm.includes('acessorio') ||
     [
       'cinta_lombar', 'colar_magnetos', 'adesivo_magneto', 'imantador', 'mascara_dormir',
       'pulseira_health', 'alm_suporte', 'col_fitness', 'col_equilibrium', 'col_nomade',
@@ -255,6 +255,8 @@ const isCalcado = (() => {
   );
 
 
+  // Normaliza a descrição para comparações de vestuário/lingerie
+  const descricaoLimpa = limparDescricaoVestuarioAcessorios(nome);
   // 2. Identificar medida padrão (largura x comprimento, pet ou gramatura)
   let medidaKey = 'padrao'
   let tamanhoGrade: string | undefined = undefined
@@ -294,11 +296,7 @@ const isCalcado = (() => {
     }
 
     // 2. Extração de Cor para Calçados
-    const coresConhecidas = [
-      'off white', 'preta', 'preto', 'branca', 'branco', 'azul',
-      'roxa', 'roxo', 'rosa neon', 'rosa claro', 'rosa', 'laranja',
-      'cinza mescla', 'mescla', 'verde', 'marsala', 'vermelha'
-    ]
+
 
     const matchCorBracket = norm.match(/\[([a-z\s]+)\]/g)
     if (matchCorBracket) {
