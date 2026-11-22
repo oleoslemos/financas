@@ -537,3 +537,72 @@ export function exportPriceTableToCSV(table: V2PriceTable): void {
   link.click()
   document.body.removeChild(link)
 }
+
+// ─── SALVAR TABELA ESTRUTURADA IMPORTADA DO PDF ─────────────────────────────
+
+export async function saveStructuredPriceTable(doc: {
+  versao: string
+  titulo: string
+  regras_comerciais: any
+  tabelas_matriz: any
+  items_planos: ParsedImportRow[]
+}): Promise<V2PriceTable> {
+  const tableId = 'tbl-' + doc.versao.toLowerCase().replace(/[^a-z0-9]/g, '_')
+  const valorPontoPadrao = 3000
+
+  const items: V2PriceTableItem[] = doc.items_planos.map((item) => ({
+    product_id: 'prd-' + Math.random().toString(36).substring(2, 9),
+    sku: item.sku || 'SKU',
+    product_name: item.product_name,
+    product_line: item.product_line,
+    tabela_fabrica: item.tabela_fabrica,
+    tabela_vendas_sul: item.tabela_vendas_sul,
+    sugestao_vendas: item.tabela_vendas_sul,
+    ponto: calcPonto(item.tabela_fabrica, valorPontoPadrao),
+  }))
+
+  const priceTable: V2PriceTable = {
+    id: tableId,
+    name: doc.titulo,
+    reajuste_percent: 0,
+    valor_ponto: valorPontoPadrao,
+    items,
+    active: true,
+    is_default: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }
+
+  // 1. Salvar no Supabase na tabela bemaviv_tabela_preco
+  if (supabase) {
+    try {
+      const payload: any = {
+        id: priceTable.id,
+        nome: doc.titulo,
+        name: doc.titulo,
+        versao: doc.versao,
+        regras_comerciais: doc.regras_comerciais,
+        tabelas_matriz: doc.tabelas_matriz,
+        items: priceTable.items,
+        ativa: true,
+        active: true,
+        is_default: true,
+        metadata: {
+          total_itens: doc.items_planos.length,
+          categorias: Object.keys(doc.tabelas_matriz),
+          regras_comerciais: doc.regras_comerciais,
+        },
+        updated_at: new Date().toISOString(),
+      }
+      await supabase.from(SUPABASE_TABLE).upsert(payload)
+    } catch (e) {
+      console.warn('Erro ao salvar no Supabase:', e)
+    }
+  }
+
+  // 2. Atualizar cache local
+  await savePriceTable(priceTable)
+  await setDefaultPriceTable(priceTable.id)
+
+  return priceTable
+}

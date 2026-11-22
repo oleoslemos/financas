@@ -79,6 +79,7 @@ const V2SignInPage = lazy(() => import('./v2/pages/V2SignInPage').then((m) => ({
 const V2AppLayout = lazy(() => import('./v2/components/V2AppLayout').then((m) => ({ default: m.V2AppLayout })))
 const V2AdminUsersPage = lazy(() => import('./v2/pages/V2AdminUsersPage').then((m) => ({ default: m.V2AdminUsersPage })))
 const V2AdmPage = lazy(() => import('./v2/pages/V2AdmPage').then((m) => ({ default: m.V2AdmPage })))
+const V2AdminGuard = lazy(() => import('./v2/guards/V2AdminGuard').then((m) => ({ default: m.V2AdminGuard })))
 const V2WelcomePage = lazy(() => import('./v2/pages/V2WelcomePage').then((m) => ({ default: m.V2WelcomePage })))
 const V2ClientesPage = lazy(() => import('./v2/pages/V2ClientesPage').then((m) => ({ default: m.V2ClientesPage })))
 const V2SettingsPage = lazy(() => import('./v2/pages/V2SettingsPage').then((m) => ({ default: m.V2SettingsPage })))
@@ -132,7 +133,14 @@ export default function App() {
         </Route>
         <Route path="/v2/login" element={<V2SignInPage />} />
         <Route path="/v2/admin/usuarios" element={<V2AdminUsersPage />} />
-        <Route path="/adm" element={<V2AdmPage />} />
+        <Route
+          path="/adm"
+          element={
+            <V2AdminGuard>
+              <V2AdmPage />
+            </V2AdminGuard>
+          }
+        />
         <Route element={<V2AppLayout />}>
           <Route path="/v2" element={<Navigate to="/v2/inicio" replace />} />
           <Route path="/v2/inicio" element={<V2WelcomePage />} />

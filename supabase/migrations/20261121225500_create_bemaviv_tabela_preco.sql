@@ -1,16 +1,18 @@
 -- ============================================================
--- Migration: Criação da tabela bemaviv_tabela_preco
+-- Migration: Criação e expansão da tabela bemaviv_tabela_preco
 -- Tabela dedicada e centralizada para gestão de preços.
--- Os campos serão refinados e expandidos no decorrer da codificação.
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS public.bemaviv_tabela_preco (
   id               TEXT PRIMARY KEY,
   nome             TEXT,
   name             TEXT,
+  versao           TEXT DEFAULT 'REV06/2026',
   descricao        TEXT,
   reajuste_percent NUMERIC DEFAULT 0,
   valor_ponto      NUMERIC DEFAULT 0,
+  regras_comerciais JSONB DEFAULT '{"desconto_5x": 5, "desconto_a_vista": [5, 5]}'::jsonb,
+  tabelas_matriz   JSONB DEFAULT '{}'::jsonb,
   items            JSONB DEFAULT '[]'::jsonb,
   ativa            BOOLEAN DEFAULT true,
   active           BOOLEAN DEFAULT true,
@@ -19,6 +21,20 @@ CREATE TABLE IF NOT EXISTS public.bemaviv_tabela_preco (
   created_at       TIMESTAMPTZ DEFAULT now(),
   updated_at       TIMESTAMPTZ DEFAULT now()
 );
+
+-- Garantir adição de colunas caso a tabela já tenha sido criada
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'bemaviv_tabela_preco' AND column_name = 'versao') THEN
+    ALTER TABLE public.bemaviv_tabela_preco ADD COLUMN versao TEXT DEFAULT 'REV06/2026';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'bemaviv_tabela_preco' AND column_name = 'regras_comerciais') THEN
+    ALTER TABLE public.bemaviv_tabela_preco ADD COLUMN regras_comerciais JSONB DEFAULT '{"desconto_5x": 5, "desconto_a_vista": [5, 5]}'::jsonb;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'bemaviv_tabela_preco' AND column_name = 'tabelas_matriz') THEN
+    ALTER TABLE public.bemaviv_tabela_preco ADD COLUMN tabelas_matriz JSONB DEFAULT '{}'::jsonb;
+  END IF;
+END $$;
 
 -- Habilitar RLS
 ALTER TABLE public.bemaviv_tabela_preco ENABLE ROW LEVEL SECURITY;
