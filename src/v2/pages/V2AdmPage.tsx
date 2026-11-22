@@ -12,6 +12,10 @@ import {
   StructuredPriceDocument,
 } from '../services/v2PdfTableParser'
 import {
+  comparePriceTables,
+  PriceTableDiffSummary,
+} from '../services/v2PriceTableComparator'
+import {
   FileText,
   Upload,
   CheckCircle2,
@@ -24,7 +28,19 @@ import {
   Sparkles,
   Layers,
   Percent,
+  TrendingUp,
+  TrendingDown,
+  PlusCircle,
+  Search,
+  ChevronDown,
+  ChevronUp,
+  MinusCircle,
 } from 'lucide-react'
+
+function formatCurrency(val: number | undefined | null): string {
+  if (val === undefined || val === null || isNaN(val)) return 'R$ 0,00'
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)
+}
 
 // Helper para carregar pdf.js via CDN de forma transparente e leve no navegador
 async function loadPdfJs(): Promise<any> {
@@ -97,10 +113,16 @@ export function V2AdmPage() {
   const [statusMessage, setStatusMessage] = useState<string>('')
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null)
 
-  // Resultado da leitura
+  // Resultado da leitura e comparativo
   const [structuredData, setStructuredData] = useState<StructuredPriceDocument | null>(null)
+  const [diffSummary, setDiffSummary] = useState<PriceTableDiffSummary | null>(null)
   const [importSuccess, setImportSuccess] = useState<boolean>(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  // Estados de visualização do comparador
+  const [showDiffDetails, setShowDiffDetails] = useState<boolean>(true)
+  const [filterTab, setFilterTab] = useState<'TODOS' | 'NOVOS' | 'ALTERADOS' | 'INALTERADOS' | 'REMOVIDOS'>('TODOS')
+  const [diffSearch, setDiffSearch] = useState<string>('')
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -133,6 +155,7 @@ export function V2AdmPage() {
     setErrorMessage(null)
     setImportSuccess(false)
     setStructuredData(null)
+    setDiffSummary(null)
   }
 
   const handleDrop = (e: React.DragEvent) => {
@@ -143,7 +166,7 @@ export function V2AdmPage() {
     }
   }
 
-  // Processamento do PDF e gravação na tabela bemaviv_tabela_preco
+  // Processamento do PDF, comparação entre versões e gravação na tabela bemaviv_tabela_preco
   const handleProcessPdf = async () => {
     if (!file) return
 
@@ -165,7 +188,11 @@ export function V2AdmPage() {
       const doc = parseTabelaPdf(rawText, file.name)
       setStructuredData(doc)
 
-      // 3. Salvar diretamente na tabela global bemaviv_tabela_preco
+      // 3. Gerar o resumo comparativo com a versão anterior ativa
+      const diff = comparePriceTables(currentTable, doc.items_planos, doc.versao)
+      setDiffSummary(diff)
+
+      // 4. Salvar diretamente na tabela global bemaviv_tabela_preco
       setStatusMessage('Gravando na base de dados bemaviv_tabela_preco...')
       await saveStructuredPriceTable(doc)
 
@@ -183,12 +210,32 @@ export function V2AdmPage() {
   const handleReset = () => {
     setFile(null)
     setStructuredData(null)
+    setDiffSummary(null)
     setImportSuccess(false)
     setErrorMessage(null)
     setStatusMessage('')
     setProgress(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
+
+  // Filtragem dos itens comparados
+  const filteredDiffItems = (diffSummary?.itens || []).filter((item) => {
+    const matchesTab =
+      filterTab === 'TODOS' ||
+      (filterTab === 'NOVOS' && item.tipo === 'NOVO') ||
+      (filterTab === 'ALTERADOS' && item.tipo === 'ALTERADO') ||
+      (filterTab === 'INALTERADOS' && item.tipo === 'INALTERADO') ||
+      (filterTab === 'REMOVIDOS' && item.tipo === 'REMOVIDO')
+
+    const q = diffSearch.toLowerCase().trim()
+    const matchesSearch =
+      !q ||
+      item.nome.toLowerCase().includes(q) ||
+      item.linha.toLowerCase().includes(q) ||
+      (item.sku && item.sku.toLowerCase().includes(q))
+
+    return matchesTab && matchesSearch
+  })
 
   if (!user || !isAdminUser(user.username)) return null
 
@@ -199,7 +246,7 @@ export function V2AdmPage() {
     >
       {/* ── Topbar Simplificada ── */}
       <header className="border-b border-white/10 bg-slate-900/80 backdrop-blur-md sticky top-0 z-20">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between gap-4">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 bg-indigo-500/20 border border-indigo-400/30 rounded-xl px-3 py-1.5">
               <ShieldCheck className="h-4 w-4 text-indigo-400" />
@@ -232,13 +279,13 @@ export function V2AdmPage() {
       </header>
 
       {/* ── Conteúdo Central ── */}
-      <main className="max-w-3xl w-full mx-auto px-4 sm:px-6 py-10 flex-1 flex flex-col justify-center">
+      <main className="max-w-5xl w-full mx-auto px-4 sm:px-6 py-8 flex-1 flex flex-col justify-center">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-black text-white tracking-tight">
             Importar Tabela de Preço
           </h1>
           <p className="text-sm text-slate-400 mt-2 max-w-lg mx-auto">
-            Envie o arquivo PDF com a tabela de preços da fábrica. O sistema atualizará diretamente a base global compartilhada por todas as empresas.
+            Envie o arquivo PDF com a tabela de preços da fábrica. O sistema atualizará diretamente a base global compartilhada por todas as empresas e gerará o resumo comparativo de mudanças.
           </p>
         </div>
 
@@ -375,58 +422,290 @@ export function V2AdmPage() {
             </div>
           )}
 
-          {/* Feedback de Sucesso */}
-          {importSuccess && structuredData && (
-            <div className="mt-6 p-6 rounded-2xl bg-emerald-950/40 border border-emerald-700/50 space-y-4 animate-in fade-in">
-              <div className="flex items-center gap-3 text-emerald-300 font-black text-base">
-                <CheckCircle2 className="h-6 w-6 text-emerald-400 shrink-0" />
-                <span>Arquivo PDF importado e estruturado com sucesso!</span>
+          {/* Feedback de Sucesso & Resumo Comparativo */}
+          {importSuccess && structuredData && diffSummary && (
+            <div className="mt-6 space-y-6 animate-in fade-in">
+              <div className="p-6 rounded-2xl bg-emerald-950/40 border border-emerald-700/50 space-y-4">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-3 text-emerald-300 font-black text-base">
+                    <CheckCircle2 className="h-6 w-6 text-emerald-400 shrink-0" />
+                    <span>Arquivo PDF importado e estruturado com sucesso!</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 transition"
+                  >
+                    Importar Outro PDF
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="bg-slate-900/80 border border-emerald-900/50 p-3 rounded-xl">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                      Versão Identificada
+                    </span>
+                    <div className="flex items-center gap-1.5 text-white font-black text-sm">
+                      <Sparkles className="h-4 w-4 text-amber-400" />
+                      {structuredData.versao}
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-900/80 border border-emerald-900/50 p-3 rounded-xl">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                      Produtos Catalogados
+                    </span>
+                    <div className="flex items-center gap-1.5 text-emerald-300 font-black text-sm">
+                      <Layers className="h-4 w-4 text-emerald-400" />
+                      {structuredData.items_planos.length} itens prontos
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-900/80 border border-emerald-900/50 p-3 rounded-xl">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                      Condições Comerciais
+                    </span>
+                    <div className="flex items-center gap-1.5 text-indigo-300 font-black text-xs">
+                      <Percent className="h-3.5 w-3.5 text-indigo-400" />
+                      -5% em 5x · -5%-5% à vista
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="bg-slate-900/80 border border-emerald-900/50 p-3 rounded-xl">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
-                    Versão Identificada
-                  </span>
-                  <div className="flex items-center gap-1.5 text-white font-black text-sm">
-                    <Sparkles className="h-4 w-4 text-amber-400" />
-                    {structuredData.versao}
+              {/* ── CARD RESUMO COMPARATIVO (O que mudou) ── */}
+              <div className="p-6 rounded-2xl bg-slate-800/90 border border-slate-700 space-y-5">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <h3 className="text-base font-black text-white flex items-center gap-2">
+                      <Layers className="h-4 w-4 text-indigo-400" />
+                      Resumo Comparativo de Mudanças
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Comparação entre <strong>{diffSummary.versaoAnterior}</strong> e <strong>{diffSummary.versaoNova}</strong>
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowDiffDetails(!showDiffDetails)}
+                    className="flex items-center gap-1.5 text-xs font-bold text-indigo-300 hover:text-indigo-200 transition bg-indigo-950/60 px-3 py-1.5 rounded-lg border border-indigo-800/60"
+                  >
+                    {showDiffDetails ? (
+                      <>
+                        <ChevronUp className="h-3.5 w-3.5" /> Ocultar Tabela
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="h-3.5 w-3.5" /> Ver Detalhes ({diffSummary.itens.length})
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* 4 Cards de Estatísticas do Diff */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div
+                    onClick={() => setFilterTab('NOVOS')}
+                    className={`p-3.5 rounded-xl border cursor-pointer transition ${
+                      filterTab === 'NOVOS'
+                        ? 'bg-emerald-950/60 border-emerald-500'
+                        : 'bg-slate-900/60 border-slate-700/60 hover:border-emerald-600/50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-400 uppercase">Novos Itens</span>
+                      <PlusCircle className="h-4 w-4 text-emerald-400" />
+                    </div>
+                    <span className="text-2xl font-black text-emerald-300 block mt-1">
+                      {diffSummary.totalNovos}
+                    </span>
+                  </div>
+
+                  <div
+                    onClick={() => setFilterTab('ALTERADOS')}
+                    className={`p-3.5 rounded-xl border cursor-pointer transition ${
+                      filterTab === 'ALTERADOS'
+                        ? 'bg-indigo-950/60 border-indigo-500'
+                        : 'bg-slate-900/60 border-slate-700/60 hover:border-indigo-600/50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-400 uppercase">Preço Alterado</span>
+                      <TrendingUp className="h-4 w-4 text-indigo-400" />
+                    </div>
+                    <span className="text-2xl font-black text-indigo-300 block mt-1">
+                      {diffSummary.totalAlterados}
+                    </span>
+                  </div>
+
+                  <div
+                    onClick={() => setFilterTab('INALTERADOS')}
+                    className={`p-3.5 rounded-xl border cursor-pointer transition ${
+                      filterTab === 'INALTERADOS'
+                        ? 'bg-slate-800 border-slate-500'
+                        : 'bg-slate-900/60 border-slate-700/60 hover:border-slate-500'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-400 uppercase">Inalterados</span>
+                      <CheckCircle2 className="h-4 w-4 text-slate-400" />
+                    </div>
+                    <span className="text-2xl font-black text-slate-300 block mt-1">
+                      {diffSummary.totalInalterados}
+                    </span>
+                  </div>
+
+                  <div
+                    onClick={() => setFilterTab('REMOVIDOS')}
+                    className={`p-3.5 rounded-xl border cursor-pointer transition ${
+                      filterTab === 'REMOVIDOS'
+                        ? 'bg-amber-950/60 border-amber-500'
+                        : 'bg-slate-900/60 border-slate-700/60 hover:border-amber-600/50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-400 uppercase">Ausentes</span>
+                      <MinusCircle className="h-4 w-4 text-amber-400" />
+                    </div>
+                    <span className="text-2xl font-black text-amber-300 block mt-1">
+                      {diffSummary.totalRemovidos}
+                    </span>
                   </div>
                 </div>
 
-                <div className="bg-slate-900/80 border border-emerald-900/50 p-3 rounded-xl">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
-                    Produtos Catalogados
-                  </span>
-                  <div className="flex items-center gap-1.5 text-emerald-300 font-black text-sm">
-                    <Layers className="h-4 w-4 text-emerald-400" />
-                    {structuredData.items_planos.length} itens prontos
+                {/* Tabela de Detalhes do Comparativo */}
+                {showDiffDetails && (
+                  <div className="space-y-3 pt-2 border-t border-slate-700/80">
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                      {/* Filtro Tabs */}
+                      <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
+                        {(['TODOS', 'NOVOS', 'ALTERADOS', 'INALTERADOS', 'REMOVIDOS'] as const).map((tab) => (
+                          <button
+                            key={tab}
+                            type="button"
+                            onClick={() => setFilterTab(tab)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition whitespace-nowrap ${
+                              filterTab === tab
+                                ? 'bg-indigo-600 text-white'
+                                : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-700'
+                            }`}
+                          >
+                            {tab === 'TODOS'
+                              ? `Todos (${diffSummary.itens.length})`
+                              : tab === 'NOVOS'
+                              ? `Novos (${diffSummary.totalNovos})`
+                              : tab === 'ALTERADOS'
+                              ? `Alterados (${diffSummary.totalAlterados})`
+                              : tab === 'INALTERADOS'
+                              ? `Inalterados (${diffSummary.totalInalterados})`
+                              : `Ausentes (${diffSummary.totalRemovidos})`}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Busca */}
+                      <div className="relative w-full sm:w-64">
+                        <Search className="h-3.5 w-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          placeholder="Buscar produto ou linha..."
+                          value={diffSearch}
+                          onChange={(e) => setDiffSearch(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Lista / Tabela */}
+                    <div className="max-h-80 overflow-y-auto rounded-xl border border-slate-700 bg-slate-900/50">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-900 border-b border-slate-700 text-slate-400 font-bold sticky top-0">
+                          <tr>
+                            <th className="p-3">Status</th>
+                            <th className="p-3">Produto</th>
+                            <th className="p-3">Linha</th>
+                            <th className="p-3 text-right">Preço Anterior</th>
+                            <th className="p-3 text-right">Novo Preço</th>
+                            <th className="p-3 text-right">Variação</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800">
+                          {filteredDiffItems.length === 0 ? (
+                            <tr>
+                              <td colSpan={6} className="p-6 text-center text-slate-500">
+                                Nenhum produto encontrado para este filtro.
+                              </td>
+                            </tr>
+                          ) : (
+                            filteredDiffItems.map((item, idx) => (
+                              <tr key={idx} className="hover:bg-slate-800/40 transition">
+                                <td className="p-3 whitespace-nowrap">
+                                  {item.tipo === 'NOVO' && (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-950 text-emerald-400 border border-emerald-700/50">
+                                      NOVO
+                                    </span>
+                                  )}
+                                  {item.tipo === 'ALTERADO' && (
+                                    <span
+                                      className={`px-2 py-0.5 rounded text-[10px] font-black border ${
+                                        (item.diferenca || 0) > 0
+                                          ? 'bg-indigo-950 text-indigo-400 border-indigo-700/50'
+                                          : 'bg-teal-950 text-teal-400 border-teal-700/50'
+                                      }`}
+                                    >
+                                      {(item.diferenca || 0) > 0 ? 'REAJUSTE' : 'REDUÇÃO'}
+                                    </span>
+                                  )}
+                                  {item.tipo === 'INALTERADO' && (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
+                                      MANTIDO
+                                    </span>
+                                  )}
+                                  {item.tipo === 'REMOVIDO' && (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-950 text-amber-400 border border-amber-700/50">
+                                      AUSENTE
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="p-3 font-bold text-white max-w-xs truncate">
+                                  {item.nome}
+                                </td>
+                                <td className="p-3 text-slate-400 whitespace-nowrap">
+                                  {item.linha}
+                                </td>
+                                <td className="p-3 text-right text-slate-400 whitespace-nowrap">
+                                  {item.precoAnterior !== undefined ? formatCurrency(item.precoAnterior) : '—'}
+                                </td>
+                                <td className="p-3 text-right font-black text-white whitespace-nowrap">
+                                  {item.precoNovo !== undefined ? formatCurrency(item.precoNovo) : '—'}
+                                </td>
+                                <td className="p-3 text-right whitespace-nowrap">
+                                  {item.tipo === 'ALTERADO' && item.diferenca !== undefined ? (
+                                    <div className="flex items-center justify-end gap-1 font-bold">
+                                      {item.diferenca > 0 ? (
+                                        <TrendingUp className="h-3 w-3 text-indigo-400" />
+                                      ) : (
+                                        <TrendingDown className="h-3 w-3 text-teal-400" />
+                                      )}
+                                      <span className={item.diferenca > 0 ? 'text-indigo-400' : 'text-teal-400'}>
+                                        {item.diferenca > 0 ? '+' : ''}
+                                        {item.variacaoPercentual}%
+                                      </span>
+                                    </div>
+                                  ) : item.tipo === 'NOVO' ? (
+                                    <span className="text-emerald-400 font-bold text-[11px]">+ Inclusão</span>
+                                  ) : (
+                                    <span className="text-slate-600">0%</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
-
-                <div className="bg-slate-900/80 border border-emerald-900/50 p-3 rounded-xl">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
-                    Condições Comerciais
-                  </span>
-                  <div className="flex items-center gap-1.5 text-indigo-300 font-black text-xs">
-                    <Percent className="h-3.5 w-3.5 text-indigo-400" />
-                    -5% em 5x · -5%-5% à vista
-                  </div>
-                </div>
-              </div>
-
-              <p className="text-xs text-slate-300">
-                A tabela <strong>bemaviv_tabela_preco</strong> foi atualizada na nuvem com todas as matrizes dimensionais e itens disponíveis para todas as empresas.
-              </p>
-
-              <div className="pt-2 flex justify-end">
-                <button
-                  type="button"
-                  onClick={handleReset}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 transition"
-                >
-                  Importar Outro PDF
-                </button>
+                )}
               </div>
             </div>
           )}
