@@ -80,7 +80,7 @@ function limparDescricaoVestuarioAcessorios(nome: string): string {
 // Extrai Modelo Principal, Medida/Tamanho e Altura
 function extrairAssinatura(nome: string, linha: string, preco: number, sku?: string): ProductSignature {
   const norm = normalizarTexto(nome)
-  const normLinha = normalizarTexto(linha)
+// const normLinha = normalizarTexto(linha) // não utilizada
   const isAssistencia = norm.startsWith('assistencia') || norm.includes('assistencia faixa') || norm.includes('assistencia tampo') || norm.includes('assistencia diversos')
 
   // 1. Identificar modelo base abrangente
@@ -239,7 +239,21 @@ const isCalcado = (() => {
   return termosCalcado.some(t => norm.includes(t))
 })()
 
-  const descricaoLimpa = limparDescricaoVestuarioAcessorios(nome)
+  // Detecta se o item pertence a Lingeries, Vestuário ou Acessórios Diversos
+  const isVestuarioAcessoriosLingerie = (
+    normLinha.includes('lingerie') ||
+    normLinha.includes('vestuario') ||
+    normLinha.includes('acessorio') ||
+    [
+      'cinta_lombar', 'colar_magnetos', 'adesivo_magneto', 'imantador', 'mascara_dormir',
+      'pulseira_health', 'alm_suporte', 'col_fitness', 'col_equilibrium', 'col_nomade',
+      'garrafa_eko7', 'legging_emana', 'legging_fem', 'bermuda_fem', 'bermuda_masc',
+      'shorts_saia', 'shorts_fem', 'regata_fitness', 'regata_fem', 'regata_masc',
+      'top_nadador', 'top_tradicional', 'blusa_3_4', 'macaquinho_perna', 'macaquinho_manga',
+      'macaquinho', 'macacao_preto', 'blusa_masc_manga', 'calcinha', 'sutia'
+    ].includes(modeloKey)
+  );
+
 
   // 2. Identificar medida padrão (largura x comprimento, pet ou gramatura)
   let medidaKey = 'padrao'
