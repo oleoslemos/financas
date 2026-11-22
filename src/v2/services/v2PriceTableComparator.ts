@@ -36,6 +36,8 @@ interface ProductSignature {
   modeloKey: string
   medidaKey: string
   altura?: string
+  tamanhoGrade?: string
+  corGrade?: string
   isAssistencia: boolean
   nomeOriginal: string
   nomeNormalizado: string
@@ -65,7 +67,7 @@ function extrairAssinatura(nome: string, linha: string, preco: number, sku?: str
   const modelosConhecidos: { key: string; termos: string[] }[] = [
     // Colchões Premium
     { key: 'diamante', termos: ['colchao diamante', 'diamante'] },
-    { key: 'serie_ouro_pillow', termos: ['serie ouro pillow', 'ouro pillow'] },
+    { key: 'serie_ouro_pillow', termos: ['serie ouro premium pillow', 'serie ouro pillow', 'ouro premium pillow', 'ouro pillow', 'pillow'] },
     { key: 'serie_ouro', termos: ['serie ouro premium', 'serie ouro'] },
     { key: 'pangeia', termos: ['colchao pangeia', 'pangeia'] },
     { key: 'news', termos: ['colchao news', 'news'] },
@@ -204,7 +206,51 @@ function extrairAssinatura(nome: string, linha: string, preco: number, sku?: str
 
   // 2. Identificar medida padrão (largura x comprimento, pet ou gramatura)
   let medidaKey = 'padrao'
-  if (norm.includes('0 78') || norm.includes('0 88') || norm.includes('0.88') || norm.includes('solteiro 0 88') || norm.includes('0,88')) {
+  let tamanhoGrade: string | undefined = undefined
+  let corGrade: string | undefined = undefined
+
+  const isCalcado = ['chinelo_nuvem', 'chinelo_fem', 'chinelo_masc', 'tenis_fn1', 'palmilha'].includes(modeloKey)
+  if (isCalcado) {
+    // 1. Extração de Tamanho para Calçados (ex: [33/34], 33/34, [32/33/34], etc.)
+    const matchTamBracket = norm.match(/\[(\d{2}(?:\/\d{2})*(?:\/\d{2})*)\]/)
+    const matchTamRaw = norm.match(/\b(\d{2}\/\d{2}(?:\/\d{2})*)\b/)
+    const matchTamNum = norm.match(/\[(\d{2})\]/) || norm.match(/\b(3[2-9]|4[0-5])\b/)
+
+    if (matchTamBracket) {
+      tamanhoGrade = matchTamBracket[1]
+    } else if (matchTamRaw) {
+      tamanhoGrade = matchTamRaw[1]
+    } else if (matchTamNum) {
+      tamanhoGrade = matchTamNum[1]
+    }
+
+    // 2. Extração de Cor para Calçados
+    const coresConhecidas = [
+      'off white', 'preta', 'preto', 'branca', 'branco', 'azul',
+      'roxa', 'roxo', 'rosa neon', 'rosa claro', 'rosa', 'laranja',
+      'cinza mescla', 'mescla', 'verde', 'marsala', 'vermelha'
+    ]
+
+    const matchCorBracket = norm.match(/\[([a-z\s]+)\]/g)
+    if (matchCorBracket) {
+      for (const b of matchCorBracket) {
+        const inside = b.replace(/[\[\]]/g, '').trim()
+        const achou = coresConhecidas.find(c => inside === c || inside.includes(c))
+        if (achou) {
+          corGrade = achou
+          break
+        }
+      }
+    }
+
+    if (!corGrade) {
+      corGrade = coresConhecidas.find(c => norm.includes(c))
+    }
+
+    if (tamanhoGrade || corGrade) {
+      medidaKey = `grade_${tamanhoGrade || 'geral'}_${corGrade || 'geral'}`
+    }
+  } else if (norm.includes('0 78') || norm.includes('0 88') || norm.includes('0.88') || norm.includes('solteiro 0 88') || norm.includes('0,88')) {
     medidaKey = '0.88x1.88'
   } else if (norm.includes('1 19') || norm.includes('1.19') || norm.includes('solteiro 1 19') || norm.includes('1,19')) {
     medidaKey = '1.19x1.88'
@@ -244,6 +290,8 @@ function extrairAssinatura(nome: string, linha: string, preco: number, sku?: str
     modeloKey,
     medidaKey,
     altura,
+    tamanhoGrade,
+    corGrade,
     isAssistencia,
     nomeOriginal: nome,
     nomeNormalizado: norm,
@@ -317,12 +365,18 @@ export function comparePriceTables(
 
     if (!match) {
       // Produto Novo (inclusão de catálogo)
+      let detalheMudanca: string | undefined = undefined
+      if (sigNova.tamanhoGrade || sigNova.corGrade) {
+        detalheMudanca = `Grade: [${sigNova.tamanhoGrade || '-'}] [${sigNova.corGrade?.toUpperCase() || '-'}]`
+      }
+
       itensDiff.push({
         sku: novo.sku,
         nome: novo.product_name,
         linha: novo.product_line,
         tipo: 'NOVO',
         precoNovo: novo.tabela_vendas_sul,
+        detalheMudanca,
       })
     } else {
       assinaturasUsadasAnterior.add(match)
@@ -335,9 +389,11 @@ export function comparePriceTables(
       let detalheMudanca: string | undefined = undefined
       if (match.altura && sigNova.altura && match.altura !== sigNova.altura) {
         detalheMudanca = `Altura: ${match.altura} ➔ ${sigNova.altura}`
+      } else if (sigNova.tamanhoGrade || sigNova.corGrade) {
+        detalheMudanca = `Grade: [${sigNova.tamanhoGrade || '-'}] [${sigNova.corGrade?.toUpperCase() || '-'}]`
       }
 
-      if (Math.abs(diferenca) > 0.05 || detalheMudanca) {
+      if (Math.abs(diferenca) > 0.05 || (match.altura && sigNova.altura && match.altura !== sigNova.altura)) {
         // Produto Alterado (Preço Reajustado e/ou Medida de Altura Alterada)
         const variacao = precoAntigo > 0 ? Number(((diferenca / precoAntigo) * 100).toFixed(2)) : 0
         itensDiff.push({
@@ -362,6 +418,7 @@ export function comparePriceTables(
           precoNovo: precoNovo,
           diferenca: 0,
           variacaoPercentual: 0,
+          detalheMudanca,
         })
       }
     }

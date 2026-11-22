@@ -35,6 +35,9 @@ import {
   ChevronDown,
   ChevronUp,
   MinusCircle,
+  ArrowRight,
+  Database,
+  FileCheck,
 } from 'lucide-react'
 
 function formatCurrency(val: number | undefined | null): string {
@@ -106,17 +109,21 @@ export function V2AdmPage() {
 
   const [currentTable, setCurrentTable] = useState<V2PriceTable | null>(null)
 
-  // Estados do upload do PDF
+  // Estados do fluxo em 2 Etapas
+  // 'IDLE': Aguardando seleção do PDF
+  // 'VALIDATED': Etapa 1 concluída (dados extraídos e comparativo pronto para revisão)
+  // 'APPLIED': Etapa 2 concluída (tabela oficial gravada no banco com sucesso)
+  const [step, setStep] = useState<'IDLE' | 'VALIDATED' | 'APPLIED'>('IDLE')
   const [file, setFile] = useState<File | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [processing, setProcessing] = useState(false)
+  const [isApplying, setIsApplying] = useState(false)
   const [statusMessage, setStatusMessage] = useState<string>('')
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null)
 
   // Resultado da leitura e comparativo
   const [structuredData, setStructuredData] = useState<StructuredPriceDocument | null>(null)
   const [diffSummary, setDiffSummary] = useState<PriceTableDiffSummary | null>(null)
-  const [importSuccess, setImportSuccess] = useState<boolean>(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   // Estados de visualização do comparador
@@ -153,9 +160,9 @@ export function V2AdmPage() {
     }
     setFile(selectedFile)
     setErrorMessage(null)
-    setImportSuccess(false)
     setStructuredData(null)
     setDiffSummary(null)
+    setStep('IDLE')
   }
 
   const handleDrop = (e: React.DragEvent) => {
@@ -166,8 +173,8 @@ export function V2AdmPage() {
     }
   }
 
-  // Processamento do PDF, comparação entre versões e gravação na tabela bemaviv_tabela_preco
-  const handleProcessPdf = async () => {
+  // ── ETAPA 1: Processar e Validar as Informações (sem gravar no banco) ──
+  const handleValidatePdf = async () => {
     if (!file) return
 
     setProcessing(true)
@@ -189,16 +196,12 @@ export function V2AdmPage() {
       setStructuredData(doc)
 
       // 3. Gerar o resumo comparativo com a versão anterior ativa
+      setStatusMessage('Cruzando com a tabela ativa para validação...')
       const diff = comparePriceTables(currentTable, doc.items_planos, doc.versao)
       setDiffSummary(diff)
 
-      // 4. Salvar diretamente na tabela global bemaviv_tabela_preco
-      setStatusMessage('Gravando na base de dados bemaviv_tabela_preco...')
-      await saveStructuredPriceTable(doc)
-
-      await loadActiveTable()
-      setImportSuccess(true)
-      setStatusMessage('Importação concluída com sucesso!')
+      setStep('VALIDATED')
+      setStatusMessage('Etapa 1 Concluída! Informações validadas com sucesso. Revise o comparativo antes de aplicar.')
     } catch (err: any) {
       console.error(err)
       setErrorMessage(err.message || 'Erro ao processar o arquivo PDF.')
@@ -207,11 +210,33 @@ export function V2AdmPage() {
     }
   }
 
+  // ── ETAPA 2: Confirmar e Atualizar Tabela de Preço Oficial no Supabase ──
+  const handleApplyPriceTable = async () => {
+    if (!structuredData) return
+
+    setIsApplying(true)
+    setErrorMessage(null)
+    setStatusMessage('Gravando nova tabela na base oficial bemaviv_tabela_preco...')
+
+    try {
+      await saveStructuredPriceTable(structuredData)
+      await loadActiveTable()
+      setStep('APPLIED')
+      setStatusMessage('Etapa 2 Concluída! Tabela de preços atualizada com sucesso no sistema.')
+    } catch (err: any) {
+      console.error(err)
+      setErrorMessage(err.message || 'Erro ao gravar a tabela de preços no banco de dados.')
+    } finally {
+      setIsApplying(false)
+    }
+  }
+
   const handleReset = () => {
     setFile(null)
     setStructuredData(null)
     setDiffSummary(null)
-    setImportSuccess(false)
+    setStep('IDLE')
+    setIsApplying(false)
     setErrorMessage(null)
     setStatusMessage('')
     setProgress(null)
@@ -291,6 +316,37 @@ export function V2AdmPage() {
 
         {/* ── Card Principal de Upload de PDF ── */}
         <div className="bg-slate-900/80 border border-slate-700/80 rounded-3xl p-6 sm:p-10 shadow-2xl backdrop-blur-xl relative overflow-hidden">
+          {/* Stepper das 2 Etapas */}
+          <div className="mb-8 p-3 rounded-2xl bg-slate-950/60 border border-slate-800 flex items-center justify-between sm:justify-center gap-4 text-xs font-bold">
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl transition ${
+              step === 'IDLE' ? 'bg-indigo-950 border border-indigo-700/60 text-indigo-300' : 'bg-emerald-950/60 text-emerald-400 border border-emerald-700/50'
+            }`}>
+              <div className={`h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-black ${
+                step === 'IDLE' ? 'bg-indigo-600 text-white' : 'bg-emerald-600 text-white'
+              }`}>
+                {step === 'IDLE' ? '1' : '✓'}
+              </div>
+              <span>1. Importar e Validar</span>
+            </div>
+
+            <ArrowRight className="h-4 w-4 text-slate-600 shrink-0" />
+
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl transition ${
+              step === 'APPLIED'
+                ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-700/50'
+                : step === 'VALIDATED'
+                ? 'bg-amber-950/60 text-amber-300 border border-amber-600 animate-pulse'
+                : 'text-slate-500'
+            }`}>
+              <div className={`h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-black ${
+                step === 'APPLIED' ? 'bg-emerald-600 text-white' : step === 'VALIDATED' ? 'bg-amber-500 text-slate-950 font-black' : 'bg-slate-800 text-slate-400'
+              }`}>
+                {step === 'APPLIED' ? '✓' : '2'}
+              </div>
+              <span>2. Atualizar Tabela de Preço</span>
+            </div>
+          </div>
+
           {/* Status da Tabela Atual */}
           {currentTable && (
             <div className="mb-6 pb-6 border-b border-slate-800 flex items-center justify-between flex-wrap gap-2 text-xs">
@@ -313,7 +369,9 @@ export function V2AdmPage() {
               isDragging
                 ? 'border-indigo-400 bg-indigo-950/20'
                 : file
-                ? 'border-emerald-500/50 bg-emerald-950/10'
+                ? step === 'APPLIED'
+                  ? 'border-emerald-500/50 bg-emerald-950/10'
+                  : 'border-indigo-500/50 bg-indigo-950/10'
                 : 'border-slate-700 hover:border-indigo-500/50 hover:bg-slate-800/40'
             }`}
           >
@@ -362,7 +420,7 @@ export function V2AdmPage() {
                       </p>
                     </div>
                   </div>
-                  {!processing && (
+                  {!processing && !isApplying && (
                     <button
                       type="button"
                       onClick={(e) => {
@@ -377,8 +435,8 @@ export function V2AdmPage() {
                   )}
                 </div>
 
-                {/* Mensagem de progresso */}
-                {processing && (
+                {/* Mensagem de progresso de validação ou gravação */}
+                {(processing || isApplying) && (
                   <div className="mt-6 space-y-2">
                     <div className="flex items-center justify-center gap-2 text-indigo-400 text-sm font-bold">
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -395,19 +453,19 @@ export function V2AdmPage() {
                   </div>
                 )}
 
-                {/* Botão de ação de processamento */}
-                {!processing && !importSuccess && (
+                {/* Botão da Etapa 1: Processar e Validar */}
+                {!processing && !isApplying && step === 'IDLE' && (
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation()
-                      handleProcessPdf()
+                      handleValidatePdf()
                     }}
                     className="mt-6 w-full py-3.5 rounded-xl text-sm font-bold text-white transition flex items-center justify-center gap-2 shadow-xl shadow-indigo-600/30 cursor-pointer"
                     style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
                   >
-                    <Upload className="h-4 w-4" />
-                    Processar e Importar PDF
+                    <FileCheck className="h-4 w-4" />
+                    1. Importar e Validar Informações
                   </button>
                 )}
               </div>
@@ -422,26 +480,89 @@ export function V2AdmPage() {
             </div>
           )}
 
-          {/* Feedback de Sucesso & Resumo Comparativo */}
-          {importSuccess && structuredData && diffSummary && (
-            <div className="mt-6 space-y-6 animate-in fade-in">
-              <div className="p-6 rounded-2xl bg-emerald-950/40 border border-emerald-700/50 space-y-4">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-3 text-emerald-300 font-black text-base">
-                    <CheckCircle2 className="h-6 w-6 text-emerald-400 shrink-0" />
-                    <span>Arquivo PDF importado e estruturado com sucesso!</span>
+          {/* ── PAINEL DA ETAPA 2 (QUANDO OS DADOS FORAM VALIDADOS) ── */}
+          {step === 'VALIDATED' && structuredData && diffSummary && (
+            <div className="mt-6 p-6 rounded-2xl bg-gradient-to-r from-indigo-950/80 via-slate-900 to-emerald-950/80 border-2 border-indigo-500/70 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="space-y-1 text-center md:text-left">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Etapa 1 Concluída · Dados Validados
+                </div>
+                <h4 className="text-base font-black text-white">
+                  Pronto para atualizar a tabela oficial de preço?
+                </h4>
+                <p className="text-xs text-slate-300 max-w-xl">
+                  Revise abaixo o resumo comparativo com todas as inclusões e reajustes. Ao confirmar, o sistema atualizará a base global com <strong>{structuredData.items_planos.length} produtos</strong> da versão <strong>{structuredData.versao}</strong>.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 w-full md:w-auto shrink-0">
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  disabled={isApplying}
+                  className="flex-1 md:flex-none px-4 py-3 rounded-xl text-xs font-bold text-slate-400 hover:text-white bg-slate-800/90 hover:bg-slate-700 border border-slate-700 transition"
+                >
+                  Descartar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApplyPriceTable}
+                  disabled={isApplying}
+                  className="flex-1 md:flex-none px-6 py-3 rounded-xl text-xs font-black text-white transition flex items-center justify-center gap-2 shadow-xl shadow-emerald-600/30 cursor-pointer"
+                  style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}
+                >
+                  {isApplying ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Atualizando...
+                    </>
+                  ) : (
+                    <>
+                      <Database className="h-4 w-4" />
+                      2. Atualizar Tabela de Preço
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── BANNER DE CONCLUSÃO FINAL DA ETAPA 2 ── */}
+          {step === 'APPLIED' && (
+            <div className="mt-6 p-6 rounded-2xl bg-emerald-950/60 border border-emerald-600 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3 text-emerald-300 font-black text-base text-center sm:text-left">
+                <CheckCircle2 className="h-7 w-7 text-emerald-400 shrink-0" />
+                <div>
+                  <div>Tabela de Preço Atualizada com Sucesso!</div>
+                  <div className="text-xs font-normal text-emerald-200 mt-0.5">
+                    A versão <strong>{structuredData?.versao}</strong> agora é a tabela padrão oficial compartilhada entre todas as empresas.
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleReset}
-                    className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 transition"
-                  >
-                    Importar Outro PDF
-                  </button>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleReset}
+                className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 transition shrink-0"
+              >
+                Concluir / Importar Outro PDF
+              </button>
+            </div>
+          )}
+
+          {/* Feedback de Sucesso & Resumo Comparativo */}
+          {(step === 'VALIDATED' || step === 'APPLIED') && structuredData && diffSummary && (
+            <div className="mt-6 space-y-6 animate-in fade-in">
+              <div className="p-6 rounded-2xl bg-slate-800/60 border border-slate-700/80 space-y-4">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2 text-white font-black text-sm">
+                    <Sparkles className="h-4 w-4 text-amber-400" />
+                    <span>Dados Estruturados da Tabela</span>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="bg-slate-900/80 border border-emerald-900/50 p-3 rounded-xl">
+                  <div className="bg-slate-900/80 border border-slate-700/80 p-3 rounded-xl">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
                       Versão Identificada
                     </span>
@@ -451,7 +572,7 @@ export function V2AdmPage() {
                     </div>
                   </div>
 
-                  <div className="bg-slate-900/80 border border-emerald-900/50 p-3 rounded-xl">
+                  <div className="bg-slate-900/80 border border-slate-700/80 p-3 rounded-xl">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
                       Produtos Catalogados
                     </span>
@@ -461,7 +582,7 @@ export function V2AdmPage() {
                     </div>
                   </div>
 
-                  <div className="bg-slate-900/80 border border-emerald-900/50 p-3 rounded-xl">
+                  <div className="bg-slate-900/80 border border-slate-700/80 p-3 rounded-xl">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
                       Condições Comerciais
                     </span>

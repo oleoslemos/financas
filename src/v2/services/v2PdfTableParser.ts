@@ -77,12 +77,14 @@ export function parseTabelaPdf(fullText: string, fileName?: string): StructuredP
   tabelasMatriz.colchoes_premium = dimColchoes.map(r => {
     addItem(`Colchão Diamante (40cm) - ${r.dim}`, 'Colchões Premium', r.d)
     addItem(`Colchão Série Ouro Premium (35cm) - ${r.dim}`, 'Colchões Premium', r.o)
+    addItem(`Colchão Série Ouro Premium Pillow (35cm) - ${r.dim}`, 'Colchões Premium', r.o)
     addItem(`Colchão Pangeia (29cm) - ${r.dim}`, 'Colchões Premium', r.p)
     addItem(`Colchão News (26cm) - ${r.dim}`, 'Colchões Premium', r.n)
     return {
       dimensao: r.dim,
       diamante_40cm: r.d,
       serie_ouro_35cm: r.o,
+      serie_ouro_pillow_35cm: r.o,
       pangeia_29cm: r.p,
       news_26cm: r.n,
       eletronico_quantica_vibro_cromo: r.elet,
@@ -316,6 +318,15 @@ export function parseTabelaPdf(fullText: string, fileName?: string): StructuredP
   addItem('Chinelo Masculino', 'Calçados', 131.55)
   addItem('Tênis FN1', 'Calçados', 532.00)
   addItem('Palmilha Magnética', 'Calçados', 103.91)
+
+  // Grade CHINELO NUVEM (numeração de 33 até 44 com cores PRETA e OFF WHITE)
+  const tamanhosNuvem = ['33/34', '35/36', '37/38', '39/40', '41/42', '43/44']
+  const coresNuvem = ['PRETA', 'OFF WHITE']
+  tamanhosNuvem.forEach(tam => {
+    coresNuvem.forEach(cor => {
+      addItem(`CHINELO NUVEM [${tam}][${cor}]`, 'Calçados', 268.80)
+    })
+  })
   addItem('Cinta Lombar (P, M, G, GG, EXG)', 'Acessórios', 323.05)
   addItem('Colar de Magnetos (P, M, G, GG)', 'Acessórios', 204.65)
   addItem('Adesivo de Magneto', 'Acessórios', 113.46)
