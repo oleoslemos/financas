@@ -29,7 +29,6 @@ export interface V2PriceTable {
 // ─── STORAGE KEYS & CONSTANTS ────────────────────────────────────────────────
 const KEY_PRICE_TABLES = 'v2_price_tables_v2'
 export const SUPABASE_TABLE = 'bemaviv_tabela_preco'
-const LEGACY_TABLE = 'v2_tabelas_preco'
 
 // ─── CALCULO SUGESTÃO DE VENDAS (REGRA DE ARREDONDAMENTO DETERMINÍSTICA B1) ─
 /**
@@ -88,20 +87,12 @@ export async function listPriceTables(): Promise<V2PriceTable[]> {
 
   if (supabase) {
     try {
-      // 1. Tentar consultar na nova tabela bemaviv_tabela_preco
       const { data, error } = await supabase.from(SUPABASE_TABLE).select('*').order('created_at', { ascending: false })
       if (!error && data && data.length > 0) {
         list = data.map((t: any) => ({
           ...t,
-          name: t.nome || t.name,
-          active: t.ativa !== undefined ? t.ativa : (t.active !== undefined ? t.active : true),
+          active: t.active !== undefined ? t.active : true,
         })) as V2PriceTable[]
-      } else {
-        // Fallback: tentar tabela legada v2_tabelas_preco
-        const { data: legacyData, error: legErr } = await supabase.from(LEGACY_TABLE).select('*').order('name')
-        if (!legErr && legacyData && legacyData.length > 0) {
-          list = legacyData as V2PriceTable[]
-        }
       }
     } catch {}
   }
@@ -149,12 +140,10 @@ export async function savePriceTable(table: Omit<V2PriceTable, 'id' | 'created_a
     try {
       const payload: any = {
         id: fullTable.id,
-        nome: fullTable.name,
         name: fullTable.name,
         reajuste_percent: fullTable.reajuste_percent,
         valor_ponto: fullTable.valor_ponto,
         items: fullTable.items,
-        ativa: fullTable.active,
         active: fullTable.active,
         is_default: fullTable.is_default,
         updated_at: fullTable.updated_at,
@@ -165,26 +154,6 @@ export async function savePriceTable(table: Omit<V2PriceTable, 'id' | 'created_a
         const msg = `[savePriceTable] ERRO ao salvar em "${SUPABASE_TABLE}": ${error.message} (code: ${error.code}, details: ${error.details}, hint: ${error.hint})`
         console.error(msg)
         lastSavePriceTableError = msg
-        // Fallback: salvar na tabela legada se bemaviv_tabela_preco der erro
-        const fallbackPayload: any = {
-          id: fullTable.id,
-          name: fullTable.name,
-          reajuste_percent: fullTable.reajuste_percent,
-          valor_ponto: fullTable.valor_ponto,
-          items: fullTable.items,
-          active: fullTable.active,
-          is_default: fullTable.is_default,
-          updated_at: fullTable.updated_at,
-        }
-        console.warn('[savePriceTable] tentando fallback na tabela legada:', LEGACY_TABLE)
-        const { error: legacyError } = await supabase.from(LEGACY_TABLE).upsert(fallbackPayload)
-        if (legacyError) {
-          const legacyMsg = `[savePriceTable] ERRO também no fallback "${LEGACY_TABLE}": ${legacyError.message}`
-          console.error(legacyMsg)
-          lastSavePriceTableError += ' | ' + legacyMsg
-        } else {
-          console.warn('[savePriceTable] salvo no fallback legado com sucesso.')
-        }
       } else {
         console.log('[savePriceTable] salvo com sucesso em', SUPABASE_TABLE)
       }
@@ -239,29 +208,17 @@ export async function setDefaultPriceTable(id: string): Promise<V2PriceTable[]> 
       for (const t of updatedList) {
         const payload: any = {
           id: t.id,
-          nome: t.name,
           name: t.name,
           reajuste_percent: t.reajuste_percent,
           valor_ponto: t.valor_ponto || 0,
           items: t.items,
-          ativa: t.active,
           active: t.active,
           is_default: t.is_default,
           updated_at: t.updated_at,
         }
         const { error } = await supabase.from(SUPABASE_TABLE).upsert(payload)
         if (error) {
-          const fallbackPayload: any = {
-            id: t.id,
-            name: t.name,
-            reajuste_percent: t.reajuste_percent,
-            valor_ponto: t.valor_ponto || 0,
-            items: t.items,
-            active: t.active,
-            is_default: t.is_default,
-            updated_at: t.updated_at,
-          }
-          await supabase.from(LEGACY_TABLE).upsert(fallbackPayload)
+          console.error('[setDefaultPriceTable] ERRO ao salvar tabela', t.id, ':', error.message)
         }
       }
     } catch (err) {
@@ -282,7 +239,6 @@ export async function deletePriceTable(id: string): Promise<void> {
   if (supabase) {
     try {
       await supabase.from(SUPABASE_TABLE).delete().eq('id', id)
-      await supabase.from(LEGACY_TABLE).delete().eq('id', id)
     } catch (err) {
       console.warn('Supabase price table delete error:', err)
     }
