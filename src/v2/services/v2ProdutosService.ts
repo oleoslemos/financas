@@ -46,7 +46,8 @@ export interface V2Product {
 
 // ─── STORAGE KEYS ─────────────────────────────────────────────────────────────
 const KEY_PRODUCTS = 'v2_produtos_v2_clean'
-const SUPABASE_TABLE = 'v2_produtos'
+const SUPABASE_TABLE = 'bemaviv_produtos'
+const LEGACY_TABLE = 'v2_produtos'
 
 // ─── CRUD OPERATIONS ─────────────────────────────────────────────────────────
 
@@ -56,10 +57,17 @@ export async function listV2Products(): Promise<V2Product[]> {
   if (supabase) {
     try {
       const { data, error } = await supabase.from(SUPABASE_TABLE).select('*').order('code_sku')
-      if (!error && data) {
+      if (!error && data && data.length > 0) {
         list = data as V2Product[]
+      } else {
+        const { data: legacyData, error: legErr } = await supabase.from(LEGACY_TABLE).select('*').order('code_sku')
+        if (!legErr && legacyData && legacyData.length > 0) {
+          list = legacyData as V2Product[]
+        }
       }
-    } catch {}
+    } catch (err) {
+      console.warn('Erro ao listar produtos do Supabase:', err)
+    }
   }
 
   if (list.length === 0) {

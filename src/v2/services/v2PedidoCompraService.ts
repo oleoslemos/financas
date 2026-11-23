@@ -97,7 +97,8 @@ export type PedidoCompra = {
 // ─── Constantes ─────────────────────────────────────────────────────────
 
 const KEY = 'v2_pedidos_compra'
-const SUPABASE_TABLE = 'v2_pedidos_compra'
+const SUPABASE_TABLE = 'bemaviv_pedidos_compra'
+const LEGACY_TABLE = 'v2_pedidos_compra'
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
@@ -176,7 +177,14 @@ export async function listPedidosCompra(): Promise<PedidoCompra[]> {
   let list: PedidoCompra[] = []
   if (supabase) {
     try {
-      const { data, error } = await supabase.from(SUPABASE_TABLE).select('*').order('created_at', { ascending: false })
+      let { data, error } = await supabase.from(SUPABASE_TABLE).select('*').order('created_at', { ascending: false })
+      if ((error || !data) && LEGACY_TABLE) {
+        const legacyRes = await supabase.from(LEGACY_TABLE).select('*').order('created_at', { ascending: false })
+        if (!legacyRes.error && legacyRes.data) {
+          data = legacyRes.data
+          error = null
+        }
+      }
       if (!error && data) {
         list = data as PedidoCompra[]
         const remoteIds = new Set(list.map((r) => r.id))
