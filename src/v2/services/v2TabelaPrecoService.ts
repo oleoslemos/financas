@@ -142,11 +142,9 @@ export async function savePriceTable(table: Omit<V2PriceTable, 'id' | 'created_a
         id: fullTable.id,
         name: fullTable.name,
         reajuste_percent: fullTable.reajuste_percent,
-        valor_ponto: fullTable.valor_ponto,
         items: fullTable.items,
         active: fullTable.active,
         is_default: fullTable.is_default,
-        updated_at: fullTable.updated_at,
       }
       console.log('[savePriceTable] upsert payload →', payload)
       const { error } = await supabase.from(SUPABASE_TABLE).upsert(payload)
@@ -210,11 +208,9 @@ export async function setDefaultPriceTable(id: string): Promise<V2PriceTable[]> 
           id: t.id,
           name: t.name,
           reajuste_percent: t.reajuste_percent,
-          valor_ponto: t.valor_ponto || 0,
           items: t.items,
           active: t.active,
           is_default: t.is_default,
-          updated_at: t.updated_at,
         }
         const { error } = await supabase.from(SUPABASE_TABLE).upsert(payload)
         if (error) {
