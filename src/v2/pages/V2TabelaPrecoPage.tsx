@@ -15,6 +15,7 @@ import {
   parseImportText,
   executeImportToCatalogAndTable,
   exportPriceTableToCSV,
+  lastSavePriceTableError,
   V2PriceTable,
   ParsedImportRow,
 } from '../services/v2TabelaPrecoService'
@@ -179,10 +180,19 @@ export function V2TabelaPrecoPage() {
     setNewTableCopyAll(true)
 
     await loadData(created.id)
-    showToast({
-      type: 'success',
-      text: `Tabela "${created.name}" criada com sucesso contendo ${created.items.length} produtos!`,
-    })
+
+    if (lastSavePriceTableError) {
+      showToast({
+        type: 'error',
+        text: `⚠️ Tabela criada localmente, mas ERRO ao salvar no Supabase: ${lastSavePriceTableError}`,
+      })
+      console.error('[V2TabelaPrecoPage] Erro detectado após criar tabela:', lastSavePriceTableError)
+    } else {
+      showToast({
+        type: 'success',
+        text: `Tabela "${created.name}" criada com sucesso contendo ${created.items.length} produtos!`,
+      })
+    }
   }
 
   // Handle Opening Rename Modal

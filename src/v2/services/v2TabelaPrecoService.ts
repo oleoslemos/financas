@@ -116,7 +116,10 @@ export async function listPriceTables(): Promise<V2PriceTable[]> {
   return list
 }
 
+export let lastSavePriceTableError: string | null = null
+
 export async function savePriceTable(table: Omit<V2PriceTable, 'id' | 'created_at' | 'updated_at'> & { id?: string }): Promise<V2PriceTable> {
+  lastSavePriceTableError = null
   const current = await listPriceTables()
   const isEdit = Boolean(table.id)
   const id = table.id || 'tbl-' + Date.now()
@@ -156,8 +159,12 @@ export async function savePriceTable(table: Omit<V2PriceTable, 'id' | 'created_a
         is_default: fullTable.is_default,
         updated_at: fullTable.updated_at,
       }
+      console.log('[savePriceTable] upsert payload →', payload)
       const { error } = await supabase.from(SUPABASE_TABLE).upsert(payload)
       if (error) {
+        const msg = `[savePriceTable] ERRO ao salvar em "${SUPABASE_TABLE}": ${error.message} (code: ${error.code}, details: ${error.details}, hint: ${error.hint})`
+        console.error(msg)
+        lastSavePriceTableError = msg
         // Fallback: salvar na tabela legada se bemaviv_tabela_preco der erro
         const fallbackPayload: any = {
           id: fullTable.id,
@@ -169,11 +176,27 @@ export async function savePriceTable(table: Omit<V2PriceTable, 'id' | 'created_a
           is_default: fullTable.is_default,
           updated_at: fullTable.updated_at,
         }
-        await supabase.from(LEGACY_TABLE).upsert(fallbackPayload)
+        console.warn('[savePriceTable] tentando fallback na tabela legada:', LEGACY_TABLE)
+        const { error: legacyError } = await supabase.from(LEGACY_TABLE).upsert(fallbackPayload)
+        if (legacyError) {
+          const legacyMsg = `[savePriceTable] ERRO também no fallback "${LEGACY_TABLE}": ${legacyError.message}`
+          console.error(legacyMsg)
+          lastSavePriceTableError += ' | ' + legacyMsg
+        } else {
+          console.warn('[savePriceTable] salvo no fallback legado com sucesso.')
+        }
+      } else {
+        console.log('[savePriceTable] salvo com sucesso em', SUPABASE_TABLE)
       }
     } catch (err) {
-      console.warn('Supabase price table upsert fallback:', err)
+      const msg = `[savePriceTable] EXCEÇÃO: ${String(err)}`
+      console.error(msg)
+      lastSavePriceTableError = msg
     }
+  } else {
+    const msg = '[savePriceTable] Supabase não inicializado — salvando apenas no localStorage.'
+    console.warn(msg)
+    lastSavePriceTableError = msg
   }
 
   let updatedList: V2PriceTable[]
