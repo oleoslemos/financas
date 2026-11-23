@@ -441,8 +441,8 @@ export function V2TabelaPrecoPage() {
         </div>
 
         {/* ── TABLE SELECTOR & REAJUSTE CONTROL BAR ── */}
-          <div className="bg-white p-5 rounded-2xl border border-purple-100 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-1">
+  
+
               <div>
                 <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                   Tabela de Preço Ativa:
@@ -540,48 +540,9 @@ export function V2TabelaPrecoPage() {
               </div>
             )}
           </div>
-        <div className="bg-white p-5 rounded-2xl border border-purple-100 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-1">
-            <div>
-              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                Tabela de Preço Ativa:
-              </label>
-              <>{tables.length === 0 ? (
-                <p className="text-xs text-slate-400 font-bold">Nenhuma tabela cadastrada</p>
-              ) : (
-                <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    value={selectedTableId}
-                    onChange={(e) => setSelectedTableId(e.target.value)}
-                    className="rounded-xl px-4 py-2.5 border border-purple-200 text-sm font-black bg-purple-50/50 text-purple-900 outline-none focus:ring-2 focus:ring-purple-400 min-w-64 cursor-pointer"
-                  >
-                    {tables.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.is_default ? '⭐ ' : ''}{t.name} ({t.items.length} itens - {t.reajuste_percent}% Reajuste{t.valor_ponto ? ` - Ponto: ${t.valor_ponto}` : ''}){t.is_default ? ' [PADRÃO]' : ''}
-                      </option>
-                    ))}
-                  </select>
 
-                  {selectedTable && (
-                    <>
-                      {/* Botão Renomear */}
-                      <button
-                        type="button"
-                        onClick={() => openRenameModal(selectedTable)}
-                        className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-purple-50 hover:text-purple-700 hover:border-purple-200 transition shadow-2xs"
-                        title="Renomear o nome desta Tabela de Preço"
-                      >
-                        <Edit2 className="h-3.5 w-3.5 text-purple-600" />
-                        Renomear
-                      </button>
-
-                      {/* Botão / Badge Tabela Padrão */}
-                      {selectedTable.is_default ? (
-                        <span
-                          className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-black bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs"
-                          title="Esta é a tabela de preço padrão do sistema (utilizada no catálogo e pedidos)"
-                        >
-                          <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" />
+          
+00 text-amber-500" />
                           Tabela Padrão
                         </span>
                       ) : (
