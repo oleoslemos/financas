@@ -71,9 +71,10 @@ export function V2TabelaPrecoPage() {
   // Modals state - Criar Tabela
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [newTableName, setNewTableName] = useState('')
-  const [newTableReajuste, setNewTableReajuste] = useState<number>(1.0)
-  const [newTableValorPonto, setNewTableValorPonto] = useState<number | ''>('')
+  const [newTableReajuste, setNewTableReajuste] = useState<number>(11.11)
+  const [newTableValorPonto, setNewTableValorPonto] = useState<number>(3000)
   const [newTableIsDefault, setNewTableIsDefault] = useState(false)
+  const [newTableCopyAll, setNewTableCopyAll] = useState(true)
   const [creatingTable, setCreatingTable] = useState(false)
 
   // Timer ref para debounce de salvamento automático no Supabase / localStorage
@@ -165,7 +166,8 @@ export function V2TabelaPrecoPage() {
       newTableName.trim(),
       newTableReajuste,
       newTableIsDefault,
-      valorPontoNum
+      valorPontoNum,
+      newTableCopyAll
     )
     setCreatingTable(false)
     setCreateModalOpen(false)

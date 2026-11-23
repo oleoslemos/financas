@@ -281,8 +281,24 @@ export async function createPriceTableWithAllProducts(
   name: string,
   reajustePercent: number,
   isDefault: boolean = false,
-  valorPonto: number = 0
+  valorPonto: number = 3000,
+  copyAllProducts: boolean = true
 ): Promise<V2PriceTable> {
+  const products = await listV2Products();
+  const currentTables = await listPriceTables();
+  const items: V2PriceTableItem[] = copyAllProducts
+    ? products.map((p) => ({
+        product_id: p.id,
+        sku: p.code_sku || 'SKU',
+        product_name: p.name,
+        product_line: p.product_line || 'Geral',
+        tabela_fabrica: p.cost_price || 0,
+        tabela_vendas_sul: p.sale_price || 0,
+        sugestao_vendas: calcSugestaoVendas(p.sale_price || 0, reajustePercent),
+        ponto: calcPonto(p.cost_price || 0, valorPonto),
+      }))
+    : [];
+  const shouldBeDefault = isDefault || currentTables.length === 0;
   const products = await listV2Products()
   const currentTables = await listPriceTables()
 
