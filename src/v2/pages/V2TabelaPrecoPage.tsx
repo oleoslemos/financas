@@ -447,7 +447,7 @@ export function V2TabelaPrecoPage() {
               <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                 Tabela de Preço Ativa:
               </label>
-              {tables.length === 0 ? (
+              <>{tables.length === 0 ? (
                 <p className="text-xs text-slate-400 font-bold">Nenhuma tabela cadastrada</p>
               ) : (
                 <div className="flex flex-wrap items-center gap-2">
