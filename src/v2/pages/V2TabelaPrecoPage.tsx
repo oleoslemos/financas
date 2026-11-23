@@ -417,7 +417,7 @@ export function V2TabelaPrecoPage() {
                   <RefreshCw className="h-3.5 w-3.5" />
                   Sincronizar Produtos
                 </button>
-              </>
+              </>)
             )}
 
             <button
@@ -441,6 +441,105 @@ export function V2TabelaPrecoPage() {
         </div>
 
         {/* ── TABLE SELECTOR & REAJUSTE CONTROL BAR ── */}
+          <div className="bg-white p-5 rounded-2xl border border-purple-100 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-1">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                  Tabela de Preço Ativa:
+                </label>
+                {tables.length === 0 ? (
+                  <p className="text-xs text-slate-400 font-bold">Nenhuma tabela cadastrada</p>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      value={selectedTableId}
+                      onChange={(e) => setSelectedTableId(e.target.value)}
+                      className="rounded-xl px-4 py-2.5 border border-purple-200 text-sm font-black bg-purple-50/50 text-purple-900 outline-none focus:ring-2 focus:ring-purple-400 min-w-64 cursor-pointer"
+                    >
+                      {tables.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.is_default ? '⭐ ' : ''}{t.name} ({t.items.length} itens - {t.reajuste_percent}% Reajuste{t.valor_ponto ? ` - Ponto: ${t.valor_ponto}` : ''}){t.is_default ? ' [PADRÃO]' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => openRenameModal(selectedTable)}
+                      className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-purple-50 hover:text-purple-700 hover:border-purple-200 transition shadow-2xs"
+                      title="Renomear o nome desta Tabela de Preço"
+                    >
+                      <Edit2 className="h-3.5 w-3.5 text-purple-600" /> Renomear
+                    </button>
+                    {selectedTable?.is_default ? (
+                      <span
+                        className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-black bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs"
+                        title="Esta é a tabela de preço padrão do sistema (utilizada no catálogo e pedidos)"
+                      >
+                        <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" /> Tabela Padrão
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleSetDefaultTable(selectedTable.id)}
+                        className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-600 bg-white border border-slate-200 hover:bg-amber-50 hover:text-amber-800 hover:border-amber-300 transition shadow-2xs"
+                        title="Definir esta tabela como a tabela de preço padrão do sistema"
+                      >
+                        <Star className="h-3.5 w-3.5 text-slate-400" /> Definir como Padrão
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-4 pt-4 sm:pt-0 sm:pl-4 sm:border-l border-slate-200">
+                <div>
+                  <label className="block text-[11px] font-bold text-purple-900 uppercase tracking-wider mb-1 flex items-center gap-1">
+                    <Percent className="h-3 w-3 text-purple-600" /> Percentual Reajuste (%):
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={selectedTable?.reajuste_percent ?? ''}
+                      onChange={(e) => handleReajustePercentChange(parseFloat(e.target.value) || 0)}
+                      className="w-24 rounded-xl px-3 py-1.5 border border-purple-300 font-black text-sm text-purple-900 bg-white outline-none focus:ring-2 focus:ring-purple-400"
+                    />
+                    <span className="text-xs font-bold text-purple-700">%</span>
+                  </div>
+                </div>
+                <div className="pl-4 border-l border-slate-200">
+                  <label className="block text-[11px] font-bold text-indigo-900 uppercase tracking-wider mb-1 flex items-center gap-1">
+                    <Coins className="h-3 w-3 text-indigo-600" /> Valor Ponto:
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      placeholder="Ex: 3000"
+                      value={selectedTable?.valor_ponto ?? ''}
+                      onChange={(e) => handleValorPontoChange(parseFloat(e.target.value) || 0)}
+                      className="w-28 rounded-xl px-3 py-1.5 border border-indigo-300 font-black text-sm text-indigo-900 bg-white outline-none focus:ring-2 focus:ring-indigo-400"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+            {selectedTable && (
+              <div className="flex items-center gap-3 border-t md:border-t-0 pt-3 md:pt-0 border-slate-100 justify-end">
+                <div className="text-right pr-2">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Total Itens</span>
+                  <span className="text-lg font-black text-slate-800">{selectedTable.items.length} produtos</span>
+                </div>
+                <button
+                  onClick={handleDeleteTable}
+                  className="p-2 rounded-xl text-red-500 hover:bg-red-50 hover:text-red-700 transition"
+                  title="Excluir esta Tabela de Preço"
+                >
+                  <Trash2 className="h-5 w-5" />
+                </button>
+              </div>
+            )}
+          </div>
         <div className="bg-white p-5 rounded-2xl border border-purple-100 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-1">
             <div>
@@ -495,21 +594,11 @@ export function V2TabelaPrecoPage() {
                           <Star className="h-3.5 w-3.5 text-slate-400" />
                           Definir como Padrão
                         </button>
-                      )}
-                    </>
-                  )}
+      
+                    </>)
+  
                 </div>
-                <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-purple-900 text-[11px] font-medium leading-snug mt-2">
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={newTableCopyAll}
-                      onChange={(e) => setNewTableCopyAll(e.target.checked)}
-                      className="h-4 w-4 rounded text-purple-600 focus:ring-purple-400 border-slate-300 cursor-pointer"
-                    />
-                    <span className="text-xs font-medium">Copiar todos os produtos</span>
-                  </label>
-                </div>
+
               )}
             </div>
 
@@ -530,29 +619,9 @@ export function V2TabelaPrecoPage() {
                     />
                     <span className="text-xs font-bold text-purple-700">%</span>
                   </div>
-                <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-purple-900 text-[11px] font-medium leading-snug mt-2">
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={newTableCopyAll}
-                      onChange={(e) => setNewTableCopyAll(e.target.checked)}
-                      className="h-4 w-4 rounded text-purple-600 focus:ring-purple-400 border-slate-300 cursor-pointer"
-                    />
-                    <span className="text-xs font-medium">Copiar todos os produtos</span>
-                  </label>
+
                 </div>
-                </div>
-                <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-purple-900 text-[11px] font-medium leading-snug mt-2">
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={newTableCopyAll}
-                      onChange={(e) => setNewTableCopyAll(e.target.checked)}
-                      className="h-4 w-4 rounded text-purple-600 focus:ring-purple-400 border-slate-300 cursor-pointer"
-                    />
-                    <span className="text-xs font-medium">Copiar todos os produtos</span>
-                  </label>
-                </div>
+
 
                 <div className="pl-4 border-l border-slate-200">
                   <label className="block text-[11px] font-bold text-indigo-900 uppercase tracking-wider mb-1 flex items-center gap-1">
@@ -570,29 +639,9 @@ export function V2TabelaPrecoPage() {
                       className="w-28 rounded-xl px-3 py-1.5 border border-indigo-300 font-black text-sm text-indigo-900 bg-white outline-none focus:ring-2 focus:ring-indigo-400"
                     />
                   </div>
-                <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-purple-900 text-[11px] font-medium leading-snug mt-2">
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={newTableCopyAll}
-                      onChange={(e) => setNewTableCopyAll(e.target.checked)}
-                      className="h-4 w-4 rounded text-purple-600 focus:ring-purple-400 border-slate-300 cursor-pointer"
-                    />
-                    <span className="text-xs font-medium">Copiar todos os produtos</span>
-                  </label>
+
                 </div>
-                </div>
-                <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-purple-900 text-[11px] font-medium leading-snug mt-2">
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={newTableCopyAll}
-                      onChange={(e) => setNewTableCopyAll(e.target.checked)}
-                      className="h-4 w-4 rounded text-purple-600 focus:ring-purple-400 border-slate-300 cursor-pointer"
-                    />
-                    <span className="text-xs font-medium">Copiar todos os produtos</span>
-                  </label>
-                </div>
+
               </div>
             )}
           </div>
@@ -715,19 +764,9 @@ export function V2TabelaPrecoPage() {
                           )
                         ) : (
                           <ArrowUpDown className="h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 transition" />
-                        )}
+        
                       </div>
-                <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-purple-900 text-[11px] font-medium leading-snug mt-2">
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={newTableCopyAll}
-                      onChange={(e) => setNewTableCopyAll(e.target.checked)}
-                      className="h-4 w-4 rounded text-purple-600 focus:ring-purple-400 border-slate-300 cursor-pointer"
-                    />
-                    <span className="text-xs font-medium">Copiar todos os produtos</span>
-                  </label>
-                </div>
+
                     </th>
 
                     <th
@@ -745,19 +784,9 @@ export function V2TabelaPrecoPage() {
                           )
                         ) : (
                           <ArrowUpDown className="h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 transition" />
-                        )}
+        
                       </div>
-                <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-purple-900 text-[11px] font-medium leading-snug mt-2">
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={newTableCopyAll}
-                      onChange={(e) => setNewTableCopyAll(e.target.checked)}
-                      className="h-4 w-4 rounded text-purple-600 focus:ring-purple-400 border-slate-300 cursor-pointer"
-                    />
-                    <span className="text-xs font-medium">Copiar todos os produtos</span>
-                  </label>
-                </div>
+
                     </th>
 
                     <th
@@ -775,19 +804,9 @@ export function V2TabelaPrecoPage() {
                           )
                         ) : (
                           <ArrowUpDown className="h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 transition" />
-                        )}
+        
                       </div>
-                <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-purple-900 text-[11px] font-medium leading-snug mt-2">
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={newTableCopyAll}
-                      onChange={(e) => setNewTableCopyAll(e.target.checked)}
-                      className="h-4 w-4 rounded text-purple-600 focus:ring-purple-400 border-slate-300 cursor-pointer"
-                    />
-                    <span className="text-xs font-medium">Copiar todos os produtos</span>
-                  </label>
-                </div>
+
                     </th>
 
                     <th
@@ -805,19 +824,9 @@ export function V2TabelaPrecoPage() {
                           )
                         ) : (
                           <ArrowUpDown className="h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 transition" />
-                        )}
+        
                       </div>
-                <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-purple-900 text-[11px] font-medium leading-snug mt-2">
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={newTableCopyAll}
-                      onChange={(e) => setNewTableCopyAll(e.target.checked)}
-                      className="h-4 w-4 rounded text-purple-600 focus:ring-purple-400 border-slate-300 cursor-pointer"
-                    />
-                    <span className="text-xs font-medium">Copiar todos os produtos</span>
-                  </label>
-                </div>
+
                     </th>
 
                     <th
@@ -835,19 +844,9 @@ export function V2TabelaPrecoPage() {
                           )
                         ) : (
                           <ArrowUpDown className="h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 transition" />
-                        )}
+        
                       </div>
-                <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-purple-900 text-[11px] font-medium leading-snug mt-2">
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={newTableCopyAll}
-                      onChange={(e) => setNewTableCopyAll(e.target.checked)}
-                      className="h-4 w-4 rounded text-purple-600 focus:ring-purple-400 border-slate-300 cursor-pointer"
-                    />
-                    <span className="text-xs font-medium">Copiar todos os produtos</span>
-                  </label>
-                </div>
+
                     </th>
 
                     <th
@@ -865,19 +864,9 @@ export function V2TabelaPrecoPage() {
                           )
                         ) : (
                           <ArrowUpDown className="h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 transition" />
-                        )}
+        
                       </div>
-                <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-purple-900 text-[11px] font-medium leading-snug mt-2">
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={newTableCopyAll}
-                      onChange={(e) => setNewTableCopyAll(e.target.checked)}
-                      className="h-4 w-4 rounded text-purple-600 focus:ring-purple-400 border-slate-300 cursor-pointer"
-                    />
-                    <span className="text-xs font-medium">Copiar todos os produtos</span>
-                  </label>
-                </div>
+
                     </th>
 
                     <th
@@ -896,19 +885,9 @@ export function V2TabelaPrecoPage() {
                           )
                         ) : (
                           <ArrowUpDown className="h-3 w-3 text-emerald-400 opacity-0 group-hover:opacity-100 transition" />
-                        )}
+        
                       </div>
-                <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-purple-900 text-[11px] font-medium leading-snug mt-2">
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={newTableCopyAll}
-                      onChange={(e) => setNewTableCopyAll(e.target.checked)}
-                      className="h-4 w-4 rounded text-purple-600 focus:ring-purple-400 border-slate-300 cursor-pointer"
-                    />
-                    <span className="text-xs font-medium">Copiar todos os produtos</span>
-                  </label>
-                </div>
+
                     </th>
                   </tr>
                 </thead>
@@ -949,7 +928,7 @@ export function V2TabelaPrecoPage() {
                             <span className="text-slate-400 font-normal text-xs" title="Informe o Valor Ponto acima para calcular">
                               -
                             </span>
-                          )}
+          
                         </td>
 
                         <td className="p-3.5 font-bold text-blue-700">
@@ -1005,18 +984,8 @@ export function V2TabelaPrecoPage() {
                       Próxima
                     </button>
                   </div>
-                <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-purple-900 text-[11px] font-medium leading-snug mt-2">
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={newTableCopyAll}
-                      onChange={(e) => setNewTableCopyAll(e.target.checked)}
-                      className="h-4 w-4 rounded text-purple-600 focus:ring-purple-400 border-slate-300 cursor-pointer"
-                    />
-                    <span className="text-xs font-medium">Copiar todos os produtos</span>
-                  </label>
-                </div>
-                )}
+
+
               </div>
             )}
           </div>
@@ -1032,17 +1001,7 @@ export function V2TabelaPrecoPage() {
                 <div className="h-9 w-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
                   <Tag className="h-5 w-5" />
                 </div>
-                <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-purple-900 text-[11px] font-medium leading-snug mt-2">
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={newTableCopyAll}
-                      onChange={(e) => setNewTableCopyAll(e.target.checked)}
-                      className="h-4 w-4 rounded text-purple-600 focus:ring-purple-400 border-slate-300 cursor-pointer"
-                    />
-                    <span className="text-xs font-medium">Copiar todos os produtos</span>
-                  </label>
-                </div>
+
                 <h3 className="text-base font-black text-slate-900 uppercase">Criar Tabela de Preço</h3>
               </div>
               <button
@@ -1099,17 +1058,7 @@ export function V2TabelaPrecoPage() {
                     className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 font-medium text-sm outline-none focus:border-purple-500"
                   />
                 </div>
-                <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-purple-900 text-[11px] font-medium leading-snug mt-2">
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={newTableCopyAll}
-                      onChange={(e) => setNewTableCopyAll(e.target.checked)}
-                      className="h-4 w-4 rounded text-purple-600 focus:ring-purple-400 border-slate-300 cursor-pointer"
-                    />
-                    <span className="text-xs font-medium">Copiar todos os produtos</span>
-                  </label>
-                </div>
+
                 <p className="text-[10px] text-slate-400 font-medium mt-1">
                   Regra do cálculo: Tabela Fábrica (R$) / Valor Ponto = Ponto com 5 casas decimais.
                 </p>
@@ -1133,17 +1082,7 @@ export function V2TabelaPrecoPage() {
                       Esta tabela será usada prioritariamente em todo o sistema (produtos e pedidos).
                     </p>
                   </div>
-                <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-purple-900 text-[11px] font-medium leading-snug mt-2">
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={newTableCopyAll}
-                      onChange={(e) => setNewTableCopyAll(e.target.checked)}
-                      className="h-4 w-4 rounded text-purple-600 focus:ring-purple-400 border-slate-300 cursor-pointer"
-                    />
-                    <span className="text-xs font-medium">Copiar todos os produtos</span>
-                  </label>
-                </div>
+
                 </label>
               </div>
 
@@ -1181,17 +1120,7 @@ export function V2TabelaPrecoPage() {
                 <div className="h-9 w-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
                   <Edit2 className="h-5 w-5" />
                 </div>
-                <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-purple-900 text-[11px] font-medium leading-snug mt-2">
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={newTableCopyAll}
-                      onChange={(e) => setNewTableCopyAll(e.target.checked)}
-                      className="h-4 w-4 rounded text-purple-600 focus:ring-purple-400 border-slate-300 cursor-pointer"
-                    />
-                    <span className="text-xs font-medium">Copiar todos os produtos</span>
-                  </label>
-                </div>
+
                 <h3 className="text-base font-black text-slate-900 uppercase">Renomear Tabela de Preço</h3>
               </div>
               <button
@@ -1249,17 +1178,7 @@ export function V2TabelaPrecoPage() {
                 <div className="h-9 w-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
                   <FileSpreadsheet className="h-5 w-5" />
                 </div>
-                <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-purple-900 text-[11px] font-medium leading-snug mt-2">
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={newTableCopyAll}
-                      onChange={(e) => setNewTableCopyAll(e.target.checked)}
-                      className="h-4 w-4 rounded text-purple-600 focus:ring-purple-400 border-slate-300 cursor-pointer"
-                    />
-                    <span className="text-xs font-medium">Copiar todos os produtos</span>
-                  </label>
-                </div>
+
                 <div>
                   <h3 className="text-base font-black text-slate-900 uppercase">
                     Importar Produtos & Tabela de Preço
@@ -1268,17 +1187,7 @@ export function V2TabelaPrecoPage() {
                     Cole os dados da planilha (Imagem 02) para cadastrar produtos automaticamente e atualizar preços.
                   </p>
                 </div>
-                <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-purple-900 text-[11px] font-medium leading-snug mt-2">
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={newTableCopyAll}
-                      onChange={(e) => setNewTableCopyAll(e.target.checked)}
-                      className="h-4 w-4 rounded text-purple-600 focus:ring-purple-400 border-slate-300 cursor-pointer"
-                    />
-                    <span className="text-xs font-medium">Copiar todos os produtos</span>
-                  </label>
-                </div>
+
               </div>
               <button
                 onClick={() => setImportModalOpen(false)}
@@ -1346,29 +1255,9 @@ export function V2TabelaPrecoPage() {
                       </tbody>
                     </table>
                   </div>
-                <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-purple-900 text-[11px] font-medium leading-snug mt-2">
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={newTableCopyAll}
-                      onChange={(e) => setNewTableCopyAll(e.target.checked)}
-                      className="h-4 w-4 rounded text-purple-600 focus:ring-purple-400 border-slate-300 cursor-pointer"
-                    />
-                    <span className="text-xs font-medium">Copiar todos os produtos</span>
-                  </label>
+
                 </div>
-                </div>
-                <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-purple-900 text-[11px] font-medium leading-snug mt-2">
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={newTableCopyAll}
-                      onChange={(e) => setNewTableCopyAll(e.target.checked)}
-                      className="h-4 w-4 rounded text-purple-600 focus:ring-purple-400 border-slate-300 cursor-pointer"
-                    />
-                    <span className="text-xs font-medium">Copiar todos os produtos</span>
-                  </label>
-                </div>
+
               )}
 
               <div className="pt-3 border-t border-slate-100 flex justify-end gap-3">
