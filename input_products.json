@@ -1,0 +1,30 @@
+[
+  {
+    "sku": "EKO-PRD-001",
+    "product_id": "prod-1790655899330",
+    "product_line": "Colchões Relax",
+    "product_name": "RENOVA [0,88 x 1,88 x 0,20m] [Quântica + Vibro]",
+    "tabela_fabrica": 858.49,
+    "sugestao_vendas": 2205,
+    "tabela_vendas_sul": 2002.57
+  },
+  {
+    "sku": "EKO-PRD-002",
+    "product_id": "prod-1790655899891",
+    "product_line": "Colchões Relax",
+    "product_name": "RENOVA [1,19 x 1,88 x 0,20m] [Quântica + Vibro]",
+    "tabela_fabrica": 1030.18,
+    "sugestao_vendas": 2645,
+    "tabela_vendas_sul": 2403.06
+  },
+  {
+    "sku": "EKO-PRD-003",
+    "product_id": "prod-1790655900553",
+    "product_line": "Colchões Relax",
+    "product_name": "RENOVA [1,38 x 1,88 x 0,20m] [Quântica + Vibro]",
+    "tabela_fabrica": 1430.81,
+    "sugestao_vendas": 3675,
+    "tabela_vendas_sul": 3337.59
+  }
+  // ... (remaining items omitted for brevity)
+]

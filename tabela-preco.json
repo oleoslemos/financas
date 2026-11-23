@@ -1,0 +1,2867 @@
+[
+	{
+		"sku": "EKO-PRD-001",
+		"ponto": 0.28616,
+		"product_id": "prod-1790655899330",
+		"product_line": "Colchões Relax",
+		"product_name": "RENOVA [0,88 x 1,88 x 0,20m	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
+ [Quântica + Vibro	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
+",
+		"tabela_fabrica": 858.49,
+		"sugestao_vendas": 2205,
+		"tabela_vendas_sul": 2002.57
+	},
+	{
+		"sku": "EKO-PRD-002",
+		"ponto": 0.34339,
+		"product_id": "prod-1790655899891",
+		"product_line": "Colchões Relax",
+		"product_name": "RENOVA [1,19 x 1,88 x 0,20m	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
+ [Quântica + Vibro	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
+",
+		"tabela_fabrica": 1030.18,
+		"sugestao_vendas": 2645,
+		"tabela_vendas_sul": 2403.06
+	},
+	{
+		"sku": "EKO-PRD-003",
+		"ponto": 0.47694,
+		"product_id": "prod-1790655900553",
+		"product_line": "Colchões Relax",
+		"product_name": "RENOVA [1,38 x 1,88 x 0,20m	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
+ [Quântica + Vibro	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
+",
+		"tabela_fabrica": 1430.81,
+		"sugestao_vendas": 3675,
+		"tabela_vendas_sul": 3337.59
+	},
+	{
+		"sku": "EKO-PRD-004",
+		"ponto": 0.57212,
+		"product_id": "prod-1790655901523",
+		"product_line": "Colchões Relax",
+		"product_name": "RENOVA [1,58 x 1,98 x 0,20m	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
+ [Quântica + Vibro	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
+",
+		"tabela_fabrica": 1716.37,
+		"sugestao_vendas": 4405,
+		"tabela_vendas_sul": 4003.71
+	},
+	{
+		"sku": "EKO-PRD-005",
+		"ponto": 0.64355,
+		"product_id": "prod-1790655902230",
+		"product_line": "Colchões Relax",
+		"product_name": "RENOVA [1,93 x 2,03 x 0,20m	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
+ [Quântica + Vibro	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
+",
+		"tabela_fabrica": 1930.66,
+		"sugestao_vendas": 4955,
+		"tabela_vendas_sul": 4503.57
+	},
+	{
+		"sku": "EKO-PRD-006",
+		"ponto": 0.34912,
+		"product_id": "prod-1790655902669",
+		"product_line": "Colchões Relax",
+		"product_name": "SEVEN [0,88 x 1,88 x 0,30m	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
+ [Quântica + Vibro	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
+",
+		"tabela_fabrica": 1047.35,
+		"sugestao_vendas": 2690,
+		"tabela_vendas_sul": 2443.12
+	},
+	{
+		"sku": "EKO-PRD-007",
+		"ponto": 0.41894,
+		"product_id": "prod-1790655903091",
+		"product_line": "Colchões Relax",
+		"product_name": "SEVEN [1,19 x 1,88 x 0,30m	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
+ [Quântica + Vibro	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
+",
+		"tabela_fabrica": 1256.82,
+		"sugestao_vendas": 3225,
+		"tabela_vendas_sul": 2931.75
+	},
+	{
+		"sku": "EKO-PRD-008",
+		"ponto": 0.58186,
+		"product_id": "prod-1790655903511",
+		"product_line": "Colchões Relax",
+		"product_name": "SEVEN [1,38 x 1,88 x 0,30m	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
+ [Quântica + Vibro	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
+",
+		"tabela_fabrica": 1745.59,
+		"sugestao_vendas": 4480,
+		"tabela_vendas_sul": 4071.87
+	},
+	{
+		"sku": "EKO-PRD-009",
+		"ponto": 0.69824,
+		"product_id": "prod-1790655903954",
+		"product_line": "Colchões Relax",
+		"product_name": "SEVEN [1,58 x 1,98 x 0,30m	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
+ [Quântica + Vibro	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
+",
+		"tabela_fabrica": 2094.71,
+		"sugestao_vendas": 5375,
+		"tabela_vendas_sul": 4886.24
+	},
+	{
+		"sku": "EKO-PRD-010",
+		"ponto": 0.78552,
+		"product_id": "prod-1790655904375",
+		"product_line": "Colchões Relax",
+		"product_name": "SEVEN [1,93 x 2,03 x 0,30m	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
+ [Quântica + Vibro	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
+",
+		"tabela_fabrica": 2356.55,
+		"sugestao_vendas": 6050,
+		"tabela_vendas_sul": 5497.02
+	},
+	{
+		"sku": "EKO-PRD-011",
+		"ponto": 0.38483,
+		"product_id": "prod-1790655905026",
+		"product_line": "Colchões Relax",
+		"product_name": "LUNAR [0,88 x 1,88 x 0,24m	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
+",
+		"tabela_fabrica": 1154.48,
+		"sugestao_vendas": 2965,
+		"tabela_vendas_sul": 2693
+	},
+	{
+		"sku": "EKO-PRD-012",
+		"ponto": 0.46179,
+		"product_id": "prod-1790655905625",
+		"product_line": "Colchões Relax",
+		"product_name": "LUNAR [1,19 x 1,88 x 0,24m	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
+",
+		"tabela_fabrica": 1385.37,
+		"sugestao_vendas": 3555,
+		"tabela_vendas_sul": 3231.6
+	},
+	{
+		"sku": "EKO-PRD-013",
+		"ponto": 0.64138,
+		"product_id": "prod-1790655906239",
+		"product_line": "Colchões Relax",
+		"product_name": "LUNAR [1,38 x 1,88 x 0,24m	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
+",
+		"tabela_fabrica": 1924.13,
+		"sugestao_vendas": 4940,
+		"tabela_vendas_sul": 4488.34
+	},
+	{
+		"sku": "EKO-PRD-014",
+		"ponto": 0.76965,
+		"product_id": "prod-1790655906883",
+		"product_line": "Colchões Relax",
+		"product_name": "LUNAR [1,58 x 1,98 x 0,24m	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
+",
+		"tabela_fabrica": 2308.95,
+		"sugestao_vendas": 5925,
+		"tabela_vendas_sul": 5386
+	},
+	{
+		"sku": "EKO-PRD-015",
+		"ponto": 0.86586,
+		"product_id": "prod-1790655907261",
+		"product_line": "Colchões Relax",
+		"product_name": "LUNAR [1,93 x 2,03 x 0,24m	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
+",
+		"tabela_fabrica": 2597.57,
+		"sugestao_vendas": 6670,
+		"tabela_vendas_sul": 6059.25
+	},
+	{
+		"sku": "EKO-PRD-016",
+		"ponto": 0.53785,
+		"product_id": "prod-1790655907620",
+		"product_line": "Colchões Relax",
+		"product_name": "ÚNICO [0,88 x 1,88 x 0,27m	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
+",
+		"tabela_fabrica": 1613.55,
+		"sugestao_vendas": 4145,
+		"tabela_vendas_sul": 3763.87
+	},
+	{
+		"sku": "EKO-PRD-017",
+		"ponto": 0.64542,
+		"product_id": "prod-1790655907975",
+		"product_line": "Colchões Relax",
+		"product_name": "ÚNICO [1,19 x 1,88 x 0,27m	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
+",
+		"tabela_fabrica": 1936.26,
+		"sugestao_vendas": 4970,
+		"tabela_vendas_sul": 4516.64
+	},
+	{
+		"sku": "EKO-PRD-018",
+		"ponto": 0.99642,
+		"product_id": "prod-1790655908331",
+		"product_line": "Colchões Relax",
+		"product_name": "ÚNICO [1,38 x 1,88 x 0,27m	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
+",
+		"tabela_fabrica": 2989.25,
+		"sugestao_vendas": 6905,
+		"tabela_vendas_sul": 6273.12
+	},
+	{
+		"sku": "EKO-PRD-019",
+		"ponto": 1.0757,
+		"product_id": "prod-1790655908708",
+		"product_line": "Colchões Relax",
+		"product_name": "ÚNICO [1,58 x 1,98 x 0,27m	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
+",
+		"tabela_fabrica": 3227.1,
+		"sugestao_vendas": 8285,
+		"tabela_vendas_sul": 7527.74
+	},
+	{
+		"sku": "EKO-PRD-020",
+		"ponto": 1.21016,
+		"product_id": "prod-1790655909073",
+		"product_line": "Colchões Relax",
+		"product_name": "ÚNICO [1,93 x 2,03 x 0,27m	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
+",
+		"tabela_fabrica": 3630.49,
+		"sugestao_vendas": 9320,
+		"tabela_vendas_sul": 8468.71
+	},
+	},
+    {
+        "sku": "EKO-PRD-757",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-756",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-755",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-754",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-753",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-752",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [PRETA]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-751",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [43/44] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-750",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [41/42] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-749",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [39/40] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-748",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [37/38] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-747",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [35/36] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    },
+    {
+        "sku": "EKO-PRD-746",
+        "product_line": "Chinelo",
+        "product_name": "CHINELO NUVEM [33/34] [OFF WHITE]",
+        "tabela_fabrica": 115.24,
+        "tabela_vendas_sul": 268.80
+    }
+]
