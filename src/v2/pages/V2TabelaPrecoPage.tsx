@@ -120,13 +120,14 @@ export function V2TabelaPrecoPage() {
   }
 
   // Load tables
-  const loadData = async () => {
+  const loadData = async (forceSelectId?: string) => {
     setLoading(true)
     const list = await listPriceTables()
     setTables(list)
 
     if (list.length > 0) {
       const activeTbl =
+        (forceSelectId ? list.find((t) => t.id === forceSelectId) : null) ||
         list.find((t) => t.id === selectedTableId) ||
         list.find((t) => t.is_default) ||
         list.find((t) => t.active) ||
@@ -177,8 +178,7 @@ export function V2TabelaPrecoPage() {
     setNewTableIsDefault(false)
     setNewTableCopyAll(true)
 
-    await loadData()
-    setSelectedTableId(created.id)
+    await loadData(created.id)
     showToast({
       type: 'success',
       text: `Tabela "${created.name}" criada com sucesso contendo ${created.items.length} produtos!`,
@@ -314,8 +314,7 @@ export function V2TabelaPrecoPage() {
     setImportRawText('')
     setParsedRows([])
 
-    await loadData()
-    if (res.table) setSelectedTableId(res.table.id)
+    await loadData(res.table?.id)
 
     showToast({
       type: 'success',
