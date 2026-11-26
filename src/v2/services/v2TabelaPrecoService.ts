@@ -120,15 +120,10 @@ export async function savePriceTable(table: Omit<V2PriceTable, 'id' | 'created_a
   const valorPonto = table.valor_ponto !== undefined ? Number(table.valor_ponto) : 0
 
   // Recalculate sugestao_vendas and ponto for all items in table
-  // Recalculate sugestao_vendas and ponto for all items in table
   const updatedItems: V2PriceTableItem[] = (table.items || []).map((item) => ({
     ...item,
     sugestao_vendas: calcSugestaoVendas(item.tabela_vendas_sul, table.reajuste_percent),
     ponto: item.bu && item.bu.toUpperCase() === 'MADRESSENZA' ? 0 : calcPonto(item.tabela_fabrica, valorPonto),
-  }))
-    ...item,
-    sugestao_vendas: calcSugestaoVendas(item.tabela_vendas_sul, table.reajuste_percent),
-    ponto: calcPonto(item.tabela_fabrica, valorPonto),
   }))
 
   const fullTable: V2PriceTable = {
