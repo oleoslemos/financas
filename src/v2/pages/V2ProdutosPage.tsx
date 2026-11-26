@@ -35,6 +35,7 @@ import {
   ArrowDown,
   Download,
   RotateCcw,
+  Lock,
 } from 'lucide-react'
 
 function formatCurrency(val: number): string {
@@ -46,10 +47,11 @@ type Toast = { type: 'success' | 'error'; text: string }
 
 export function V2ProdutosPage() {
   const navigate = useNavigate()
+  const currentUser = getCurrentV2User()
 
   useEffect(() => {
-    if (!getCurrentV2User()) navigate('/v2/login', { replace: true })
-  }, [navigate])
+    if (!currentUser) navigate('/v2/login', { replace: true })
+  }, [navigate, currentUser])
 
   const [products, setProducts] = useState<V2Product[]>([])
   const [loading, setLoading] = useState(true)
@@ -124,6 +126,8 @@ export function V2ProdutosPage() {
     type: ProductType
     product_line: string // Linha do Produto
     model: string
+    cod_group7: string // COD_GROUP7
+    bu: string // BU
     unit: string
     cost_price: number // Tabela Fábrica (R$)
     sale_price: number // Tabela Vendas Sul (R$)
@@ -140,6 +144,8 @@ export function V2ProdutosPage() {
     type: 'SIMPLES',
     product_line: '',
     model: '',
+    cod_group7: '',
+    bu: '',
     unit: 'UN',
     cost_price: 0,
     sale_price: 0,
@@ -174,6 +180,8 @@ export function V2ProdutosPage() {
       type: 'SIMPLES',
       product_line: '',
       model: '',
+      cod_group7: '',
+      bu: '',
       unit: 'UN',
       cost_price: 0,
       sale_price: 0,
@@ -193,15 +201,20 @@ export function V2ProdutosPage() {
   const openEditModal = (p: V2Product) => {
     setEditingProd(p)
     const sku = p.code_sku || generateNextSku(products)
+    const currentFabrica = activePrices[p.id]?.fabrica ?? p.cost_price ?? 0
+    const currentVendas = activePrices[p.id]?.vendas ?? p.sale_price ?? 0
+
     setForm({
       code_sku: sku,
       name: p.name || '',
       type: p.type || 'SIMPLES',
       product_line: p.product_line || '',
       model: p.model || '',
+      cod_group7: p.cod_group7 || '',
+      bu: p.bu || '',
       unit: p.unit || 'UN',
-      cost_price: p.cost_price || 0,
-      sale_price: p.sale_price || 0,
+      cost_price: currentFabrica,
+      sale_price: currentVendas,
       dim_width_cm: p.dim_width_cm != null ? String(p.dim_width_cm) : '',
       dim_length_cm: p.dim_length_cm != null ? String(p.dim_length_cm) : '',
       dim_height_cm: p.dim_height_cm != null ? String(p.dim_height_cm) : '',
@@ -317,8 +330,8 @@ export function V2ProdutosPage() {
 
     setSaving(true)
 
-    let finalSalePrice = editingProd ? (activePrices[editingProd.id]?.vendas ?? 0) : 0
-    let finalCostPrice = editingProd ? (activePrices[editingProd.id]?.fabrica ?? 0) : 0
+    const finalCostPrice = editingProd ? (activePrices[editingProd.id]?.fabrica ?? editingProd.cost_price ?? 0) : form.cost_price
+    let finalSalePrice = editingProd ? (activePrices[editingProd.id]?.vendas ?? editingProd.sale_price ?? 0) : form.sale_price
 
     if (form.type === 'KIT' && form.kit_price_mode === 'AUTO') {
       finalSalePrice = form.kit_items.reduce((sum, i) => sum + i.quantity * i.unit_price, 0)
@@ -339,6 +352,8 @@ export function V2ProdutosPage() {
       product_line: finalLine,
       model: form.model,
       unit: form.unit,
+      cod_group7: form.cod_group7.trim() || null,
+      bu: form.bu.trim() || null,
       cost_price: finalCostPrice,
       sale_price: finalSalePrice,
       dim_width_cm: form.dim_width_cm ? parseFloat(form.dim_width_cm) : null,
@@ -398,6 +413,8 @@ export function V2ProdutosPage() {
       product_line: p.product_line,
       model: p.model,
       unit: p.unit,
+      cod_group7: p.cod_group7 || undefined,
+      bu: p.bu || undefined,
       cost_price: p.cost_price,
       sale_price: p.sale_price,
       dim_width_cm: p.dim_width_cm,
@@ -444,6 +461,8 @@ export function V2ProdutosPage() {
     const matchesSearch =
       p.name.toLowerCase().includes(q) ||
       (p.code_sku && p.code_sku.toLowerCase().includes(q)) ||
+      (p.cod_group7 && p.cod_group7.toLowerCase().includes(q)) ||
+      (p.bu && p.bu.toLowerCase().includes(q)) ||
       (p.model && p.model.toLowerCase().includes(q)) ||
       (p.product_line && p.product_line.toLowerCase().includes(q))
 
@@ -676,10 +695,22 @@ export function V2ProdutosPage() {
                                 </button>
                               )}
                               <div>
-                                <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded mr-2 font-mono">
-                                  {p.code_sku || 'SKU'}
-                                </span>
-                                <span className="font-bold text-slate-900 text-sm">{p.name}</span>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded font-mono">
+                                    {p.code_sku || 'SKU'}
+                                  </span>
+                                  {p.cod_group7 && (
+                                    <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded font-mono border border-purple-200" title="Cód. Group7">
+                                      G7: {p.cod_group7}
+                                    </span>
+                                  )}
+                                  {p.bu && (
+                                    <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded font-mono border border-amber-200" title="BU (Unidade de Negócio)">
+                                      BU: {p.bu}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="font-bold text-slate-900 text-sm mt-0.5 block">{p.name}</span>
                               </div>
                             </div>
                           </td>
@@ -1021,23 +1052,55 @@ export function V2ProdutosPage() {
                   )}
                 </div>
 
-                {/* PRICES */}
+                {/* NOVOS CAMPOS: COD_GROUP7 E BU */}
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Cód. Group7 (COD_GROUP7)</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: 1001"
+                    value={form.cod_group7}
+                    onChange={(e) => setForm({ ...form, cod_group7: e.target.value })}
+                    className="w-full rounded-xl px-3.5 py-2.5 border border-slate-200 font-mono text-sm outline-none focus:border-blue-500 uppercase"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">BU (Unidade de Negócio)</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: EKO7 / BEMAVIV"
+                    value={form.bu}
+                    onChange={(e) => setForm({ ...form, bu: e.target.value })}
+                    className="w-full rounded-xl px-3.5 py-2.5 border border-slate-200 font-medium text-sm outline-none focus:border-blue-500 uppercase"
+                  />
+                </div>
+
+                {/* PRICES (Informativo - Gerenciado nas Tabelas de Preço) */}
                 {form.type !== 'KIT' && (
                   <>
                     <div>
-                      <label className="block font-bold text-slate-700 mb-1">Tabela Fábrica (R$)</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="font-bold text-slate-700">Tabela Fábrica (R$)</label>
+                        <span className="text-[10px] text-slate-400 flex items-center gap-0.5" title="Alterações de preços são feitas diretamente na Tabela de Preço">
+                          <Lock className="h-2.5 w-2.5" /> Tabela de Preço
+                        </span>
+                      </div>
                       <div className="w-full rounded-xl px-3.5 py-2.5 border border-slate-200 font-bold text-sm text-slate-700 bg-slate-100 cursor-not-allowed select-none">
-                        {formatCurrency(editingProd ? (activePrices[editingProd.id]?.fabrica ?? 0) : 0)}
+                        {formatCurrency(editingProd ? (activePrices[editingProd.id]?.fabrica ?? form.cost_price ?? 0) : form.cost_price)}
                       </div>
                     </div>
 
                     <div>
-                      <label className="block font-bold text-emerald-800 mb-1">Tabela Vendas Sul (R$)</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="font-bold text-emerald-800">Tabela Vendas Sul (R$)</label>
+                        <span className="text-[10px] text-slate-400 flex items-center gap-0.5" title="Alterações de preços são feitas diretamente na Tabela de Preço">
+                          <Lock className="h-2.5 w-2.5" /> Tabela de Preço
+                        </span>
+                      </div>
                       <div className="w-full rounded-xl px-3.5 py-2.5 border border-slate-200 font-bold text-sm text-emerald-800 bg-slate-100 cursor-not-allowed select-none">
-                        {formatCurrency(editingProd ? (activePrices[editingProd.id]?.vendas ?? 0) : 0)}
+                        {formatCurrency(editingProd ? (activePrices[editingProd.id]?.vendas ?? form.sale_price ?? 0) : form.sale_price)}
                       </div>
                     </div>
-
                   </>
                 )}
               </div>

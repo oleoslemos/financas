@@ -31,6 +31,8 @@ export interface V2Product {
   category?: string
   product_line?: string // Linha do Produto
   model?: string
+  cod_group7?: string | null // Código Group7
+  bu?: string | null // BU (Unidade de Negócio)
   unit: string
   cost_price: number // Tabela Fábrica (R$)
   sale_price: number // Tabela Vendas Sul (R$)
@@ -109,13 +111,15 @@ export async function saveV2Product(item: Omit<V2Product, 'id' | 'created_at'> &
 
   if (supabase) {
     try {
-      await supabase.from(SUPABASE_TABLE).upsert({
+      const payload: any = {
         id: fullItem.id,
         code_sku: fullItem.code_sku,
         name: fullItem.name,
         type: fullItem.type,
         product_line: fullItem.product_line || null,
         model: fullItem.model || null,
+        cod_group7: fullItem.cod_group7 || null,
+        bu: fullItem.bu || null,
         unit: fullItem.unit || 'UN',
         cost_price: fullItem.cost_price,
         sale_price: fullItem.sale_price,
@@ -127,7 +131,18 @@ export async function saveV2Product(item: Omit<V2Product, 'id' | 'created_at'> &
         kit_price_mode: fullItem.kit_price_mode || 'AUTO',
         active: fullItem.active,
         updated_at: new Date().toISOString(),
-      })
+      }
+
+      const { error: upsertErr } = await supabase.from(SUPABASE_TABLE).upsert(payload)
+      if (upsertErr) {
+        // Fallback: se as novas colunas ainda não existirem no Supabase, tenta sem elas
+        if (upsertErr.message?.includes('cod_group7') || upsertErr.message?.includes('bu')) {
+          const { cod_group7, bu, ...fallbackPayload } = payload
+          await supabase.from(SUPABASE_TABLE).upsert(fallbackPayload)
+        } else {
+          console.warn('Supabase product upsert warning:', upsertErr)
+        }
+      }
     } catch (err) {
       console.warn('Supabase product upsert fallback:', err)
     }
@@ -180,6 +195,8 @@ export async function getDistinctProductLines(): Promise<string[]> {
 export function exportProductsToCSV(products: V2Product[]): void {
   const headers = [
     'SKU',
+    'CÓD GROUP7',
+    'BU',
     'DESCRIÇÃO PRODUTO',
     'LINHA DO PRODUTO',
     'DIMENSÕES',
@@ -200,6 +217,8 @@ export function exportProductsToCSV(products: V2Product[]): void {
 
     return [
       `"${p.code_sku || ''}"`,
+      `"${p.cod_group7 || ''}"`,
+      `"${p.bu || ''}"`,
       `"${(p.name || '').replace(/"/g, '""')}"`,
       `"${(p.product_line || '').replace(/"/g, '""')}"`,
       `"${dim || '—'}"`,

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getCurrentV2User } from '../services/v2AuthService'
+import { getCurrentV2User, canEditProductPrices } from '../services/v2AuthService'
 import {
   listPriceTables,
   savePriceTable,
@@ -17,6 +17,7 @@ import {
   exportPriceTableToCSV,
   lastSavePriceTableError,
   V2PriceTable,
+  V2PriceTableItem,
   ParsedImportRow,
 } from '../services/v2TabelaPrecoService'
 import {
@@ -50,10 +51,12 @@ type Toast = { type: 'success' | 'error'; text: string }
 
 export function V2TabelaPrecoPage() {
   const navigate = useNavigate()
+  const currentUser = getCurrentV2User()
+  const canEditPrices = canEditProductPrices(currentUser)
 
   useEffect(() => {
-    if (!getCurrentV2User()) navigate('/v2/login', { replace: true })
-  }, [navigate])
+    if (!currentUser) navigate('/v2/login', { replace: true })
+  }, [navigate, currentUser])
 
   const [tables, setTables] = useState<V2PriceTable[]>([])
   const [selectedTableId, setSelectedTableId] = useState<string>('')
@@ -61,6 +64,14 @@ export function V2TabelaPrecoPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filterLine, setFilterLine] = useState<string>('TODAS')
+
+  // Edit item prices state (Restrito a suelenjalves e leoslemos)
+  const [editingItem, setEditingItem] = useState<{
+    item: V2PriceTableItem
+    tabela_fabrica: number
+    tabela_vendas_sul: number
+  } | null>(null)
+  const [savingItemPrice, setSavingItemPrice] = useState(false)
 
   // Toast
   const [toast, setToast] = useState<Toast | null>(null)
@@ -332,6 +343,48 @@ export function V2TabelaPrecoPage() {
     })
   }
 
+  // Handle Open Edit Item Price (exclusivo para esta tabela de preço)
+  const handleOpenEditItemPrice = (item: V2PriceTableItem) => {
+    if (!canEditPrices) return
+    setEditingItem({
+      item,
+      tabela_fabrica: item.tabela_fabrica || 0,
+      tabela_vendas_sul: item.tabela_vendas_sul || 0,
+    })
+  }
+
+  // Handle Save Item Price in Selected Table (sem alterar outras tabelas)
+  const handleSaveItemPrice = async () => {
+    if (!editingItem || !selectedTable || !canEditPrices) return
+
+    const updatedFabrica = Number(editingItem.tabela_fabrica) || 0
+    const updatedSul = Number(editingItem.tabela_vendas_sul) || 0
+
+    const updatedItems = (selectedTable.items || []).map((i) => {
+      if (i.product_id === editingItem.item.product_id && (i.sku === editingItem.item.sku || !i.sku)) {
+        return {
+          ...i,
+          tabela_fabrica: updatedFabrica,
+          tabela_vendas_sul: updatedSul,
+          sugestao_vendas: calcSugestaoVendas(updatedSul, selectedTable.reajuste_percent),
+          ponto: calcPonto(updatedFabrica, selectedTable.valor_ponto || 0),
+        }
+      }
+      return i
+    })
+
+    setSavingItemPrice(true)
+    const saved = await savePriceTable({
+      ...selectedTable,
+      items: updatedItems,
+    })
+    setSelectedTable(saved)
+    setTables((prev) => prev.map((t) => (t.id === saved.id ? saved : t)))
+    setSavingItemPrice(false)
+    setEditingItem(null)
+    showToast({ type: 'success', text: `Preços atualizados com sucesso na tabela "${selectedTable.name}"!` })
+  }
+
   // Filter & Sort Items in Selected Table
   const items = selectedTable?.items || []
 
@@ -344,6 +397,8 @@ export function V2TabelaPrecoPage() {
     const matchesSearch =
       i.product_name.toLowerCase().includes(q) ||
       (i.sku && i.sku.toLowerCase().includes(q)) ||
+      (i.cod_group7 && i.cod_group7.toLowerCase().includes(q)) ||
+      (i.bu && i.bu.toLowerCase().includes(q)) ||
       (i.product_line && i.product_line.toLowerCase().includes(q))
 
     const matchesLine = filterLine === 'TODAS' || i.product_line === filterLine
@@ -782,6 +837,10 @@ export function V2TabelaPrecoPage() {
                         )}
                       </div>
                     </th>
+
+                    {canEditPrices && (
+                      <th className="p-3.5 text-center">AÇÕES</th>
+                    )}
                   </tr>
                 </thead>
 
@@ -793,9 +852,21 @@ export function V2TabelaPrecoPage() {
                     return (
                       <tr key={idx} className="hover:bg-purple-50/30 transition">
                         <td className="p-3.5">
-                          <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded font-mono border border-purple-200">
-                            {item.sku || 'SKU'}
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded font-mono border border-purple-200">
+                              {item.sku || 'SKU'}
+                            </span>
+                            {item.cod_group7 && (
+                              <span className="text-[9px] font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded font-mono" title="Cód. Group7">
+                                G7: {item.cod_group7}
+                              </span>
+                            )}
+                            {item.bu && (
+                              <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded font-mono border border-amber-200" title="BU">
+                                BU: {item.bu}
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         <td className="p-3.5 font-bold text-slate-900 text-sm">
@@ -831,6 +902,20 @@ export function V2TabelaPrecoPage() {
                         <td className="p-3.5 font-black text-emerald-800 text-sm bg-emerald-50/40 border-l border-emerald-100">
                           {formatCurrency(sugestaoCalculada)}
                         </td>
+
+                        {canEditPrices && (
+                          <td className="p-3.5 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditItemPrice(item)}
+                              className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition inline-flex items-center gap-1 shadow-2xs cursor-pointer"
+                              title="Alterar Tabela Fábrica e Tabela Vendas Sul para esta tabela de preço"
+                            >
+                              <Edit2 className="h-3 w-3" />
+                              <span>Editar Preço</span>
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     )
                   })}
@@ -883,6 +968,156 @@ export function V2TabelaPrecoPage() {
           </div>
         )}
       </div>
+
+      {/* ── MODAL EDITAR PREÇOS DO ITEM NESTA TABELA ── */}
+      {editingItem && selectedTable && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-5 my-6 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="h-9 w-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+                  <Edit2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 uppercase">
+                    Editar Preços do Produto
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Tabela: <strong className="text-purple-700">{selectedTable.name}</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingItem(null)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-xl"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* PRODUCT INFO CARD */}
+            <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-1.5 text-xs">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-mono font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded text-[10px]">
+                  {editingItem.item.sku || 'SKU'}
+                </span>
+                {editingItem.item.cod_group7 && (
+                  <span className="font-mono font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded text-[10px]">
+                    G7: {editingItem.item.cod_group7}
+                  </span>
+                )}
+                {editingItem.item.bu && (
+                  <span className="font-mono font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded text-[10px]">
+                    BU: {editingItem.item.bu}
+                  </span>
+                )}
+                <span className="font-bold text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded text-[10px]">
+                  {editingItem.item.product_line || 'Geral'}
+                </span>
+              </div>
+              <p className="font-bold text-slate-900 text-sm">{editingItem.item.product_name}</p>
+            </div>
+
+            {/* EDITABLE PRICE INPUTS */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Tabela Fábrica (R$) *
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editingItem.tabela_fabrica || ''}
+                  onChange={(e) =>
+                    setEditingItem({
+                      ...editingItem,
+                      tabela_fabrica: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                  placeholder="0,00"
+                  className="w-full rounded-xl px-3.5 py-2.5 border border-slate-300 font-bold text-sm text-slate-800 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-emerald-800 mb-1">
+                  Tabela Vendas Sul (R$) *
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editingItem.tabela_vendas_sul || ''}
+                  onChange={(e) =>
+                    setEditingItem({
+                      ...editingItem,
+                      tabela_vendas_sul: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                  placeholder="0,00"
+                  className="w-full rounded-xl px-3.5 py-2.5 border border-slate-300 font-bold text-sm text-emerald-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                />
+              </div>
+            </div>
+
+            {/* LIVE CALCULATION PREVIEWS */}
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="p-3 rounded-xl bg-indigo-50/70 border border-indigo-200/60">
+                <p className="text-[10px] font-bold uppercase text-indigo-700 tracking-wider">Novo Ponto Calculado</p>
+                <p className="text-base font-black text-indigo-900 font-mono mt-0.5">
+                  {selectedTable.valor_ponto && selectedTable.valor_ponto > 0
+                    ? formatPonto(calcPonto(editingItem.tabela_fabrica, selectedTable.valor_ponto))
+                    : '-'}
+                </p>
+                <p className="text-[10px] text-indigo-600 mt-0.5">
+                  Valor Ponto: {formatCurrency(selectedTable.valor_ponto || 0)}
+                </p>
+              </div>
+
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200">
+                <p className="text-[10px] font-bold uppercase text-emerald-700 tracking-wider">Nova Sugestão Vendas</p>
+                <p className="text-base font-black text-emerald-900 mt-0.5">
+                  {formatCurrency(calcSugestaoVendas(editingItem.tabela_vendas_sul, selectedTable.reajuste_percent))}
+                </p>
+                <p className="text-[10px] text-emerald-700 mt-0.5">
+                  Reajuste aplicado: {selectedTable.reajuste_percent}%
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-purple-50/60 border border-purple-100 text-[11px] text-purple-800">
+              💡 <strong>Isolamento de Tabela:</strong> Esta alteração será gravada <em>exclusivamente</em> na tabela <strong>{selectedTable.name}</strong>. As demais tabelas históricas não serão modificadas.
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setEditingItem(null)}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 border border-slate-200 hover:bg-slate-50 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={savingItemPrice}
+                onClick={handleSaveItemPrice}
+                className="px-6 py-2.5 rounded-xl text-xs font-bold text-white shadow-sm bg-purple-600 hover:bg-purple-700 transition flex items-center gap-1.5 cursor-pointer"
+              >
+                {savingItemPrice ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Salvando...</span>
+                  </>
+                ) : (
+                  <span>Salvar Preços nesta Tabela</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── MODAL CRIAR TABELA DE PREÇO ── */}
       {createModalOpen && (
@@ -1109,13 +1344,13 @@ export function V2TabelaPrecoPage() {
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Cole o conteúdo da planilha (Colunas: PRODUTO | LINHA | TABELA FABRICA | TABELA SUL):
+                  Cole o conteúdo da planilha (Colunas: PRODUTO | LINHA | TABELA FÁBRICA | TABELA SUL | COD_GROUP7 | BU):
                 </label>
                 <textarea
                   rows={6}
                   value={importRawText}
                   onChange={(e) => setImportRawText(e.target.value)}
-                  placeholder={`Exemplo de conteúdo copiado do Excel:\nRENOVA [0,88 x 1,88 x 0,20m]\tColchões Relax\tR$ 858,49\tR$ 2.002,57\nSEVEN [1,38 x 1,88 x 0,30m]\tColchões Relax\tR$ 1.841,31\tR$ 4.295,16\nNEWS [1,58 x 1,98 x 0,26m]\tColchões Premium\tR$ 4.743,33\tR$ 11.064,58`}
+                  placeholder={`Exemplo de conteúdo copiado do Excel (com ou sem cabeçalho):\nPRODUTO\tLINHA\tTABELA FABRICA\tTABELA SUL\tCOD_GROUP7\tBU\nRENOVA [0,88 x 1,88 x 0,20m]\tColchões Relax\tR$ 858,49\tR$ 2.002,57\t1001\tEKO7\nSEVEN [1,38 x 1,88 x 0,30m]\tColchões Relax\tR$ 1.841,31\tR$ 4.295,16\t1002\tEKO7\nNEWS [1,58 x 1,98 x 0,26m]\tColchões Premium\tR$ 4.743,33\tR$ 11.064,58\t1003\tEKO7`}
                   className="w-full rounded-2xl p-3 border border-slate-200 font-mono text-xs outline-none focus:border-purple-500 bg-slate-50"
                 />
               </div>
@@ -1142,6 +1377,8 @@ export function V2TabelaPrecoPage() {
                         <tr>
                           <th className="p-2">PRODUTO</th>
                           <th className="p-2">LINHA</th>
+                          <th className="p-2">GROUP7</th>
+                          <th className="p-2">BU</th>
                           <th className="p-2">TABELA FÁBRICA</th>
                           <th className="p-2">TABELA SUL</th>
                           <th className="p-2">SKU STATUS</th>
@@ -1152,6 +1389,24 @@ export function V2TabelaPrecoPage() {
                           <tr key={i} className="hover:bg-slate-50">
                             <td className="p-2 font-bold text-slate-900">{r.product_name}</td>
                             <td className="p-2 text-slate-600">{r.product_line}</td>
+                            <td className="p-2">
+                              {r.cod_group7 ? (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200 font-mono">
+                                  {r.cod_group7}
+                                </span>
+                              ) : (
+                                <span className="text-slate-300">—</span>
+                              )}
+                            </td>
+                            <td className="p-2">
+                              {r.bu ? (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 font-mono">
+                                  {r.bu}
+                                </span>
+                              ) : (
+                                <span className="text-slate-300">—</span>
+                              )}
+                            </td>
                             <td className="p-2">{formatCurrency(r.tabela_fabrica)}</td>
                             <td className="p-2 font-bold text-emerald-700">{formatCurrency(r.tabela_vendas_sul)}</td>
                             <td className="p-2">

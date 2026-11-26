@@ -38,6 +38,25 @@ export function getCurrentV2User(): V2User | null {
   }
 }
 
+/**
+ * Usuários autorizados a alterar Tabela Fábrica (R$) e Tabela Vendas Sul (R$)
+ * no cadastro do produto: suelenjalves e leoslemos
+ */
+export const PRICE_EDIT_ALLOWED_USERS: string[] = ['suelenjalves', 'leoslemos']
+
+export function canEditProductPrices(user?: { username?: string | null; email?: string | null } | null): boolean {
+  const activeUser = user !== undefined ? user : getCurrentV2User()
+  if (!activeUser) return false
+
+  const u = (activeUser.username || '').trim().toLowerCase()
+  const e = (activeUser.email || '').trim().toLowerCase()
+
+  if (PRICE_EDIT_ALLOWED_USERS.includes(u)) return true
+  if (PRICE_EDIT_ALLOWED_USERS.some((name) => e === `${name}@gmail.com` || e.startsWith(`${name}@`))) return true
+
+  return false
+}
+
 export function setV2Session(user: V2User | null): void {
   try {
     if (user) {

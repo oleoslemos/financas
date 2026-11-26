@@ -8,6 +8,8 @@ export interface V2PriceTableItem {
   sku: string
   product_name: string // Descrição Produto
   product_line: string // Linha do Produto
+  cod_group7?: string | null
+  bu?: string | null
   tabela_fabrica: number
   tabela_vendas_sul: number
   sugestao_vendas: number
@@ -118,7 +120,12 @@ export async function savePriceTable(table: Omit<V2PriceTable, 'id' | 'created_a
   const valorPonto = table.valor_ponto !== undefined ? Number(table.valor_ponto) : 0
 
   // Recalculate sugestao_vendas and ponto for all items in table
+  // Recalculate sugestao_vendas and ponto for all items in table
   const updatedItems: V2PriceTableItem[] = (table.items || []).map((item) => ({
+    ...item,
+    sugestao_vendas: calcSugestaoVendas(item.tabela_vendas_sul, table.reajuste_percent),
+    ponto: item.bu && item.bu.toUpperCase() === 'MADRESSENZA' ? 0 : calcPonto(item.tabela_fabrica, valorPonto),
+  }))
     ...item,
     sugestao_vendas: calcSugestaoVendas(item.tabela_vendas_sul, table.reajuste_percent),
     ponto: calcPonto(item.tabela_fabrica, valorPonto),
@@ -271,6 +278,8 @@ export async function createPriceTableWithAllProducts(
           sku: p.code_sku || 'SKU',
           product_name: p.name,
           product_line: p.product_line || 'Geral',
+          cod_group7: p.cod_group7 || undefined,
+          bu: p.bu || undefined,
           tabela_fabrica: p.cost_price || 0,
           tabela_vendas_sul: p.sale_price || 0,
           sugestao_vendas: calcSugestaoVendas(p.sale_price || 0, reajustePercent),
@@ -314,6 +323,8 @@ export async function syncMissingProductsToPriceTable(tableId: string): Promise<
     sku: p.code_sku || 'SKU',
     product_name: p.name,
     product_line: p.product_line || 'Geral',
+    cod_group7: p.cod_group7 || undefined,
+    bu: p.bu || undefined,
     tabela_fabrica: p.cost_price || 0,
     tabela_vendas_sul: p.sale_price || 0,
     sugestao_vendas: calcSugestaoVendas(p.sale_price || 0, table.reajuste_percent),
@@ -326,12 +337,44 @@ export async function syncMissingProductsToPriceTable(tableId: string): Promise<
   })
 }
 
-// ─── FERRAMENTA DE IMPORTAÇÃO (BASEADA NA IMAGEM 02) ─────────────────────────
+/**
+ * Atualiza os preços de fábrica e venda de um produto em todas as tabelas de preço ativas,
+ * recalculando sugestão de vendas e pontuação.
+ */
+export async function updateProductPricesInPriceTables(
+  productId: string,
+  costPrice: number,
+  salePrice: number
+): Promise<void> {
+  const tables = await listPriceTables()
+  for (const table of tables) {
+    const itemIndex = (table.items || []).findIndex((i) => i.product_id === productId)
+    if (itemIndex >= 0) {
+      const updatedItems = [...table.items]
+      const oldItem = updatedItems[itemIndex]
+      updatedItems[itemIndex] = {
+        ...oldItem,
+        tabela_fabrica: costPrice,
+        tabela_vendas_sul: salePrice,
+        sugestao_vendas: calcSugestaoVendas(salePrice, table.reajuste_percent),
+        ponto: calcPonto(costPrice, table.valor_ponto || 0),
+      }
+      await savePriceTable({
+        ...table,
+        items: updatedItems,
+      })
+    }
+  }
+}
+
+// ─── FERRAMENTA DE IMPORTAÇÃO (BASEADA NA PLANILHA DE PREÇOS) ──────────────────
 
 export interface ParsedImportRow {
   sku?: string
   product_name: string // PRODUTO
   product_line: string // LINHA
+  cod_group7?: string // COD_GROUP7
+  bu?: string // BU
   tabela_fabrica: number // TABELA FABRICA
   tabela_vendas_sul: number // TABELA SUL
   sugestao_vendas?: number // SUGESTÃO VENDAS (calculada se não informada)
@@ -340,6 +383,7 @@ export interface ParsedImportRow {
 /**
  * Parse text or CSV for product import
  * Suporta colunas separadas por tabulação (\t), vírgula (,), ou ponto e vírgula (;)
+ * Identifica automaticamente colunas COD_GROUP7 e BU tanto por cabeçalho quanto por posição.
  */
 export function parseImportText(rawText: string): ParsedImportRow[] {
   const lines = rawText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
@@ -347,62 +391,181 @@ export function parseImportText(rawText: string): ParsedImportRow[] {
 
   const result: ParsedImportRow[] = []
 
-  // Check if first line is header
-  const firstLineUpper = lines[0].toUpperCase()
+  const parseCurrency = (str: string): number => {
+    if (!str) return 0
+    const clean = str.replace(/[R$\s]/g, '').replace(/\./g, '').replace(',', '.')
+    const val = parseFloat(clean)
+    return isNaN(val) ? 0 : val
+  }
+
+  const normalize = (s: string) =>
+    s
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .trim()
+
+  const firstLineNorm = normalize(lines[0])
   const isHeader =
-    firstLineUpper.includes('PRODUTO') ||
-    firstLineUpper.includes('LINHA') ||
-    firstLineUpper.includes('FABRICA') ||
-    firstLineUpper.includes('SKU')
+    firstLineNorm.includes('PRODUTO') ||
+    firstLineNorm.includes('DESCRIC') ||
+    firstLineNorm.includes('LINHA') ||
+    firstLineNorm.includes('FABRICA') ||
+    firstLineNorm.includes('SKU') ||
+    firstLineNorm.includes('GROUP7') ||
+    firstLineNorm.includes('COD_GROUP') ||
+    firstLineNorm.includes('BU')
 
-  const dataLines = isHeader ? lines.slice(1) : lines
-
-  for (const line of dataLines) {
-    // Detect delimiter
+  const splitCols = (line: string): string[] => {
     let cols: string[] = []
     if (line.includes('\t')) {
       cols = line.split('\t')
     } else if (line.includes(';')) {
       cols = line.split(';')
     } else {
-      // Split by 2 or more spaces
       cols = line.split(/\s{2,}/)
     }
+    return cols.map((c) => c.trim().replace(/^"|"$/g, ''))
+  }
 
-    cols = cols.map((c) => c.trim().replace(/^"|"$/g, ''))
+  // Header column mapping
+  let colSku = -1
+  let colName = -1
+  let colLine = -1
+  let colGroup7 = -1
+  let colBu = -1
+  let colFab = -1
+  let colSul = -1
+  let colSug = -1
+
+  if (isHeader) {
+    const headerCols = splitCols(lines[0])
+    headerCols.forEach((col, idx) => {
+      const norm = normalize(col)
+      if (norm.includes('GROUP7') || norm.includes('COD_GROUP') || norm.includes('COD GROUP') || norm.includes('GRUPO7')) {
+        colGroup7 = idx
+      } else if (norm === 'BU' || norm.startsWith('BU ') || norm.includes('B.U.') || norm.includes('UNIDADE')) {
+        colBu = idx
+      } else if (norm.includes('PRODUTO') || norm.includes('DESCRIC') || norm.includes('NOME')) {
+        colName = idx
+      } else if (norm.includes('LINHA')) {
+        colLine = idx
+      } else if (norm.includes('FABRICA') || norm.includes('CUSTO')) {
+        colFab = idx
+      } else if (norm.includes('SUL') || norm.includes('VENDA')) {
+        colSul = idx
+      } else if (norm.includes('SUGEST')) {
+        colSug = idx
+      } else if (norm.includes('SKU') || norm.includes('CODIGO')) {
+        colSku = idx
+      }
+    })
+  }
+
+  const dataLines = isHeader ? lines.slice(1) : lines
+
+  for (const line of dataLines) {
+    const cols = splitCols(line)
     if (cols.length < 2) continue
 
-    // Format helpers for currency parsing
-    const parseCurrency = (str: string): number => {
-      if (!str) return 0
-      const clean = str.replace(/[R$\s]/g, '').replace(/\./g, '').replace(',', '.')
-      const val = parseFloat(clean)
-      return isNaN(val) ? 0 : val
-    }
-
-    // Heuristic mapping:
-    // Case 1: SKU | PRODUTO | LINHA | TABELA FABRICA | TABELA SUL
-    // Case 2: PRODUTO | LINHA | TABELA FABRICA | TABELA SUL | SUGESTAO VENDAS
     let sku = ''
     let name = ''
     let lineName = ''
+    let cod_group7 = ''
+    let bu = ''
     let fab = 0
     let sul = 0
     let sug = 0
 
-    if (cols[0].toUpperCase().startsWith('EKO-') || cols[0].toUpperCase().startsWith('PRD-')) {
-      sku = cols[0]
-      name = cols[1] || ''
-      lineName = cols[2] || ''
-      fab = parseCurrency(cols[3] || '0')
-      sul = parseCurrency(cols[4] || '0')
-      sug = parseCurrency(cols[5] || '0')
+    if (isHeader && colName >= 0) {
+      // Header-based extraction
+      name = cols[colName] || ''
+      if (colSku >= 0) sku = cols[colSku] || ''
+      if (colLine >= 0) lineName = cols[colLine] || ''
+      if (colGroup7 >= 0) cod_group7 = cols[colGroup7] || ''
+      if (colBu >= 0) bu = cols[colBu] || ''
+      if (colFab >= 0) fab = parseCurrency(cols[colFab] || '0')
+      if (colSul >= 0) sul = parseCurrency(cols[colSul] || '0')
+      if (colSug >= 0) sug = parseCurrency(cols[colSug] || '0')
     } else {
-      name = cols[0] || ''
-      lineName = cols[1] || ''
-      fab = parseCurrency(cols[2] || '0')
-      sul = parseCurrency(cols[3] || '0')
-      sug = parseCurrency(cols[4] || '0')
+      // Positional heuristic extraction:
+      if (cols.length === 4) {
+        // PRODUTO | LINHA | TABELA FABRICA | TABELA SUL
+        name = cols[0] || ''
+        lineName = cols[1] || ''
+        fab = parseCurrency(cols[2] || '0')
+        sul = parseCurrency(cols[3] || '0')
+      } else if (cols.length === 5) {
+        if (cols[0].toUpperCase().startsWith('EKO-') || cols[0].toUpperCase().startsWith('PRD-')) {
+          // SKU | PRODUTO | LINHA | TABELA FABRICA | TABELA SUL
+          sku = cols[0]
+          name = cols[1] || ''
+          lineName = cols[2] || ''
+          fab = parseCurrency(cols[3] || '0')
+          sul = parseCurrency(cols[4] || '0')
+        } else {
+          // PRODUTO | LINHA | TABELA FABRICA | TABELA SUL | SUGESTAO
+          name = cols[0] || ''
+          lineName = cols[1] || ''
+          fab = parseCurrency(cols[2] || '0')
+          sul = parseCurrency(cols[3] || '0')
+          sug = parseCurrency(cols[4] || '0')
+        }
+      } else if (cols.length === 6) {
+        // Check if prices are at end or middle
+        const p2 = parseCurrency(cols[2])
+        const p3 = parseCurrency(cols[3])
+        const p4 = parseCurrency(cols[4])
+        const p5 = parseCurrency(cols[5])
+
+        if (p4 > 0 || p5 > 0) {
+          // COD_GROUP7 | BU | PRODUTO | LINHA | TABELA FABRICA | TABELA SUL
+          cod_group7 = cols[0] || ''
+          bu = cols[1] || ''
+          name = cols[2] || ''
+          lineName = cols[3] || ''
+          fab = p4
+          sul = p5
+        } else if (p2 > 0 || p3 > 0) {
+          // PRODUTO | LINHA | TABELA FABRICA | TABELA SUL | COD_GROUP7 | BU
+          name = cols[0] || ''
+          lineName = cols[1] || ''
+          fab = p2
+          sul = p3
+          cod_group7 = cols[4] || ''
+          bu = cols[5] || ''
+        } else {
+          sku = cols[0]
+          name = cols[1] || ''
+          lineName = cols[2] || ''
+          fab = parseCurrency(cols[3] || '0')
+          sul = parseCurrency(cols[4] || '0')
+          sug = parseCurrency(cols[5] || '0')
+        }
+      } else if (cols.length >= 7) {
+        // Check for SKU at cols[0]
+        const hasSku = cols[0].toUpperCase().startsWith('EKO-') || cols[0].toUpperCase().startsWith('PRD-')
+        if (hasSku) {
+          // SKU | PRODUTO | LINHA | TABELA FABRICA | TABELA SUL | COD_GROUP7 | BU
+          sku = cols[0]
+          name = cols[1] || ''
+          lineName = cols[2] || ''
+          fab = parseCurrency(cols[3] || '0')
+          sul = parseCurrency(cols[4] || '0')
+          cod_group7 = cols[5] || ''
+          bu = cols[6] || ''
+          if (cols[7]) sug = parseCurrency(cols[7])
+        } else {
+          // COD_GROUP7 | BU | PRODUTO | LINHA | TABELA FABRICA | TABELA SUL | SUGESTAO
+          cod_group7 = cols[0] || ''
+          bu = cols[1] || ''
+          name = cols[2] || ''
+          lineName = cols[3] || ''
+          fab = parseCurrency(cols[4] || '0')
+          sul = parseCurrency(cols[5] || '0')
+          if (cols[6]) sug = parseCurrency(cols[6])
+        }
+      }
     }
 
     if (name) {
@@ -410,6 +573,8 @@ export function parseImportText(rawText: string): ParsedImportRow[] {
         sku: sku || undefined,
         product_name: name,
         product_line: lineName || 'Geral',
+        cod_group7: cod_group7 || undefined,
+        bu: bu || undefined,
         tabela_fabrica: fab,
         tabela_vendas_sul: sul,
         sugestao_vendas: sug > 0 ? sug : undefined,
@@ -422,9 +587,8 @@ export function parseImportText(rawText: string): ParsedImportRow[] {
 
 /**
  * Executa a importação:
- * 1. Para cada linha onde o SKU NÃO estiver preenchido, cadastra um NOVO produto em v2_produtos com SKU automático.
- * 2. Atualiza os preços de fábrica e venda sul dos produtos no catálogo.
- * 3. Vincula/atualiza todos os produtos na Tabela de Preço selecionada.
+ * 1. Cadastra novos produtos ou atualiza produtos existentes em bemaviv_produtos com os preços, cod_group7 e bu.
+ * 2. Atualiza os preços e novos campos de todos os produtos na Tabela de Preço alvo.
  */
 export async function executeImportToCatalogAndTable(
   rows: ParsedImportRow[],
@@ -435,10 +599,12 @@ export async function executeImportToCatalogAndTable(
   let updatedCount = 0
 
   for (const row of rows) {
-    // Check if product exists by SKU or Name
+    // Check if product exists by SKU, COD_GROUP7 or Name
     let found = existingProducts.find(
-      (p) => (row.sku && p.code_sku.toUpperCase() === row.sku.toUpperCase()) ||
-             p.name.trim().toLowerCase() === row.product_name.trim().toLowerCase()
+      (p) =>
+        (row.sku && p.code_sku && p.code_sku.toUpperCase() === row.sku.toUpperCase()) ||
+        (row.cod_group7 && p.cod_group7 && p.cod_group7.trim().toUpperCase() === row.cod_group7.trim().toUpperCase()) ||
+        p.name.trim().toLowerCase() === row.product_name.trim().toLowerCase()
     )
 
     if (!found) {
@@ -448,6 +614,8 @@ export async function executeImportToCatalogAndTable(
         name: row.product_name,
         type: 'SIMPLES',
         product_line: row.product_line,
+        cod_group7: row.cod_group7 || undefined,
+        bu: row.bu || undefined,
         cost_price: row.tabela_fabrica,
         sale_price: row.tabela_vendas_sul,
         unit: 'UN',
@@ -455,18 +623,20 @@ export async function executeImportToCatalogAndTable(
       })
       registeredCount++
     } else {
-      // Atualiza preços do produto cadastrado
+      // Atualiza preços e campos cod_group7 e bu do produto cadastrado
       found = await saveV2Product({
         ...found,
         product_line: row.product_line || found.product_line,
         cost_price: row.tabela_fabrica || found.cost_price,
         sale_price: row.tabela_vendas_sul || found.sale_price,
+        cod_group7: row.cod_group7 !== undefined ? row.cod_group7 : found.cod_group7,
+        bu: row.bu !== undefined ? row.bu : found.bu,
       })
       updatedCount++
     }
   }
 
-  // Agora sincroniza todos os produtos na Tabela de Preço
+  // Agora sincroniza todos os produtos na Tabela de Preço alvo
   let targetTable: V2PriceTable | null = null
   const tables = await listPriceTables()
   targetTable = tables.find((t) => t.id === targetTableId) || null
@@ -474,6 +644,35 @@ export async function executeImportToCatalogAndTable(
   if (!targetTable) {
     targetTable = await createPriceTableWithAllProducts('Tabela de Preço Principal', 1.0)
   } else {
+    // 1. Atualiza itens existentes na tabela de preço com os novos dados do catálogo
+    const refreshedProducts = await listV2Products()
+    const productMap = new Map(refreshedProducts.map((p) => [p.id, p]))
+
+    const updatedExistingItems = targetTable.items.map((item) => {
+      const prod = productMap.get(item.product_id)
+      if (!prod) return item
+      const fab = prod.cost_price || item.tabela_fabrica
+      const sul = prod.sale_price || item.tabela_vendas_sul
+      return {
+        ...item,
+        sku: prod.code_sku || item.sku,
+        product_name: prod.name || item.product_name,
+        product_line: prod.product_line || item.product_line,
+        cod_group7: prod.cod_group7 || item.cod_group7,
+        bu: prod.bu || item.bu,
+        tabela_fabrica: fab,
+        tabela_vendas_sul: sul,
+        sugestao_vendas: calcSugestaoVendas(sul, targetTable!.reajuste_percent),
+        ponto: calcPonto(fab, targetTable!.valor_ponto || 0),
+      }
+    })
+
+    targetTable = await savePriceTable({
+      ...targetTable,
+      items: updatedExistingItems,
+    })
+
+    // 2. Adiciona produtos ausentes
     const updatedTable = await syncMissingProductsToPriceTable(targetTable.id)
     if (updatedTable) targetTable = updatedTable
   }
@@ -486,6 +685,8 @@ export async function executeImportToCatalogAndTable(
 export function exportPriceTableToCSV(table: V2PriceTable): void {
   const headers = [
     'SKU',
+    'CÓD GROUP7',
+    'BU',
     'DESCRIÇÃO PRODUTO',
     'LINHA DO PRODUTO',
     'TABELA FÁBRICA (R$)',
@@ -498,6 +699,8 @@ export function exportPriceTableToCSV(table: V2PriceTable): void {
     const ponto = calcPonto(item.tabela_fabrica, table.valor_ponto || 0)
     return [
       `"${item.sku || ''}"`,
+      `"${item.cod_group7 || ''}"`,
+      `"${item.bu || ''}"`,
       `"${(item.product_name || '').replace(/"/g, '""')}"`,
       `"${(item.product_line || '').replace(/"/g, '""')}"`,
       `"${(item.tabela_fabrica || 0).toFixed(2).replace('.', ',')}"`,
